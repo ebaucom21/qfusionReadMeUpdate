@@ -9,6 +9,7 @@
         <file>ColorPickerItem.qml</file>
         <file>ColorPickerColorItem.qml</file>
         <file>CommandsPane.qml</file>
+        <file>ConfirmationItem.qml</file>
         <file>ConnectionScreen.qml</file>
         <file>CVarAwareCheckBox.qml</file>
         <file>CVarAwareColorPicker.qml</file>
@@ -22,7 +23,6 @@
         <file>DemoPlaybackMenu.qml</file>
         <file>DemosListDelegate.qml</file>
         <file>DemosPage.qml</file>
-        <file>GametypeSlantedOption.qml</file>
         <file>GraphicsSettings.qml</file>
         <file>HelpPage.qml</file>
         <file>HudAwardsArea.qml</file>
@@ -46,7 +46,6 @@
         <file>HudTeamScore.qml</file>
         <file>HudValueBar.qml</file>
         <file>HudWeaponStatus.qml</file>
-        <file>InGameButton.qml</file>
         <file>InGameCallvoteMapSelector.qml</file>
         <file>InGameCallvoteNumberSelector.qml</file>
         <file>InGameCallvoteOptionSelector.qml</file>
@@ -55,7 +54,6 @@
         <file>InGameCallvotesPage.qml</file>
         <file>InGameChatPage.qml</file>
         <file>InGameGametypeOptionsPage.qml</file>
-        <file>InGameConfirmationPage.qml</file>
         <file>InGameHud.qml</file>
         <file>InGameMenu.qml</file>
         <file>KeyboardAndMouse.qml</file>
@@ -81,8 +79,6 @@
         <file>PlayerSettings.qml</file>
         <file>PlayOnlinePage.qml</file>
         <file>ProfilePage.qml</file>
-        <file>PopupBackground.qml</file>
-        <file>PopupContentItem.qml</file>
         <file>QuitPage.qml</file>
         <file>RichChatList.qml</file>
         <file>ScoreboardScreen.qml</file>
@@ -102,6 +98,7 @@
         <file>SettingsPage.qml</file>
         <file>SettingsRow.qml</file>
         <file>SimpleVideoDecoration.qml</file>
+        <file>SlantedButton.qml</file>
         <file>SoundSettings.qml</file>
         <file>TeamsSettings.qml</file>
         <file>TeamSettingsTeamColumn.qml</file>

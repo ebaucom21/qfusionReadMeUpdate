@@ -31,12 +31,34 @@ Item {
 	readonly property color trailDecayColor: UI.ui.colorWithAlpha(Material.backgroundColor, 0.0)
 	readonly property color highlightedColor: Material.accentColor
 
+	property real bodyWidth: mouseArea.containsMouse ? UI.ui.mainMenuButtonWidthDp + 12 : UI.ui.mainMenuButtonWidthDp
+	property real bodyHeight: mouseArea.containsMouse ? root.height + 2 : root.height
+	property color bodyColor: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
+
+	Behavior on bodyWidth { SmoothedAnimation { duration: 333 } }
+	Behavior on bodyHeight { SmoothedAnimation { duration: 333 } }
+	Behavior on bodyColor { ColorAnimation { duration: 50 } }
+
+    readonly property real baseTrailElementWidth: 20
+    readonly property real trailSpacing: 4
+    property real trailElementWidth: mouseArea.containsMouse ? baseTrailElementWidth + 1 : baseTrailElementWidth
+	readonly property int trailElementsCount: Math.floor(UI.ui.mainMenuButtonTrailWidthDp / (baseTrailElementWidth + root.trailSpacing))
+
+    Behavior on trailElementWidth {
+        NumberAnimation {
+            duration: 500
+            easing.type: Easing.OutElastic
+            easing.amplitude: 2.0
+        }
+    }
+
 	states: [
 		State {
 			name: "centered"
 			AnchorChanges {
-				target: contentRow
+				target: body
 				anchors.horizontalCenter: root.horizontalCenter
+				anchors.verticalCenter: root.verticalCenter
 				anchors.left: undefined
 				anchors.right: undefined
 			}
@@ -44,8 +66,9 @@ Item {
 		State {
 			name: "pinnedToLeft"
 			AnchorChanges {
-				target: contentRow
+				target: body
 				anchors.horizontalCenter: undefined
+				anchors.verticalCenter: root.verticalCenter
 				anchors.left: root.left
 				anchors.right: undefined
 			}
@@ -53,8 +76,9 @@ Item {
 		State {
 			name: "pinnedToRight"
 			AnchorChanges {
-				target: contentRow
+				target: body
 				anchors.horizontalCenter: undefined
+				anchors.verticalCenter: root.verticalCenter
 				anchors.left: undefined
 				anchors.right: root.right
 			}
@@ -82,15 +106,20 @@ Item {
 
 	Loader {
 		active: !leaningRight
-		anchors.right: contentRow.left
-		anchors.rightMargin: 4
+		anchors.right: body.left
+		anchors.rightMargin: trailSpacing
+	    anchors.verticalCenter: body.verticalCenter
 		sourceComponent: leftTrailComponent
 	}
 
 	Component {
 		id: leftTrailComponent
 		MainMenuButtonTrail {
-			leftColor: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
+            spacing: root.trailSpacing
+            elementsCount: root.trailElementsCount
+            elementWidth: trailElementWidth
+            elementHeight: root.bodyHeight
+			leftColor: root.bodyColor
 			rightColor: root.trailDecayColor
 			transformMatrix: root.transformMatrix
 		}
@@ -100,12 +129,12 @@ Item {
     Item {
         z: -1
         id: shadowCaster
-        anchors.centerIn: contentRow
+        anchors.centerIn: body
         opacity: 0.5
         Item {
             anchors.centerIn: parent
-            width: contentRow.width
-            height: contentRow.height
+            width: body.width
+            height: body.height
 		    transform: Matrix4x4 { matrix: root.transformMatrix }
             layer.enabled: true
             layer.effect: ElevationEffect { elevation: 16 }
@@ -113,12 +142,11 @@ Item {
     }
 
 	Rectangle {
-		id: contentRow
-		height: 40
-		width: mouseArea.containsMouse ? UI.ui.mainMenuButtonWidthDp + 12 : UI.ui.mainMenuButtonWidthDp
+		id: body
+		width: bodyWidth
+		height: bodyHeight
 		radius: 3
-		color: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
-		Behavior on width { SmoothedAnimation { duration: 333 } }
+		color: bodyColor
 
 		transform: Matrix4x4 { matrix: root.transformMatrix }
 
@@ -166,16 +194,21 @@ Item {
 
 	Loader {
 		active: leaningRight
-		anchors.left: contentRow.right
-		anchors.leftMargin: 4
+		anchors.left: body.right
+		anchors.leftMargin: trailSpacing
+		anchors.verticalCenter: body.verticalCenter
 		sourceComponent: rightTrailComponent
 	}
 
 	Component {
 		id: rightTrailComponent
 		MainMenuButtonTrail {
+			spacing: root.trailSpacing
+			elementsCount: root.trailElementsCount
+			elementWidth: trailElementWidth
+			elementHeight: bodyHeight
 			leftColor: root.trailDecayColor
-			rightColor: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
+			rightColor: root.bodyColor
 			transformMatrix: root.transformMatrix
 		}
 	}

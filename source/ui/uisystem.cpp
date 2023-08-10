@@ -367,8 +367,6 @@ public:
 	Q_PROPERTY( QString defaultTeamBetaModel MEMBER m_defaultTeamBetaModel CONSTANT );
 	Q_PROPERTY( QString defaultTeamPlayersModel MEMBER m_defaultTeamPlayersModel CONSTANT );
 	Q_PROPERTY( qreal desiredPopupWidth MEMBER s_desiredPopupWidth CONSTANT );
-	Q_PROPERTY( qreal desiredPopupHeight MEMBER s_desiredPopupHeight CONSTANT );
-	Q_PROPERTY( qreal popupButtonWidth MEMBER s_popupButtonWidth CONSTANT );
 	Q_PROPERTY( QJsonArray videoModeHeadingsList MEMBER s_videoModeHeadingsList CONSTANT );
 	Q_PROPERTY( QJsonArray videoModeWidthValuesList MEMBER s_videoModeWidthValuesList CONSTANT );
 	Q_PROPERTY( QJsonArray videoModeHeightValuesList MEMBER s_videoModeHeightValuesList CONSTANT );
@@ -414,9 +412,7 @@ private:
 	static inline const qreal s_fullscreenOverlayOpacity { 0.90 };
 	static inline const qreal s_mainMenuButtonWidthDp { 224.0 };
 	static inline const qreal s_mainMenuButtonTrailWidthDp { 224.0 * 1.25 };
-	static inline const qreal s_desiredPopupWidth { 512.0 - 32.0 };
-	static inline const qreal s_desiredPopupHeight { 256.0 };
-	static inline const qreal s_popupButtonWidth { 128.0 };
+	static inline const qreal s_desiredPopupWidth { 360.0 };
 
 	static inline const QString s_regularFontFamily { "Ubuntu" };
 	static inline const QString s_headingFontFamily { "IBM Plex Sans" };

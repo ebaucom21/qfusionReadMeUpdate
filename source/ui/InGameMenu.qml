@@ -72,23 +72,34 @@ Rectangle {
     Component {
         id: generalComponent
         Item {
+            KeyNavigation.tab: mainMenuButton
+
             ColumnLayout {
+                id: buttonsLayout
                 spacing: 20
                 width: parent.width - 64 - 192
                 anchors.centerIn: parent
 
-                InGameButton {
+                SlantedButton {
+                    id: mainMenuButton
                     text: "Main menu"
+                    KeyNavigation.down: loadoutsButton
                     Layout.fillWidth: true
                     onClicked: UI.ui.showMainMenu()
                 }
-                InGameButton {
+                SlantedButton {
+                    id: loadoutsButton
+                    KeyNavigation.up: mainMenuButton
+                    KeyNavigation.down: readyButton
                     visible: canShowLoadouts
                     text: canShowLoadouts ? UI.gametypeOptionsModel.tabTitle : ""
                     Layout.fillWidth: true
                     onClicked: stackView.push(gametypeOptionsComponent)
                 }
-                InGameButton {
+                SlantedButton {
+                    id: readyButton
+                    KeyNavigation.up: loadoutsButton
+                    KeyNavigation.down: joinButton
                     visible: UI.ui.canBeReady
                     text: UI.ui.isReady ? "Not ready" : "Ready"
                     Layout.fillWidth: true
@@ -97,7 +108,10 @@ Rectangle {
                         UI.ui.returnFromInGameMenu()
                     }
                 }
-                InGameButton {
+                SlantedButton {
+                    id: joinButton
+                    KeyNavigation.up: readyButton
+                    KeyNavigation.down: switchTeamButton
                     visible: UI.ui.canJoin
                     text: "Join"
                     Layout.fillWidth: true
@@ -110,7 +124,10 @@ Rectangle {
                         }
                     }
                 }
-                InGameButton {
+                SlantedButton {
+                    id: switchTeamButton
+                    KeyNavigation.up: joinButton
+                    KeyNavigation.down: queueActionButton
                     visible: !UI.ui.canJoin && (UI.ui.canJoinAlpha !== UI.ui.canJoinBeta)
                     text: "Switch team"
                     Layout.fillWidth: true
@@ -127,7 +144,10 @@ Rectangle {
                         }
                     }
                 }
-                InGameButton {
+                SlantedButton {
+                    id: queueActionButton
+                    KeyNavigation.up: switchTeamButton
+                    KeyNavigation.down: spectateButton
                     visible: UI.ui.canToggleChallengerStatus && UI.hudDataModel.isSpectator
                     text: UI.ui.isInChallengersQueue ? "Leave the queue" : "Enter the queue"
                     Layout.fillWidth: true
@@ -136,7 +156,10 @@ Rectangle {
                         UI.ui.returnFromInGameMenu()
                     }
                 }
-                InGameButton {
+                SlantedButton {
+                    id: spectateButton
+                    KeyNavigation.up: queueActionButton
+                    KeyNavigation.down: disconnectButton
                     visible: UI.ui.canSpectate
                     text: "Spectate"
                     Layout.fillWidth: true
@@ -149,7 +172,9 @@ Rectangle {
                         }
                     }
                 }
-                InGameButton {
+                SlantedButton {
+                    id: disconnectButton
+                    KeyNavigation.up: spectateButton
                     text: "Disconnect"
                     Layout.fillWidth: true
                     onClicked: {
@@ -190,14 +215,25 @@ Rectangle {
 
     Component {
         id: spectateConfirmationComponent
-        InGameConfirmationPage {
+        ConfirmationItem {
             titleText: "Spectate?"
-            onAccepted: {
-                UI.ui.spectate()
-                UI.ui.returnFromInGameMenu()
+            numButtons: 2
+            buttonTexts: ["Spectate", "Go back"]
+            buttonFocusStatuses: [false, true]
+            buttonEnabledStatuses: [true, true]
+            onButtonClicked: {
+                if (buttonIndex === 0) {
+                    UI.ui.spectate()
+                    UI.ui.returnFromInGameMenu()
+                } else {
+                    stackView.pop()
+                }
             }
-            onRejected: stackView.pop()
-
+            onButtonActiveFocusChanged: {
+                const newStatuses = [...buttonFocusStatuses]
+                newStatuses[buttonIndex] = buttonActiveFocus
+                buttonFocusStatuses = newStatuses
+            }
             Connections {
                 target: UI.ui
                 onCanSpectateChanged: {
@@ -219,17 +255,29 @@ Rectangle {
 
     Component {
         id: switchTeamConfirmationComponent
-        InGameConfirmationPage {
+        ConfirmationItem {
             titleText: "Switch team?"
-            onAccepted: {
-                if (UI.ui.canJoinAlpha) {
-                    UI.ui.joinAlpha()
+            numButtons: 2
+            buttonTexts: ["Switch", "Go back"]
+            buttonFocusStatuses: [false, true]
+            buttonEnabledStatuses: [true, true]
+            onButtonClicked: {
+                if (buttonIndex === 0) {
+                    if (UI.ui.canJoinAlpha) {
+                        UI.ui.joinAlpha()
+                    } else {
+                        UI.ui.joinBeta()
+                    }
+                    UI.ui.returnFromInGameMenu()
                 } else {
-                    UI.ui.joinBeta()
+                    stackView.pop()
                 }
-                UI.ui.returnFromInGameMenu()
             }
-            onRejected: stackView.pop()
+            onButtonActiveFocusChanged: {
+                const newStatuses = [...buttonFocusStatuses]
+                newStatuses[buttonIndex] = buttonActiveFocus
+                buttonFocusStatuses = newStatuses
+            }
             Connections {
                 target: UI.ui
                 onCanJoinAlphaChanged: {
@@ -256,10 +304,24 @@ Rectangle {
 
     Component {
         id: disconnectConfirmationComponent
-        InGameConfirmationPage {
+        ConfirmationItem {
             titleText: "Disconnect?"
-            onAccepted: UI.ui.disconnect()
-            onRejected: stackView.pop()
+            numButtons: 2
+            buttonTexts: ["Disconnect", "Go back"]
+            buttonFocusStatuses: [false, true]
+            buttonEnabledStatuses: [true, true]
+            onButtonClicked: {
+                if (buttonIndex === 0) {
+                    UI.ui.disconnect()
+                } else {
+                    stackView.pop()
+                }
+            }
+            onButtonActiveFocusChanged: {
+                const newStatuses = [...buttonFocusStatuses]
+                newStatuses[buttonIndex] = buttonActiveFocus
+                buttonFocusStatuses = newStatuses
+            }
         }
     }
 
@@ -271,7 +333,7 @@ Rectangle {
                 width: parent.width - 64 - 192
                 spacing: 20
 
-                InGameButton {
+                SlantedButton {
                     Layout.fillWidth: true
                     text: "Join any team"
                     onClicked: {
@@ -279,7 +341,7 @@ Rectangle {
                         UI.ui.returnFromInGameMenu()
                     }
                 }
-                InGameButton {
+                SlantedButton {
                     text: "Join '" + UI.hudDataModel.alphaName + "'"
                     Layout.fillWidth: true
                     onClicked: {
@@ -287,7 +349,7 @@ Rectangle {
                         UI.ui.returnFromInGameMenu()
                     }
                 }
-                InGameButton {
+                SlantedButton {
                     text: "Join '" + UI.hudDataModel.betaName + "'"
                     Layout.fillWidth: true
                     onClicked: {
@@ -321,17 +383,11 @@ Rectangle {
     }
 
     Connections {
-        target: UI.gametypeOptionsModel
-        onAvailableChanged: {
-            if (!available) {
-                stackView.replace(generalComponent)
+        target: stackView
+        onCurrentItemChanged: {
+            if (stackView.currentItem) {
+                stackView.currentItem.forceActiveFocus()
             }
-        }
-    }
-
-    onVisibleChanged: {
-        if (visible) {
-            stackView.forceActiveFocus()
         }
     }
 

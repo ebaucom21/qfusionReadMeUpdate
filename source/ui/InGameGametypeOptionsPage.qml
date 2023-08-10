@@ -7,7 +7,10 @@ import net.warsow 2.6
 Item {
     id: root
 
-    readonly property real optionWidth: 72 + 24
+    readonly property real optionWidth: 108
+    readonly property real optionExtraWidthOnMouseOver: 12
+    readonly property real optionExtraHeightOnMouseOver: 4
+    readonly property real optionBodySlantDegrees: 15
     readonly property real optionSpacing: 18
     readonly property real maxOptionsPerRow: 3
 
@@ -68,8 +71,12 @@ Item {
 
                         Repeater {
                             model: 2
-                            delegate: GametypeSlantedOption {
+                            delegate: SlantedButton {
                                 text: booleanOptionTexts[index]
+                                bodySlantDegrees: optionBodySlantDegrees
+                                textSlantDegrees: 0.0
+                                extraWidthOnMouseOver: optionExtraWidthOnMouseOver
+                                extraHeightOnMouseOver: optionExtraHeightOnMouseOver
                                 Layout.preferredWidth: optionWidth
                                 checked: booleanOptionPredicates[index](option.optionCurrent)
                                 iconPath: booleanOptionIcons[index]
@@ -107,8 +114,13 @@ Item {
                                 Repeater {
                                     model: rowIndex != Math.floor(option.optionNumItems / maxOptionsPerRow) ?
                                         maxOptionsPerRow : option.optionNumItems % maxOptionsPerRow
-                                    delegate: GametypeSlantedOption {
+                                    delegate: SlantedButton {
                                         readonly property int flatIndex: rowIndex * maxOptionsPerRow + index
+                                        Layout.preferredWidth: optionWidth
+                                        bodySlantDegrees: optionBodySlantDegrees
+                                        textSlantDegrees: 0.0
+                                        extraWidthOnMouseOver: optionExtraWidthOnMouseOver
+                                        extraHeightOnMouseOver: optionExtraHeightOnMouseOver
                                         checked: option.optionCurrent.includes(flatIndex)
                                         iconPath: UI.gametypeOptionsModel.getSelectorItemIcon(option.optionRow, flatIndex)
                                         text: UI.gametypeOptionsModel.getSelectorItemTitle(option.optionRow, flatIndex)
