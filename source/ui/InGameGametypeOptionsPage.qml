@@ -31,8 +31,9 @@ Item {
             implicitHeight: titleLabel.implicitHeight + loader.height + loader.anchors.topMargin
 
             readonly property int optionRow: index
-            readonly property int optionModel: model
-            readonly property int optionCurrent: current
+            readonly property int optionSelectionLimit: selectionLimit
+            readonly property int optionNumItems: numItems
+            readonly property var optionCurrent: current
 
             Label {
                 id: titleLabel
@@ -83,10 +84,18 @@ Item {
                 Component {
                     id: selectorComponent
                     ColumnLayout {
+                        id: selectorItem
+
+                        // This is a local queue for cycling selected indices during the selector lifetime.
+                        // To make it work, the native code tries to limit the scope of dispatched updates to optionCurrent when possible.
+                        property var selectedIndices: []
+
+                        Component.onCompleted: selectorItem.selectedIndices = [...option.optionCurrent]
+
                         spacing: 24
                         width: root.width
                         Repeater {
-                            model: Math.max(option.optionModel / maxOptionsPerRow, 1)
+                            model: Math.max(option.optionNumItems / maxOptionsPerRow, 1)
                             RowLayout {
                                 readonly property int rowIndex: index
 
@@ -96,14 +105,23 @@ Item {
                                 Item { Layout.fillWidth: true }
 
                                 Repeater {
-                                    model: rowIndex != Math.floor(option.optionModel / maxOptionsPerRow) ?
-                                        maxOptionsPerRow : option.optionModel % maxOptionsPerRow
+                                    model: rowIndex != Math.floor(option.optionNumItems / maxOptionsPerRow) ?
+                                        maxOptionsPerRow : option.optionNumItems % maxOptionsPerRow
                                     delegate: GametypeSlantedOption {
                                         readonly property int flatIndex: rowIndex * maxOptionsPerRow + index
-                                        checked: flatIndex === option.optionCurrent
+                                        checked: option.optionCurrent.includes(flatIndex)
                                         iconPath: UI.gametypeOptionsModel.getSelectorItemIcon(option.optionRow, flatIndex)
                                         text: UI.gametypeOptionsModel.getSelectorItemTitle(option.optionRow, flatIndex)
-                                        onClicked: UI.gametypeOptionsModel.select(option.optionRow, flatIndex)
+                                        onClicked: {
+                                            // This leads to model updates, which are likely to affect option.optionCurrent
+                                            if (!checked) {
+                                                console.assert(!selectorItem.selectedIndices.includes(flatIndex))
+                                                selectorItem.selectedIndices.shift()
+                                                selectorItem.selectedIndices.push(flatIndex)
+                                                console.assert(selectorItem.selectedIndices.length === optionSelectionLimit)
+                                                UI.gametypeOptionsModel.select(option.optionRow, selectorItem.selectedIndices)
+                                            }
+                                        }
                                     }
                                 }
 

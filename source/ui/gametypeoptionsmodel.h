@@ -19,7 +19,7 @@ class GametypeOptionsModel : public QAbstractListModel {
 public:
 	enum Kind {
 		Boolean,
-		OneOfList,
+		ExactlyNOfList,
 	};
 	Q_ENUM( Kind )
 
@@ -32,12 +32,13 @@ public:
 	Q_INVOKABLE QByteArray getSelectorItemIcon( int optionRow, int indexInRow ) const;
 	Q_INVOKABLE QByteArray getSelectorItemTitle( int optionRow, int indexInRow ) const;
 
-	Q_INVOKABLE void select( int optionRow, int indexInRow );
+	Q_INVOKABLE void select( int optionRow, const QVariantList &selectedItemIndices );
 private:
 	enum class Role {
 		Title = Qt::UserRole + 1,
 		Kind,
-		Model,
+		NumItems,
+		SelectionLimit,
 		Current
 	};
 
@@ -45,7 +46,9 @@ private:
 		unsigned titleSpanIndex;
 		unsigned commandSpanIndex;
 		Kind kind;
-		unsigned model;
+		unsigned numItems { 0 };
+		unsigned selectionLimit { 0 };
+		// A span in the shared buffer of entries
 		std::pair<unsigned, unsigned> selectableItemsSpan;
 	};
 
@@ -70,7 +73,7 @@ private:
 	bool parseEntryParts( const wsw::StringView &string, wsw::StaticVector<wsw::StringView, 4> &parts );
 
 	[[nodiscard]]
-	auto addListItems( const wsw::StringView &string ) -> std::optional<std::pair<unsigned, unsigned>>;
+	auto addOptionListItems( const wsw::StringView &string ) -> std::optional<std::pair<unsigned, unsigned>>;
 
 	[[nodiscard]]
 	auto addString( const wsw::StringView &string ) -> unsigned;
@@ -81,7 +84,14 @@ private:
 	auto getSelectableEntry( int optionRow, int chosenIndex ) const -> const SelectableItemEntry &;
 
 	[[nodiscard]]
-	bool doReload();
+	bool doReloadFromConfigStrings();
+	[[nodiscard]]
+	bool parseConfigString( const wsw::StringView &configString );
+
+	[[nodiscard]]
+	static bool validateBooleanOptionValue( int rawValue );
+	[[nodiscard]]
+	static bool validateExactlyNOfListOptionValue( int rawValue, unsigned selectionLimit, unsigned numItems );
 
 	void clear();
 
