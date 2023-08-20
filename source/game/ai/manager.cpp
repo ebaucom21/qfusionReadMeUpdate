@@ -278,7 +278,7 @@ void AiManager::RemoveBot( const wsw::StringView &name ) {
 	// Do not iterate over the linked list of bots since it is implicitly modified by these calls
 	for( edict_t *ent = game.edicts + gs.maxclients; PLAYERNUM( ent ) >= 0; ent-- ) {
 		if( ent->r.client->netname.equalsIgnoreCase( name ) ) {
-			trap_DropClient( ent, DROP_TYPE_GENERAL, nullptr );
+			trap_DropClient( ent, ReconnectBehaviour::DontReconnect );
 			OnBotDropped( ent );
 			G_FreeAI( ent );
 			game.numBots--;
@@ -295,7 +295,7 @@ void AiManager::AfterLevelScriptShutdown() {
 			continue;
 		}
 
-		trap_DropClient( ent, DROP_TYPE_GENERAL, nullptr );
+		trap_DropClient( ent, ReconnectBehaviour::DontReconnect );
 		OnBotDropped( ent );
 		G_FreeAI( ent );
 		game.numBots--;

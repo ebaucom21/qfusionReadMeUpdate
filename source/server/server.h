@@ -277,9 +277,9 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address,
 					   mm_uuid_t ticket_id, mm_uuid_t session_id );
 
 #ifndef _MSC_VER
-void SV_DropClient( client_t *drop, int type, const char *format, ... ) __attribute__( ( format( printf, 3, 4 ) ) );
+void SV_DropClient( client_t *drop, ReconnectBehaviour reconnectBehaviour, const char *format, ... ) __attribute__( ( format( printf, 3, 4 ) ) );
 #else
-void SV_DropClient( client_t *drop, int type, _Printf_format_string_ const char *format, ... );
+void SV_DropClient( client_t *drop, ReconnectBehaviour reconnectBehaviour, _Printf_format_string_ const char *format, ... );
 #endif
 
 void SV_ExecuteClientThinks( int clientNum );

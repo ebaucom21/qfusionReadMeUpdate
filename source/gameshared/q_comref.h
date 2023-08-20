@@ -400,20 +400,28 @@ typedef enum {
 	CA_ACTIVE,                          // game views should be displayed
 } connstate_t;
 
-enum {
-	DROP_TYPE_GENERAL,
-	DROP_TYPE_PASSWORD,
-	DROP_TYPE_NORECONNECT,
-	DROP_TYPE_TOTAL
+enum class ReconnectBehaviour : unsigned {
+	DontReconnect = 1,
+	Autoreconnect,
+	OfUserChoice,
+	RequestPassword,
 };
 
-enum {
-	DROP_REASON_CONNFAILED,
-	DROP_REASON_CONNTERMINATED,
-	DROP_REASON_CONNERROR
+// TODO: We need supporting this at language level
+constexpr ReconnectBehaviour kReconnectBehaviourValues[] = {
+	ReconnectBehaviour::DontReconnect, ReconnectBehaviour::Autoreconnect,
+	ReconnectBehaviour::OfUserChoice, ReconnectBehaviour::RequestPassword
 };
 
-#define DROP_FLAG_AUTORECONNECT 1       // it's okay try reconnectting automatically
+enum class ConnectionDropStage : unsigned {
+	EstablishingFailed = 1,
+	FunctioningError,
+	TerminatedByServer,
+};
+
+constexpr ConnectionDropStage kConnectionDropStageValues[] = {
+	ConnectionDropStage::EstablishingFailed, ConnectionDropStage::FunctioningError, ConnectionDropStage::TerminatedByServer
+};
 
 typedef enum {
 	MM_LOGIN_STATE_LOGGED_OUT,

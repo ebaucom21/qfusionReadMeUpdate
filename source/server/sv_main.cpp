@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/pipeutils.h"
 #include "../qcommon/compression.h"
 #include "../qcommon/demometadata.h"
+#include "../qcommon/wswtonum.h"
 #include "../gameshared/gs_public.h"
 
 using wsw::operator""_asView;
@@ -211,7 +212,7 @@ typedef struct sv_infoserver_s {
 
 static sv_infoserver_t sv_infoServers[MAX_INFO_SERVERS];
 
-static void PF_DropClient( edict_t *ent, int type, const char *message ) {
+static void PF_DropClient( edict_t *ent, ReconnectBehaviour reconnectBehaviour, const char *message ) {
 	int p;
 	client_t *drop;
 
@@ -226,9 +227,9 @@ static void PF_DropClient( edict_t *ent, int type, const char *message ) {
 
 	drop = svs.clients + ( p - 1 );
 	if( message ) {
-		SV_DropClient( drop, type, "%s", message );
+		SV_DropClient( drop, reconnectBehaviour, "%s", message );
 	} else {
-		SV_DropClient( drop, type, NULL );
+		SV_DropClient( drop, reconnectBehaviour, NULL );
 	}
 }
 
@@ -909,7 +910,7 @@ static void SV_CheckTimeouts( void ) {
 
 		if( ( cl->state != CS_FREE && cl->state != CS_ZOMBIE ) &&
 			( cl->lastPacketReceivedTime + 1000 * sv_timeout->value < svs.realtime ) ) {
-			SV_DropClient( cl, DROP_TYPE_GENERAL, "%s", "Error: Connection timed out" );
+			SV_DropClient( cl, ReconnectBehaviour::OfUserChoice, "%s", "Error: Connection timed out" );
 			cl->state = CS_FREE; // don't bother with zombie state
 		}
 
@@ -1356,7 +1357,8 @@ static void SV_FinalMessage( const char *message, bool reconnect ) {
 			if( reconnect ) {
 				SV_SendServerCommand( cl, "forcereconnect \"%s\"", message );
 			} else {
-				SV_SendServerCommand( cl, "disconnect %i \"%s\"", DROP_TYPE_GENERAL, message );
+				SV_SendServerCommand( cl, "disconnect %u \"%s\" %u", (unsigned)ReconnectBehaviour::DontReconnect,
+									  message, (unsigned)ConnectionDropStage::TerminatedByServer );
 			}
 
 			SV_InitClientMessage( cl, &tmpMessage, NULL, 0 );
@@ -1456,7 +1458,7 @@ void SV_Map( const char *level, bool devmap ) {
 	// remove all bots before changing map
 	for( i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++ ) {
 		if( cl->state && cl->edict && ( cl->edict->r.svflags & SVF_FAKECLIENT ) ) {
-			SV_DropClient( cl, DROP_TYPE_GENERAL, NULL );
+			SV_DropClient( cl, ReconnectBehaviour::DontReconnect, NULL );
 		}
 	}
 
@@ -1506,11 +1508,11 @@ void SV_UserinfoChanged( client_t *client ) {
 	if( !client->edict || !( client->edict->r.svflags & SVF_FAKECLIENT ) ) {
 		// force the IP key/value pair so the game can filter based on ip
 		if( !Info_SetValueForKey( client->userinfo, "socket", NET_SocketTypeToString( client->netchan.socket->type ) ) ) {
-			SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Couldn't set userinfo (socket)\n" );
+			SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "%s", "Error: Couldn't set userinfo (socket)\n" );
 			return;
 		}
 		if( !Info_SetValueForKey( client->userinfo, "ip", NET_AddressToString( &client->netchan.remoteAddress ) ) ) {
-			SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Couldn't set userinfo (ip)\n" );
+			SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "%s", "Error: Couldn't set userinfo (ip)\n" );
 			return;
 		}
 	}
@@ -1537,14 +1539,14 @@ void SV_UserinfoChanged( client_t *client ) {
 	ge->ClientUserinfoChanged( client->edict, client->userinfo );
 
 	if( !Info_Validate( client->userinfo ) ) {
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Invalid userinfo (after game)" );
+		SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "%s", "Error: Invalid userinfo (after game)" );
 		return;
 	}
 
 	// we assume that game module deals with setting a correct name
 	val = Info_ValueForKey( client->userinfo, "name" );
 	if( !val || !val[0] ) {
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: No name set" );
+		SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "%s", "Error: No name set" );
 		return;
 	}
 	Q_strncpyz( client->name, val, sizeof( client->name ) );
@@ -1851,12 +1853,12 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address,
 * or unwillingly.  This is NOT called if the entire server is quiting
 * or crashing.
 */
-void SV_DropClient( client_t *drop, int type, const char *format, ... ) {
-	va_list argptr;
+void SV_DropClient( client_t *drop, ReconnectBehaviour reconnectBehaviour, const char *format, ... ) {
 	char *reason;
 	char string[1024];
 
 	if( format ) {
+		va_list argptr;
 		va_start( argptr, format );
 		Q_vsnprintfz( string, sizeof( string ), format, argptr );
 		va_end( argptr );
@@ -1877,7 +1879,7 @@ void SV_DropClient( client_t *drop, int type, const char *format, ... ) {
 		SV_ClientResetCommandBuffers( drop ); // make sure everything is clean
 	} else {
 		SV_InitClientMessage( drop, &tmpMessage, NULL, 0 );
-		SV_SendServerCommand( drop, "disconnect %i \"%s\"", type, string );
+		SV_SendServerCommand( drop, "disconnect %u \"%s\"", (unsigned)reconnectBehaviour, string );
 		SV_AddReliableCommandsToMessage( drop, &tmpMessage );
 
 		SV_SendMessageToClient( drop, &tmpMessage );
@@ -2108,7 +2110,7 @@ static void HandleClientCommand_Begin( client_t *client, const CmdArgs &cmdArgs 
 		if( dedicated->integer ) {
 			svWarning() << "HandleClientCommand_Begin: 'Begin' from already spawned client" << wsw::StringView( client->name );
 		}
-		SV_DropClient( client, DROP_TYPE_GENERAL, "Error: Begin while connected" );
+		SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "Error: Begin while connected" );
 		return;
 	}
 	// wsw : r1q2[end]
@@ -2400,7 +2402,7 @@ static void HandleClientCommand_BeginDownload( client_t *client, const CmdArgs &
 * The client is going to disconnect, so remove the connection immediately
 */
 static void HandleClientCommand_Disconnect( client_t *client, const CmdArgs & ) {
-	SV_DropClient( client, DROP_TYPE_GENERAL, NULL );
+	SV_DropClient( client, ReconnectBehaviour::DontReconnect, NULL );
 }
 
 
@@ -2414,7 +2416,7 @@ static void HandleClientCommand_Userinfo( client_t *client, const CmdArgs &cmdAr
 
 	info = Cmd_Argv( 1 );
 	if( !Info_Validate( info ) ) {
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Invalid userinfo" );
+		SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "%s", "Error: Invalid userinfo" );
 		return;
 	}
 
@@ -2607,7 +2609,7 @@ static void SV_ParseMoveCommand( client_t *client, msg_t *msg ) {
 	ucmdCount = (unsigned int)MSG_ReadUint8( msg );
 
 	if( ucmdCount > CMD_MASK ) {
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Ucmd overflow" );
+		SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "%s", "Error: Ucmd overflow" );
 		return;
 	}
 
@@ -2666,7 +2668,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 		switch( c ) {
 			default:
 				Com_Printf( "SV_ParseClientMessage: unknown command char\n" );
-				SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Unknown command char" );
+				SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "%s", "Error: Unknown command char" );
 				return;
 
 			case clc_nop:
@@ -2687,7 +2689,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 			{
 				if( client->reliable ) {
 					Com_Printf( "SV_ParseClientMessage: svack from reliable client\n" );
-					SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: svack from reliable client" );
+					SV_DropClient( client, ReconnectBehaviour::DontReconnect, "%s", "Error: svack from reliable client" );
 					return;
 				}
 				cmdNum = MSG_ReadIntBase128( msg );
@@ -2737,7 +2739,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 
 	if( msg->readcount > msg->cursize ) {
 		Com_Printf( "SV_ParseClientMessage: badread\n" );
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Bad message" );
+		SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "%s", "Error: Bad message" );
 		return;
 	}
 }
@@ -2813,7 +2815,7 @@ void SV_AddServerCommand( client_t *client, const wsw::StringView &cmd ) {
 	// if we would be losing an old command that hasn't been acknowledged, we must drop the connection
 	// we check == instead of >= so a broadcast print added by SV_DropClient() doesn't cause a recursive drop client
 	if( client->reliableSequence - client->reliableAcknowledge == MAX_RELIABLE_COMMANDS + 1 ) {
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Too many pending reliable server commands" );
+		SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "%s", "Error: Too many pending reliable server commands" );
 		return;
 	}
 
@@ -3011,7 +3013,7 @@ bool SV_SendClientsFragments( void ) {
 			Com_Printf( "Error sending fragment to %s: %s\n", NET_AddressToString( &client->netchan.remoteAddress ),
 						NET_ErrorString() );
 			if( client->reliable ) {
-				SV_DropClient( client, DROP_TYPE_GENERAL, "Error sending fragment: %s\n", NET_ErrorString() );
+				SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "Error sending fragment: %s\n", NET_ErrorString() );
 			}
 			continue;
 		}
@@ -3175,7 +3177,7 @@ void SV_SendClientMessages( void ) {
 			if( !SV_SendClientDatagram( client ) ) {
 				Com_Printf( "Error sending message to %s: %s\n", client->name, NET_ErrorString() );
 				if( client->reliable ) {
-					SV_DropClient( client, DROP_TYPE_GENERAL, "Error sending message: %s\n", NET_ErrorString() );
+					SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "Error sending message: %s\n", NET_ErrorString() );
 				}
 			}
 		} else {
@@ -3187,7 +3189,7 @@ void SV_SendClientMessages( void ) {
 				if( !SV_SendMessageToClient( client, &tmpMessage ) ) {
 					Com_Printf( "Error sending message to %s: %s\n", client->name, NET_ErrorString() );
 					if( client->reliable ) {
-						SV_DropClient( client, DROP_TYPE_GENERAL, "Error sending message: %s\n", NET_ErrorString() );
+						SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "Error sending message: %s\n", NET_ErrorString() );
 					}
 				}
 			}
@@ -4491,6 +4493,12 @@ static void HandleOobCommand_GetChallenge( const socket_t *socket, const netadr_
 	Netchan_OutOfBandPrint( socket, address, "challenge %i", svs.challenges[index].challenge );
 }
 
+static void SendRejectPacket( const socket_t *socket, const netadr_t *address, const char *message, ReconnectBehaviour reconnectBehaviour ) {
+	// The two initial numeric values are for compatibility with old (pre-2.6) clients
+	Netchan_OutOfBandPrint( socket, address, "reject\n0\n0\n%s\n%u\n%u\n%u\n", ( message ? message : "" ),
+							(unsigned)APP_PROTOCOL_VERSION, (unsigned)ConnectionDropStage::EstablishingFailed, (unsigned)reconnectBehaviour );
+}
+
 static void HandleOobCommand_Connect( const socket_t *socket, const netadr_t *address, const CmdArgs &cmdArgs ) {
 	Com_DPrintf( "HandleOobCommand_Connect(%s)\n", Cmd_Args() );
 
@@ -4500,15 +4508,17 @@ static void HandleOobCommand_Connect( const socket_t *socket, const netadr_t *ad
 			Netchan_OutOfBandPrint( socket, address, "print\nServer is version %4.2f. Protocol %3i\n",
 									APP_VERSION, APP_PROTOCOL_VERSION );
 		} else {
-			Netchan_OutOfBandPrint( socket, address,
-									"reject\n%i\n%i\nServer and client don't have the same version\n", DROP_TYPE_GENERAL, 0 );
+			wsw::StaticString<128> buffer;
+			buffer << wsw::StringView( "Server and client don't have the same version: expected=" );
+			buffer << APP_PROTOCOL_VERSION << wsw::StringView( ", got" ) << version;
+			SendRejectPacket( socket, address, buffer.data(), ReconnectBehaviour::DontReconnect );
 		}
 		Com_DPrintf( "    rejected connect from protocol %i\n", version );
 		return;
 	}
 
 	if( !Info_Validate( Cmd_Argv( 4 ) ) ) {
-		Netchan_OutOfBandPrint( socket, address, "reject\n%i\n%i\nInvalid userinfo string\n", DROP_TYPE_GENERAL, 0 );
+		SendRejectPacket( socket, address, "Invalid userinfo string", ReconnectBehaviour::DontReconnect );
 		Com_DPrintf( "Connection from %s refused: invalid userinfo string\n", NET_AddressToString( address ) );
 		return;
 	}
@@ -4518,14 +4528,12 @@ static void HandleOobCommand_Connect( const socket_t *socket, const netadr_t *ad
 
 	// force the IP key/value pair so the game can filter based on ip
 	if( !Info_SetValueForKey( userinfo, "socket", NET_SocketTypeToString( socket->type ) ) ) {
-		Netchan_OutOfBandPrint( socket, address, "reject\n%i\n%i\nError: Couldn't set userinfo (socket)\n",
-								DROP_TYPE_GENERAL, 0 );
+		SendRejectPacket( socket, address, "Couldn't set userinfo (socket)", ReconnectBehaviour::OfUserChoice );
 		Com_DPrintf( "Connection from %s refused: couldn't set userinfo (socket)\n", NET_AddressToString( address ) );
 		return;
 	}
 	if( !Info_SetValueForKey( userinfo, "ip", NET_AddressToString( address ) ) ) {
-		Netchan_OutOfBandPrint( socket, address, "reject\n%i\n%i\nError: Couldn't set userinfo (ip)\n",
-								DROP_TYPE_GENERAL, 0 );
+		SendRejectPacket( socket, address, "Couldn't set userinfo (ip)", ReconnectBehaviour::OfUserChoice );
 		Com_DPrintf( "Connection from %s refused: couldn't set userinfo (ip)\n", NET_AddressToString( address ) );
 		return;
 	}
@@ -4558,14 +4566,12 @@ static void HandleOobCommand_Connect( const socket_t *socket, const netadr_t *ad
 				NET_InitAddress( &svs.challenges[i].adr, NA_NOTRANSMIT );
 				break; // good
 			}
-			Netchan_OutOfBandPrint( socket, address, "reject\n%i\n%i\nBad challenge\n",
-									DROP_TYPE_GENERAL, DROP_FLAG_AUTORECONNECT );
+			SendRejectPacket( socket, address, "Bad challenge", ReconnectBehaviour::OfUserChoice );
 			return;
 		}
 	}
 	if( i == MAX_CHALLENGES ) {
-		Netchan_OutOfBandPrint( socket, address, "reject\n%i\n%i\nNo challenge for address\n",
-								DROP_TYPE_GENERAL, DROP_FLAG_AUTORECONNECT );
+		SendRejectPacket( socket, address, "No challenge for address", ReconnectBehaviour::OfUserChoice );
 		return;
 	}
 
@@ -4588,8 +4594,7 @@ static void HandleOobCommand_Connect( const socket_t *socket, const netadr_t *ad
 		}
 
 		if( previousclients >= sv_iplimit->integer * 2 ) {
-			Netchan_OutOfBandPrint( socket, address, "reject\n%i\n%i\nToo many connections from your host\n", DROP_TYPE_GENERAL,
-									DROP_FLAG_AUTORECONNECT );
+			SendRejectPacket( socket, address, "Too many connections from your host", ReconnectBehaviour::DontReconnect );
 			Com_DPrintf( "%s:connect rejected : too many connections\n", NET_AddressToString( address ) );
 			return;
 		}
@@ -4632,38 +4637,33 @@ static void HandleOobCommand_Connect( const socket_t *socket, const netadr_t *ad
 			}
 		}
 		if( !newcl ) {
-			Netchan_OutOfBandPrint( socket, address, "reject\n%i\n%i\nServer is full\n", DROP_TYPE_GENERAL,
-									DROP_FLAG_AUTORECONNECT );
+			SendRejectPacket( socket, address, "The server is full", ReconnectBehaviour::OfUserChoice );
 			Com_DPrintf( "Server is full. Rejected a connection.\n" );
 			return;
 		}
 		if( newcl->state && newcl->edict && ( newcl->edict->r.svflags & SVF_FAKECLIENT ) ) {
-			SV_DropClient( newcl, DROP_TYPE_GENERAL, "%s", "Need room for a real player" );
+			SV_DropClient( newcl, ReconnectBehaviour::DontReconnect, "%s", "Need room for a real player" );
 		}
 	}
 
 	// get the game a chance to reject this connection or modify the userinfo
 	if( !SV_ClientConnect( socket, address, newcl, userinfo, game_port, challenge, false, ticket_id, session_id ) ) {
-		const char *rejtype, *rejflag, *rejtypeflag, *rejmsg;
-
-		rejtype = Info_ValueForKey( userinfo, "rejtype" );
-		if( !rejtype ) {
-			rejtype = "0";
+		std::optional<ReconnectBehaviour> reconnectBehavior;
+		if( const auto maybeRawBehavior = wsw::toNum<unsigned>( Info_ValueForKey( userinfo, "rejbehavior" ) ) ) {
+			for( const ReconnectBehaviour behaviourValue : kReconnectBehaviourValues ) {
+				if( (unsigned)behaviourValue == *maybeRawBehavior ) {
+					reconnectBehavior = behaviourValue;
+					break;
+				}
+			}
 		}
-		rejflag = Info_ValueForKey( userinfo, "rejflag" );
-		if( !rejflag ) {
-			rejflag = "0";
-		}
-		// hax because Info_ValueForKey can only be called twice in a row
-		rejtypeflag = va( "%s\n%s", rejtype, rejflag );
 
-		rejmsg = Info_ValueForKey( userinfo, "rejmsg" );
+		const char *rejmsg = Info_ValueForKey( userinfo, "rejmsg" );
 		if( !rejmsg ) {
 			rejmsg = "Game module rejected connection";
 		}
 
-		Netchan_OutOfBandPrint( socket, address, "reject\n%s\n%s\n", rejtypeflag, rejmsg );
-
+		SendRejectPacket( socket, address, rejmsg, reconnectBehavior.value() );
 		Com_DPrintf( "Game rejected a connection.\n" );
 		return;
 	}

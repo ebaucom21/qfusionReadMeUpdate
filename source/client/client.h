@@ -267,10 +267,6 @@ typedef struct {
 	netadr_t httpaddress;           // address of the builtin HTTP server
 	char *httpbaseurl;              // http://<httpaddress>/
 
-	bool rejected;          // these are used when the server rejects our connection
-	int rejecttype;
-	char rejectmessage[80];
-
 	netchan_t netchan;
 
 	int challenge;              // from the server to use for connecting

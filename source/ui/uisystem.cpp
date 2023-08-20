@@ -192,9 +192,9 @@ public:
 
 	void addStatusMessage( const wsw::StringView &message ) override;
 
-	void notifyOfFailedConnection( const wsw::StringView &message, ConnectionFailKind kind );
+	void notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour rectonnectBehaviour, ConnectionDropStage dropStage );
 
-	Q_INVOKABLE void clearFailedConnectionState() { m_clearFailedConnectionState = true; }
+	Q_INVOKABLE void stopReactingToDroppedConnection() { m_pendingReconnectBehaviour = std::nullopt; }
 
 	[[nodiscard]]
 	bool isShown() const override;
@@ -331,19 +331,24 @@ public:
 	Q_SIGNAL void isOperatorChanged( bool isOperator );
 	Q_PROPERTY( bool isOperator MEMBER m_isOperator NOTIFY isOperatorChanged );
 
-	enum ConnectionFailKind_ {
-		NoFail = 0,
-		DontReconnect    = (unsigned)UISystem::ConnectionFailKind::DontReconnect,
-		TryReconnecting  = (unsigned)UISystem::ConnectionFailKind::TryReconnecting,
-		PasswordRequired = (unsigned)UISystem::ConnectionFailKind::PasswordRequired
+	enum ReconnectBehaviour_ {
+		DontReconnect   = (unsigned)ReconnectBehaviour::DontReconnect,
+		OfUserChoice    = (unsigned)ReconnectBehaviour::OfUserChoice,
+		RequestPassword = (unsigned)ReconnectBehaviour::RequestPassword,
 	};
-	Q_ENUM( ConnectionFailKind_ );
+	Q_ENUM( ReconnectBehaviour_ );
 
-	Q_SIGNAL void connectionFailKindChanged( ConnectionFailKind_ kind );
-	Q_PROPERTY( ConnectionFailKind_ connectionFailKind READ getConnectionFailKind NOTIFY connectionFailKindChanged );
+	Q_SIGNAL bool isReactingToDroppedConnectionChanged( bool isReactingToDroppedConnection );
+	Q_PROPERTY( bool isReactingToDroppedConnection READ isReactingToDroppedConnection NOTIFY isReactingToDroppedConnectionChanged );
 
-	Q_SIGNAL void connectionFailMessageChanged( const QByteArray &message );
-	Q_PROPERTY( QByteArray connectionFailMessage READ getConnectionFailMessage NOTIFY connectionFailMessageChanged );
+	Q_SIGNAL void reconnectBehaviourChanged( QVariant reconnectBehaviour );
+	Q_PROPERTY( QVariant reconnectBehaviour READ getReconnectBehaviour NOTIFY reconnectBehaviourChanged );
+
+	Q_SIGNAL void droppedConnectionTitleChanged( const QString &droppedConnectionTitle );
+	Q_PROPERTY( QString droppedConnectionTitle READ getDroppedConnectionTitle NOTIFY droppedConnectionTitleChanged );
+
+	Q_SIGNAL void droppedConnectionMessageChanged( const QString &droppedConnectionMessage );
+	Q_PROPERTY( QString droppedConnectionMessage READ getDroppedConnectionMessage NOTIFY droppedConnectionMessageChanged );
 
 	Q_PROPERTY( QColor black MEMBER m_colorBlack CONSTANT );
 	Q_PROPERTY( QColor red MEMBER m_colorRed CONSTANT );
@@ -475,10 +480,12 @@ private:
 	HudEditorModel m_hudEditorModel;
 	HudDataModel m_hudDataModel;
 
-	QByteArray m_connectionFailMessage;
-	std::optional<ConnectionFailKind> m_pendingConnectionFailKind;
-	std::optional<ConnectionFailKind> m_connectionFailKind;
-	bool m_clearFailedConnectionState { false };
+	QString m_pendingDroppedConnectionTitle;
+	QString m_droppedConnectionTitle;
+	QString m_pendingDroppedConnectionMessage;
+	QString m_droppedConnectionMessage;
+	std::optional<ReconnectBehaviour_> m_pendingReconnectBehaviour;
+	std::optional<ReconnectBehaviour_> m_reconnectBehaviour;
 
 	connstate_t m_clientState { CA_UNINITIALIZED };
 	bool m_isPlayingADemo { false };
@@ -587,11 +594,15 @@ private:
 	bool hasPendingCVarChanges() const { return !m_pendingCVarChanges.isEmpty(); }
 
 	[[nodiscard]]
-	auto getConnectionFailMessage() const -> QByteArray { return m_connectionFailMessage; }
+	bool isReactingToDroppedConnection() const { return m_reconnectBehaviour != std::nullopt; }
 	[[nodiscard]]
-	auto getConnectionFailKind() const -> ConnectionFailKind_ {
-		return m_connectionFailKind ? (ConnectionFailKind_)*m_connectionFailKind : NoFail;
-	};
+	auto getReconnectBehaviour() const -> QVariant {
+		return m_reconnectBehaviour ? QVariant( *m_reconnectBehaviour ) : QVariant();
+	}
+	[[nodiscard]]
+	auto getDroppedConnectionTitle() const -> const QString & { return m_droppedConnectionTitle; }
+	[[nodiscard]]
+	auto getDroppedConnectionMessage() const -> const QString & { return m_droppedConnectionMessage; }
 
 	explicit QtUISystem( int width, int height );
 	~QtUISystem() override;
@@ -1314,24 +1325,23 @@ void QtUISystem::checkPropertyChanges() {
 		checkMaskChanges = true;
 	} else if( isPlayingADemo != wasPlayingADemo ) {
 		checkMaskChanges = true;
-	} else if( m_pendingConnectionFailKind ) {
-		checkMaskChanges = true;
-	} else if( m_clearFailedConnectionState ) {
+	} else if( m_pendingReconnectBehaviour != m_reconnectBehaviour ) {
 		checkMaskChanges = true;
 	}
-
-	m_clearFailedConnectionState = false;
 
 	if( checkMaskChanges ) {
 		const bool wasShowingScoreboard = m_isShowingScoreboard;
 		const bool wasShowingChatPopup = m_isShowingChatPopup;
 		const bool wasShowingTeamChatPopup = m_isShowingTeamChatPopup;
-		if( m_pendingConnectionFailKind ) {
-			m_connectionFailKind = m_pendingConnectionFailKind;
-			m_pendingConnectionFailKind = std::nullopt;
+		if( m_pendingReconnectBehaviour ) {
+			m_reconnectBehaviour = m_pendingReconnectBehaviour;
 			setActiveMenuMask( ConnectionScreen );
-			Q_EMIT connectionFailKindChanged( getConnectionFailKind() );
-			Q_EMIT connectionFailMessageChanged( getConnectionFailMessage() );
+			m_droppedConnectionTitle   = m_pendingDroppedConnectionTitle;
+			m_droppedConnectionMessage = m_pendingDroppedConnectionMessage;
+			Q_EMIT droppedConnectionTitleChanged( getDroppedConnectionTitle() );
+			Q_EMIT droppedConnectionMessageChanged( getDroppedConnectionMessage() );
+			Q_EMIT reconnectBehaviourChanged( getReconnectBehaviour() );
+			Q_EMIT isReactingToDroppedConnectionChanged( true );
 		} else if( actualClientState == CA_DISCONNECTED ) {
 			setActiveMenuMask( MainMenu );
 			m_chatProxy.clear();
@@ -1366,14 +1376,21 @@ void QtUISystem::checkPropertyChanges() {
 			Q_EMIT isShowingTeamChatPopupChanged( false );
 		}
 
-		// Reset the fail state (if any) for robustness
-		if( actualClientState != CA_DISCONNECTED ) {
-			const bool hadKind = m_connectionFailKind != std::nullopt;
-			m_connectionFailKind = m_pendingConnectionFailKind = std::nullopt;
-			m_connectionFailMessage.clear();
-			if( hadKind ) {
-				Q_EMIT connectionFailKindChanged( NoFail );
-				Q_EMIT connectionFailMessageChanged( m_connectionFailMessage );
+		// Reset the state related to the dropped connection for robustness
+		if( actualClientState != CA_DISCONNECTED || m_pendingReconnectBehaviour == std::nullopt ) {
+			const bool wasReactingToDroppedConnection = isReactingToDroppedConnection();
+			m_pendingReconnectBehaviour               = std::nullopt;
+			m_reconnectBehaviour                      = std::nullopt;
+			m_pendingDroppedConnectionMessage.clear();
+			m_pendingDroppedConnectionTitle.clear();
+			m_droppedConnectionTitle.clear();
+			m_droppedConnectionMessage.clear();
+			if( wasReactingToDroppedConnection ) {
+				assert( !isReactingToDroppedConnection() );
+				Q_EMIT isReactingToDroppedConnectionChanged( false );
+				Q_EMIT reconnectBehaviourChanged( QVariant() );
+				Q_EMIT droppedConnectionTitleChanged( QString() );
+				Q_EMIT droppedConnectionMessageChanged( QString() );
 			}
 		}
 	}
@@ -2205,11 +2222,25 @@ void QtUISystem::addStatusMessage( const wsw::StringView &message ) {
 	m_hudDataModel.addStatusMessage( message, getFrameTimestamp() );
 }
 
-void QtUISystem::notifyOfFailedConnection( const wsw::StringView &message, ConnectionFailKind kind ) {
-	m_connectionFailMessage.clear();
-	// TODO: Add proper overloads that avoid duplicated conversions
-	m_connectionFailMessage = toStyledText( message ).toUtf8();
-	m_pendingConnectionFailKind = kind;
+static const QString kConnectionFailedTitle( "Connection failed" );
+static const QString kConnectionErrorTitle( "Connection error" );
+static const QString kConnectionTerminatedTitle( "Connection terminated" );
+
+void QtUISystem::notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour reconnectBehaviour, ConnectionDropStage dropStage ) {
+	switch( dropStage ) {
+		case ConnectionDropStage::EstablishingFailed: m_pendingDroppedConnectionTitle = kConnectionFailedTitle; break;
+		case ConnectionDropStage::FunctioningError: m_pendingDroppedConnectionTitle = kConnectionErrorTitle; break;
+		case ConnectionDropStage::TerminatedByServer: m_pendingDroppedConnectionTitle = kConnectionTerminatedTitle; break;
+	}
+	m_pendingDroppedConnectionMessage.clear();
+	m_pendingDroppedConnectionMessage.append( QLatin1String( message.data(), (int)message.size() ) );
+	if( reconnectBehaviour == ReconnectBehaviour::Autoreconnect ) {
+		wsw::failWithLogicError( "The UI should not be notified of dropped connections with Autoreconnect behaviour" );
+	}
+	static_assert( (unsigned)ReconnectBehaviour_::DontReconnect == (unsigned)ReconnectBehaviour::DontReconnect );
+	static_assert( (unsigned)ReconnectBehaviour_::OfUserChoice == (unsigned)ReconnectBehaviour::OfUserChoice );
+	static_assert( (unsigned)ReconnectBehaviour_::RequestPassword == (unsigned)ReconnectBehaviour_::RequestPassword );
+	m_pendingReconnectBehaviour = (ReconnectBehaviour_)reconnectBehaviour;
 }
 
 template <typename Value>
@@ -2230,14 +2261,14 @@ void QtUISystem::reconnectWithPassword( const QByteArray &password ) {
 	wsw::StaticString<256> command;
 	appendSetCVarCommand( "password"_asView, wsw::StringView( password.data(), password.size() ) );
 	CL_Cbuf_AppendCommand( "reconnect" );
-	m_clearFailedConnectionState = true;
+	m_pendingReconnectBehaviour = std::nullopt;
 }
 
 void QtUISystem::reconnect() {
 	// TODO: Check whether we actually can reconnect
 	CL_Cbuf_AppendCommand( "reconnect" );
 	// Protect from sticking in this state
-	m_clearFailedConnectionState = true;
+	m_pendingReconnectBehaviour = std::nullopt;
 }
 
 void QtUISystem::launchLocalServer( const QByteArray &gametype, const QByteArray &map, int flags, int numBots ) {

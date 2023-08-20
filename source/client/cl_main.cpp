@@ -31,6 +31,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/hash.h"
 #include "../qcommon/q_trie.h"
 #include "../qcommon/textstreamwriterextras.h"
+#include "../qcommon/wswtonum.h"
 #include "../ui/uisystem.h"
 
 #include "serverlist.h"
@@ -1535,23 +1536,33 @@ void CL_ForwardToServer_f( const CmdArgs &cmdArgs ) {
 }
 
 void CL_ServerDisconnect_f( const CmdArgs &cmdArgs ) {
-	int type = atoi( Cmd_Argv( 1 ) );
-	if( type < 0 || type >= DROP_TYPE_TOTAL ) {
-		type = DROP_TYPE_GENERAL;
+	auto reconnectBehaviour = ReconnectBehaviour::DontReconnect;
+	if( const auto rawAutoconnectBehaviour = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( 1 ) ) ) ) {
+		for( const ReconnectBehaviour behaviourValue: kReconnectBehaviourValues ) {
+			if( (unsigned)behaviourValue == *rawAutoconnectBehaviour ) {
+				reconnectBehaviour = behaviourValue;
+				break;
+			}
+		}
 	}
 
-	char reason[MAX_STRING_CHARS];
-	Q_strncpyz( reason, Cmd_Argv( 2 ), sizeof( reason ) );
+	wsw::StaticString<MAX_STRING_CHARS> reason;
+	reason << cmdArgs[2];
 
 	CL_Disconnect_f( {} );
 
-	clNotice() << "Connection was closed by server" << wsw::StringView( reason );
+	auto connectionDropStage = ConnectionDropStage::FunctioningError;
+	if( const auto rawDropStage = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( 1 ) ) ) ) {
+		for( const ConnectionDropStage dropStageValue : kConnectionDropStageValues ) {
+			if( (unsigned)dropStageValue == *rawDropStage ) {
+				connectionDropStage = dropStageValue;
+				break;
+			}
+		}
+	}
 
-	char menuparms[MAX_STRING_CHARS];
-	Q_snprintfz( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i servername \"%s\" droptype %i rejectmessage \"%s\"",
-				 DROP_REASON_CONNTERMINATED, cls.servername, type, reason );
-
-	CL_Cmd_ExecuteNow( menuparms );
+	clNotice() << "Connection was closed by server" << reason;
+	wsw::ui::UISystem::instance()->notifyOfDroppedConnection( reason.asView(), reconnectBehaviour, connectionDropStage );
 }
 
 void CL_Quit( void ) {
@@ -1682,7 +1693,6 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 
 	cls.connect_time = -99999; // CL_CheckForResend() will fire immediately
 	cls.connect_count = 0;
-	cls.rejected = false;
 	cls.lastPacketReceivedTime = cls.realtime; // reset the timeout limit
 	cls.mv = false;
 }
@@ -2030,7 +2040,6 @@ void CL_Disconnect( const char *message, bool isCalledByBuiltinServer /* TODO!!!
 
 		cls.connect_time = 0;
 		cls.connect_count = 0;
-		cls.rejected = false;
 
 		if( cls.demoRecorder.recording ) {
 			CL_Stop_f( {} );
@@ -2084,9 +2093,10 @@ void CL_Disconnect( const char *message, bool isCalledByBuiltinServer /* TODO!!!
 
 		if( cl_connectChain[0] == '\0' ) {
 			if( message ) {
-				const auto kind = wsw::ui::UISystem::ConnectionFailKind::TryReconnecting;
-				auto *uiSystem = wsw::ui::UISystem::instance();
-				uiSystem->notifyOfFailedConnection( wsw::StringView( message ), kind );
+				// TODO: Remove the "message" parameter, call directly in the client code
+				wsw::ui::UISystem::instance()->notifyOfDroppedConnection( wsw::StringView( message ),
+																		  ReconnectBehaviour::OfUserChoice,
+																		  ConnectionDropStage::FunctioningError );
 			}
 		} else {
 			const char *s = strchr( cl_connectChain, ',' );
@@ -2168,7 +2178,6 @@ void CL_ServerReconnect_f( const CmdArgs & ) {
 		}
 
 		cls.connect_count = 0;
-		cls.rejected = false;
 
 		CL_GameModule_Shutdown();
 		SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
@@ -2232,8 +2241,6 @@ static void HandleOob_ClientConnect( const socket_t *socket, const netadr_t *add
 		return;
 	}
 
-	cls.rejected = false;
-
 	Q_strncpyz( cls.session, MSG_ReadStringLine( msg ), sizeof( cls.session ) );
 
 	Netchan_Setup( &cls.netchan, socket, address, Netchan_GamePort() );
@@ -2247,38 +2254,58 @@ static void HandleOob_Reject( const socket_t *socket, const netadr_t *address, m
 		return;
 	}
 
-	cls.rejected = true;
+	// Skip the legacy reject type
+	std::ignore = MSG_ReadStringLine( msg );
+	// Skip the legacy reject flag
+	std::ignore = MSG_ReadStringLine( msg );
 
-	cls.rejecttype = atoi( MSG_ReadStringLine( msg ) );
-	if( cls.rejecttype < 0 || cls.rejecttype >= DROP_TYPE_TOTAL ) {
-		cls.rejecttype = DROP_TYPE_GENERAL;
+	const wsw::String rejectMessage( MSG_ReadStringLine( msg ) );
+	clNotice() << "Connection refused" << rejectMessage;
+
+	auto connectionDropStage = ConnectionDropStage::EstablishingFailed;
+	auto reconnectBehaviour  = ReconnectBehaviour::DontReconnect;
+
+	// 2.6+ sends protocol version
+	if( const auto protocolVersion = wsw::toNum<unsigned>( wsw::StringView( MSG_ReadStringLine( msg ) ) ) ) {
+		// Parse 2.6+ extensions
+		clNotice() << "Parsing reject packet extensions" << wsw::named( "protocol version", *protocolVersion );
+		std::optional<ConnectionDropStage> parsedStage;
+		std::optional<ReconnectBehaviour> parsedBehaviour;
+		if( const auto rawDropStage = wsw::toNum<unsigned>( wsw::StringView( MSG_ReadStringLine( msg ) ) ) ) {
+			for( const ConnectionDropStage dropStageValue: kConnectionDropStageValues ) {
+				if( *rawDropStage == (unsigned)dropStageValue ) {
+					parsedStage = dropStageValue;
+					break;
+				}
+			}
+		}
+		if( parsedStage ) {
+			if( const auto rawBehaviour = wsw::toNum<unsigned>( wsw::StringView( MSG_ReadStringLine( msg ) ) ) ) {
+				for( const ReconnectBehaviour behaviourValue: kReconnectBehaviourValues ) {
+					if( *rawBehaviour == (unsigned)behaviourValue ) {
+						parsedBehaviour = behaviourValue;
+						break;
+					}
+				}
+			}
+		}
+		if( parsedStage && parsedBehaviour ) {
+			connectionDropStage = *parsedStage;
+			reconnectBehaviour  = *parsedBehaviour;
+		} else {
+			clWarning() << "Failed to parse the connection drop stage/reconnect behaviour, using defaults";
+		}
 	}
 
-	const int rejectflag = atoi( MSG_ReadStringLine( msg ) );
-
-	Q_strncpyz( cls.rejectmessage, MSG_ReadStringLine( msg ), sizeof( cls.rejectmessage ) );
-	if( strlen( cls.rejectmessage ) > sizeof( cls.rejectmessage ) - 2 ) {
-		cls.rejectmessage[strlen( cls.rejectmessage ) - 2] = '.';
-		cls.rejectmessage[strlen( cls.rejectmessage ) - 1] = '.';
-		cls.rejectmessage[strlen( cls.rejectmessage )] = '.';
-	}
-
-	clNotice() << "Connection refused" << wsw::StringView( cls.rejectmessage );
-	if( rejectflag & DROP_FLAG_AUTORECONNECT ) {
+	if( reconnectBehaviour == ReconnectBehaviour::Autoreconnect ) {
 		clNotice() << "Automatic reconnecting allowed";
+		// TODO: What's next?
 	} else {
 		clNotice() << "Automatic reconnecting not allowed";
-		const auto dropType = cls.rejecttype;
 		CL_Disconnect( nullptr );
-		using Kind = wsw::ui::UISystem::ConnectionFailKind;
 		auto *const uiSystem = wsw::ui::UISystem::instance();
-		if( dropType == DROP_TYPE_GENERAL ) {
-			uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::TryReconnecting );
-		} else if( dropType == DROP_TYPE_PASSWORD ) {
-			uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::PasswordRequired );
-		} else {
-			uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::DontReconnect );
-		}
+		const wsw::StringView rejectMessageView( rejectMessage.data(), rejectMessage.size() );
+		uiSystem->notifyOfDroppedConnection( rejectMessageView, reconnectBehaviour, connectionDropStage );
 	}
 }
 

@@ -996,14 +996,14 @@ static void G_UpdateMMPlayerInfoString( int playerNum ) {
 void Client::handleUserInfoChanges() {
 	const auto maybeIP = m_userInfo.get( kInfoKeyIP );
 	if( !maybeIP ) {
-		trap_DropClient( getEntity(), DROP_TYPE_GENERAL, "Error: Server didn't provide client IP" );
+		trap_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Server didn't provide client IP" );
 		return;
 	}
 	ip.assign( *maybeIP );
 
 	const auto maybeSocket = m_userInfo.get( kInfoKeySocket );
 	if( !maybeSocket ) {
-		trap_DropClient( getEntity(), DROP_TYPE_GENERAL, "Error: Server didn't provide client socket" );
+		trap_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Server didn't provide client socket" );
 		return;
 	}
 	socket.assign( *maybeSocket );
@@ -1031,7 +1031,7 @@ void Client::handleUserInfoChanges() {
 		}
 	}
 	if( !m_userInfo.set( kInfoKeyName, netname.asView() ) ) {
-		trap_DropClient( getEntity(), DROP_TYPE_GENERAL, "Error: Couldn't set userinfo (name)" );
+		trap_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Couldn't set userinfo (name)" );
 		return;
 	}
 
@@ -1131,22 +1131,19 @@ bool ClientConnect( edict_t *ent, char *userinfo, bool fakeClient ) {
 
 	// verify that server gave us valid data
 	if( !Info_Validate( userinfo ) ) {
-		Info_SetValueForKey( userinfo, "rejtype", va( "%i", DROP_TYPE_GENERAL ) );
-		Info_SetValueForKey( userinfo, "rejflag", va( "%i", 0 ) );
+		Info_SetValueForKey( userinfo, "rejbehavior", va( "%i", (unsigned)ReconnectBehaviour::OfUserChoice ) );
 		Info_SetValueForKey( userinfo, "rejmsg", "Invalid userinfo" );
 		return false;
 	}
 
 	if( !Info_ValueForKey( userinfo, "ip" ) ) {
-		Info_SetValueForKey( userinfo, "rejtype", va( "%i", DROP_TYPE_GENERAL ) );
-		Info_SetValueForKey( userinfo, "rejflag", va( "%i", 0 ) );
+		Info_SetValueForKey( userinfo, "rejbehavior", va( "%i", (unsigned)ReconnectBehaviour::OfUserChoice ) );
 		Info_SetValueForKey( userinfo, "rejmsg", "Error: Server didn't provide client IP" );
 		return false;
 	}
 
 	if( !Info_ValueForKey( userinfo, "socket" ) ) {
-		Info_SetValueForKey( userinfo, "rejtype", va( "%i", DROP_TYPE_GENERAL ) );
-		Info_SetValueForKey( userinfo, "rejflag", va( "%i", 0 ) );
+		Info_SetValueForKey( userinfo, "rejbehavior", va( "%i", (unsigned)ReconnectBehaviour::OfUserChoice ) );
 		Info_SetValueForKey( userinfo, "rejmsg", "Error: Server didn't provide client socket" );
 		return false;
 	}
@@ -1155,8 +1152,7 @@ bool ClientConnect( edict_t *ent, char *userinfo, bool fakeClient ) {
 	// check to see if they are on the banned IP list
 	value = Info_ValueForKey( userinfo, "ip" );
 	if( SV_FilterPacket( value ) ) {
-		Info_SetValueForKey( userinfo, "rejtype", va( "%i", DROP_TYPE_GENERAL ) );
-		Info_SetValueForKey( userinfo, "rejflag", va( "%i", 0 ) );
+		Info_SetValueForKey( userinfo, "rejbehavior", va( "%i", (unsigned)ReconnectBehaviour::DontReconnect ) );
 		Info_SetValueForKey( userinfo, "rejmsg", "You're banned from this server" );
 		return false;
 	}
@@ -1164,8 +1160,7 @@ bool ClientConnect( edict_t *ent, char *userinfo, bool fakeClient ) {
 	// check for a password
 	value = Info_ValueForKey( userinfo, "password" );
 	if( !fakeClient && ( *password->string && ( !value || strcmp( password->string, value ) ) ) ) {
-		Info_SetValueForKey( userinfo, "rejtype", va( "%i", DROP_TYPE_PASSWORD ) );
-		Info_SetValueForKey( userinfo, "rejflag", va( "%i", 0 ) );
+		Info_SetValueForKey( userinfo, "rejbehavior", va( "%i", (unsigned)ReconnectBehaviour::RequestPassword ) );
 		if( value && value[0] ) {
 			Info_SetValueForKey( userinfo, "rejmsg", "Incorrect password" );
 		} else {
@@ -2045,7 +2040,7 @@ void Client::setUserInfo( const wsw::StringView &rawInfo ) {
 	if( m_userInfo.parse( rawInfo ) ) {
 		handleUserInfoChanges();
 	} else {
-		trap_DropClient( getEntity(), DROP_TYPE_GENERAL, "Error: Invalid userinfo" );
+		trap_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Invalid userinfo" );
 	}
 }
 

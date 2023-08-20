@@ -968,7 +968,7 @@ static void G_VoteKickPassed( callvotedata_t *vote ) {
 			// Ban the player for 1 minute to prevent an instant reconnect
 			trap_Cmd_ExecuteText( EXEC_APPEND, va( "addip %s 1", host ) );
 		}
-		trap_DropClient( ent, DROP_TYPE_NORECONNECT, "Kicked" );
+		trap_DropClient( ent, ReconnectBehaviour::DontReconnect, "Kicked" );
 	}
 }
 
@@ -988,7 +988,7 @@ static void G_VoteKickBanPassed( callvotedata_t *vote ) {
 		if( const char *host = G_GetClientHostForFilter( ent ) ) {
 			trap_Cmd_ExecuteText( EXEC_APPEND, va( "addip %s 15\n", host ) );
 		}
-		trap_DropClient( ent, DROP_TYPE_NORECONNECT, "Kicked" );
+		trap_DropClient( ent, ReconnectBehaviour::DontReconnect, "Kicked" );
 	}
 }
 

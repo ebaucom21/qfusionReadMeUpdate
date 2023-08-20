@@ -56,7 +56,7 @@ static void Cmd_ConsoleKick_f( const CmdArgs &cmdArgs ) {
 		trap_Cmd_ExecuteText( EXEC_APPEND, va( "addip %s 1", host ) );
 	}
 
-	trap_DropClient( ent, DROP_TYPE_NORECONNECT, "Kicked" );
+	trap_DropClient( ent, ReconnectBehaviour::DontReconnect, "Kicked" );
 }
 
 

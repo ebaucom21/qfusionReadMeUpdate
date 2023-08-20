@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    87
+#define GAME_API_VERSION    88
 
 //===============================================================
 
@@ -192,7 +192,7 @@ typedef struct {
 	// a fake client connection, ClientConnect is called afterwords
 	// with fakeClient set to true
 	int ( *FakeClientConnect )( const char *fakeUserinfo, const char *fakeSocketType, const char *fakeIP );
-	void ( *DropClient )( struct edict_s *ent, int type, const char *message );
+	void ( *DropClient )( struct edict_s *ent, ReconnectBehaviour reconnectBehaviour, const char *message );
 	int ( *GetClientState )( int numClient );
 	void ( *ExecuteClientThinks )( int clientNum );
 

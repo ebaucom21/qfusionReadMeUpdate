@@ -278,8 +278,8 @@ static inline void trap_ExecuteClientThinks( int clientNum ) {
 	GAME_IMPORT.ExecuteClientThinks( clientNum );
 }
 
-static inline void trap_DropClient( edict_t *ent, int type, const char *message ) {
-	GAME_IMPORT.DropClient( ent, type, message );
+static inline void trap_DropClient( edict_t *ent, ReconnectBehaviour reconnectBehaviour, const char *message = nullptr ) {
+	GAME_IMPORT.DropClient( ent, reconnectBehaviour, message );
 }
 
 static inline void trap_LocateEntities( struct edict_s *edicts, int edict_size, int num_edicts, int max_edicts ) {

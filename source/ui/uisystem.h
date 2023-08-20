@@ -5,6 +5,10 @@
 #include <optional>
 #include <span>
 
+#include "../gameshared/q_shared.h"
+#include "../gameshared/q_math.h"
+#include "../gameshared/q_comref.h"
+
 struct MessageFault;
 struct ReplicatedScoreboardData;
 
@@ -90,13 +94,7 @@ public:
 
 	virtual void addStatusMessage( const wsw::StringView &message ) = 0;
 
-	enum class ConnectionFailKind {
-		DontReconnect = 1,
-		TryReconnecting,
-		PasswordRequired
-	};
-
-	virtual void notifyOfFailedConnection( const wsw::StringView &message, ConnectionFailKind kind ) = 0;
+	virtual void notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour reconnectBehaviour, ConnectionDropStage dropStage ) = 0;
 
 	[[nodiscard]]
 	virtual bool isShown() const = 0;

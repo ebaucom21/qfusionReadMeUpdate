@@ -12,6 +12,8 @@ Item {
 
     default property Component contentComponent
 
+    readonly property alias contentItem: loader.item
+
     property string title
     property bool active
     property string acceptButtonText: "OK"

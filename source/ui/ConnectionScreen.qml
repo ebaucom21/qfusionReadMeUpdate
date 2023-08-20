@@ -59,26 +59,27 @@ Item {
             PopupContentItem {
                 width: popupLikeBackground.width
                 height: popupLikeBackground.height
-                title: "Connection refused"
+                title: UI.ui.droppedConnectionTitle
                 active: true
                 anchors.centerIn: parent
                 buttonsRowBottomMargin: +4
                 buttonsRowRightMargin: +8
                 acceptButtonText: "Retry"
-                hasAcceptButton: UI.ui.connectionFailKind !== UISystem.DontReconnect
-                acceptButtonEnabled: UI.ui.connectionFailKind === UISystem.TryReconnecting ||
-                                     (UI.ui.connectionFailKind === UISystem.PasswordRequired && text.length)
+                hasAcceptButton: UI.ui.reconnectBehaviour !== UISystem.DontReconnect
+                acceptButtonEnabled: UI.ui.reconnectBehaviour === UISystem.OfUserChoice ||
+                                     (UI.ui.reconnectBehaviour === UISystem.RequestPassword && contentItem.passwordText.length > 0)
                 rejectButtonText: hasAcceptButton ? "Cancel" : "OK"
                 onAccepted: {
-                    if (UI.ui.connectionFailKind === UISystem.PasswordRequired) {
-                        UI.ui.reconnectWithPassword(text)
+                    if (UI.ui.reconnectBehaviour === UISystem.RequestPassword) {
+                        UI.ui.reconnectWithPassword(contentItem.passwordText)
                     } else {
                         UI.ui.reconnect()
                     }
                 }
-                onRejected: UI.ui.clearFailedConnectionState()
-                onDismissed: UI.ui.clearFailedConnectionState()
+                onRejected: UI.ui.stopReactingToDroppedConnection()
+                onDismissed: UI.ui.stopReactingToDroppedConnection()
                 contentComponent: Item {
+                    property alias passwordText: passwordInput.text
                     Label {
                         id: descLabel
                         anchors.top: parent.top
@@ -94,12 +95,12 @@ Item {
                         lineHeight: 1.25
                         font.pointSize: 12
                         font.letterSpacing: 0.5
-                        text: UI.ui.connectionFailMessage
+                        text: UI.ui.droppedConnectionMessage
                     }
 
                     TextField {
                         id: passwordInput
-                        visible: UI.ui.connectionFailKind === UISystem.PasswordRequired
+                        visible: UI.ui.reconnectBehaviour === UISystem.RequestPassword
                         enabled: visible
                         Material.theme: activeFocus ? Material.Light : Material.Dark
                         anchors.top: descLabel.bottom
@@ -109,7 +110,7 @@ Item {
                         width: 128
                         maximumLength: 16
                         echoMode: TextInput.Password
-                        onEditingFinished: UI.ui.reconnectWithPassword(text)
+                        onEditingFinished: UI.ui.reconnectWithPassword(passwordInput.text)
                     }
                 }
             }
@@ -118,8 +119,8 @@ Item {
 
     Connections {
         target: UI.ui
-        onConnectionFailKindChanged: {
-            if (UI.ui.connectionFailKind) {
+        onIsReactingToDroppedConnectionChanged: {
+            if (UI.ui.isReactingToDroppedConnection) {
                 stackView.clear(StackView.Immediate)
                 stackView.push(dialogComponent, null, StackView.ReplaceTransition)
             } else {
@@ -131,7 +132,7 @@ Item {
 
     Keys.onPressed: {
         if (event.key === Qt.Key_Escape) {
-            UI.ui.clearFailedConnectionState()
+            UI.ui.stopReactingToDroppedConnection()
             UI.ui.disconnect()
         }
     }
