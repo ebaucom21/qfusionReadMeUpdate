@@ -39,6 +39,15 @@ struct EllipsoidalFlockParams {
 	float stretchScale { 1.0f };
 	float gravity { 600 };
 	float drag { 0.0f };
+	// Degrees per second for points which are close to the origin
+	float vorticityAngularSpeed { 0.0f };
+	float vorticityAxis[3] { 0.0f, 0.0f, 1.0f };
+	// Units per second for points which are close to the origin
+	float outflowSpeed { 0.0f };
+	// Axis of the outflow, should be a unit vector
+	float outflowAxis[3] { 0.0f, 0.0f, 1.0f };
+	float turbulenceSpeed { 0.0f };
+	float turbulenceScale { 1.0f };
 	float restitution { 0.75f };
 	struct { unsigned minInclusive { 1 }, maxInclusive { 1 }; } bounceCount;
 	struct { float min { 300 }, max { 300 }; } speed;
@@ -58,6 +67,15 @@ struct ConicalFlockParams {
 	float shiftDir[3] { 0.0f, 0.0f, 1.0f };
 	float gravity { 600 };
 	float drag { 0.0f };
+	// Degrees per second for points which are close to the origin
+	float vorticityAngularSpeed { 0.0f };
+	float vorticityAxis[3] { 0.0f, 0.0f, 1.0f };
+	// Units per second for points which are close to the origin
+	float outflowSpeed { 0.0f };
+	// Axis of the outflow, should be a unit vector
+	float outflowAxis[3] { 0.0f, 0.0f, 1.0f };
+	float turbulenceSpeed { 0.0f };
+	float turbulenceScale { 1.0f };
 	float restitution { 0.75f };
 	float angle { 45.0f };
 	float innerAngle { 0.0f };
@@ -113,6 +131,18 @@ struct PolyTrailOfParticles;
 struct alignas( 16 ) ParticleFlock {
 	Particle::AppearanceRules appearanceRules;
 	float drag { 0.0f };
+
+	// note that the accumulated error due simulation timestep size leads to travelling in the radial direction
+	// this leads to larger spirals at lower framerates (or at lag spikes)
+	// also note induced velocities by vorticity and outflow are proportional to 1/r
+	// for vorticity the distance to vorticityOrigin and for outflow the distance to the line formed by the origin and vector
+
+	// Radians/second for points on a reference distance
+	float vorticityAngularSpeedRadians { 0.0f };
+	// Units per second for points on a reference distance
+	float outflowSpeed { 0.0f };
+	// Units per second
+	float turbulenceSpeed { 0.0f };
 	float restitution { 0.75f };
 	Particle *particles;
 	int64_t timeoutAt;
@@ -144,6 +174,15 @@ struct alignas( 16 ) ParticleFlock {
 	uint8_t globalBinIndex { 255 };
 	uint8_t groupBinIndex { 255 };
 	uint8_t underlyingStorageCapacity { 0 };
+	// Put these fields last as they are rarely used
+	float turbulenceCoordinateScale { 1.0f };
+	// The origin of the vorticity effect
+	float vorticityOrigin[3];
+	float vorticityAxis[3];
+	// Point used to define the line of the outflow
+	float outflowOrigin[3]; //
+	// Axis of the outflow, should be a unit vector
+	float outflowAxis[3] { 0.0f, 0.0f, 1.0f };
 };
 
 void updateParticleTrail( ParticleFlock *flock, ConicalFlockParams *flockParamsTemplate,
@@ -249,6 +288,9 @@ private:
 							   const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
 							   const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail );
 
+	template <typename FlockParams>
+	void setupFlockFieldsFromParams( ParticleFlock *__restrict flock, const FlockParams &flockParams );
+
 	static void runStepKinematics( ParticleFlock *__restrict flock, float deltaSeconds, vec3_t resultBounds[2] );
 
 	[[nodiscard]]
@@ -298,10 +340,9 @@ public:
 								const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
 								const ParamsOfPolyTrailOfParticles *paramsOfTrails = nullptr );
 
-	// Caution: Trail particles aren't assumed to be bouncing by default
-	// (otherwise, respective flock fields should be set manually)
 	[[nodiscard]]
-	auto createTrailFlock( const Particle::AppearanceRules &appearanceRules, unsigned binIndex ) -> ParticleFlock *;
+	auto createTrailFlock( const Particle::AppearanceRules &appearanceRules,
+						   const ConicalFlockParams &initialFlockParams, unsigned binIndex ) -> ParticleFlock *;
 
 	void destroyTrailFlock( ParticleFlock *flock ) { unlinkAndFree( flock ); }
 

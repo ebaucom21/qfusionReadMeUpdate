@@ -159,7 +159,7 @@ auto TrackedEffectsSystem::allocParticleTrail( int entNum, unsigned trailIndex,
 		trail->paramsTemplate = paramsTemplate;
 
 		// Don't drop right now, just mark for computing direction next frames
-		trail->particleFlock = cg.particleSystem.createTrailFlock( appearanceRules, particleSystemBin );
+		trail->particleFlock = cg.particleSystem.createTrailFlock( appearanceRules, *paramsTemplate, particleSystemBin );
 
 		VectorCopy( origin, trail->lastDropOrigin );
 
@@ -366,6 +366,7 @@ static ConicalFlockParams g_rocketSmokeParticlesFlockParams {
 	.gravity         = 0,
 	.angle           = 45,
 	.innerAngle      = 18,
+	.bounceCount     = { .minInclusive = 0, .maxInclusive = 0 },
 	.speed           = { .min = 75, .max = 150 },
 	.timeout         = { .min = 350, .max = 400 },
 	.activationDelay = { .min = 8, .max = 8 },
@@ -374,6 +375,7 @@ static ConicalFlockParams g_rocketSmokeParticlesFlockParams {
 static ConicalFlockParams g_rocketFireParticlesFlockParams {
 	.gravity         = 0,
 	.angle           = 15,
+	.bounceCount     = { .minInclusive = 0, .maxInclusive = 0 },
 	.speed           = { .min = 75, .max = 150 },
 	.timeout         = { .min = 125, .max = 250 },
 	.activationDelay = { .min = 8, .max = 8 },
@@ -489,17 +491,19 @@ static const RgbaLifespan kGrenadeSmokeTrailColors[1] {
 };
 
 static ConicalFlockParams g_grenadeFuseParticlesFlockParams {
-	.gravity    = 0,
-	.angle      = 60,
-	.innerAngle = 30,
-	.speed      = { .min = 50, .max = 75 },
-	.timeout    = { .min = 125, .max = 175 },
+	.gravity     = 0,
+	.angle       = 60,
+	.innerAngle  = 30,
+	.bounceCount = { .minInclusive = 0, .maxInclusive = 0 },
+	.speed       = { .min = 50, .max = 75 },
+	.timeout     = { .min = 125, .max = 175 },
 };
 
 static ConicalFlockParams g_grenadeSmokeParticlesFlockParams {
 	.gravity         = 0,
 	.angle           = 24,
 	.innerAngle      = 9,
+	.bounceCount     = { .minInclusive = 0, .maxInclusive = 0 },
 	.speed           = { .min = 25, .max = 50 },
 	.timeout         = { .min = 300, .max = 350 },
 	.activationDelay = { .min = 8, .max = 8 },
@@ -611,17 +615,19 @@ static const RgbaLifespan kBlastIonsTrailColors[] {
 };
 
 static ConicalFlockParams g_blastSmokeParticlesFlockParams {
-	.gravity = 0,
-	.angle   = 24,
-	.speed   = { .min = 200, .max = 300 },
-	.timeout = { .min = 175, .max = 225 },
+	.gravity     = 0,
+	.angle       = 24,
+	.bounceCount = { .minInclusive = 0, .maxInclusive = 0 },
+	.speed       = { .min = 200, .max = 300 },
+	.timeout     = { .min = 175, .max = 225 },
 };
 
 static ConicalFlockParams g_blastIonsParticlesFlockParams {
-	.gravity         = -75,
-	.angle           = 30,
-	.speed           = { .min = 200, .max = 300 },
-	.timeout         = { .min = 300, .max = 400 },
+	.gravity     = -75,
+	.angle       = 30,
+	.bounceCount = { .minInclusive = 0, .maxInclusive = 0 },
+	.speed       = { .min = 200, .max = 300 },
+	.timeout     = { .min = 300, .max = 400 },
 };
 
 static const StraightPolyTrailProps kBlastCombinedTrailProps {

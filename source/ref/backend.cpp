@@ -1548,14 +1548,16 @@ static void submitSparkParticlesToBackend( const FrontendToBackendShared *fsh,
 
 		vec3_t particleDir;
 		float fromFrac, toFrac;
-		if( float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 1.0f ) [[likely]] {
-			const float rcpSpeed = Q_RSqrt( squareSpeed );
+		vec3_t visualVelocity;
+		VectorAdd( particle->dynamicsVelocity, particle->artificialVelocity, visualVelocity );
+		if( const float squareVisualSpeed = VectorLengthSquared( visualVelocity ); squareVisualSpeed > 1.0f ) [[likely]] {
+			const float rcpVisualSpeed = Q_RSqrt( squareVisualSpeed );
 			if( particle->rotationAngle == 0.0f ) [[likely]] {
-				VectorScale( particle->velocity, rcpSpeed, particleDir );
+				VectorScale( visualVelocity, rcpVisualSpeed, particleDir );
 				fromFrac = 0.0f, toFrac = 1.0f;
 			} else {
 				vec3_t tmpParticleDir;
-				VectorScale( particle->velocity, rcpSpeed, tmpParticleDir );
+				VectorScale( visualVelocity, rcpVisualSpeed, tmpParticleDir );
 
 				mat3_t rotationMatrix;
 				const float *rotationAxis = kPredefinedDirs[particle->rotationAxisIndex];

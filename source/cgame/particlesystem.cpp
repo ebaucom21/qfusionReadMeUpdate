@@ -1,6 +1,7 @@
 #include "particlesystem.h"
 #include "../common/links.h"
 #include "../client/client.h"
+#include "../common/noise.h"
 #include "cg_local.h"
 
 struct PolyTrailOfParticles {
@@ -334,27 +335,11 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 														  maxParticles, std::addressof( appearanceRules ),
 														  &m_rng, cg.time, fillStride );
 
-	flock->timeoutAt               = fillResult.resultTimeout;
-	flock->numActivatedParticles   = fillResult.numParticles * activatedCountMultiplier;
-	flock->numDelayedParticles     = fillResult.numParticles * delayedCountMultiplier;
-	flock->delayedParticlesOffset  = ( initialOffset + 1 ) - fillResult.numParticles * delayedCountMultiplier;
-	flock->drag                    = flockParams.drag;
-	flock->restitution             = flockParams.restitution;
-	flock->hasRotatingParticles    = flockParams.angularVelocity.min != 0.0f || flockParams.angularVelocity.max != 0.0f;
-	flock->minBounceCount          = flockParams.bounceCount.minInclusive;
-	flock->maxBounceCount          = flockParams.bounceCount.maxInclusive;
-	flock->startBounceCounterDelay = flockParams.startBounceCounterDelay;
-
-	if( flock->minBounceCount < flock->maxBounceCount ) {
-		// Assume that probability of dropping the particle for varyingCount + 1 impacts is finalDropProbability
-		// Hence that probability of not dropping it for varyingCount + 1 impacts is 1.0f - finalDropProbability
-		// (We assume that almost all particles must be dropped the next step after the max one, hence the +1)
-		// The probability of not dropping it every step is pow( finalKeepProbability, 1.0f / ( varyingCount + 1 ) )
-		constexpr float finalDropProbability = 0.95f;
-		constexpr float finalKeepProbability = 1.00f - finalDropProbability;
-		const unsigned varyingCount          = flock->maxBounceCount - flock->minBounceCount;
-		flock->keepOnImpactProbability       = std::pow( finalKeepProbability, Q_Rcp( (float)( varyingCount + 1 ) ) );
-	}
+	flock->timeoutAt              = fillResult.resultTimeout;
+	flock->numActivatedParticles  = fillResult.numParticles * activatedCountMultiplier;
+	flock->numDelayedParticles    = fillResult.numParticles * delayedCountMultiplier;
+	flock->delayedParticlesOffset = ( initialOffset + 1 ) - fillResult.numParticles * delayedCountMultiplier;
+	setupFlockFieldsFromParams( flock, flockParams );
 
 	[[maybe_unused]] vec3_t dropOriginInitializer;
 	if( paramsOfPolyTrail || paramsOfParticleTrail ) {
@@ -374,13 +359,10 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 			const Particle *__restrict p = &flock->particles[maxParticles - 1 - i];
 			VectorCopy( dropOriginInitializer, dropOrigins[p->originalIndex] );
 		}
+
 		assert( !trailFlock->numActivatedParticles && !trailFlock->numDelayedParticles );
-		trailFlock->timeoutAt               = std::numeric_limits<int64_t>::max();
-		trailFlock->delayedParticlesOffset  = flock->underlyingStorageCapacity - 1;
-		trailFlock->drag                    = paramsOfParticleTrail->flockParamsTemplate.drag;
-		trailFlock->hasRotatingParticles    = paramsOfParticleTrail->flockParamsTemplate.angularVelocity.min != 0.0f ||
-											  paramsOfParticleTrail->flockParamsTemplate.angularVelocity.max != 0.0f;
-		assert( !trailFlock->minBounceCount && !trailFlock->maxBounceCount && !trailFlock->startBounceCounterDelay );
+		trailFlock->timeoutAt = std::numeric_limits<int64_t>::max();
+		setupFlockFieldsFromParams( flock, *trailFlock->flockParamsTemplate );
 	}
 
 	if( paramsOfPolyTrail ) {
@@ -399,6 +381,36 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 
 		polyTrail->spawnedAt  = cg.time;
 		polyTrail->numEntries = fillResult.numParticles;
+	}
+}
+
+template <typename FlockParams>
+void ParticleSystem::setupFlockFieldsFromParams( ParticleFlock *__restrict flock, const FlockParams &params ) {
+
+	flock->drag                         = params.drag;
+	flock->vorticityAngularSpeedRadians = DEG2RAD( params.vorticityAngularSpeed );
+	VectorSet( flock->vorticityOrigin, params.origin[0], params.origin[1], params.origin[2] );
+	VectorSet( flock->vorticityAxis, params.vorticityAxis[0], params.vorticityAxis[1], params.vorticityAxis[2] );
+	flock->outflowSpeed                 = params.outflowSpeed;
+	VectorSet( flock->outflowOrigin, params.origin[0], params.origin[1], params.origin[2] );
+	VectorSet( flock->outflowAxis, params.outflowAxis[0], params.outflowAxis[1], params.outflowAxis[2] );
+	flock->turbulenceSpeed              = params.turbulenceSpeed;
+	flock->turbulenceCoordinateScale    = Q_Rcp( params.turbulenceScale );
+	flock->restitution                  = params.restitution;
+	flock->hasRotatingParticles         = params.angularVelocity.min != 0.0f || params.angularVelocity.max != 0.0f;
+	flock->minBounceCount               = params.bounceCount.minInclusive;
+	flock->maxBounceCount               = params.bounceCount.maxInclusive;
+	flock->startBounceCounterDelay      = params.startBounceCounterDelay;
+
+	if( flock->minBounceCount < flock->maxBounceCount ) {
+		// Assume that probability of dropping the particle for varyingCount + 1 impacts is finalDropProbability
+		// Hence that probability of not dropping it for varyingCount + 1 impacts is 1.0f - finalDropProbability
+		// (We assume that almost all particles must be dropped the next step after the max one, hence the +1)
+		// The probability of not dropping it every step is pow( finalKeepProbability, 1.0f / ( varyingCount + 1 ) )
+		constexpr float finalDropProbability = 0.95f;
+		constexpr float finalKeepProbability = 1.00f - finalDropProbability;
+		const unsigned varyingCount          = flock->maxBounceCount - flock->minBounceCount;
+		flock->keepOnImpactProbability       = std::pow( finalKeepProbability, Q_Rcp( (float)( varyingCount + 1 ) ) );
 	}
 }
 
@@ -444,17 +456,17 @@ void ParticleSystem::addLargeParticleFlock( const Particle::AppearanceRules &rul
 	addParticleFlockImpl<ConicalFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize, paramsOfParticleTrail, paramsOfPolyTrail );
 }
 
-auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules, unsigned binIndex ) -> ParticleFlock * {
+auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules,
+									   const ConicalFlockParams &initialFlockParams,
+									   unsigned binIndex ) -> ParticleFlock * {
 	assert( binIndex == kClippedTrailFlocksBin || binIndex == kNonClippedTrailFlocksBin );
-
 	// Don't let it evict anything TODO???
 	ParticleFlock *flock = createFlock( binIndex, rules, nullptr );
-
 	// Externally managed
-	flock->timeoutAt             = std::numeric_limits<int64_t>::max();
-	flock->numActivatedParticles = 0;
-	flock->numDelayedParticles   = 0;
-
+	flock->timeoutAt = std::numeric_limits<int64_t>::max();
+	// This is important for drag/turbulence/vorticity/outflow
+	setupFlockFieldsFromParams( flock, initialFlockParams );
+	assert( flock->numActivatedParticles + flock->numDelayedParticles == 0 );
 	return flock;
 }
 
@@ -495,6 +507,13 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 	assert( params->activationDelay.min <= params->activationDelay.max );
 	assert( params->activationDelay.max <= 10'000 );
 
+	assert( params->vorticityAngularSpeed == 0.0f || std::fabs( VectorLengthFast( params->vorticityAxis ) - 1.0f ) < 1e-3f );
+	assert( std::fabs( params->vorticityAngularSpeed ) <= 10.0f * 360.0f );
+	assert( params->outflowSpeed == 0.0f || std::fabs( VectorLengthFast( params->outflowAxis ) - 1.0f ) < 1e-3f );
+	assert( std::fabs( params->outflowSpeed ) <= 1000.0f );
+	assert( params->turbulenceSpeed >= 0.0f && params->turbulenceSpeed <= 1000.0f );
+	assert( params->turbulenceScale >= 1.0f && params->turbulenceScale <= 1000.0f );
+
 	const vec3_t *__restrict dirs = ::kPredefinedDirs;
 
 	assert( params->timeout.min && params->timeout.min <= params->timeout.max && params->timeout.max < 3000 );
@@ -534,7 +553,7 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		// We try relying on branch prediction facilities
 		// TODO: Add template/if constexpr specializations
 		if( isSpherical ) {
-			VectorScale( randomDir, speed, p->velocity );
+			VectorScale( randomDir, speed, p->dynamicsVelocity );
 		} else {
 			const float stretchScale = params->stretchScale;
 			const float stretchDot   = DotProduct( randomDir, params->stretchDir );
@@ -548,17 +567,17 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 			const float rcpNewDirLen  = Q_RSqrt( newAlignedSquareLen + perpSquareLen );
 			const float velocityScale = speed * rcpNewDirLen;
 			// Combine the perpendicular part with the aligned part using the strech scale
-			VectorMA( perpPart, stretchScale, alignedPart, p->velocity );
+			VectorMA( perpPart, stretchScale, alignedPart, p->dynamicsVelocity );
 			// Normalize and scale by the speed
-			VectorScale( p->velocity, velocityScale, p->velocity );
+			VectorScale( p->dynamicsVelocity, velocityScale, p->dynamicsVelocity );
 		}
 
 		if( hasSpeedShift ) {
 			const float shift = rng->nextFloat( params->shiftSpeed.min, params->shiftSpeed.max );
-			VectorMA( p->velocity, shift, params->shiftDir, p->velocity );
+			VectorMA( p->dynamicsVelocity, shift, params->shiftDir, p->dynamicsVelocity );
 		}
 
-		p->velocity[3] = 0.0f;
+		p->dynamicsVelocity[3] = 0.0f;
 
 		p->rotationAngle = 0.0f;
 		if( hasVariableAngularVelocity ) {
@@ -654,6 +673,13 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 	assert( params->activationDelay.min <= params->activationDelay.max );
 	assert( params->activationDelay.max <= 10'000 );
 
+	assert( params->vorticityAngularSpeed == 0.0f || std::fabs( VectorLengthFast( params->vorticityAxis ) - 1.0f ) < 1e-3f );
+	assert( std::fabs( params->vorticityAngularSpeed ) <= 10.0f * 360.0f );
+	assert( params->outflowSpeed == 0.0f || std::fabs( VectorLengthFast( params->outflowAxis ) - 1.0f ) < 1e-3f );
+	assert( std::fabs( params->outflowSpeed ) <= 1000.0f );
+	assert( params->turbulenceSpeed >= 0.0f && params->turbulenceSpeed <= 1000.0f );
+	assert( params->turbulenceScale >= 1.0f && params->turbulenceScale <= 1000.0f );
+
 	// TODO: Supply cosine values as parameters?
 
 	float maxZ = 1.0f;
@@ -702,16 +728,16 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 
 		const float speed = rng->nextFloat( params->speed.min, params->speed.max );
 		const vec3_t untransformed { speed * r * std::cos( phi ), speed * r * std::sin( phi ), speed * z };
-		Matrix3_TransformVector( transformMatrix, untransformed, p->velocity );
+		Matrix3_TransformVector( transformMatrix, untransformed, p->dynamicsVelocity );
 
 		// We try relying on branch prediction facilities
 		// TODO: Add template/if constexpr specializations
 		if( hasSpeedShift ) {
 			const float shift = rng->nextFloat( params->shiftSpeed.min, params->shiftSpeed.max );
-			VectorMA( p->velocity, shift, params->shiftDir, p->velocity );
+			VectorMA( p->dynamicsVelocity, shift, params->shiftDir, p->dynamicsVelocity );
 		}
 
-		p->velocity[3] = 0.0f;
+		p->dynamicsVelocity[3] = 0.0f;
 
 		p->rotationAngle = 0.0f;
 		if( hasVariableAngularVelocity ) {
@@ -788,6 +814,19 @@ void updateParticleTrail( ParticleFlock *__restrict flock,
 
 			VectorCopy( lastDropOrigin, flockParamsTemplate->origin );
 			VectorCopy( dir, flockParamsTemplate->dir );
+
+			assert( ( flockParamsTemplate->vorticityAngularSpeed != 0.0f ) == ( flock->vorticityAngularSpeedRadians != 0.0f ) );
+			if( flockParamsTemplate->vorticityAngularSpeed != 0.0f ) {
+				// Note: The template vorticity axis is unused, update the flock directly
+				VectorCopy( lastDropOrigin, flock->vorticityOrigin );
+				VectorCopy( dir, flock->vorticityAxis );
+			}
+			assert( flockParamsTemplate->outflowSpeed == flock->outflowSpeed );
+			if( flockParamsTemplate->outflowSpeed != 0.0f ) {
+				// Note: The template outflow axis is unused, update the flock directly
+				VectorCopy( lastDropOrigin, flock->outflowOrigin );
+				VectorCopy( dir, flock->outflowAxis );
+			}
 
 			unsigned stepNum    = 0;
 			const auto numSteps = (unsigned)wsw::max( 1.0f, distance * Q_Rcp( updateParams.dropDistance ) );
@@ -1101,41 +1140,86 @@ void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float d
 
 	BoundsBuilder boundsBuilder;
 
-	if( flock->drag > 0.0f ) {
-		for( unsigned i = 0; i < flock->numActivatedParticles; ++i ) {
-			Particle *const __restrict particle = flock->particles + i;
-			if( const float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 1.0f ) [[likely]] {
-				const float rcpSpeed = Q_RSqrt( squareSpeed );
-				const float speed    = Q_Rcp( rcpSpeed );
-				vec4_t velocityDir;
-				VectorScale( particle->velocity, rcpSpeed, velocityDir );
-				const float forceLike  = flock->drag * speed * speed;
-				const float deltaSpeed = -forceLike * deltaSeconds;
-				VectorMA( particle->velocity, deltaSpeed, velocityDir, particle->velocity );
-			}
-			VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
-			VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
+	for( unsigned i = 0; i < flock->numActivatedParticles; ++i ) {
+		Particle *const __restrict particle = flock->particles + i;
 
-			if( flock->hasRotatingParticles ) {
-				particle->rotationAngle += particle->angularVelocity * deltaSeconds;
-				particle->rotationAngle = AngleNormalize360( particle->rotationAngle );
-			}
+		vec4_t accel;
+		Vector4Copy( particle->accel, accel );
+        Vector4Set( particle->artificialVelocity, 0.0f, 0.0f, 0.0f, 0.0f );
 
-			// TODO: Supply this 4-component vector explicitly
-			boundsBuilder.addPoint( particle->origin );
+		if( flock->drag > 0.0f ) {
+			if( const float speed = VectorLengthFast( particle->dynamicsVelocity ); speed > 1.0f ) [[likely]] {
+				const float drag = flock->drag * speed;
+				VectorMA( accel, -drag, particle->dynamicsVelocity, accel );
+			}
 		}
-	} else {
-		for( unsigned i = 0; i < flock->numActivatedParticles; ++i ) {
-			Particle *const __restrict particle = flock->particles + i;
-			VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
-			VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
-			// TODO: Supply this 4-component vector explicitly
-			boundsBuilder.addPoint( particle->origin );
 
-			if( flock->hasRotatingParticles ) {
-				particle->rotationAngle += particle->angularVelocity * deltaSeconds;
-				particle->rotationAngle = AngleNormalize360( particle->rotationAngle );
+		// Negative values lead to rotation in the opposite direction
+		if( flock->vorticityAngularSpeedRadians != 0.0f ) {
+			float distance                     = 0.0f;
+			float angularSpeedScaleForDistance = 0.0f;
+			constexpr float referenceDistance  = 16.0f;
+
+			vec4_t particleOffsetFromOrigin, vortexDir;
+			VectorSubtract( particle->origin, flock->vorticityOrigin, particleOffsetFromOrigin );
+			CrossProduct( particleOffsetFromOrigin, flock->vorticityAxis, vortexDir );
+
+			if( const float squareDirLength = VectorLengthSquared( vortexDir ); squareDirLength > 0.0f ) [[likely]] {
+				// Normalize the vortex dir for further use
+				const float rcpDirLength = Q_RSqrt( squareDirLength );
+				VectorScale( vortexDir, rcpDirLength, vortexDir );
+				// The offset vector is an operand of the cross product, which is non-zero, so it's magnitude is non-zero
+				const float squaredOffsetMagnitude = VectorLengthSquared( particleOffsetFromOrigin );
+				assert( squaredOffsetMagnitude > 0.0f );
+				distance = squaredOffsetMagnitude * Q_RSqrt( squaredOffsetMagnitude );
+				// The scale is 1.0 for offsets less than this distance, otherwise it uses a reciprocal falloff
+				angularSpeedScaleForDistance = Q_Rcp( wsw::max( 1.0f, distance - referenceDistance ) );
 			}
+
+			assert( angularSpeedScaleForDistance >= 0.0f && angularSpeedScaleForDistance <= 1.0f );
+			const float particleVorticityAngularSpeed = flock->vorticityAngularSpeedRadians * angularSpeedScaleForDistance;
+			const float particleVorticityLinearSpeed  = particleVorticityAngularSpeed * distance;
+			VectorMA( particle->artificialVelocity, particleVorticityLinearSpeed, vortexDir, particle->artificialVelocity );
+		}
+
+		// Negative values lead to inflow
+		if( flock->outflowSpeed != 0.0f ) {
+			vec4_t particleOffsetFromOrigin;
+			VectorSubtract( particle->origin, flock->outflowOrigin, particleOffsetFromOrigin );
+			const float lengthAlongAxis = DotProduct( particleOffsetFromOrigin, flock->outflowAxis );
+			vec4_t perpendicularOffset;
+			// It is important that the axis is a unit vector for this step
+			VectorMA( particleOffsetFromOrigin, -lengthAlongAxis, flock->outflowAxis, perpendicularOffset );
+			if( const float radiusSquared = VectorLengthSquared( perpendicularOffset ); radiusSquared > 0.0f ) [[likely]] {
+				constexpr float referenceDistance    = 2.0f;
+				constexpr float rcpReferenceDistance = 1.0f / referenceDistance;
+				vec4_t outflowVec;
+				// Make the maximum the value at a radius of referenceDistance units
+				const float rcpRadiusSquared = wsw::min( Q_Rcp( radiusSquared ), wsw::square( rcpReferenceDistance ) );
+				// Make dependancy 1/r
+				VectorScale( perpendicularOffset, rcpRadiusSquared, outflowVec );
+				VectorMA( particle->artificialVelocity, flock->outflowSpeed, outflowVec, particle->artificialVelocity );
+			}
+		}
+
+        if( flock->turbulenceSpeed > 0.0f && particle->lifetimeFrac > 0.1f ) {
+			vec3_t scaledOrigin;
+			VectorScale( particle->origin, flock->turbulenceCoordinateScale, scaledOrigin );
+			const Vec3 turbulence = calcSimplexNoiseCurl( scaledOrigin[0], scaledOrigin[1], scaledOrigin[2] );
+			VectorMA( particle->artificialVelocity, flock->turbulenceSpeed, turbulence.Data(), particle->artificialVelocity );
+        }
+
+		vec3_t effectiveVelocity;
+		VectorMA( particle->dynamicsVelocity, deltaSeconds, accel, particle->dynamicsVelocity );
+        VectorAdd( particle->dynamicsVelocity, particle->artificialVelocity, effectiveVelocity );
+		VectorMA( particle->oldOrigin, deltaSeconds, effectiveVelocity, particle->origin );
+
+		// TODO: Supply this 4-component vector explicitly
+		boundsBuilder.addPoint( particle->origin );
+
+		if( flock->hasRotatingParticles ) {
+			particle->rotationAngle += particle->angularVelocity * deltaSeconds;
+			particle->rotationAngle = AngleNormalize360( particle->rotationAngle );
 		}
 	}
 
@@ -1216,13 +1300,14 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 						}
 
 						if( keepTheParticleByImpactRules ) {
-							// Reflect the velocity
-							const float oldSquareSpeed    = VectorLengthSquared( p->velocity );
+							// Reflect the dynamics velocity
+							// Note: The artificial velocity is not updated
+							const float oldSquareSpeed    = VectorLengthSquared( p->dynamicsVelocity );
 							const float oldSpeedThreshold = 1.0f;
 							const float newSpeedThreshold = oldSpeedThreshold * Q_Rcp( flock->restitution );
 							if( oldSquareSpeed >= wsw::square( newSpeedThreshold ) ) [[likely]] {
 								const float rcpOldSpeed = Q_RSqrt( oldSquareSpeed );
-								vec3_t oldVelocityDir { p->velocity[0], p->velocity[1], p->velocity[2] };
+								vec3_t oldVelocityDir { p->dynamicsVelocity[0], p->dynamicsVelocity[1], p->dynamicsVelocity[2] };
 								VectorScale( oldVelocityDir, rcpOldSpeed, oldVelocityDir );
 
 								vec3_t reflectedVelocityDir;
@@ -1234,7 +1319,7 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 
 								const float newSpeed = flock->restitution * ( oldSquareSpeed * rcpOldSpeed );
 								// Save the reflected velocity
-								VectorScale( reflectedVelocityDir, newSpeed, p->velocity );
+								VectorScale( reflectedVelocityDir, newSpeed, p->dynamicsVelocity );
 
 								// Save the trace endpos with a slight offset as an origin for the next step.
 								// This is not really correct but is OK.

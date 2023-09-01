@@ -256,7 +256,10 @@ struct alignas( 16 ) Particle {
 
 	float origin[4];
 	float oldOrigin[4];
-	float velocity[4];
+	// Kept/accumulated between frames
+	float dynamicsVelocity[4];
+	// Calculated in immediate mode for a given origin
+    float artificialVelocity[4];
 	float accel[4];
 	float rotationAngle;
 	float angularVelocity;
