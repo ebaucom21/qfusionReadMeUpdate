@@ -45,8 +45,6 @@ static ::EnumValueConfigVar<ScoreboardModelProxy::Layout, LayoutMatcher> v_layou
 static ::EnumValueConfigVar<ScoreboardModelProxy::TableStyle, TableStyleMatcher> v_tableStyle { "scb_tableStyle"_asView, {
 	.byDefault = ScoreboardModelProxy::Checkerboard, .flags = CVAR_ARCHIVE },
 };
-static VarModificationTracker g_layoutModificationTracker { &v_layout };
-static VarModificationTracker g_tableStyleModificationTracker { &v_tableStyle };
 
 [[nodiscard]]
 static inline auto formatGlyph( int codePoint ) -> QChar {
@@ -202,7 +200,8 @@ bool ScoreboardModelProxy::isMixedListRowAlpha( int row ) const {
 	return m_scoreboard.getPlayerTeam( nums[row] ) == TEAM_ALPHA;
 }
 
-ScoreboardModelProxy::ScoreboardModelProxy() {
+ScoreboardModelProxy::ScoreboardModelProxy()
+	: m_layoutModificationTracker( &v_layout ), m_tableStyleModificationTracker( &v_tableStyle ) {
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_PLAYERS );
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_ALPHA );
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_BETA );
@@ -273,13 +272,13 @@ void ScoreboardModelProxy::dispatchPlayerRowUpdates( const PlayerUpdates &update
 }
 
 void ScoreboardModelProxy::checkVars() {
-	if( g_layoutModificationTracker.checkAndReset() ) {
+	if( m_layoutModificationTracker.checkAndReset() ) {
 		if( const Layout newLayout = v_layout.get(); newLayout != m_layout ) {
 			m_layout = newLayout;
 			Q_EMIT layoutChanged( newLayout );
 		}
 	}
-	if( g_tableStyleModificationTracker.checkAndReset() ) {
+	if( m_tableStyleModificationTracker.checkAndReset() ) {
 		if( const TableStyle newTableStyle = v_tableStyle.get(); newTableStyle != m_tableStyle ) {
 			m_tableStyle = newTableStyle;
 			Q_EMIT tableStyleChanged( m_tableStyle );

@@ -6,6 +6,7 @@
 
 #include <array>
 
+#include "../qcommon/configvars.h"
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/wswstaticstring.h"
 #include "hudlayoutmodel.h"
@@ -239,6 +240,9 @@ class HudDataModel : public QObject {
 	FragsFeedModel m_fragsFeedModel { this };
 	MessageFeedModel m_messageFeedModel;
 	AwardsModel m_awardsModel;
+
+	VarModificationTracker m_clientHudChangesTracker;
+	VarModificationTracker m_specHudChangesTracker;
 
 	InGameHudLayoutModel m_clientLayoutModel;
 	InGameHudLayoutModel m_specLayoutModel;

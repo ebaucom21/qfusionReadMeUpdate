@@ -92,7 +92,6 @@ static FloatConfigVar v_mouseAccel { "ui_mouseAccel"_asView, {
 static BoolConfigVar v_debugNativelyDrawnItems { "ui_debugNativelyDrawnItems"_asView, {
 	.byDefault = false, .flags = CVAR_DEVELOPER, }
 };
-static VarModificationTracker g_debugNativelyDrawnItemsChangesTracker { &v_debugNativelyDrawnItems };
 
 namespace wsw::ui {
 
@@ -526,6 +525,8 @@ private:
 	bool m_hasSucceededBackgroundMapLoading { false };
 
 	qreal m_mouseXY[2] { 0.0, 0.0 };
+
+	VarModificationTracker m_debugNativelyDrawnItemsChangesTracker { &v_debugNativelyDrawnItems };
 
 	static void initPersistentPart();
 	static void registerFonts();
@@ -1449,7 +1450,7 @@ void QtUISystem::checkPropertyChanges() {
 		Q_EMIT isShowingActionRequestsChanged( m_isShowingActionRequests );
 	}
 
-	if( g_debugNativelyDrawnItemsChangesTracker.checkAndReset() ) {
+	if( m_debugNativelyDrawnItemsChangesTracker.checkAndReset() ) {
 		Q_EMIT isDebuggingNativelyDrawnItemsChanged( v_debugNativelyDrawnItems.get() );
 	}
 

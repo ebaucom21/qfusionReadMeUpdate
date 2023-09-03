@@ -33,8 +33,6 @@ using wsw::operator""_asView;
 
 static StringConfigVar v_clientHud { "cg_clientHud"_asView, { .byDefault = "default"_asView, .flags = CVAR_ARCHIVE } };
 static StringConfigVar v_specHud { "cg_specHud"_asView, { .byDefault = "default"_asView, .flags = CVAR_ARCHIVE } };
-static VarModificationTracker g_clientHudChangesTracker { &v_clientHud };
-static VarModificationTracker g_specHudChangesTracker { &v_specHud };
 
 namespace wsw::ui {
 
@@ -786,7 +784,8 @@ void HudDataModel::setStyledName( QByteArray *dest, const wsw::StringView &name 
 	*dest = toStyledText( name ).toLatin1();
 }
 
-HudDataModel::HudDataModel() {
+HudDataModel::HudDataModel()
+	: m_clientHudChangesTracker( &v_clientHud ), m_specHudChangesTracker( &v_specHud ) {
 	assert( !m_matchTimeMinutes && !m_matchTimeSeconds );
 	setFormattedTime( &m_formattedMinutes, m_matchTimeMinutes );
 	setFormattedTime( &m_formattedSeconds, m_matchTimeSeconds );
@@ -900,10 +899,10 @@ void HudDataModel::onHudUpdated( const QByteArray &name ) {
 }
 
 void HudDataModel::checkPropertyChanges( int64_t currTime ) {
-	if( g_clientHudChangesTracker.checkAndReset() ) {
+	if( m_clientHudChangesTracker.checkAndReset() ) {
 		handleVarChanges( &v_clientHud, &m_clientLayoutModel, &m_clientHudName );
 	}
-	if( g_specHudChangesTracker.checkAndReset() ) {
+	if( m_specHudChangesTracker.checkAndReset() ) {
 		handleVarChanges( &v_specHud, &m_specLayoutModel, &m_specHudName );
 	}
 

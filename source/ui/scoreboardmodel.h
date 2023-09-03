@@ -2,6 +2,7 @@
 #define WSW_95e07a0d_69fa_4239_9546_1fa5a5580f55_H
 
 #include "scoreboard.h"
+#include "../qcommon/configvars.h"
 #include "../gameshared/gs_public.h"
 
 #include <QAbstractListModel>
@@ -120,6 +121,9 @@ public:
 	Layout m_layout { SideBySide };
 	TableStyle m_tableStyle { Checkerboard };
 	bool m_hasChasers { false };
+
+	VarModificationTracker m_layoutModificationTracker;
+	VarModificationTracker m_tableStyleModificationTracker;
 
 	void checkVars();
 
