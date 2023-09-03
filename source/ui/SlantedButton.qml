@@ -20,6 +20,7 @@ Item {
     property string iconPath
 
     property bool highlighted
+    property bool highlightedWithAnim
     property bool checked
     property bool displayIconPlaceholder: true
     property bool highlightOnActiveFocus: true
@@ -38,10 +39,16 @@ Item {
     property real extraWidthOnMouseOver: 12.0
     property real extraHeightOnMouseOver: 2.0
 
-    readonly property bool hasActiveHighlight:
-        mouseArea.containsMouse || root.highlighted || root.checked || (root.highlightOnActiveFocus && root.activeFocus)
+    property real highlightAnimAmplitude: 5.0
+    property int highlightInterval: 5000
 
-    readonly property var fullHeightTransformMatrix: UI.ui.makeSkewXMatrix(height, bodySlantDegrees)
+    readonly property bool hasActiveHighlight:
+        mouseArea.containsMouse || root.highlighted || root.checked || highlightAnim.highlightActive || (root.highlightOnActiveFocus && root.activeFocus)
+
+    readonly property var translationMatrix:
+        UI.ui.makeTranslateMatrix(highlightAnim.running ? highlightAnimAmplitude * highlightAnim.bodyShiftFrac : 0.0, 0.0)
+    readonly property var fullHeightTransformMatrix:
+        UI.ui.makeSkewXMatrix(height, bodySlantDegrees).times(translationMatrix)
 
     states: [
         State {
@@ -76,11 +83,27 @@ Item {
         }
     ]
 
+    ButtonHighlightAnim {
+        id: highlightAnim
+        highlightInterval: root.highlightInterval
+        running: root.highlightedWithAnim && !mouseArea.containsMouse && !mouseLeftTimer.running
+    }
+
+    Timer {
+        id: mouseLeftTimer
+        interval: 10000
+    }
+
     MouseArea {
         id: mouseArea
         hoverEnabled: true
         anchors.fill: parent
         onClicked: root.clicked()
+        onContainsMouseChanged: {
+            if (!containsMouse) {
+                mouseLeftTimer.start()
+            }
+        }
     }
 
     Keys.onEnterPressed: root.clicked()
@@ -108,8 +131,8 @@ Item {
     Rectangle {
         id: body
         anchors.centerIn: parent
-        width: mouseArea.containsMouse && root.extraWidthOnMouseOver ? parent.width + root.extraWidthOnMouseOver : parent.width
-        height: mouseArea.containsMouse && root.extraHeightOnMouseOver ? parent.height + root.extraHeightOnMouseOver : parent.height
+        width: (mouseArea.containsMouse || highlightAnim.highlightActive) && root.extraWidthOnMouseOver ? parent.width + root.extraWidthOnMouseOver : parent.width
+        height: (mouseArea.containsMouse || highlightAnim.highlightActive) && root.extraHeightOnMouseOver ? parent.height + root.extraHeightOnMouseOver : parent.height
         radius: root.cornerRadius
 
         color: !root.enabled ? "darkgrey" : (hasActiveHighlight ? Material.accentColor : Qt.lighter(Material.backgroundColor, 1.35))
@@ -119,7 +142,7 @@ Item {
 
         Behavior on width { SmoothedAnimation { duration: 333 } }
         Behavior on height { SmoothedAnimation { duration: 333 } }
-        Behavior on color { ColorAnimation { duration: 50 } }
+        Behavior on color { ColorAnimation { duration: highlightAnim.colorAnimDuration } }
     }
 
     Component {
@@ -131,7 +154,7 @@ Item {
             implicitHeight: 12
             radius: 1
             opacity: root.enabled ? (mouseArea.containsMouse ? 1.0 : 0.7) : 0.33
-            transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(height, placeholderSlantDegrees) }
+            transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(height, placeholderSlantDegrees).times(translationMatrix) }
         }
     }
 
@@ -185,7 +208,7 @@ Item {
 
         Behavior on font.letterSpacing { SmoothedAnimation { duration: 333 } }
 
-        transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(height, textSlantDegrees) }
+        transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(label.height, textSlantDegrees).times(translationMatrix) }
         opacity: root.enabled ? 1.0 : 0.5
     }
 }

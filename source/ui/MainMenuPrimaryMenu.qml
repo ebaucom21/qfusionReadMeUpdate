@@ -80,6 +80,7 @@ Item {
 
 		MainMenuButtonRow {
 		    highlighted: root.highlightedPageTag === root.pageLocalGame
+		    highlightedWithAnim: true
 			text: "Local game"
 			leaningRight: true
 			Layout.fillWidth: true

@@ -5,6 +5,7 @@
         <file>AutoFittingComboBox.qml</file>
         <file>BindableCommand.qml</file>
         <file>BindableCommandsColumn.qml</file>
+        <file>ButtonHighlightAnim.qml</file>
         <file>CarouselTabBar.qml</file>
         <file>ColorPickerItem.qml</file>
         <file>ColorPickerColorItem.qml</file>

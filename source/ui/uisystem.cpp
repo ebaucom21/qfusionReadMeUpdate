@@ -312,6 +312,7 @@ public:
 	Q_INVOKABLE QVariant colorFromRgbString( const QString &string ) const;
 
 	Q_INVOKABLE QMatrix4x4 makeSkewXMatrix( qreal height, qreal degrees ) const;
+	Q_INVOKABLE QMatrix4x4 makeTranslateMatrix( qreal translateX, qreal translateY ) const;
 
 	Q_INVOKABLE QByteArray formatPing( int ping ) const;
 
@@ -2108,6 +2109,13 @@ auto QtUISystem::makeSkewXMatrix( qreal height, qreal degrees ) const -> QMatrix
 		+0.0, +0.0, +0.0, +1.0
 	};
 	result.translate( tan * (float)height, 0.0f );
+	return result;
+}
+
+auto QtUISystem::makeTranslateMatrix( qreal translateX, qreal translateY ) const -> QMatrix4x4 {
+	QMatrix4x4 result;
+	result.setToIdentity();
+	result.translate( translateX, translateY );
 	return result;
 }
 

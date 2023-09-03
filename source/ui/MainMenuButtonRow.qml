@@ -10,6 +10,7 @@ Item {
 	height: 40
 
     property bool highlighted: false
+    property bool highlightedWithAnim: false
 	property string text
 	property bool leaningRight: false
 	property real expansionFrac: 0.0
@@ -25,23 +26,26 @@ Item {
 		}
 	}
 
-	readonly property var transformMatrix: UI.ui.makeSkewXMatrix(root.height, 20.0)
+	readonly property var transformMatrix:
+	    UI.ui.makeSkewXMatrix(root.height, 20.0).times(
+	        UI.ui.makeTranslateMatrix(highlightAnim.running ? ((leaningRight ? -10.0 : + 10.0) * highlightAnim.bodyShiftFrac) : 0.0, 0.0))
 
 	readonly property color foregroundColor: Qt.lighter(Material.backgroundColor, 1.5)
 	readonly property color trailDecayColor: UI.ui.colorWithAlpha(Material.backgroundColor, 0.0)
 	readonly property color highlightedColor: Material.accentColor
 
-	property real bodyWidth: mouseArea.containsMouse ? UI.ui.mainMenuButtonWidthDp + 12 : UI.ui.mainMenuButtonWidthDp
-	property real bodyHeight: mouseArea.containsMouse ? root.height + 2 : root.height
-	property color bodyColor: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
+    // Can't figure out the appropriate name for the expression...
+	property real bodyWidth: (mouseArea.containsMouse || highlightAnim.highlightActive) ? UI.ui.mainMenuButtonWidthDp + 12 : UI.ui.mainMenuButtonWidthDp
+	property real bodyHeight: (mouseArea.containsMouse || highlightAnim.highlightActive) ? root.height + 2 : root.height
+	property color bodyColor: (mouseArea.containsMouse || highlightAnim.highlightActive) || highlighted ? highlightedColor : foregroundColor
 
 	Behavior on bodyWidth { SmoothedAnimation { duration: 333 } }
 	Behavior on bodyHeight { SmoothedAnimation { duration: 333 } }
-	Behavior on bodyColor { ColorAnimation { duration: 50 } }
+	Behavior on bodyColor { ColorAnimation { duration: highlightAnim.colorAnimDuration } }
 
     readonly property real baseTrailElementWidth: 20
     readonly property real trailSpacing: 4
-    property real trailElementWidth: mouseArea.containsMouse ? baseTrailElementWidth + 1 : baseTrailElementWidth
+    property real trailElementWidth: (mouseArea.containsMouse || highlightAnim.highlightActive) ? baseTrailElementWidth + 1 : baseTrailElementWidth
 	readonly property int trailElementsCount: Math.floor(UI.ui.mainMenuButtonTrailWidthDp / (baseTrailElementWidth + root.trailSpacing))
 
     Behavior on trailElementWidth {
@@ -49,6 +53,26 @@ Item {
             duration: 500
             easing.type: Easing.OutElastic
             easing.amplitude: 2.0
+        }
+    }
+
+    ButtonHighlightAnim {
+        id: highlightAnim
+        // TODO: The expansion frac computations should not take the translation in account
+        running: root.highlightedWithAnim && !mouseArea.containsMouse && !mouseLeftTimer.running && root.expansionFrac < 0.5
+    }
+
+    Timer {
+        id: mouseLeftTimer
+        interval: 10000
+    }
+
+    Connections {
+        target: mouseArea
+        onContainsMouseChanged: {
+            if (!mouseArea.containsMouse) {
+                mouseLeftTimer.start()
+            }
         }
     }
 

@@ -101,6 +101,7 @@ Rectangle {
                     KeyNavigation.up: loadoutsButton
                     KeyNavigation.down: joinButton
                     visible: UI.ui.canBeReady
+                    highlightedWithAnim: visible && !UI.ui.isReady
                     text: UI.ui.isReady ? "Not ready" : "Ready"
                     Layout.fillWidth: true
                     onClicked: {
@@ -112,6 +113,7 @@ Rectangle {
                     id: joinButton
                     KeyNavigation.up: readyButton
                     KeyNavigation.down: switchTeamButton
+                    highlightedWithAnim: visible
                     visible: UI.ui.canJoin
                     text: "Join"
                     Layout.fillWidth: true
