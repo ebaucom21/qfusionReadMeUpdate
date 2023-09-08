@@ -59,7 +59,7 @@ Item {
     ButtonHighlightAnim {
         id: highlightAnim
         // TODO: The expansion frac computations should not take the translation in account
-        running: root.highlightedWithAnim && !mouseArea.containsMouse && !mouseLeftTimer.running && root.expansionFrac < 0.5
+        running: root.highlightedWithAnim && !mouseArea.containsMouse && !mouseLeftTimer.running && root.expansionFrac < 0.5 && !UI.ui.isConsoleOpen
     }
 
     Timer {

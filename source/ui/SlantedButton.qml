@@ -86,7 +86,7 @@ Item {
     ButtonHighlightAnim {
         id: highlightAnim
         highlightInterval: root.highlightInterval
-        running: root.highlightedWithAnim && !mouseArea.containsMouse && !mouseLeftTimer.running
+        running: root.highlightedWithAnim && !mouseArea.containsMouse && !mouseLeftTimer.running && !UI.ui.isConsoleOpen
     }
 
     Timer {

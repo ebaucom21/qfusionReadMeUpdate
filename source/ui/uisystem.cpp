@@ -214,6 +214,8 @@ public:
 
 	Q_PROPERTY( bool isShowingScoreboard READ isShowingScoreboard NOTIFY isShowingScoreboardChanged );
 
+	Q_PROPERTY( bool isConsoleOpen MEMBER m_isConsoleOpen NOTIFY isConsoleOpenChanged );
+
 	Q_PROPERTY( bool isShowingChatPopup MEMBER m_isShowingChatPopup NOTIFY isShowingChatPopupChanged );
 	Q_PROPERTY( bool isShowingTeamChatPopup MEMBER m_isShowingTeamChatPopup NOTIFY isShowingTeamChatPopupChanged );
 	Q_PROPERTY( bool hasTeamChat MEMBER m_hasTeamChat NOTIFY hasTeamChatChanged );
@@ -391,6 +393,8 @@ signals:
 
 	Q_SIGNAL void isShowingActionRequestsChanged( bool isShowingActionRequests );
 
+	Q_SIGNAL void isConsoleOpenChanged( bool isConsoleOpen );
+
 	Q_SIGNAL void isShowingMainMenuChanged( bool isShowingMainMenu );
 	Q_SIGNAL void isShowingConnectionScreenChanged( bool isShowingConnectionScreen );
 	Q_SIGNAL void isShowingInGameMenuChanged( bool isShowingInGameMenu );
@@ -509,6 +513,8 @@ private:
 	bool m_hasTeamChat { false };
 	bool m_isShowingPovHud { false };
 	bool m_isShowingHud { false };
+
+	bool m_isConsoleOpen { false };
 
 	bool m_canBeReady { false };
 	bool m_isReady { false };
@@ -1448,6 +1454,12 @@ void QtUISystem::checkPropertyChanges() {
 	m_isShowingActionRequests = !m_actionRequestsModel.empty() && !m_activeMenuMask;
 	if( wasShowingActionRequests != m_isShowingActionRequests ) {
 		Q_EMIT isShowingActionRequestsChanged( m_isShowingActionRequests );
+	}
+
+	const bool wasConsoleOpen = m_isConsoleOpen;
+	m_isConsoleOpen = Con_HasKeyboardFocus();
+	if( wasConsoleOpen != m_isConsoleOpen ) {
+		Q_EMIT isConsoleOpenChanged( m_isConsoleOpen );
 	}
 
 	if( m_debugNativelyDrawnItemsChangesTracker.checkAndReset() ) {
