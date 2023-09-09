@@ -332,31 +332,82 @@ Rectangle {
         Item {
             ColumnLayout {
                 anchors.centerIn: parent
-                width: parent.width - 64 - 192
-                spacing: 20
-
-                SlantedButton {
+                width: parent.width
+                spacing: 24
+                Label {
                     Layout.fillWidth: true
-                    text: "Join any team"
-                    onClicked: {
-                        UI.ui.join()
-                        UI.ui.returnFromInGameMenu()
+                    horizontalAlignment: Qt.AlignHCenter
+                    font.weight: Font.Medium
+                    font.capitalization: Font.SmallCaps
+                    font.pointSize: 18
+                    font.letterSpacing: 1.25
+                    text: "Select your team"
+                }
+                RowLayout {
+                    spacing: 20
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 20
+                    Layout.rightMargin: 20
+                    TeamSelectionTeamPane {
+                        id: alphaTeamPane
+                        model: UI.scoreboardAlphaModel
+                        Layout.fillWidth: true
+                        alignment: Qt.AlignRight
+                        Layout.preferredHeight: Math.max(alphaTeamPane.implicitHeight, betaTeamPane.implicitHeight, 144 + 32)
+                        color: UI.hudDataModel.alphaColor
+                    }
+                    TeamSelectionTeamPane {
+                        id: betaTeamPane
+                        model: UI.scoreboardBetaModel
+                        Layout.fillWidth: true
+                        alignment: Qt.AlignLeft
+                        Layout.preferredHeight: Math.max(alphaTeamPane.implicitHeight, betaTeamPane.implicitHeight, 144 + 32)
+                        color: UI.hudDataModel.betaColor
                     }
                 }
-                SlantedButton {
-                    text: "Join '" + UI.hudDataModel.alphaName + "'"
-                    Layout.fillWidth: true
-                    onClicked: {
-                        UI.ui.joinAlpha()
-                        UI.ui.returnFromInGameMenu()
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 24
+                    SlantedButton {
+                        Layout.preferredWidth: 144
+                        displayIconPlaceholder: false
+                        labelHorizontalCenterOffset: -10
+                        bodySlantDegrees: -9
+                        textSlantDegrees: -4
+                        Material.background: Qt.darker(UI.hudDataModel.alphaColor, 2)
+                        Material.accent: Qt.darker(UI.hudDataModel.alphaColor, 1.2)
+                        text: UI.hudDataModel.alphaName
+                        onClicked: {
+                            UI.ui.joinAlpha()
+                            UI.ui.returnFromInGameMenu()
+                        }
                     }
-                }
-                SlantedButton {
-                    text: "Join '" + UI.hudDataModel.betaName + "'"
-                    Layout.fillWidth: true
-                    onClicked: {
-                        UI.ui.joinBeta()
-                        UI.ui.returnFromInGameMenu()
+                    SlantedButton {
+                        Layout.preferredWidth: 144 + 16
+                        displayIconPlaceholder: false
+                        labelHorizontalCenterOffset: 0
+                        bodySlantDegrees: 0
+                        textSlantDegrees: 0
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "Any team"
+                        onClicked: {
+                            UI.ui.join()
+                            UI.ui.returnFromInGameMenu()
+                        }
+                    }
+                    SlantedButton {
+                        Layout.preferredWidth: 144
+                        displayIconPlaceholder: false
+                        labelHorizontalCenterOffset: 0
+                        bodySlantDegrees: +10
+                        textSlantDegrees: +5
+                        Material.background: Qt.darker(UI.hudDataModel.betaColor, 2)
+                        Material.accent: Qt.darker(UI.hudDataModel.betaColor, 1.2)
+                        text: UI.hudDataModel.betaName
+                        onClicked: {
+                            UI.ui.joinBeta()
+                            UI.ui.returnFromInGameMenu()
+                        }
                     }
                 }
             }

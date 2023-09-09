@@ -103,6 +103,7 @@
         <file>SoundSettings.qml</file>
         <file>TeamsSettings.qml</file>
         <file>TeamSettingsTeamColumn.qml</file>
+        <file>TeamSelectionTeamPane.qml</file>
         <file>WswCheckBox.qml</file>
         <file>UI.qml</file>
         <file>Hud.qml</file>

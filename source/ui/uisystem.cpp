@@ -2110,7 +2110,7 @@ auto QtUISystem::colorFromRgbString( const QString &string ) const -> QVariant {
 }
 
 auto QtUISystem::makeSkewXMatrix( qreal height, qreal degrees ) const -> QMatrix4x4 {
-	assert( degrees >= 0.0 && degrees + 0.1 < 90.0 );
+	assert( degrees > -90.0 && degrees < +90.0 );
 	const float angle = (float)DEG2RAD( degrees );
 	const float sin = std::sin( angle );
 	const float cos = std::cos( angle );
