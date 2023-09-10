@@ -215,18 +215,20 @@ public:
 	int anim { 0 };
 	int progress { 0 };
 	int iconNum { 0 };
+	int stringNum { 0 };
 	bool enabled { false };
 
 	Q_PROPERTY( QColor color MEMBER color );
 	Q_PROPERTY( int anim MEMBER anim );
 	Q_PROPERTY( int progress MEMBER progress );
 	Q_PROPERTY( int iconNum MEMBER iconNum );
+	Q_PROPERTY( int stringNum MEMBER stringNum );
 	Q_PROPERTY( bool enabled MEMBER enabled );
 
 	[[nodiscard]]
 	bool operator!=( const ObjectiveIndicatorState &that ) const {
 		return color == that.color && anim == that.anim && progress == that.progress &&
-			iconNum == that.iconNum && enabled == that.enabled;
+			iconNum == that.iconNum && stringNum == that.stringNum && enabled == that.enabled;
 	}
 };
 
@@ -462,6 +464,8 @@ public:
 
 	[[nodiscard]]
 	Q_INVOKABLE QByteArray getIndicatorIconPath( int iconNum ) const;
+	[[nodiscard]]
+	Q_INVOKABLE QByteArray getIndicatorStatusString( int stringNum ) const;
 
 	HudDataModel();
 

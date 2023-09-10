@@ -5,8 +5,12 @@ import net.warsow 2.6
 
 ParallelAnimation {
     id: root
-    property real minSide
-    property real maxSide
+    property real initialWidth
+    property real initialHeight
+    property real peakWidth
+    property real peakHeight
+    property real finalWidth
+    property real finalHeight
     property real minOpacity
     property int step1Duration
     property int step2Duration
@@ -15,19 +19,37 @@ ParallelAnimation {
     loops: Animation.Infinite
 
     SequentialAnimation {
-        PropertyAnimation {
-            target: root.target
-            properties: "width,height"
-            from: minSide
-            to: maxSide
-            duration: step1Duration
+        ParallelAnimation {
+            PropertyAnimation {
+                target: root.target
+                property: "width"
+                from: initialWidth
+                to: peakWidth
+                duration: step1Duration
+            }
+            PropertyAnimation {
+                target: root.target
+                properties: "height"
+                from: initialHeight
+                to: peakHeight
+                duration: step1Duration
+            }
         }
-        PropertyAnimation {
-            target: root.target
-            properties: "width,height"
-            from: maxSide
-            to: minSide
-            duration: step2Duration
+        ParallelAnimation {
+            PropertyAnimation {
+                target: root.target
+                property: "width"
+                from: peakWidth
+                to: finalWidth
+                duration: step2Duration
+            }
+            PropertyAnimation {
+                target: root.target
+                property: "height"
+                from: peakHeight
+                to: finalHeight
+                duration: step2Duration
+            }
         }
     }
     SequentialAnimation {

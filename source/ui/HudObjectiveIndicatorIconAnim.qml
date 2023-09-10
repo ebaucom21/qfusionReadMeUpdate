@@ -8,7 +8,8 @@ SequentialAnimation {
 
     property var target
     property string targetProperty
-    property real amplitude
+    property real originalValue
+    property real valueShiftAmplitude
     property int period: 500
 
     loops: Animation.Infinite
@@ -17,21 +18,21 @@ SequentialAnimation {
         target: root.target
         property: targetProperty
         duration: 0.25 * period
-        from: 0
-        to: -amplitude
+        from: originalValue
+        to: originalValue - valueShiftAmplitude
     }
     NumberAnimation {
         target: root.target
         property: targetProperty
         duration: 0.5 * period
-        from: -amplitude
-        to: +amplitude
+        from: originalValue - valueShiftAmplitude
+        to: originalValue + valueShiftAmplitude
     }
     NumberAnimation {
         target: root.target
         property: targetProperty
         duration: 0.25 * period
-        from: +amplitude
-        to: 0
+        from: originalValue + valueShiftAmplitude
+        to: originalValue
     }
 }

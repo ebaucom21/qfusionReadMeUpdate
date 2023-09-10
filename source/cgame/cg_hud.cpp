@@ -551,6 +551,10 @@ auto CG_HudIndicatorState( int num ) -> wsw::ui::ObjectiveIndicatorState {
 	if( (unsigned)iconNum >= (unsigned)MAX_GENERAL ) {
 		iconNum = 0;
 	}
+	int stringNum = stats[STAT_INDICATOR_1_STATUS_STRING + num];
+	if( (unsigned)stringNum >= (unsigned)MAX_GENERAL ) {
+		stringNum = 0;
+	}
 
 	const int progress = wsw::clamp<int>( stats[STAT_INDICATOR_1_PROGRESS + num], -100, +100 );
 	const bool enabled = stats[STAT_INDICATOR_1_ENABLED + num] != 0;
@@ -565,13 +569,23 @@ auto CG_HudIndicatorState( int num ) -> wsw::ui::ObjectiveIndicatorState {
 	}
 
 	const QColor color( QColor::fromRgb( COLOR_R( packedColor ), COLOR_G( packedColor ), COLOR_B( packedColor ) ) );
-	return { .color = color, .anim = anim, .progress = progress, .iconNum = iconNum, .enabled = enabled };
+	return wsw::ui::ObjectiveIndicatorState {
+		.color = color, .anim = anim, .progress = progress, .iconNum = iconNum, .stringNum = stringNum, .enabled = enabled
+	};
 }
 
 auto CG_HudIndicatorIconPath( int iconNum ) -> std::optional<wsw::StringView> {
-	assert( (unsigned)iconNum <= (unsigned)CS_GENERAL );
+	assert( (unsigned)iconNum < (unsigned)MAX_GENERAL );
 	if( iconNum ) {
 		return cgs.configStrings.get( (unsigned)( CS_GENERAL + iconNum - 1 ) );
+	}
+	return std::nullopt;
+}
+
+auto CG_HudIndicatorStatusString( int stringNum ) -> std::optional<wsw::StringView> {
+	assert( (unsigned)stringNum < (unsigned)MAX_GENERAL );
+	if( stringNum ) {
+		return cgs.configStrings.get( (unsigned)( CS_GENERAL + stringNum - 1 ) );
 	}
 	return std::nullopt;
 }

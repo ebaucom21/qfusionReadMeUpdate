@@ -21,6 +21,7 @@ int CG_TeamBetaDisplayedColor();
 int CG_TeamToForcedTeam( int team );
 wsw::ui::ObjectiveIndicatorState CG_HudIndicatorState( int );
 std::optional<wsw::StringView> CG_HudIndicatorIconPath( int );
+std::optional<wsw::StringView> CG_HudIndicatorStatusString( int );
 auto CG_GetMatchClockTime() -> std::pair<int, int>;
 auto CG_WeaponAmmo( int weapon ) -> std::pair<int, int>;
 std::optional<unsigned> CG_ActiveChasePov();
@@ -755,6 +756,15 @@ auto HudDataModel::getIndicatorIconPath( int iconNum ) const -> QByteArray {
 	if( iconNum ) {
 		if( const auto maybePath = CG_HudIndicatorIconPath( iconNum ) ) {
 			return kIconPathPrefix + QByteArray::fromRawData( maybePath->data(), (int)maybePath->size() );
+		}
+	}
+	return QByteArray();
+}
+
+auto HudDataModel::getIndicatorStatusString( int stringNum ) const -> QByteArray {
+	if( stringNum ) {
+		if( const auto maybePath = CG_HudIndicatorStatusString( stringNum ) ) {
+			return QByteArray::fromRawData( maybePath->data(), (int)maybePath->size() );
 		}
 	}
 	return QByteArray();

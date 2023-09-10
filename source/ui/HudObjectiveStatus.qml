@@ -11,8 +11,14 @@ Item {
     // TODO: Avoid using magic numbers for the height of the team score element
     implicitHeight: Math.max(row.height, 80)
 
+    // TODO: Use a single model (QAbstractItemModel) for all indicators?
     readonly property bool idle: !indicator1.indicatorProgress &&
         !indicator2.indicatorProgress && !indicator3.indicatorProgress
+
+    readonly property int numEnabledIndicators:
+        (Hud.dataModel.indicator1State.enabled ? 1 : 0) +
+        (Hud.dataModel.indicator2State.enabled ? 1 : 0) +
+        (Hud.dataModel.indicator3State.enabled ? 1 : 0)
 
     property real barHeightFrac: idle ? 0.0 : 1.0
     Behavior on barHeightFrac { SmoothedAnimation { duration: 500 } }
@@ -35,16 +41,19 @@ Item {
 
         HudObjectiveIndicator {
             id: indicator1
+            useExclusiveMode: numEnabledIndicators === 1 && indicator1.indicatorState.enabled && indicator1.canUseExclusiveMode
             barHeightFrac: root.barHeightFrac
             indicatorState: Hud.dataModel.indicator1State
         }
         HudObjectiveIndicator {
             id: indicator2
+            useExclusiveMode: numEnabledIndicators === 1 && indicator2.indicatorState.enabled && indicator2.canUseExclusiveMode
             barHeightFrac: root.barHeightFrac
             indicatorState: Hud.dataModel.indicator2State
         }
         HudObjectiveIndicator {
             id: indicator3
+            useExclusiveMode: numEnabledIndicators === 1 && indicator3.indicatorState.enabled && indicator3.canUseExclusiveMode
             barHeightFrac: root.barHeightFrac
             indicatorState: Hud.dataModel.indicator3State
         }
