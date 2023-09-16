@@ -451,8 +451,8 @@ void CG_DrawHUD() {
 	}
 }
 
-bool CG_IsSpectator() {
-	return ISREALSPECTATOR();
+int CG_RealClientTeam() {
+	return cg.frame.playerState.stats[STAT_REALTEAM];
 }
 
 std::optional<unsigned> CG_ActiveChasePov() {
@@ -483,7 +483,7 @@ bool CG_HasTwoTeams() {
 }
 
 bool CG_CanBeReady() {
-	return !ISREALSPECTATOR() && ( GS_MatchState() == MATCH_STATE_WARMUP || GS_MatchState() == MATCH_STATE_COUNTDOWN );
+	return !ISREALSPECTATOR() && GS_MatchState() == MATCH_STATE_WARMUP;
 }
 
 bool CG_IsReady() {

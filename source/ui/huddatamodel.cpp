@@ -10,7 +10,7 @@
 #include <QQmlEngine>
 
 // Hacks
-bool CG_IsSpectator();
+int CG_RealClientTeam();
 bool CG_HasTwoTeams();
 int CG_ActiveWeapon();
 bool CG_HasWeapon( int weapon );
@@ -920,8 +920,19 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT hasTwoTeamsChanged( m_hasTwoTeams );
 	}
 
-	if( const bool wasSpectator = m_isSpectator; wasSpectator != ( m_isSpectator = CG_IsSpectator() ) ) {
-		Q_EMIT isSpectatorChanged( m_isSpectator );
+	Team realClientTeam = TeamSpectators;
+	if( const int rawRealClientTeam = CG_RealClientTeam(); rawRealClientTeam != TEAM_SPECTATOR ) {
+		if( rawRealClientTeam == TEAM_ALPHA ) {
+			realClientTeam = TeamAlpha;
+		} else if( rawRealClientTeam == TEAM_BETA ) {
+			realClientTeam = TeamBeta;
+		} else {
+			realClientTeam = TeamPlayers;
+		}
+	}
+	if( m_realClientTeam != realClientTeam ) {
+		m_realClientTeam = realClientTeam;
+		Q_EMIT realClientTeamChanged( realClientTeam );
 	}
 
 	const bool hadActivePov = m_hasActivePov, wasPovAlive = m_isPovAlive;

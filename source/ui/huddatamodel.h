@@ -237,6 +237,16 @@ class HudDataModel : public QObject {
 
 	friend class FragsFeedModel;
 
+public:
+	enum Team {
+		TeamSpectators = 1,
+		TeamPlayers,
+		TeamAlpha,
+		TeamBeta,
+	};
+	Q_ENUM( Team );
+private:
+	// TODO: Reorder public/private sections
 	InventoryModel m_inventoryModel;
 	TeamListModel m_teamListModel;
 	FragsFeedModel m_fragsFeedModel { this };
@@ -279,10 +289,10 @@ class HudDataModel : public QObject {
 	int m_alphaScore { 0 }, m_pendingAlphaScore { 0 };
 	int m_betaScore { 0 }, m_pendingBetaScore { 0 };
 	bool m_hasTwoTeams { false };
-	bool m_isSpectator { true };
 	bool m_hasActivePov { false };
 	bool m_isPovAlive { false };
 	int m_activeItemsMask { 0 };
+	Team m_realClientTeam { TeamSpectators };
 
 	QByteArray m_formattedSeconds;
 	QByteArray m_formattedMinutes;
@@ -370,8 +380,9 @@ public:
 
 	Q_SIGNAL void hasTwoTeamsChanged( bool hasTwoTeams );
 	Q_PROPERTY( bool hasTwoTeams MEMBER m_hasTwoTeams NOTIFY hasTwoTeamsChanged );
-	Q_SIGNAL void isSpectatorChanged( bool isSpectator );
-	Q_PROPERTY( bool isSpectator MEMBER m_isSpectator NOTIFY isSpectatorChanged );
+
+	Q_SIGNAL void realClientTeamChanged( Team realClientTeam );
+	Q_PROPERTY( Team realClientTeam MEMBER m_realClientTeam NOTIFY realClientTeamChanged );
 
 	Q_SIGNAL void hasActivePovChanged( bool hasActivePov );
 	Q_PROPERTY( bool hasActivePov MEMBER m_hasActivePov NOTIFY hasActivePovChanged );

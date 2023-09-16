@@ -74,7 +74,7 @@ bool GLimp_BeginUIRenderingHacks();
 bool GLimp_EndUIRenderingHacks();
 
 // Hacks
-bool CG_IsSpectator();
+int CG_RealClientTeam();
 bool CG_HasTwoTeams();
 bool CG_IsOperator();
 bool CG_IsChallenger();
@@ -279,8 +279,10 @@ public:
 	Q_INVOKABLE void quit();
 	Q_INVOKABLE void disconnect();
 
-	Q_INVOKABLE void toggleReady();
-	Q_INVOKABLE void toggleChallengerStatus();
+	Q_INVOKABLE void setReady();
+	Q_INVOKABLE void setNotReady();
+	Q_INVOKABLE void enterChallengersQueue();
+	Q_INVOKABLE void leaveChallengersQueue();
 	Q_INVOKABLE void spectate();
 	Q_INVOKABLE void join();
 	Q_INVOKABLE void joinAlpha();
@@ -1402,7 +1404,7 @@ void QtUISystem::checkPropertyChanges() {
 	const bool hadTeamChat = m_hasTeamChat;
 	m_hasTeamChat = false;
 	if( CL_Cmd_Exists( "say_team"_asView ) ) {
-		m_hasTeamChat = CG_IsSpectator() || ( GS_TeamBasedGametype() && !GS_IndividualGameType() );
+		m_hasTeamChat = ( CG_RealClientTeam() == TEAM_SPECTATOR ) || ( GS_TeamBasedGametype() && !GS_IndividualGameType() );
 	}
 
 	if( hadTeamChat != m_hasTeamChat ) {
@@ -2079,14 +2081,26 @@ void QtUISystem::joinBeta() {
 	CL_Cbuf_AppendCommand( "join beta\n" );
 }
 
-void QtUISystem::toggleReady() {
+void QtUISystem::setReady() {
 	assert( m_canBeReady );
-	CL_Cbuf_AppendCommand( m_isReady ? "notready\n" : "ready\n" );
+	CL_Cbuf_AppendCommand( "ready\n" );
 }
 
-void QtUISystem::toggleChallengerStatus() {
+void QtUISystem::setNotReady() {
+	assert( m_canBeReady );
+	CL_Cbuf_AppendCommand( "notready\n" );
+}
+
+void QtUISystem::enterChallengersQueue() {
 	assert( m_canToggleChallengerStatus );
-	CL_Cbuf_AppendCommand( m_isInChallengersQueue ? "spec\n" : "join\n" );
+	// TODO: Is there a separate command
+	CL_Cbuf_AppendCommand( "join\n" );
+}
+
+void QtUISystem::leaveChallengersQueue() {
+	assert( m_canToggleChallengerStatus );
+	// TODO: Is there a separate command
+	CL_Cbuf_AppendCommand( "spec\n" );
 }
 
 void QtUISystem::callVote( const QByteArray &name, const QByteArray &value, bool isOperatorCall ) {

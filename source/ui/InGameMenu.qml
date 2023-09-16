@@ -9,7 +9,7 @@ Rectangle {
     id: root
     color: UI.ui.colorWithAlpha(Material.background, UI.ui.fullscreenOverlayOpacity)
 
-    readonly property bool canShowLoadouts: UI.gametypeOptionsModel.available && !UI.hudDataModel.isSpectator
+    readonly property bool canShowLoadouts: UI.gametypeOptionsModel.available && UI.hudDataModel.realClientTeam !== HudDataModel.TeamSpectators
 
     // Force redrawing stuff every frame
     ProgressBar {
@@ -105,7 +105,11 @@ Rectangle {
                     text: UI.ui.isReady ? "Not ready" : "Ready"
                     Layout.fillWidth: true
                     onClicked: {
-                        UI.ui.toggleReady()
+                        if (UI.ui.isReady) {
+                            UI.ui.setNotReady()
+                        } else {
+                            UI.ui.setReady()
+                        }
                         UI.ui.returnFromInGameMenu()
                     }
                 }
@@ -122,7 +126,7 @@ Rectangle {
                             stackView.push(teamSelectionComponent)
                         } else {
                             UI.ui.join()
-                            UI.ui.returnFromInGameMenu()
+                            stackView.push(awaitingJoinComponent)
                         }
                     }
                 }
@@ -137,10 +141,11 @@ Rectangle {
                         if (UI.hudDataModel.isInWarmupState) {
                             if (UI.ui.canJoinAlpha) {
                                 UI.ui.joinAlpha()
+                                stackView.push(awaitingSwitchTeamComponent, {"targetTeam" : HudDataModel.TeamAlpha})
                             } else {
                                 UI.ui.joinBeta()
+                                stackView.push(awaitingSwitchTeamComponent, {"targetTeam" : HudDataModel.TeamBeta})
                             }
-                            UI.ui.returnFromInGameMenu()
                         } else {
                             stackView.push(switchTeamConfirmationComponent)
                         }
@@ -150,12 +155,17 @@ Rectangle {
                     id: queueActionButton
                     KeyNavigation.up: switchTeamButton
                     KeyNavigation.down: spectateButton
-                    visible: UI.ui.canToggleChallengerStatus && UI.hudDataModel.isSpectator
+                    visible: UI.ui.canToggleChallengerStatus && UI.hudDataModel.realClientTeam === HudDataModel.TeamSpectators
                     text: UI.ui.isInChallengersQueue ? "Leave the queue" : "Enter the queue"
                     Layout.fillWidth: true
                     onClicked: {
-                        UI.ui.toggleChallengerStatus()
-                        UI.ui.returnFromInGameMenu()
+                        if (UI.ui.isInChallengersQueue) {
+                            UI.ui.leaveChallengersQueue()
+                            UI.ui.returnFromInGameMenu()
+                        } else {
+                            UI.ui.enterChallengersQueue()
+                            stackView.push(awaitingJoinQueueComponent)
+                        }
                     }
                 }
                 SlantedButton {
@@ -180,7 +190,7 @@ Rectangle {
                     text: "Disconnect"
                     Layout.fillWidth: true
                     onClicked: {
-                        if (UI.hudDataModel.isSpectator || UI.hudDataModel.isInWarmupState) {
+                        if (UI.hudDataModel.realClientTeam === HudDataModel.TeamSpectators || UI.hudDataModel.isInWarmupState) {
                             UI.ui.disconnect()
                         } else {
                             stackView.push(disconnectConfirmationComponent)
@@ -266,11 +276,14 @@ Rectangle {
             onButtonClicked: {
                 if (buttonIndex === 0) {
                     if (UI.ui.canJoinAlpha) {
+                        stackView.pop()
+                        stackView.push(awaitingSwitchTeamComponent, {"targetTeam" : HudDataModel.TeamAlpha})
                         UI.ui.joinAlpha()
                     } else {
+                        stackView.pop()
+                        stackView.push(awaitingSwitchTeamComponent, {"targetTeam" : HudDataModel.TeamBeta})
                         UI.ui.joinBeta()
                     }
-                    UI.ui.returnFromInGameMenu()
                 } else {
                     stackView.pop()
                 }
@@ -330,6 +343,7 @@ Rectangle {
     Component {
         id: teamSelectionComponent
         Item {
+            property bool connectionsEnabled: true
             ColumnLayout {
                 anchors.centerIn: parent
                 width: parent.width
@@ -378,8 +392,10 @@ Rectangle {
                         Material.accent: Qt.darker(UI.hudDataModel.alphaColor, 1.2)
                         text: UI.hudDataModel.alphaName
                         onClicked: {
+                            connectionsEnabled = false
+                            stackView.pop()
+                            stackView.push(awaitingJoinComponent, {"maybeTargetTeam" : HudDataModel.TeamAlpha})
                             UI.ui.joinAlpha()
-                            UI.ui.returnFromInGameMenu()
                         }
                     }
                     SlantedButton {
@@ -391,8 +407,10 @@ Rectangle {
                         Layout.alignment: Qt.AlignHCenter
                         text: "Any team"
                         onClicked: {
+                            connectionsEnabled = false
+                            stackView.pop()
+                            stackView.push(awaitingJoinComponent)
                             UI.ui.join()
-                            UI.ui.returnFromInGameMenu()
                         }
                     }
                     SlantedButton {
@@ -405,14 +423,17 @@ Rectangle {
                         Material.accent: Qt.darker(UI.hudDataModel.betaColor, 1.2)
                         text: UI.hudDataModel.betaName
                         onClicked: {
+                            connectionsEnabled = false
+                            stackView.pop()
+                            stackView.push(awaitingJoinComponent, {"maybeTargetTeam" : HudDataModel.TeamBeta})
                             UI.ui.joinBeta()
-                            UI.ui.returnFromInGameMenu()
                         }
                     }
                 }
             }
             Connections {
                 target: UI.ui
+                enabled: connectionsEnabled
                 onCanJoinAlphaChanged: {
                     if (!UI.ui.canJoinAlpha) {
                         stackView.pop()
@@ -426,11 +447,193 @@ Rectangle {
             }
             Connections {
                 target: UI.hudDataModel
+                enabled: connectionsEnabled
                 onIsInPostmatchStateChanged: {
                     if (UI.hudDataModel.isInPostmatchState) {
                         stackView.pop()
                     }
                 }
+            }
+        }
+    }
+
+    Component {
+        id: awaitingJoinComponent
+        Item {
+            // Zero by default. Feasible teams are non-zero.
+            property int maybeTargetTeam
+            ProgressBar {
+                anchors.centerIn: parent
+                indeterminate: true
+                Material.accent: "white"
+            }
+            Connections {
+                target: UI.hudDataModel
+                onRealClientTeamChanged: {
+                    // TODO: Should we check for the actual team?
+                    if (UI.hudDataModel.realClientTeam !== HudDataModel.TeamSpectators) {
+                        UI.ui.returnFromInGameMenu()
+                    }
+                }
+                onIsInPostmatchStateChanged: {
+                    if (UI.ui.isInPostmatchState) {
+                        stackView.pop()
+                    }
+                }
+            }
+            Timer {
+                running: true
+                interval: 2000
+                onTriggered: {
+                    stackView.pop()
+                    if (maybeTargetTeam === HudDataModel.TeamAlpha || maybeTargetTeam === HudDataModel.TeamBeta) {
+                        let actualTeamName
+                        if (maybeTargetTeam === HudDataModel.TeamAlpha) {
+                            actualTeamName = UI.hudDataModel.alphaName;
+                        } else {
+                            actualTeamName = UI.hudDataModel.betaName;
+                        }
+                        stackView.push(actionFailureComponent, {"message" : "Failed to join the <b>" + actualTeamName + "</b> team"})
+                    } else {
+                        stackView.push(actionFailureComponent, {"message" : "Failed to join"})
+                    }
+                }
+            }
+            Timer {
+                running: true
+                repeat: true
+                interval: 750
+                onTriggered: {
+                    if (maybeTargetTeam === HudDataModel.TeamAlpha) {
+                        UI.ui.joinAlpha()
+                    } else if (maybeTargetTeam === HudDataModel.TeamBeta) {
+                        UI.ui.joinBeta()
+                    } else {
+                        UI.ui.join()
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: awaitingSwitchTeamComponent
+        Item {
+            property int targetTeam
+            ProgressBar {
+                anchors.centerIn: parent
+                indeterminate: true
+                Material.accent: "white"
+            }
+            Connections {
+                target: UI.hudDataModel
+                onIsInPostmatchStateChanged: {
+                    if (UI.hudDataModel.isInPostmatchState) {
+                        stackView.pop()
+                    }
+                }
+                onRealClientTeamChanged: {
+                    if (UI.hudDataModel.realClientTeam === targetTeam) {
+                        UI.ui.returnFromInGameMenu()
+                    }
+                }
+            }
+            Timer {
+                running: true
+                repeat: true
+                interval: 750
+                onTriggered: {
+                    // TODO: Should there be a generic "join" method?
+                    if (targetTeam === HudDataModel.TeamAlpha) {
+                        UI.ui.joinAlpha()
+                    } else {
+                        UI.ui.joinBeta()
+                    }
+                }
+            }
+            Timer {
+                running: true
+                repeat: true
+                interval: 2000
+                onTriggered: {
+                    stackView.pop()
+                    stackView.push(actionFailureComponent, {"message" : "Failed to switch team"})
+                }
+            }
+        }
+    }
+
+    Component {
+        id: awaitingJoinQueueComponent
+        Item {
+            ProgressBar {
+                Material.accent: "white"
+                anchors.centerIn: parent
+                indeterminate: true
+            }
+            Connections {
+                target: UI.ui
+                onIsInChallengersQueueChanged: {
+                    if (UI.ui.isInChallengersQueue) {
+                        UI.ui.returnFromInGameMenu()
+                    }
+                }
+            }
+            Connections {
+                target: UI.hudDataModel
+                onRealClientTeamChanged: {
+                    // If in-game
+                    if (UI.hudDataModel.realClientTeam === HudDataModel.TeamSpectators) {
+                        UI.ui.returnFromInGameMenu()
+                    }
+                }
+            }
+            // TODO: Can we really fail to join the queue?
+            Timer {
+                running: true
+                repeat: true
+                interval: 750
+                onTriggered: UI.ui.joinChallengersQueue()
+            }
+            Timer {
+                running: true
+                interval: 2000
+                onTriggered: stackView.push(actionFailureComponent, {"message" : "Failed to join the challengers queue"})
+            }
+        }
+    }
+
+    Component {
+        id: actionFailureComponent
+        Item {
+            property alias message: confirmationItem.titleText
+            ConfirmationItem {
+                id: confirmationItem
+                anchors.fill: parent
+                numButtons: 1
+                buttonTexts: ["OK"]
+                buttonEnabledStatuses: [true]
+                buttonFocusStatuses: [false]
+                contentComponent: Label {
+                    readonly property bool focusable: false
+                    property int secondsLeft: 3
+                    font.weight: Font.Medium
+                    font.pointSize: 12
+                    font.letterSpacing: 0.5
+                    text: "Going back in " + secondsLeft + " seconds"
+                    Timer {
+                        running: true
+                        repeat: true
+                        interval: 1000
+                        onTriggered: secondsLeft--
+                    }
+                }
+                onButtonClicked: stackView.pop()
+            }
+            Timer {
+                running: true
+                interval: 3000
+                onTriggered: stackView.pop()
             }
         }
     }
