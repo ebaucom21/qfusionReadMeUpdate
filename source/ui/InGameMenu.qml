@@ -43,6 +43,7 @@ Rectangle {
         onHeightChanged: UI.ui.updateHudOccluder(tabBar)
         onXChanged: UI.ui.updateHudOccluder(tabBar)
         onYChanged: UI.ui.updateHudOccluder(tabBar)
+        onVisibleChanged: UI.ui.updateHudOccluder(tabBar)
     }
 
     Item {
@@ -67,6 +68,7 @@ Rectangle {
         onHeightChanged: UI.ui.updateHudOccluder(mainPane)
         onXChanged: UI.ui.updateHudOccluder(mainPane)
         onYChanged: UI.ui.updateHudOccluder(mainPane)
+        onVisibleChanged: UI.ui.updateHudOccluder(mainPane)
     }
 
     Component {

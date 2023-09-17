@@ -49,6 +49,7 @@ Rectangle {
         onHeightChanged: UI.ui.updateHudOccluder(hudOccluder)
         onXChanged: UI.ui.updateHudOccluder(hudOccluder)
         onYChanged: UI.ui.updateHudOccluder(hudOccluder)
+        onVisibleChanged: UI.ui.updateHudOccluder(hudOccluder)
     }
 
     Column {

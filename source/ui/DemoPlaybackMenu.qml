@@ -25,6 +25,7 @@ Item {
         onHeightChanged: UI.ui.updateHudOccluder(pane)
         onXChanged: UI.ui.updateHudOccluder(pane)
         onYChanged: UI.ui.updateHudOccluder(pane)
+        onVisibleChanged: UI.ui.updateHudOccluder(pane)
 
         MouseArea {
             id: mouseArea

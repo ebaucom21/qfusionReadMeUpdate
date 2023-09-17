@@ -1848,9 +1848,11 @@ bool QtUISystem::isHudItemOccluded( QQuickItem *item ) {
 	itemRect.setHeight( itemRect.height() + 10.0 );
 	itemRect.moveTopLeft( QPointF( itemRect.x() - 5.0, itemRect.y() - 5.0 ) );
 	for( const QQuickItem *occluder : m_hudOccluders ) {
-		const QRectF occluderRect( occluder->mapRectToScene( occluder->boundingRect() ) );
-		if( occluderRect.intersects( itemRect ) ) {
-			return true;
+		if( occluder->isVisible() ) {
+			const QRectF occluderRect( occluder->mapRectToScene( occluder->boundingRect() ) );
+			if( occluderRect.intersects( itemRect ) ) {
+				return true;
+			}
 		}
 	}
 	return false;
