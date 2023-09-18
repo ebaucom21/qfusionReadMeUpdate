@@ -215,6 +215,7 @@ public:
 	Q_PROPERTY( bool isShowingScoreboard READ isShowingScoreboard NOTIFY isShowingScoreboardChanged );
 
 	Q_PROPERTY( bool isConsoleOpen MEMBER m_isConsoleOpen NOTIFY isConsoleOpenChanged );
+	Q_PROPERTY( bool isClientDisconnected MEMBER m_isClientDisconnected NOTIFY isClientDisconnectedChanged );
 
 	Q_PROPERTY( bool isShowingChatPopup MEMBER m_isShowingChatPopup NOTIFY isShowingChatPopupChanged );
 	Q_PROPERTY( bool isShowingTeamChatPopup MEMBER m_isShowingTeamChatPopup NOTIFY isShowingTeamChatPopupChanged );
@@ -396,6 +397,7 @@ signals:
 	Q_SIGNAL void isShowingActionRequestsChanged( bool isShowingActionRequests );
 
 	Q_SIGNAL void isConsoleOpenChanged( bool isConsoleOpen );
+	Q_SIGNAL void isClientDisconnectedChanged( bool isClientDisconnected );
 
 	Q_SIGNAL void isShowingMainMenuChanged( bool isShowingMainMenu );
 	Q_SIGNAL void isShowingConnectionScreenChanged( bool isShowingConnectionScreen );
@@ -517,6 +519,7 @@ private:
 	bool m_isShowingHud { false };
 
 	bool m_isConsoleOpen { false };
+	bool m_isClientDisconnected { true };
 
 	bool m_canBeReady { false };
 	bool m_isReady { false };
@@ -1462,6 +1465,12 @@ void QtUISystem::checkPropertyChanges() {
 	m_isConsoleOpen = Con_HasKeyboardFocus();
 	if( wasConsoleOpen != m_isConsoleOpen ) {
 		Q_EMIT isConsoleOpenChanged( m_isConsoleOpen );
+	}
+
+	const bool wasClientDisconnected = m_isClientDisconnected;
+	m_isClientDisconnected = actualClientState <= CA_DISCONNECTED;
+	if( wasClientDisconnected != m_isClientDisconnected ) {
+		Q_EMIT isClientDisconnectedChanged( m_isClientDisconnected );
 	}
 
 	if( m_debugNativelyDrawnItemsChangesTracker.checkAndReset() ) {
