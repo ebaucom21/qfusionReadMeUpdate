@@ -5,6 +5,7 @@
 #include "wswstringsplitter.h"
 #include "wswtonum.h"
 #include "outputmessages.h"
+#include "../gameshared/q_shared.h"
 
 cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force );
 
@@ -370,6 +371,96 @@ void StringConfigVar::helperOfSet( const wsw::StringView &value, bool force ) {
 			wsw::String ztValue( m_name.data(), m_name.size() );
 			Cvar_Set2( m_name.data(), ztValue.data(), force );
 		}
+	} else {
+		failOnSet();
+	}
+}
+
+template <typename String>
+static void colorToString( int color, String *__restrict string ) {
+	assert( !COLOR_A( color ) );
+	string->append( std::to_string( COLOR_R( color ) ) );
+	string->push_back( ' ' );
+	string->append( std::to_string( COLOR_G( color ) ) );
+	string->push_back( ' ' );
+	string->append( std::to_string( COLOR_B( color  ) ) );
+}
+
+[[nodiscard]]
+static auto parseColor( const wsw::StringView &string ) -> std::optional<int> {
+	int parts[3];
+	int numParts = 0;
+
+	wsw::StringSplitter splitter( string );
+	for(;; ) {
+		if( const std::optional<wsw::StringView> maybeToken = splitter.getNext() ) {
+			if( numParts == 3 ) {
+				return std::nullopt;
+			}
+			if( const auto maybeNum = wsw::toNum<uint8_t>( *maybeToken ) ) {
+				parts[numParts++] = *maybeNum;
+			} else {
+				return std::nullopt;
+			}
+		} else {
+			if( numParts == 3 ) {
+				break;
+			} else {
+				return std::nullopt;
+			}
+		}
+	}
+
+	assert( numParts == 3 );
+	return COLOR_RGB( parts[0], parts[1], parts[2] );
+}
+
+ColorConfigVar::ColorConfigVar( const wsw::StringView &name, Params &&params )
+	: DeclaredConfigVar( name, params.flags ), m_params( params ) {}
+
+void ColorConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
+	assert( defaultValueBuffer->empty() );
+	colorToString( m_params.byDefault & kRgbMask, defaultValueBuffer );
+}
+
+auto ColorConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
+	if( const std::optional<int> maybeColor = parseColor( newValue ) ) {
+		m_cachedValue = *maybeColor;
+		return std::nullopt;
+	} else {
+		assert( tmpBuffer->empty() );
+		m_cachedValue = m_params.byDefault & kRgbMask;
+		colorToString( m_params.byDefault & kRgbMask, tmpBuffer );
+		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+	}
+}
+
+auto ColorConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
+	if( !parseColor( newValue ) ) {
+		assert( tmpBuffer->empty() );
+		colorToString( m_params.byDefault & kRgbMask, tmpBuffer );
+		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+	}
+	return std::nullopt;
+}
+
+auto ColorConfigVar::get() const -> int {
+	if( m_underlying ) {
+		assert( !( m_cachedValue & ~kRgbMask ) );
+		return m_cachedValue;
+	} else {
+		failOnGet();
+	}
+}
+
+void ColorConfigVar::helperOfSet( int value, bool force ) {
+	if( m_underlying ) {
+		// We clamp out-of-range values silently
+		value = value & kRgbMask;
+		wsw::StaticString<16> buffer;
+		m_cachedValue = value;
+		colorToString( value, &buffer );
+		Cvar_Set2( m_name.data(), buffer.data(), force );
 	} else {
 		failOnSet();
 	}

@@ -206,6 +206,34 @@ private:
 	const Params m_params;
 };
 
+// For now, it's limited to RGB values which can be retrieved as integers
+class ColorConfigVar final : public DeclaredConfigVar {
+public:
+	struct Params {
+		int byDefault { kRgbMask };
+		const int flags { 0 };
+		const char *desc;
+	};
+
+	ColorConfigVar( const wsw::StringView &name, Params &&params );
+
+	[[nodiscard]]
+	auto get() const -> int;
+	void set( int value ) { helperOfSet( value, false ); }
+	void setImmediately( int value ) { helperOfSet( value, true ); }
+private:
+	static constexpr int kRgbMask = ~( 0xFF << 24 );
+
+	void getDefaultValueText( wsw::String *defaultValueBuffer ) const override;
+	void helperOfSet( int value, bool force );
+
+	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
+	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
+
+	std::atomic<int> m_cachedValue;
+	const Params m_params;
+};
+
 class UntypedEnumValueConfigVar : public DeclaredConfigVar {
 public:
 	using MatcherObj  = const void *;
