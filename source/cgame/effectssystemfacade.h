@@ -90,6 +90,8 @@ public:
 										   std::variant<std::span<const unsigned>,
 										       std::pair<unsigned, unsigned>> delaysOrDelayRange = std::make_pair( 0u, 0u ) );
 
+	void spawnWaterImpactRing( unsigned delay, const float *origin );
+
 	[[nodiscard]]
 	auto spawnBulletTracer( int owner, const float *from, const float *to ) -> unsigned;
 

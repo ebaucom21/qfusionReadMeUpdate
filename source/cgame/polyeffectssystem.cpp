@@ -51,6 +51,10 @@ PolyEffectsSystem::~PolyEffectsSystem() {
 		next = rosette->next;
 		destroyImpactRosetteEffect( rosette );
 	}
+	for( RibbonEffect *ribbon = m_ribbonEffectsHead, *next = nullptr; ribbon; ribbon = next ) {
+		next = ribbon->next;
+		destroyRibbonEffect( ribbon );
+	}
 	CM_FreeShapeList( cl.cms, m_tmpShapeList );
 }
 
@@ -355,6 +359,12 @@ void PolyEffectsSystem::destroyImpactRosetteEffect( ImpactRosetteEffect *effect 
 	wsw::unlink( effect, &m_impactRosetteEffectsHead );
 	effect->~ImpactRosetteEffect();
 	m_impactRosetteEffectsAllocator.free( effect );
+}
+
+void PolyEffectsSystem::destroyRibbonEffect( RibbonEffect *effect ) {
+	wsw::unlink( effect, &m_ribbonEffectsHead );
+	effect->~RibbonEffect();
+	m_ribbonEffectsAllocator.free( effect );
 }
 
 void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float *to, TransientBeamParams &&params ) {
@@ -805,6 +815,201 @@ auto PolyEffectsSystem::ImpactRosetteFlarePoly::fillMeshBuffers( const float *__
 	return { numAddedVertices, numAddedIndices };
 }
 
+void PolyEffectsSystem::spawnSimulatedRing( SimulatedRingParams &&params ) {
+	void *mem = m_ribbonEffectsAllocator.allocOrNull();
+	if( !mem ) [[unlikely]] {
+		assert( m_ribbonEffectsHead );
+		// TODO: Make retrieval of oldest elements from allocators possible
+		RibbonEffect *oldestEffect = m_ribbonEffectsHead->next;
+		while( oldestEffect ) {
+			if( oldestEffect->next ) {
+				oldestEffect = oldestEffect->next;
+			} else {
+				break;
+			}
+		}
+		wsw::unlink( oldestEffect, &m_ribbonEffectsHead );
+		oldestEffect->~RibbonEffect();
+		mem = oldestEffect;
+	}
+
+	auto *const __restrict effect   = new( mem )RibbonEffect;
+	effect->spawnTime               = m_lastTime;
+	effect->lifetime                = params.lifetime;
+	effect->simulationDelay         = params.simulationDelay;
+	effect->movementDuration        = params.movementDuration;
+	effect->numEdges                = kMaxRibbonEdges;
+	effect->numClipMoveSmoothSteps  = params.numClipMoveSmoothSteps;
+	effect->numClipAlphaSmoothSteps = params.numClipAlphaSmoothSteps;
+	effect->alphaLifespan           = params.alphaLifespan;
+	effect->isLooped                = true;
+	effect->softenOnContact         = params.softenOnContact;
+
+	effect->poly.parentEffect = effect;
+	effect->poly.material     = params.material;
+
+	const float minInnerSpeed = wsw::max( 0.0f, params.innerSpeed.mean - 0.5f * params.innerSpeed.spread );
+	const float maxInnerSpeed = params.innerSpeed.mean + 0.5f * params.innerSpeed.spread;
+
+	const float minOuterSpeed = wsw::max( 0.0f, params.outerSpeed.mean - 0.5f * params.outerSpeed.spread );
+	const float maxOuterSpeed = params.outerSpeed.mean + 0.5f * params.outerSpeed.spread;
+
+	vec3_t axis1, axis2;
+	PerpendicularVector( axis2, params.axisDir );
+	CrossProduct( params.axisDir, axis2, axis1 );
+	VectorNormalizeFast( axis1 ), VectorNormalizeFast( axis2 );
+
+	vec3_t origin;
+	VectorAdd( params.origin, params.offset, origin );
+
+	float angle = 0.0f;
+	const float angleStep = (float)M_TWOPI * Q_Rcp( (float)effect->numEdges );
+	for( unsigned edgeNum = 0; edgeNum < effect->numEdges; ++edgeNum ) {
+		// Hiding latency/breaking dependency chain
+		const float outerSpeed = m_rng.nextFloat( minOuterSpeed, maxOuterSpeed );
+		const float sinPart    = std::sin( angle ), cosPart = std::cos( angle );
+		const float innerSpeed = wsw::min( outerSpeed, m_rng.nextFloat( minInnerSpeed, maxInnerSpeed ) );
+
+		float *const __restrict innerVelocity = effect->innerVelocities[edgeNum];
+		float *const __restrict outerVelocity = effect->outerVelocities[edgeNum];
+
+		VectorClear( innerVelocity );
+		VectorMA( innerVelocity, sinPart, axis1, innerVelocity );
+		VectorMA( innerVelocity, cosPart, axis2, innerVelocity );
+		VectorScale( innerVelocity, innerSpeed, innerVelocity );
+
+		VectorClear( outerVelocity );
+		VectorMA( outerVelocity, sinPart, axis1, outerVelocity );
+		VectorMA( outerVelocity, cosPart, axis2, outerVelocity );
+		VectorScale( outerVelocity, outerSpeed, outerVelocity );
+
+		VectorCopy( origin, effect->innerPositions[edgeNum] );
+		VectorCopy( origin, effect->outerPositions[edgeNum] );
+
+		effect->innerTexCoords[edgeNum][0] = 0.5f + 0.5f * params.innerTexCoordFrac * sinPart;
+		effect->innerTexCoords[edgeNum][1] = 0.5f + 0.5f * params.innerTexCoordFrac * cosPart;
+
+		effect->outerTexCoords[edgeNum][0] = 0.5f + 0.5f * params.outerTexCoordFrac * sinPart;
+		effect->outerTexCoords[edgeNum][1] = 0.5f + 0.5f * params.outerTexCoordFrac * cosPart;
+
+		angle += angleStep;
+	}
+
+	Vector4Set( effect->poly.cullMins, params.origin[0] - 0.1f, params.origin[1] - 0.1f, params.origin[2] - 0.1f, 0.0f );
+	Vector4Set( effect->poly.cullMaxs, params.origin[0] + 0.1f, params.origin[1] + 0.1f, params.origin[2] + 0.1f, 1.0f );
+
+	wsw::link( effect, &m_ribbonEffectsHead );
+}
+
+auto PolyEffectsSystem::RibbonPoly::getStorageRequirements( const float *, const float *, float ) const
+	-> std::optional<std::pair<unsigned, unsigned>> {
+	assert( parentEffect->numEdges > 1 );
+	// TODO: Use strips
+	const unsigned numQuads = parentEffect->numEdges;
+	return std::make_pair( 4 * numQuads, 6 * numQuads );
+}
+
+auto PolyEffectsSystem::RibbonPoly::fillMeshBuffers( const float *__restrict viewOrigin,
+													 const float *__restrict viewAxis,
+													 float,
+													 const Scene::DynamicLight *,
+													 std::span<const uint16_t>,
+													 vec4_t *__restrict positions,
+													 vec4_t *__restrict normals,
+													 vec2_t *__restrict texCoords,
+													 byte_vec4_t *__restrict colors,
+													 uint16_t *__restrict indices ) const
+	-> std::pair<unsigned, unsigned> {
+	assert( parentEffect->numEdges > 1 );
+	// TODO: Can we skip some vertices for far lods?
+
+	const vec3_t *const __restrict innerPositions   = parentEffect->innerPositions;
+	const vec3_t *const __restrict outerPositions   = parentEffect->outerPositions;
+	const vec2_t *const __restrict innerTexCoords   = parentEffect->innerTexCoords;
+	const vec2_t *const __restrict outerTexCoords   = parentEffect->outerTexCoords;
+
+	[[maybe_unused]] const float *const __restrict innerContactAlpha = parentEffect->innerContactAlpha;
+	[[maybe_unused]] const float *const __restrict outerContactAlpha = parentEffect->outerContactAlpha;
+
+	const float globalAlphaScale                = 255.0f * parentEffect->alphaLifespan.getValueForLifetimeFrac( lifetimeFrac );
+	const bool softenOnContact                  = parentEffect->softenOnContact;
+	[[maybe_unused]] const auto globalAlphaByte = (uint8_t)globalAlphaScale;
+
+	unsigned numVertices = 0;
+	unsigned numIndices  = 0;
+
+	unsigned prevEdgeNum = 0;
+	unsigned currEdgeNum = 1;
+	do {
+		VectorCopy( innerPositions[prevEdgeNum], positions[0] );
+		VectorCopy( outerPositions[prevEdgeNum], positions[1] );
+		VectorCopy( outerPositions[currEdgeNum], positions[2] );
+		VectorCopy( innerPositions[currEdgeNum], positions[3] );
+		positions[0][3] = positions[1][3] = positions[2][3] = positions[3][3] = 1.0f;
+
+		if( softenOnContact ) {
+			Vector4Set( colors[0], 255, 255, 255, (uint8_t)( globalAlphaScale * innerContactAlpha[prevEdgeNum] ) );
+			Vector4Set( colors[1], 255, 255, 255, (uint8_t)( globalAlphaScale * outerContactAlpha[prevEdgeNum] ) );
+			Vector4Set( colors[2], 255, 255, 255, (uint8_t)( globalAlphaScale * outerContactAlpha[currEdgeNum] ) );
+			Vector4Set( colors[3], 255, 255, 255, (uint8_t)( globalAlphaScale * innerContactAlpha[currEdgeNum] ) );
+		} else {
+			Vector4Set( colors[0], 255, 255, 255, globalAlphaByte );
+			Vector4Set( colors[1], 255, 255, 255, globalAlphaByte );
+			Vector4Set( colors[2], 255, 255, 255, globalAlphaByte );
+			Vector4Set( colors[3], 255, 255, 255, globalAlphaByte );
+		}
+
+		Vector2Copy( innerTexCoords[prevEdgeNum], texCoords[0] );
+		Vector2Copy( outerTexCoords[prevEdgeNum], texCoords[1] );
+		Vector2Copy( outerTexCoords[currEdgeNum], texCoords[2] );
+		Vector2Copy( innerTexCoords[currEdgeNum], texCoords[3] );
+
+		VectorSet( indices + 0, numVertices + 0, numVertices + 1, numVertices + 2 );
+		VectorSet( indices + 3, numVertices + 0, numVertices + 2, numVertices + 3 );
+
+		positions += 4, colors += 4, texCoords += 4, numVertices += 4;
+		indices += 6, numIndices += 6;
+
+		prevEdgeNum = currEdgeNum;
+		++currEdgeNum;
+	} while( currEdgeNum < parentEffect->numEdges );
+
+	if( parentEffect->isLooped ) {
+		// TODO: Discover how to handle this case within the loop
+		currEdgeNum = 0;
+
+		VectorCopy( innerPositions[prevEdgeNum], positions[0] );
+		VectorCopy( outerPositions[prevEdgeNum], positions[1] );
+		VectorCopy( outerPositions[currEdgeNum], positions[2] );
+		VectorCopy( innerPositions[currEdgeNum], positions[3] );
+		positions[0][3] = positions[1][3] = positions[2][3] = positions[3][3] = 1.0f;
+
+		if( softenOnContact ) {
+			Vector4Set( colors[0], 255, 255, 255, (uint8_t)( globalAlphaScale * innerContactAlpha[prevEdgeNum] ) );
+			Vector4Set( colors[1], 255, 255, 255, (uint8_t)( globalAlphaScale * outerContactAlpha[prevEdgeNum] ) );
+			Vector4Set( colors[2], 255, 255, 255, (uint8_t)( globalAlphaScale * outerContactAlpha[currEdgeNum] ) );
+			Vector4Set( colors[3], 255, 255, 255, (uint8_t)( globalAlphaScale * innerContactAlpha[currEdgeNum] ) );
+		} else {
+			Vector4Set( colors[0], 255, 255, 255, globalAlphaByte );
+			Vector4Set( colors[1], 255, 255, 255, globalAlphaByte );
+			Vector4Set( colors[2], 255, 255, 255, globalAlphaByte );
+			Vector4Set( colors[3], 255, 255, 255, globalAlphaByte );
+		}
+
+		Vector2Copy( innerTexCoords[prevEdgeNum], texCoords[0] );
+		Vector2Copy( outerTexCoords[prevEdgeNum], texCoords[1] );
+		Vector2Copy( outerTexCoords[currEdgeNum], texCoords[2] );
+		Vector2Copy( innerTexCoords[currEdgeNum], texCoords[3] );
+
+		VectorSet( indices + 0, numVertices + 0, numVertices + 1, numVertices + 2 );
+		VectorSet( indices + 3, numVertices + 0, numVertices + 2, numVertices + 3 );
+
+		numVertices += 4, numIndices += 6;
+	}
+
+	return { numVertices, numIndices };
+}
+
 void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
 	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
 		if( beam->poly.material && beam->poly.points.size() > 1 ) [[likely]] {
@@ -859,6 +1064,14 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 	}
 
 	const float timeDeltaSeconds = 1e-3f * std::min<float>( 33, (float)( currTime - m_lastTime ) );
+	simulateTracersAndSubmit( currTime, timeDeltaSeconds, request );
+	simulateRosettesAndSubmit( currTime, timeDeltaSeconds, request );
+	simulateRibbonsAndSubmit( currTime, timeDeltaSeconds, request );
+
+	m_lastTime = currTime;
+}
+
+void PolyEffectsSystem::simulateTracersAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request ) {
 	for( TracerEffect *tracer = m_tracerEffectsHead, *next = nullptr; tracer; tracer = next ) { next = tracer->next;
 		if( tracer->timeoutAt <= currTime ) [[unlikely]] {
 			destroyTracerEffect( tracer );
@@ -1003,7 +1216,9 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 			}
 		}
 	}
+}
 
+void PolyEffectsSystem::simulateRosettesAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request ) {
 	for( ImpactRosetteEffect *effect = m_impactRosetteEffectsHead, *next = nullptr; effect; effect = next ) {
 		next = effect->next;
 
@@ -1090,6 +1305,204 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 			destroyImpactRosetteEffect( effect );
 		}
 	}
+}
 
-	m_lastTime = currTime;
+void PolyEffectsSystem::simulateRibbonsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request ) {
+	for( RibbonEffect *ribbon = m_ribbonEffectsHead, *next = nullptr; ribbon; ribbon = next ) { next = ribbon->next;
+		if( ribbon->spawnTime + ribbon->lifetime <= currTime ) [[unlikely]] {
+			destroyRibbonEffect( ribbon );
+			continue;
+		}
+
+		const int64_t startSimulationAt = ribbon->spawnTime + ribbon->simulationDelay;
+		if( startSimulationAt <= currTime ) [[likely]] {
+			const int64_t stopMovingAt = startSimulationAt + ribbon->movementDuration;
+			// Hacks: currently, the simulation is the same as movement simulation
+			// After stopping moving, we can use the "frozen" state of an object.
+			if( currTime < stopMovingAt ) {
+				simulateRibbon( ribbon, timeDeltaSeconds );
+			}
+
+			if( DistanceSquared( ribbon->poly.cullMins, ribbon->poly.cullMaxs ) > wsw::square( 1.0f ) ) [[likely]] {
+				assert( ribbon->lifetime > ribbon->simulationDelay );
+				const int64_t lifetimeSoFar  = currTime - startSimulationAt;
+				const int64_t visualLifetime = ribbon->lifetime - ribbon->simulationDelay;
+				ribbon->poly.lifetimeFrac    = (float)( lifetimeSoFar ) * Q_Rcp( (float)visualLifetime );
+				assert( ribbon->poly.lifetimeFrac >= 0.0f && ribbon->poly.lifetimeFrac <= 1.0f );
+				request->addDynamicMesh( &ribbon->poly );
+			}
+		}
+	}
+}
+
+void PolyEffectsSystem::simulateRibbon( RibbonEffect *__restrict ribbon, float timeDeltaSeconds ) {
+	assert( ribbon->numEdges > 1 && ribbon->numEdges <= kMaxRibbonEdges );
+	const unsigned numEdges = ribbon->numEdges;
+	unsigned edgeNum;
+
+	// Make sure we aren't going to blow up stack
+	static_assert( kMaxRibbonEdges < 64 );
+
+	vec3_t unclippedInnerPositions[kMaxRibbonEdges], unclippedOuterPositions[kMaxRibbonEdges];
+
+	// Use independent builders to break the major dependency chain
+	BoundsBuilder innerBoundsBuilder, outerBoundsBuilder;
+
+	// Compute unclipped positions for this step.
+	// Compute the enclosing bounding box along the way.
+	edgeNum = 0;
+	do {
+		VectorMA( ribbon->outerPositions[edgeNum], timeDeltaSeconds, ribbon->outerVelocities[edgeNum], unclippedOuterPositions[edgeNum] );
+		VectorMA( ribbon->innerPositions[edgeNum], timeDeltaSeconds, ribbon->innerVelocities[edgeNum], unclippedInnerPositions[edgeNum] );
+		innerBoundsBuilder.addPoint( unclippedInnerPositions[edgeNum] );
+		outerBoundsBuilder.addPoint( unclippedOuterPositions[edgeNum] );
+	} while( ++edgeNum < numEdges );
+
+	// TODO: There should be a method to combine bounds (actually there is but arch-specific)
+	vec3_t innerMins, innerMaxs, combinedMins, combinedMaxs;
+	innerBoundsBuilder.storeTo( innerMins, innerMaxs );
+	outerBoundsBuilder.addPoint( innerMins );
+	outerBoundsBuilder.addPoint( innerMaxs );
+	outerBoundsBuilder.storeToWithAddedEpsilon( combinedMins, combinedMaxs );
+
+	// TODO: Add a fused call
+	CM_BuildShapeList( cl.cms, m_tmpShapeList, combinedMins, combinedMaxs, MASK_SOLID | MASK_WATER );
+	CM_ClipShapeList( cl.cms, m_tmpShapeList, m_tmpShapeList, combinedMins, combinedMaxs );
+
+	// Note: The empty shape list optimization can be added but it does not seem to be beneficial for current effects
+	// which practically always have some nearby collsion shapes.
+
+	float clipMoveFractions[kMaxRibbonEdges];
+
+	edgeNum = 0;
+	// TODO: Use absolute units?
+	constexpr float kMoveFracEpsilon = 1e-3f;
+	if( ribbon->softenOnContact ) {
+		trace_t trace;
+
+		float originalOuterAlphaFractions[kMaxRibbonEdges];
+		float originalInnerAlphaFractions[kMaxRibbonEdges];
+
+		do {
+			// We have to check both vertices independently for softening
+			CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, ribbon->outerPositions[edgeNum],
+								unclippedOuterPositions[edgeNum], vec3_origin, vec3_origin, MASK_SOLID | MASK_WATER );
+			const float outerFrac = trace.fraction;
+
+			CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, ribbon->innerPositions[edgeNum],
+								unclippedInnerPositions[edgeNum], vec3_origin, vec3_origin, MASK_SOLID | MASK_WATER );
+			const float innerFrac = trace.fraction;
+
+			originalOuterAlphaFractions[edgeNum] = Q_Sqrt( outerFrac );
+			originalInnerAlphaFractions[edgeNum] = Q_Sqrt( innerFrac );
+
+			float moveFrac = 0.0f;
+			// Use the same logic as in the other (non-softening case)
+			if( outerFrac > kMoveFracEpsilon ) {
+				if( innerFrac > kMoveFracEpsilon ) {
+					moveFrac = wsw::min( innerFrac, outerFrac );
+				}
+			}
+
+			clipMoveFractions[edgeNum] = moveFrac;
+		} while( ++edgeNum < numEdges );
+
+		float tmpBuffer1[kMaxRibbonEdges], tmpBuffer2[kMaxRibbonEdges];
+
+		const float *innerAlphaFractions = smoothRibbonFractions( originalInnerAlphaFractions, tmpBuffer1, tmpBuffer2, {
+			.numEdges = numEdges, .numSteps = ribbon->numClipAlphaSmoothSteps, .isLooped = ribbon->isLooped,
+		});
+		// tmpBuffer1,2 are safe to reuse after this call
+		std::memcpy( ribbon->innerContactAlpha, innerAlphaFractions, sizeof( float ) * numEdges );
+
+		const float *outerFractions = smoothRibbonFractions( originalOuterAlphaFractions, tmpBuffer1, tmpBuffer2, {
+			.numEdges = numEdges, .numSteps = ribbon->numClipAlphaSmoothSteps, .isLooped = ribbon->isLooped,
+		});
+		std::memcpy( ribbon->outerContactAlpha, outerFractions, sizeof( float ) * numEdges );
+	} else {
+		trace_t trace;
+		do {
+			float moveFrac = 0.0f;
+			// Consider the outer hull to be "dragging" the ring,
+			// so if the outer vertex is definitely stopped, don't even bother to check the inner one.
+			CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, ribbon->outerPositions[edgeNum],
+								unclippedOuterPositions[edgeNum], vec3_origin, vec3_origin, MASK_SOLID | MASK_WATER );
+			if( const float outerFrac = trace.fraction; trace.fraction > kMoveFracEpsilon ) {
+				CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, ribbon->innerPositions[edgeNum],
+									unclippedInnerPositions[edgeNum], vec3_origin, vec3_origin, MASK_SOLID | MASK_WATER );
+				if( const float innerFrac = trace.fraction; innerFrac > kMoveFracEpsilon ) {
+					moveFrac = wsw::min( innerFrac, outerFrac );
+				}
+			}
+
+			clipMoveFractions[edgeNum] = moveFrac;
+		} while( ++edgeNum < numEdges );
+	}
+
+	float buffer1[kMaxRibbonEdges], buffer2[kMaxRibbonEdges];
+	const float *const __restrict finalMoveFractions = smoothRibbonFractions( clipMoveFractions, buffer1, buffer2, {
+		.numEdges = numEdges, .numSteps = ribbon->numClipMoveSmoothSteps, .isLooped = ribbon->isLooped
+	});
+
+	// Compute final positions given smoothed move fractions
+	edgeNum = 0;
+	do {
+		assert( finalMoveFractions[edgeNum] >= 0.0f && finalMoveFractions[edgeNum] <= 1.0f );
+		const float frac = timeDeltaSeconds * finalMoveFractions[edgeNum];
+		VectorMA( ribbon->outerPositions[edgeNum], frac, ribbon->outerVelocities[edgeNum], ribbon->outerPositions[edgeNum] );
+		VectorMA( ribbon->innerPositions[edgeNum], frac, ribbon->innerVelocities[edgeNum], ribbon->innerPositions[edgeNum] );
+	} while( ++edgeNum < numEdges );
+
+	// Don't recompute bounds (bounds of non-clipped vertices should be sufficient)
+	VectorCopy( combinedMins, ribbon->poly.cullMins );
+	VectorCopy( combinedMaxs, ribbon->poly.cullMaxs );
+	ribbon->poly.cullMins[3] = 0.0f, ribbon->poly.cullMaxs[3] = 1.0f;
+}
+
+auto PolyEffectsSystem::smoothRibbonFractions( float *__restrict original,
+											   float *__restrict pingPongBuffer1,
+											   float *__restrict pingPongBuffer2,
+											   SmoothRibbonParams &&params ) -> float * {
+	float *const buffers[2] { pingPongBuffer1, pingPongBuffer2 };
+
+	const unsigned numEdges  = params.numEdges;
+	const unsigned numSteps  = params.numSteps;
+	const bool isLooped      = params.isLooped;
+	float *__restrict src    = original;
+	unsigned destBufferIndex = 0;
+
+	for( unsigned pingPongStep = 0; pingPongStep < numSteps; ++pingPongStep ) {
+		float *const __restrict dest = buffers[destBufferIndex];
+		assert( src != dest );
+
+		constexpr float kPeakWeight = 0.50f;
+		constexpr float kTailWeight = 0.25f;
+		static_assert( kPeakWeight + 2.0f * kTailWeight == 1.0f );
+
+		// Don't let the fraction grow over the original value
+
+		if( isLooped ) {
+			dest[0]            = wsw::min( original[0],
+										   kPeakWeight * src[0] + kTailWeight * ( src[1] + src[numEdges - 1] ) );
+			dest[numEdges - 1] = wsw::min( original[numEdges - 1],
+										   kPeakWeight * src[numEdges - 1] + kTailWeight * ( src[0] + src[numEdges - 2] ) );
+		} else {
+			dest[0]            = wsw::min( original[0],
+										   kPeakWeight * src[0] + 2.0f * kTailWeight * src[1] );
+			dest[numEdges - 1] = wsw::min( original[numEdges - 1],
+										   kPeakWeight * src[numEdges - 1] + 2.0f * kTailWeight * src[numEdges - 2] );
+		}
+
+		unsigned edgeNum = 1;
+		do {
+			dest[edgeNum] = wsw::min( original[edgeNum],
+									  kPeakWeight * src[edgeNum] + kTailWeight * ( src[edgeNum - 1] + src[edgeNum + 1] ) );
+		} while( ++edgeNum < numEdges - 1 );
+
+		src             = dest;
+		destBufferIndex = ( destBufferIndex + 1 ) % 2;
+	}
+
+	// It is either a last written buffer, or the original buffer (in case of no steps made).
+	return src;
 }

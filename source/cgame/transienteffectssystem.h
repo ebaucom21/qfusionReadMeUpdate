@@ -60,10 +60,6 @@ public:
 
 	void spawnPelletImpactModel( const float *origin, const float *dir );
 
-	void spawnBulletLikeImpactRing( const float *origin, const float *axisDir );
-
-	void spawnWaterImpactRing( const float *origin, const float *axisDir );
-
 	// TODO: Bins should be an implementation detail of the particle system,
 	// specify absolute numbers of desired particles count!
 	enum class ParticleFlockBin { Small, Medium, Large };
@@ -230,9 +226,6 @@ private:
 
 	void spawnSmokeHull( int64_t currTime, const float *origin, const float *spikeSpeedMask,
 						 const SmokeHullParams &smokeHullParams );
-
-	void spawnImpactRing( const float *origin, const float *axisDir, unsigned timeout,
-						  const ValueLifespan &scaleLifespan, const ValueLifespan &alphaLifespan );
 
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );

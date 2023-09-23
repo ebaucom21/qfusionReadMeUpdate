@@ -125,6 +125,29 @@ public:
 
 	void spawnImpactRosette( ImpactRosetteParams &&params );
 
+	struct SimulatedRingParams {
+		float origin[3];
+		float offset[3];
+		float axisDir[3];
+		ValueLifespan alphaLifespan;
+		struct { float mean; float spread; } innerSpeed;
+		struct { float mean; float spread; } outerSpeed;
+		unsigned lifetime { 100 };
+		unsigned simulationDelay { 0 };
+		unsigned movementDuration { ~0u };
+		// 0.0 maps the inner ring to a texture center.
+		// 0.5 maps the inner ring to a circle (half as small as a (maximal) inscribed circle) with center matching texture center.
+		float innerTexCoordFrac { 0.0f };
+		// 1.0 maps the outer ring to a (maximal) inscribed circle with center matching texture center.
+		float outerTexCoordFrac { 1.0f };
+		unsigned numClipMoveSmoothSteps { 0 };
+		unsigned numClipAlphaSmoothSteps { 0 };
+		bool softenOnContact { false };
+		shader_s *material { nullptr };
+	};
+
+	void spawnSimulatedRing( SimulatedRingParams &&params );
+
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
 private:
 	struct StraightBeamEffect : public StraightBeam {
@@ -273,29 +296,91 @@ private:
 		ImpactRosetteFlarePoly flarePoly;
 	};
 
+	struct RibbonEffect;
+
+	struct RibbonPoly : public DynamicMesh {
+		RibbonEffect *parentEffect { nullptr };
+		float lifetimeFrac { 0.0f };
+
+		[[nodiscard]]
+		auto getStorageRequirements( const float *, const float *, float ) const
+			-> std::optional<std::pair<unsigned, unsigned>> override;
+
+		[[nodiscard]]
+		auto fillMeshBuffers( const float *__restrict viewOrigin,
+							  const float *__restrict viewAxis,
+							  float,
+							  const Scene::DynamicLight *,
+							  std::span<const uint16_t>,
+							  vec4_t *__restrict positions,
+							  vec4_t *__restrict normals,
+							  vec2_t *__restrict texCoords,
+							  byte_vec4_t *__restrict colors,
+							  uint16_t *__restrict indices ) const -> std::pair<unsigned, unsigned> override;
+	};
+
+	// TODO: Differentiate for different kinds of ribbons
+	static constexpr unsigned kMaxRibbonEdges = 32;
+
+	struct RibbonEffect {
+		RibbonEffect *prev { nullptr }, *next { nullptr };
+		int64_t spawnTime { 0 };
+		unsigned lifetime { 0 };
+		unsigned numEdges { 0 };
+		unsigned movementDuration { 0 };
+		unsigned simulationDelay { 0 };
+		unsigned numClipMoveSmoothSteps { 0 };
+		unsigned numClipAlphaSmoothSteps { 0 };
+		// TODO: Experiment with an AOS memory layout
+		vec3_t innerPositions[kMaxRibbonEdges];
+		vec3_t outerPositions[kMaxRibbonEdges];
+		vec3_t innerVelocities[kMaxRibbonEdges];
+		vec3_t outerVelocities[kMaxRibbonEdges];
+		vec2_t innerTexCoords[kMaxRibbonEdges];
+		vec2_t outerTexCoords[kMaxRibbonEdges];
+		// TODO: Unused for non-softened-on-contact ribbons, use a subtype?
+		float innerContactAlpha[kMaxRibbonEdges];
+		float outerContactAlpha[kMaxRibbonEdges];
+		ValueLifespan alphaLifespan;
+		RibbonPoly poly;
+		bool isLooped { false };
+		bool softenOnContact { false };
+	};
+
 	void destroyTransientBeamEffect( TransientBeamEffect *effect );
-
 	void destroyTracerEffect( TracerEffect *effect );
-
 	void destroyImpactRosetteEffect( ImpactRosetteEffect *effect );
+	void destroyRibbonEffect( RibbonEffect *effect );
+
+	void simulateTracersAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+	void simulateRosettesAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+	void simulateRibbonsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+
+	void simulateRibbon( RibbonEffect *ribbon, float timeDeltaSeconds );
+
+	struct SmoothRibbonParams {
+		unsigned numEdges;
+		unsigned numSteps;
+		bool isLooped;
+	};
+
+	[[nodiscard]]
+	static auto smoothRibbonFractions( float *original, float *pingPongBuffer1,
+									   float *pingPongBuffer2, SmoothRibbonParams &&params ) -> float *;
 
 	wsw::HeapBasedFreelistAllocator m_straightLaserBeamsAllocator { sizeof( StraightBeamEffect ), MAX_CLIENTS * 4 };
 	wsw::HeapBasedFreelistAllocator m_curvedLaserBeamsAllocator { sizeof( CurvedBeamEffect ), MAX_CLIENTS * 4 };
-
 	wsw::HeapBasedFreelistAllocator m_transientBeamsAllocator { sizeof( TransientBeamEffect ), MAX_CLIENTS * 2 };
-
     wsw::HeapBasedFreelistAllocator m_tracerEffectsAllocator { sizeof( TracerEffect ), MAX_CLIENTS * 4 };
-
     wsw::HeapBasedFreelistAllocator m_impactRosetteEffectsAllocator { sizeof( ImpactRosetteEffect ), 64 };
+	wsw::HeapBasedFreelistAllocator m_ribbonEffectsAllocator { sizeof( RibbonEffect ), 32 };
 
 	StraightBeamEffect *m_straightLaserBeamsHead { nullptr };
 	CurvedBeamEffect *m_curvedLaserBeamsHead { nullptr };
-
 	TransientBeamEffect *m_transientBeamsHead { nullptr };
-
 	TracerEffect *m_tracerEffectsHead { nullptr };
-
 	ImpactRosetteEffect *m_impactRosetteEffectsHead { nullptr };
+	RibbonEffect *m_ribbonEffectsHead { nullptr };
 
 	// TODO: Use the shared instance for the entire client codebase
 	wsw::RandomGenerator m_rng;

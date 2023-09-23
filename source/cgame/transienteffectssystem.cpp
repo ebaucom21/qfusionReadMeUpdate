@@ -844,53 +844,6 @@ void TransientEffectsSystem::spawnPelletImpactModel( const float *origin, const 
 	};
 }
 
-void TransientEffectsSystem::spawnImpactRing( const float *origin, const float *axisDir, unsigned timeout,
-											  const ValueLifespan &scaleLifespan, const ValueLifespan &alphaLifespan ) {
-	assert( std::fabs( VectorLengthFast( axisDir ) - 1.0f ) < 0.1f );
-
-	QuadPoly::OrientedSpriteRules appearanceRules {};
-	VectorCopy( axisDir, appearanceRules.axis );
-	MakeNormalVectors( axisDir, appearanceRules.axis + 3, appearanceRules.axis + 6 );
-
-	PolyEffect *const effect     = allocPolyEffect( m_lastTime, timeout );
-	effect->poly.material        = cgs.media.shaderImpactRing;
-	effect->poly.appearanceRules = appearanceRules;
-
-	VectorMA( origin, 4.0f, axisDir, effect->poly.origin );
-
-	effect->scaleLifespan   = scaleLifespan;
-	effect->alphaLifespan   = alphaLifespan;
-	effect->scaleMultiplier = m_rng.nextFloat( 0.9f, 1.1f );
-}
-
-static const ValueLifespan kBulletImpactRingScaleLifespan {
-	.initial = 0.0f, .fadedIn = 72.0f, .fadedOut = 96.0f,
-	.finishFadingInAtLifetimeFrac = 0.08f, .startFadingOutAtLifetimeFrac = 0.10f,
-};
-
-static const ValueLifespan kBulletImpactRingAlphaLifespan {
-	.initial = 1.0f, .fadedIn = 0.25f, .fadedOut = 0.0f,
-	.finishFadingInAtLifetimeFrac = 0.15f, .startFadingOutAtLifetimeFrac = 0.17f,
-};
-
-void TransientEffectsSystem::spawnBulletLikeImpactRing( const float *origin, const float *axisDir ) {
-	spawnImpactRing( origin, axisDir, 250, kBulletImpactRingScaleLifespan, kBulletImpactRingAlphaLifespan );
-}
-
-static const ValueLifespan kWaterImpactRingScaleLifespan {
-	.initial = 0.0f, .fadedIn = 56.0f, .fadedOut = 72.0f,
-	.finishFadingInAtLifetimeFrac = 0.45f, .startFadingOutAtLifetimeFrac = 0.47f,
-};
-
-static const ValueLifespan kWaterImpactRingAlphaLifespan {
-	.initial = 0.0f, .fadedIn = 0.33f, .fadedOut = 0.0f,
-	.finishFadingInAtLifetimeFrac = 0.15f, .startFadingOutAtLifetimeFrac = 0.20f,
-};
-
-void TransientEffectsSystem::spawnWaterImpactRing( const float *origin, const float *axisDir ) {
-	spawnImpactRing( origin, axisDir, 575, kWaterImpactRingScaleLifespan, kWaterImpactRingAlphaLifespan );
-}
-
 void TransientEffectsSystem::addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 													   const ConicalFlockParams &flockParams,
 													   const Particle::AppearanceRules &appearanceRules ) {

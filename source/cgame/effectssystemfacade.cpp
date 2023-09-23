@@ -1716,8 +1716,29 @@ void EffectsSystemFacade::spawnBulletLikeImpactRingUsingLimiter( unsigned delay,
 			const float dotFrac      = ( dot - minDot ) * rcpDotRange;
 			const float acceptChance = 1.0f - dotFrac;
 			if( m_rng.tryWithChance( acceptChance ) ) {
-				// TODO: Postpone if needed
-				m_transientEffectsSystem.spawnBulletLikeImpactRing( impact.origin, axisDir );
+				cg.polyEffectsSystem.spawnSimulatedRing( PolyEffectsSystem::SimulatedRingParams {
+					.origin     = { impact.origin[0], impact.origin[1], impact.origin[2] },
+					.offset     = { impact.normal[0], impact.normal[1], impact.normal[2] },
+					.axisDir    = { axisDir[0], axisDir[1], axisDir[2] },
+					.alphaLifespan = ValueLifespan {
+						.initial   = 1.0f,
+						.fadedIn   = 0.33f,
+						.fadedOut  = 0.0f,
+						.finishFadingInAtLifetimeFrac = 0.15f,
+						.startFadingOutAtLifetimeFrac = 0.35f,
+					},
+					.innerSpeed              = { 200.0f, 5.0f },
+					.outerSpeed              = { 400.0f, 5.0f },
+					.lifetime                = 375 + delay,
+					.simulationDelay         = delay,
+					.movementDuration        = 300,
+					.innerTexCoordFrac       = 0.5f,
+					.outerTexCoordFrac       = 1.0f,
+					.numClipMoveSmoothSteps  = 10,
+					.numClipAlphaSmoothSteps = 3,
+					.softenOnContact         = true,
+					.material                = cgs.media.shaderImpactRing,
+				});
 				return;
 			}
 		}
@@ -2078,10 +2099,8 @@ const EffectsSystemFacade::EventRateLimiterParams EffectsSystemFacade::kLiquidIm
 void EffectsSystemFacade::spawnBulletLiquidImpactEffect( unsigned delay, const LiquidImpact &impact ) {
 	spawnLiquidImpactParticleEffect( delay, impact, 1.0f, { 0.70f, 0.95f } );
 
-	if( m_liquidImpactRingsRateLimiter.acquirePermission( cg.time, impact.origin, kLiquidImpactRingLimiterParams ) ) {
-		// TODO: Postpone if needed
-		m_transientEffectsSystem.spawnWaterImpactRing( impact.origin, impact.burstDir );
-	}
+	spawnWaterImpactRing( delay, impact.origin );
+
 	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
 		sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
 		startSoundForImpactUsingLimiter( sfx, impact, kLiquidImpactSoundLimiterParams );
@@ -2211,43 +2230,77 @@ void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const S
 void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const LiquidImpact> impacts, float percentageScale,
 															std::pair<float, float> randomRotationAngleCosineRange,
 															std::variant<std::span<const unsigned>,
-															    std::pair<unsigned, unsigned>> delaysOrDelayRange ) {
+															std::pair<unsigned, unsigned>> delaysOrDelayRange ) {
+	assert( impacts.size() < 64 );
+	wsw::StaticVector<unsigned, 64> tmpDelays;
+	std::span<const unsigned> chosenDelays;
+
 	if( const auto *delayRange = std::get_if<std::pair<unsigned, unsigned>>( &delaysOrDelayRange ) ) {
 		assert( delayRange->first <= delayRange->second );
 		if( delayRange->second > 0 && delayRange->first != delayRange->second ) {
 			for( const LiquidImpact &impact: impacts ) {
 				const unsigned delay = delayRange->first + m_rng.nextBoundedFast( delayRange->second - delayRange->first );
 				spawnLiquidImpactParticleEffect( delay, impact, percentageScale, randomRotationAngleCosineRange );
+				tmpDelays.push_back( delay );
 			}
 		} else {
 			for( const LiquidImpact &impact: impacts ) {
 				spawnLiquidImpactParticleEffect( delayRange->first, impact, percentageScale, randomRotationAngleCosineRange );
+				tmpDelays.push_back( delayRange->first );
 			}
 		}
+		chosenDelays = std::span<const unsigned> { tmpDelays.data(), tmpDelays.size() };
 	} else if( const auto *individualDelays = std::get_if<std::span<const unsigned>>( &delaysOrDelayRange ) ) {
 		assert( individualDelays->size() == impacts.size() );
 		for( size_t i = 0; i < impacts.size(); ++i ) {
 			spawnLiquidImpactParticleEffect( ( *individualDelays )[i], impacts[i], percentageScale, randomRotationAngleCosineRange );
 		}
+		chosenDelays = *individualDelays;
 	} else [[unlikely]] {
 		wsw::failWithRuntimeError( "Unreachable" );
 	}
 
-	// We don't care of delay for relatively slow water rings TODO?
-	for( const LiquidImpact &impact: impacts ) {
-		if( m_liquidImpactRingsRateLimiter.acquirePermission( cg.time, impact.origin, kLiquidImpactRingLimiterParams ) ) {
-			// Hack: Force aligning to Z-axis for now (burst dirs could differ from it).
-			// We'd like to support non-horizontal water surfaces in further development.
-			m_transientEffectsSystem.spawnWaterImpactRing( impact.origin, &axis_identity[AXIS_UP] );
-		}
+	// It's better to keep loops split for a better instruction cache utilization
+	assert( chosenDelays.size() == impacts.size() );
+	for( size_t i = 0; i < impacts.size(); ++i ) {
+		spawnWaterImpactRing( chosenDelays[i], impacts[i].origin );
 	}
 
-	// We don't care of delay for sounds as well
+	// TODO: Add delays to sounds?
 	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
 		for( const LiquidImpact &impact: impacts ) {
 			sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
 			startSoundForImpactUsingLimiter( sfx, impact, kLiquidImpactSoundLimiterParams );
 		}
+	}
+}
+
+void EffectsSystemFacade::spawnWaterImpactRing( unsigned delay, const float *origin ) {
+	if( m_liquidImpactRingsRateLimiter.acquirePermission( cg.time, origin, kLiquidImpactRingLimiterParams ) ) {
+		cg.polyEffectsSystem.spawnSimulatedRing( PolyEffectsSystem::SimulatedRingParams {
+			// Hack: Force aligning to Z-axis for now (burst dirs could differ from it).
+			// We'd like to support non-horizontal water surfaces in further development.
+			.origin     = { origin[0], origin[1], origin[2] },
+			.offset     = { 0.0f, 0.0f, 0.1f },
+			.axisDir    = { 0.0f, 0.0f, 1.0f },
+			.alphaLifespan = ValueLifespan {
+				.initial   = 0.0f,
+				.fadedIn   = 0.7f,
+				.fadedOut  = 0.0f,
+				.finishFadingInAtLifetimeFrac = 0.10f,
+				.startFadingOutAtLifetimeFrac = 0.15f,
+			},
+			.innerSpeed              = { 50.0f, 2.5f },
+			.outerSpeed              = { 100.0f, 5.0f },
+			.lifetime                = 600 + delay,
+			.simulationDelay         = delay,
+			.movementDuration        = 500,
+			.innerTexCoordFrac       = 0.5f,
+			.outerTexCoordFrac       = 1.0f,
+			.numClipMoveSmoothSteps  = 10,
+			.softenOnContact         = false,
+			.material                = cgs.media.shaderImpactRing,
+		});
 	}
 }
 
