@@ -11,7 +11,28 @@ Item {
 
     property string cvarName: ""
     property bool applyImmediately: true
-    property bool suppressSignals: true
+
+    QtObject {
+        id: impl
+        property bool suppressSignals: true
+        property var pendingValue
+
+        function getCurrNumericVarValue() {
+            return impl.textToValue(UI.ui.getCVarValue(root.cvarName))
+        }
+
+        function valueToText(v) {
+            return (v + 0.0).toFixed(root.fractionalPartDigits)
+        }
+
+        function textToValue(text) {
+            let v = parseFloat(text)
+            if (isNaN(v)) {
+                v = 0.0
+            }
+            return Math.max(slider.from, Math.min(v, slider.to))
+        }
+    }
 
     property int fractionalPartDigits: 2
     property real textFieldWidth: 56
@@ -63,7 +84,7 @@ Item {
             slider.suppressSignals      = suppressSliderSignals
         }
 
-        const text = valueToText(value)
+        const text = impl.valueToText(value)
         if (text != textField.text) {
             const suppressFieldSignals = textField.suppressSignals
             textField.suppressSignals  = true
@@ -71,63 +92,63 @@ Item {
             textField.suppressSignals  = suppressFieldSignals
         }
 
-        if (!root.suppressSignals) {
+        if (!impl.suppressSignals) {
             if (applyImmediately) {
                 UI.ui.setCVarValue(cvarName, value)
             } else {
-                UI.ui.markPendingCVarChanges(root, cvarName, value)
+                impl.pendingValue = value
             }
         }
     }
 
-    function checkCVarChanges() {
-        let newValue = getCurrNumericVarValue()
-        if (value != newValue) {
-            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
-                value = newValue
+    Connections {
+        target: UI.ui
+        onCheckingCVarChangesRequested: {
+            const newValue = impl.getCurrNumericVarValue()
+            if (!applyImmediately && typeof(impl.pendingValue) !== "undefined") {
+                if (impl.pendingValue === newValue) {
+                    impl.pendingValue = undefined
+                }
+            }
+            if (value != newValue) {
+                if (applyImmediately || typeof(impl.pendingValue) === "undefined") {
+                    value = newValue
+                }
             }
         }
-    }
-
-    function rollbackChanges() {
-        root.suppressSignals      = true
-        slider.suppressSignals    = true
-        textField.suppressSignals = true
-
-        value = getCurrNumericVarValue()
-
-        textField.suppressSignals = false
-        slider.suppressSignals    = false
-        root.suppressSignals      = false
-    }
-
-    function valueToText(v) {
-        return (v + 0.0).toFixed(fractionalPartDigits)
-    }
-
-    function textToValue(text) {
-        let v = parseFloat(text)
-        if (isNaN(v)) {
-            v = 0.0
+        onReportingPendingCVarChangesRequested: {
+            if (typeof(impl.pendingValue) !== "undefined") {
+                UI.ui.reportPendingCVarChanges(root.cvarName, impl.pendingValue)
+            }
         }
-        return Math.max(slider.from, Math.min(v, slider.to))
-    }
+        onRollingPendingCVarChangesBackRequested: {
+            impl.suppressSignals      = true
+            slider.suppressSignals    = true
+            textField.suppressSignals = true
 
-    function getCurrNumericVarValue() {
-        return textToValue(UI.ui.getCVarValue(cvarName))
+            root.value        = impl.getCurrNumericVarValue()
+            impl.pendingValue = undefined
+
+            textField.suppressSignals = false
+            slider.suppressSignals    = false
+            impl.suppressSignals      = false
+        }
+        onPendingCVarChangesCommitted: {
+            impl.pendingValue = undefined
+        }
     }
 
     Component.onCompleted: {
-        value                     = getCurrNumericVarValue()
-        slider.value              = value
-        textField.text            = valueToText(value)
-        UI.ui.registerCVarAwareControl(root)
-        suppressSignals           = false
+        console.assert(impl.suppressSignals)
+        console.assert(slider.suppressSignals)
+        console.assert(textField.suppressSignals)
+        root.value                = impl.getCurrNumericVarValue()
+        slider.value              = root.value
+        textField.text            = impl.valueToText(root.value)
+        impl.suppressSignals      = false
         slider.suppressSignals    = false
         textField.suppressSignals = false
     }
-
-    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 
     Slider {
         id: slider
@@ -177,8 +198,8 @@ Item {
 
         onEditingFinished: {
             if (!textField.suppressSignals) {
-                const numericValue = textToValue(textField.text)
-                const newTextValue = valueToText(numericValue)
+                const numericValue = impl.textToValue(textField.text)
+                const newTextValue = impl.valueToText(numericValue)
                 if (newTextValue !== textField.text) {
                     textField.suppressSignals = true
                     textField.text            = newTextValue

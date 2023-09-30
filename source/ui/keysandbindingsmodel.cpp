@@ -452,32 +452,6 @@ auto KeysAndBindingsModel::getCommandNum( const wsw::StringView &bindingView ) c
 	return std::nullopt;
 }
 
-void KeysAndBindingsModel::registerKeyItem( QQuickItem *item, int quakeKey ) {
-	if( (size_t)( quakeKey - 1 ) < (size_t)( m_keyItems.size() - 1 ) ) {
-		assert( !m_keyItems[quakeKey] );
-		m_keyItems[quakeKey] = item;
-	}
-}
-
-void KeysAndBindingsModel::unregisterKeyItem( QQuickItem *item, int quakeKey ) {
-	if( (size_t)( quakeKey - 1 ) < (size_t)( m_keyItems.size() - 1 ) ) {
-		assert( m_keyItems[quakeKey] == item );
-		m_keyItems[quakeKey] = nullptr;
-	}
-}
-
-void KeysAndBindingsModel::registerCommandItem( QQuickItem *item, int commandNum ) {
-	assert( (size_t)commandNum < m_commandItems.size() );
-	assert( !m_commandItems[commandNum] );
-	m_commandItems[commandNum] = item;
-}
-
-void KeysAndBindingsModel::unregisterCommandItem( QQuickItem *item, int commandNum ) {
-	assert( (size_t)commandNum < m_commandItems.size() );
-	assert( item == m_commandItems[commandNum] );
-	m_commandItems[commandNum] = nullptr;
-}
-
 void KeysAndBindingsModel::startTrackingUpdates() {
 	reload();
 	m_isTrackingUpdates = true;
@@ -694,23 +668,19 @@ KeysAndBindingsModel::KeysAndBindingsModel() {
 	m_keyboardNumPadRowModel[4] = keyboardRowToJsonArray( kNumPadRow5 );
 }
 
-void KeysAndBindingsModel::onKeyItemContainsMouseChanged( QQuickItem *keyItem, int quakeKey, bool contains ) {
+void KeysAndBindingsModel::onKeyItemContainsMouseChanged( int quakeKey, bool contains ) {
 	// Find a command with the respective binding
 	if( const auto &command = m_lastKeyBindings[quakeKey]; !command.empty() ) {
 		if( const auto maybeCommandNum = getCommandNum( wsw::StringView( command.data(), command.size() ) ) ) {
-			if ( QQuickItem *commandItem = m_commandItems[*maybeCommandNum] ) {
-				commandItem->setProperty( "externallyHighlighted", contains );
-			}
+			Q_EMIT commandExternalHighlightChanged( *maybeCommandNum, contains );
 		}
 	}
 }
 
-void KeysAndBindingsModel::onCommandItemContainsMouseChanged( QQuickItem *commandItem, int commandNum, bool contains ) {
+void KeysAndBindingsModel::onCommandItemContainsMouseChanged( int commandNum, bool contains ) {
 	assert( (unsigned)commandNum < (unsigned)kMaxCommands );
 	for( int key : m_boundKeysForCommand[commandNum] ) {
-		if( QQuickItem *keyItem = m_keyItems[key] ) {
-			keyItem->setProperty( "externallyHighlighted", contains );
-		}
+		Q_EMIT keyExternalHighlightChanged( key, contains );
 	}
 }
 

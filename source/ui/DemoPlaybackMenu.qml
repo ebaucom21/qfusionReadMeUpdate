@@ -15,17 +15,14 @@ Item {
         layer.effect: ElevationEffect { elevation: 64 }
 
         Component.onCompleted: {
-            UI.ui.registerHudOccluder(pane)
             x = 0.5 * (parent.width - width)
             y = 0.75 * parent.height
         }
 
-        Component.onDestruction: UI.ui.unregisterHudOccluder(pane)
-        onWidthChanged: UI.ui.updateHudOccluder(pane)
-        onHeightChanged: UI.ui.updateHudOccluder(pane)
-        onXChanged: UI.ui.updateHudOccluder(pane)
-        onYChanged: UI.ui.updateHudOccluder(pane)
-        onVisibleChanged: UI.ui.updateHudOccluder(pane)
+        Connections {
+            target: UI.ui
+            onHudOccludersRetrievalRequested: UI.ui.supplyHudOccluder(pane)
+        }
 
         MouseArea {
             id: mouseArea

@@ -14,7 +14,6 @@ ComboBox {
     property real minimumWidth
     property real menuItemWidth
     property bool wasVisible
-    property bool hasRegisteredHudOccluder
 
     background.opacity: 0.67
     
@@ -72,10 +71,6 @@ ComboBox {
             root.background.visible  = wasVisible
 
             rootItem.resetPopupMode()
-            if (root.hasRegisteredHudOccluder) {
-                UI.ui.unregisterHudOccluder(background)
-                root.hasRegisteredHudOccluder = false
-            }
         }
 
         function repositionBlurRegion() {
@@ -91,11 +86,6 @@ ComboBox {
 
                 rootItem.setOrUpdatePopupMode(Qt.rect(globalPos.x + inset, globalPos.y + inset,
                     background.width - 2 * inset, background.height - 2 * inset))
-
-                if (!root.hasRegisteredHudOccluder) {
-                    UI.ui.registerHudOccluder(background)
-                    root.hasRegisteredHudOccluder = true
-                }
             }
         }
     }

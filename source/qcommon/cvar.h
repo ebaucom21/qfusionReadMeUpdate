@@ -56,6 +56,7 @@ void        Cvar_SetValue( const char *var_name, float value );
 float       Cvar_Value( const char *var_name );
 const char *Cvar_String( const char *var_name );
 int     Cvar_Integer( const char *var_name );
+int     Cvar_Flags( const char *var_name );
 cvar_t      *Cvar_Find( const char *var_name );
 void        Cvar_GetLatchedVars( cvar_flag_t flags );
 void        Cvar_FixCheatVars( void );

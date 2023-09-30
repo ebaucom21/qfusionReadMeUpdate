@@ -12,101 +12,119 @@ AutoFittingComboBox {
     property string cvarName: ""
     property bool applyImmediately: true
 
-    property var oldValue
-
-    property bool skipIndexChangeSignal: true
-
     property var knownHeadingsAndValues
 
-    property var headings
-    property var values
+    readonly property var values: impl.values
+    readonly property var headings: impl.headings
 
-    readonly property string placeholder: "- -"
+    readonly property string placeholder: "(unknown)"
+
+    QtObject {
+        id: impl
+        property var pendingValue
+        property var oldValue
+        property bool skipIndexChangeSignal: true
+        property var headings
+        property var values
+
+        function setNewValue(value) {
+            let index = impl.mapValueToIndex(value)
+            if (index < 0) {
+                // Add a placeholder if needed. Otherwise just update the placeholder value
+                if (impl.headings[impl.headings.length - 1] !== placeholder) {
+                    impl.headings.push(placeholder)
+                    impl.values.push(value)
+                    model = impl.headings
+                } else {
+                    impl.values[impl.values.length - 1] = value
+                }
+                index = impl.values.length - 1
+            } else {
+                // Remove the placeholder if it's no longer useful
+                if (index != impl.headings.length - 1 && impl.headings[impl.headings.length - 1] === placeholder) {
+                    impl.values.pop()
+                    impl.headings.pop()
+                    model = impl.headings
+                }
+            }
+
+            impl.oldValue = value
+            if (root.currentIndex != index) {
+                root.currentIndex = index
+            }
+        }
+
+        function mapValueToIndex(value) {
+            const knownValues = knownHeadingsAndValues[1]
+            for (let i = 0; i < knownValues.length; ++i) {
+                if (knownValues[i] == value) {
+                    return i
+                }
+            }
+            return -1
+        }
+    }
 
     onKnownHeadingsAndValuesChanged: {
         const value = UI.ui.getCVarValue(cvarName)
         // Make deep copies
-        headings = [...knownHeadingsAndValues[0]]
-        values = [...knownHeadingsAndValues[1]]
-        if (mapValueToIndex(value) < 0) {
-            values.push(value)
-            headings.push(placeholder)
+        impl.headings = [...knownHeadingsAndValues[0]]
+        impl.values   = [...knownHeadingsAndValues[1]]
+        if (impl.mapValueToIndex(value) < 0) {
+            impl.values.push(value)
+            impl.headings.push(placeholder)
         }
-        model = headings
+        model = impl.headings
         // Force a value re-check/index update next frame (for some unknown reasons it has to be postponed)
-        oldValue = undefined
+        impl.oldValue = undefined
     }
 
-    function checkCVarChanges() {
-        let value = UI.ui.getCVarValue(cvarName)
-        if (value != oldValue) {
-            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
-                setNewValue(value)
+    Connections {
+        target: UI.ui
+        onCheckingCVarChangesRequested: {
+            const value = UI.ui.getCVarValue(cvarName)
+            if (!applyImmediately && typeof(impl.pendingValue) !== "undefined") {
+                if ((impl.pendingValue + '') === value) {
+                    impl.pendingValue = undefined
+                }
+            }
+            if (value != impl.oldValue) {
+                if (applyImmediately || typeof(impl.pendingValue) === "undefined") {
+                    impl.skipIndexChangeSignal = true
+                    impl.setNewValue(value)
+                    impl.skipIndexChangeSignal = false
+                }
             }
         }
-    }
-
-    function setNewValue(value) {
-        let index = mapValueToIndex(value)
-        if (index < 0) {
-            // Add a placeholder if needed. Otherwise just update the placeholder value
-            if (headings[headings.length - 1] !== placeholder) {
-                headings.push(placeholder)
-                values.push(value)
-                model = headings
-            } else {
-                values[values.length - 1] = value
-            }
-            index = values.length - 1
-        } else {
-            // Remove the placeholder if it's no longer useful
-            if (index != headings.length - 1 && headings[headings.length - 1] === placeholder) {
-                values.pop()
-                headings.pop()
-                model = headings
+        onReportingPendingCVarChangesRequested: {
+            if (typeof(impl.pendingValue) !== "undefined") {
+                UI.ui.reportPendingCVarChanges(cvarName, impl.pendingValue)
             }
         }
-
-        oldValue = value
-        if (root.currentIndex != index) {
-            root.currentIndex = index
+        onRollingPendingCVarChangesBackRequested: {
+            impl.skipIndexChangeSignal = true
+            impl.setNewValue(UI.ui.getCVarValue(cvarName))
+            impl.pendingValue          = undefined
+            impl.skipIndexChangeSignal = false
         }
-    }
-
-    function mapValueToIndex(value) {
-        const knownValues = knownHeadingsAndValues[1]
-        for (let i = 0; i < knownValues.length; ++i) {
-            if (knownValues[i] == value) {
-                return i
-            }
+        onPendingCVarChangesCommitted: {
+            impl.pendingValue = undefined
         }
-        return -1
-    }
-
-    function rollbackChanges() {
-        skipIndexChangeSignal = true
-        setNewValue(UI.ui.getCVarValue(cvarName))
-        skipIndexChangeSignal = false
     }
 
     onCurrentIndexChanged: {
-        if (skipIndexChangeSignal) {
-            return
-        }
-
-        let value = values[currentIndex]
-        if (applyImmediately) {
-            UI.ui.setCVarValue(cvarName, value)
-        } else {
-            UI.ui.markPendingCVarChanges(root, cvarName, value)
+        if (!impl.skipIndexChangeSignal) {
+            const value = impl.values[currentIndex]
+            if (applyImmediately) {
+                UI.ui.setCVarValue(cvarName, value)
+            } else {
+                impl.pendingValue = value
+            }
         }
     }
 
     Component.onCompleted: {
         // Values are already set in onKnownHeadingsAndValuesChanged handler
-        UI.ui.registerCVarAwareControl(root)
-        skipIndexChangeSignal = false
+        impl.skipIndexChangeSignal = false
     }
-
-    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

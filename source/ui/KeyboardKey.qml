@@ -34,6 +34,15 @@ Item {
 
     readonly property bool isActionAvailable: mouseArea.containsMouse && mouseArea.mouseX < 16 && !isInEditorMode
 
+    Connections {
+        target: UI.keysAndBindings
+        onKeyExternalHighlightChanged: {
+            if (root.quakeKey == targetQuakeKey) {
+                externallyHighlighted = targetHighlighted
+            }
+        }
+    }
+
     Rectangle {
         color: !hidden ? (root.group ? highlightBackground : Qt.rgba(0, 0, 0, 0.3)) : "transparent"
         radius: 5
@@ -48,9 +57,6 @@ Item {
             top: parent.top
             left: parent.left
         }
-
-        Component.onCompleted: UI.keysAndBindings.registerKeyItem(root, quakeKey)
-        Component.onDestruction: UI.keysAndBindings.unregisterKeyItem(root, quakeKey)
 
         Rectangle {
             anchors {
@@ -85,7 +91,7 @@ Item {
             height: parent.height - 10
             onContainsMouseChanged: {
                 if (!isInEditorMode) {
-                    UI.keysAndBindings.onKeyItemContainsMouseChanged(root, quakeKey, mouseArea.containsMouse)
+                    UI.keysAndBindings.onKeyItemContainsMouseChanged(quakeKey, mouseArea.containsMouse)
                 }
             }
             onClicked: {

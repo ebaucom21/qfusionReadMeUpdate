@@ -9,100 +9,116 @@ AutoFittingComboBox {
     Material.theme: Material.Dark
     Material.accent: "orange"
 
-    property int oldWidth
-    property int oldHeight
+    model: impl.headings
 
-    property bool skipIndexChangeSignal: true
+    QtObject {
+        id: impl
 
-    readonly property var knownWidthValues: UI.ui.videoModeWidthValuesList
-    readonly property var knownHeightValues: UI.ui.videoModeHeightValuesList
+        property int oldWidth
+        property int oldHeight
+        property bool skipIndexChangeSignal: true
+        property var pendingWidthAndHeight
 
-    property var headings: UI.ui.videoModeHeadingsList
-    property var widthValues: knownWidthValues
-    property var heightValues: knownHeightValues
+        readonly property var knownWidthValues: UI.ui.videoModeWidthValuesList
+        readonly property var knownHeightValues: UI.ui.videoModeHeightValuesList
 
-    model: headings
+        property var headings: UI.ui.videoModeHeadingsList
+        property var widthValues: knownWidthValues
+        property var heightValues: knownHeightValues
 
-    function parse(s) {
-        const value = parseInt(s, 10)
-        return value === value ? value : 0
-    }
-
-    function getWidth() { return parse(UI.ui.getCVarValue("vid_width")) }
-    function getHeight() { return parse(UI.ui.getCVarValue("vid_height")) }
-
-    function checkCVarChanges() {
-        const width = getWidth()
-        const height = getHeight()
-        if (width !== oldWidth || height !== oldHeight) {
-            if (!UI.ui.hasControlPendingCVarChanges(root)) {
-                setNewValues(width, height)
-            }
+        function parse(stringValue) {
+            const parsedValue = parseInt(stringValue, 10)
+            return !isNaN(parsedValue) ? parsedValue : 0
         }
-    }
 
-    function setNewValues(width, height) {
-        let index = mapValuesToIndex(width, height)
-        if (index < 0) {
-            // Add a placeholder if needed. Otherwise just update the placeholder value
-            if (headings[headings.length - 1] !== "- -") {
-                headings.push("- -")
-                widthValues.push(width)
-                heightValues.push(height)
-                model = headings
+        function getActualWidth() { return impl.parse(UI.ui.getCVarValue("vid_width")) }
+        function getActualHeight() { return impl.parse(UI.ui.getCVarValue("vid_height")) }
+
+        function setNewValues(width, height) {
+            let index = impl.mapValuesToIndex(width, height)
+            if (index < 0) {
+                // Add a placeholder if needed. Otherwise just update the placeholder value
+                if (impl.headings[impl.headings.length - 1] !== "(custom)") {
+                    impl.headings.push("(custom)")
+                    impl.widthValues.push(width)
+                    impl.heightValues.push(height)
+                    root.model = impl.headings
+                } else {
+                    impl.widthValues[impl.widthValues.length - 1]   = width
+                    impl.heightValues[impl.heightValues.length - 1] = height
+                }
+                index = impl.widthValues.length - 1
             } else {
-                widthValues[widthValues.length - 1] = width
-                heightValues[heightValues.length - 1] = height
+                // Remove the placeholder if it's no longer useful
+                if (index != impl.headings.length - 1 && impl.headings[impl.headings.length - 1] === "(custom)") {
+                    impl.widthValues.pop()
+                    impl.heightValues.pop()
+                    impl.headings.pop()
+                    model = impl.headings
+                }
             }
-            index = widthValues.length - 1
-        } else {
-            // Remove the placeholder if it's no longer useful
-            if (index != headings.length - 1 && headings[headings.length - 1] === "- -") {
-                widthValues.pop()
-                heightValues.pop()
-                headings.pop()
-                model = headings
+
+            impl.oldWidth  = width
+            impl.oldHeight = height
+            if (root.currentIndex != index) {
+                root.currentIndex = index
             }
         }
 
-        oldWidth = width
-        oldHeight = height
-        if (root.currentIndex != index) {
-            root.currentIndex = index
+        function mapValuesToIndex(width, height) {
+            for (let i = 0; i < impl.knownWidthValues.length; ++i) {
+                if (impl.knownWidthValues[i] === width && impl.knownHeightValues[i] === height) {
+                    return i
+                }
+            }
+            return -1
         }
     }
 
-    function mapValuesToIndex(width, height) {
-        for (let i = 0; i < knownWidthValues.length; ++i) {
-            if (knownWidthValues[i] === width && knownHeightValues[i] === height) {
-                return i
+    Connections {
+        target: UI.ui
+        onCheckingCVarChangesRequested: {
+            const width  = impl.getActualWidth()
+            const height = impl.getActualHeight()
+            if (typeof(impl.pendingWidthAndHeight) !== "undefined") {
+                // TODO: Should we check latched values instead?
+                if (impl.pendingWidthAndHeight[0] === width && impl.pendingWidthAndHeight[1] === height) {
+                    impl.pendingWidthAndHeight = undefined
+                }
+            }
+            if (width !== impl.oldWidth || height !== impl.oldHeight) {
+                if (typeof(impl.pendingWidthAndHeight) === "undefined") {
+                    impl.setNewValues(width, height)
+                }
             }
         }
-        return -1
-    }
-
-    function rollbackChanges() {
-        skipIndexChangeSignal = true
-        setNewValues(getWidth(), getHeight())
-        skipIndexChangeSignal = false
+        onReportingPendingCVarChangesRequested: {
+            if (typeof(impl.pendingWidthAndHeight) !== "undefined") {
+                UI.ui.reportPendingCVarChanges("vid_width", impl.pendingWidthAndHeight[0])
+                UI.ui.reportPendingCVarChanges("vid_height", impl.pendingWidthAndHeight[1])
+            }
+        }
+        onRollingPendingCVarChangesBackRequested: {
+            impl.skipIndexChangeSignal = true
+            impl.setNewValues(impl.getActualWidth(), impl.getActualHeight())
+            impl.pendingWidthAndHeight = undefined
+            impl.skipIndexChangeSignal = false
+        }
+        onPendingCVarChangesCommitted: {
+            impl.pendingWidthAndHeight = undefined
+        }
     }
 
     onCurrentIndexChanged: {
-        if (!skipIndexChangeSignal) {
-            const width = widthValues[currentIndex]
-            const height = heightValues[currentIndex]
-            UI.ui.markPendingCVarChanges(root, "vid_width", width, true)
-            UI.ui.markPendingCVarChanges(root, "vid_height", height, true)
+        if (!impl.skipIndexChangeSignal) {
+            impl.pendingWidthAndHeight = [impl.widthValues[currentIndex], impl.heightValues[currentIndex]]
         }
     }
 
     Component.onCompleted: {
-        console.assert(heightValues.length === widthValues.length)
-        console.assert(headings.length === widthValues.length)
-        setNewValues(getWidth(), getHeight())
-        UI.ui.registerCVarAwareControl(root)
-        skipIndexChangeSignal = false
+        console.assert(impl.heightValues.length === impl.widthValues.length)
+        console.assert(impl.headings.length === impl.widthValues.length)
+        impl.setNewValues(impl.getActualWidth(), impl.getActualHeight())
+        impl.skipIndexChangeSignal = false
     }
-
-    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

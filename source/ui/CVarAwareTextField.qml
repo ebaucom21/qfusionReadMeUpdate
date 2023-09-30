@@ -12,31 +12,49 @@ TextField {
     property string cvarName: ""
     property bool applyImmediately: true
 
-    function checkCVarChanges() {
-        let actualValue = UI.ui.getCVarValue(cvarName)
-        if (actualValue != text) {
-            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
-                text = actualValue
-            }
-        }
+    QtObject {
+        id: impl
+        property var pendingValue
     }
 
-    function rollbackChanges() {
-        text = UI.ui.getCVarValue(cvarName)
+    Connections {
+        target: UI.ui
+        onCheckingCVarChangesRequested: {
+            const actualValue = UI.ui.getCVarValue(cvarName)
+            if (!applyImmediately && typeof(impl.pendingValue) !== "undefined") {
+                if (impl.pendingValue === actualValue) {
+                    impl.pendingValue = undefined
+                }
+            }
+            if (actualValue != text) {
+                if (applyImmediately || typeof(impl.pendingValue) === "undefined") {
+                    text = actualValue
+                }
+            }
+        }
+        onReportingPendingCVarChangesRequested: {
+            if (typeof(impl.pendingValue) !== "undefined") {
+                UI.ui.reportPendingCVarChanges(cvarName, impl.pendingValue)
+            }
+        }
+        onRollingPendingCVarChangesBackRequested: {
+            root.text         = UI.ui.getCVarValue(cvarName)
+            impl.pendingValue = undefined
+        }
+        onPendingCVarChangesCommitted: {
+            impl.pendingValue = undefined
+        }
     }
 
     onTextEdited: {
         if (applyImmediately) {
             UI.ui.setCVarValue(cvarName, text)
         } else {
-            UI.ui.markPendingCVarChanges(root, cvarName, text)
+            impl.pendingValue = text
         }
     }
 
     Component.onCompleted: {
         text = UI.ui.getCVarValue(cvarName)
-        UI.ui.registerCVarAwareControl(root)
     }
-
-    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

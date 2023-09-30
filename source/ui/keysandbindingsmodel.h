@@ -38,14 +38,11 @@ public:
 	[[nodiscard]]
 	Q_INVOKABLE QColor colorForGroup( int group ) const;
 
-	Q_INVOKABLE void registerKeyItem( QQuickItem *item, int quakeKey );
-	Q_INVOKABLE void unregisterKeyItem( QQuickItem *item, int quakeKey );
+	Q_SIGNAL void keyExternalHighlightChanged( int targetQuakeKey, bool targetHighlighted );
+	Q_SIGNAL void commandExternalHighlightChanged( int targetCommandNum, bool targetHighlighted );
 
-	Q_INVOKABLE void onKeyItemContainsMouseChanged( QQuickItem *keyItem, int quakeKey, bool contains );
-	Q_INVOKABLE void onCommandItemContainsMouseChanged( QQuickItem *commandItem, int commandNum, bool contains );
-
-	Q_INVOKABLE void registerCommandItem( QQuickItem *item, int commandNum );
-	Q_INVOKABLE void unregisterCommandItem( QQuickItem *item, int commandNum );
+	Q_INVOKABLE void onKeyItemContainsMouseChanged( int quakeKey, bool contains );
+	Q_INVOKABLE void onCommandItemContainsMouseChanged( int commandNum, bool contains );
 
 	Q_INVOKABLE void startTrackingUpdates();
 	Q_INVOKABLE void stopTrackingUpdates();
@@ -195,9 +192,6 @@ private:
 
 	// This is not that bad as the small strings optimization should work for the most part
 	std::array<wsw::String, 256> m_lastKeyBindings;
-
-	std::array<QQuickItem *, 256> m_keyItems {};
-	std::array<QQuickItem *, kMaxCommands> m_commandItems {};
 
 	bool m_isTrackingUpdates { false };
 };

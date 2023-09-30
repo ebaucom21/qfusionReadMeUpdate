@@ -11,35 +11,51 @@ WswCheckBox {
 
     property string cvarName: ""
     property bool applyImmediately: true
-    property var valueConverters: undefined
 
-    function checkCVarChanges() {
-        const value = fromNative(UI.ui.getCVarValue(cvarName))
-        if (checked != value) {
-            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
-                checked = value
-            }
-        }
+    QtObject {
+        id: impl
+        property var pendingChecked
     }
 
-    function rollbackChanges() { checked = fromNative(UI.ui.getCVarValue(cvarName)) }
+    Connections {
+        target: UI.ui
+        onCheckingCVarChangesRequested: {
+            const value = fromNative(UI.ui.getCVarValue(cvarName))
+            if (!applyImmediately && typeof(impl.pendingChecked) !== "undefined") {
+                if (impl.pendingChecked === value) {
+                    impl.pendingChecked = undefined
+                }
+            }
+            if (checked != value) {
+                if (applyImmediately || typeof(impl.pendingChecked) === "undefined") {
+                    checked = value
+                }
+            }
+        }
+        onReportingPendingCVarChangesRequested: {
+            if (typeof(impl.pendingChecked) !== "undefined") {
+                UI.ui.reportPendingCVarChanges(cvarName, toNative(impl.pendingChecked))
+            }
+        }
+        onRollingPendingCVarChangesBackRequested: {
+            checked             = fromNative(UI.ui.getCVarValue(cvarName))
+            impl.pendingChecked = undefined
+        }
+        onPendingCVarChangesCommitted: {
+            impl.pendingChecked = undefined
+        }
+    }
 
     function fromNative(value) { return value != 0; }
     function toNative(value) { return value ? "1" : "0"; }
 
     onClicked: {
-        const convertedValue = toNative(checked)
         if (applyImmediately) {
-            UI.ui.setCVarValue(cvarName, convertedValue)
+            UI.ui.setCVarValue(cvarName, toNative(checked))
         } else {
-            UI.ui.markPendingCVarChanges(root, cvarName, convertedValue)
+            impl.pendingChecked = checked
         }
     }
 
-    Component.onCompleted: {
-        checked = fromNative(UI.ui.getCVarValue(cvarName))
-        UI.ui.registerCVarAwareControl(root)
-    }
-
-    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
+    Component.onCompleted: checked = fromNative(UI.ui.getCVarValue(cvarName))
 }

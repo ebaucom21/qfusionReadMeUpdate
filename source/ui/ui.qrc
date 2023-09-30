@@ -16,7 +16,6 @@
         <file>CVarAwareColorPicker.qml</file>
         <file>CVarAwareComboBox.qml</file>
         <file>CVarAwareModelSelector.qml</file>
-        <file>CVarAwareSegmentedRow.qml</file>
         <file>CVarAwareSlider.qml</file>
 	    <file>CVarAwareSliderWithBox.qml</file>
         <file>CVarAwareTextField.qml</file>

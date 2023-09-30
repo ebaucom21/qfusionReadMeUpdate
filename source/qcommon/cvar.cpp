@@ -119,6 +119,13 @@ int Cvar_Integer( const char *var_name ) {
 		   : 0;
 }
 
+int Cvar_Flags( const char *var_name ) {
+	const cvar_t *const var = Cvar_Find( var_name );
+	return var
+		   ? var->flags
+		   : 0;
+}
+
 [[nodiscard]]
 static auto getCorrectedValue( const cvar_t *var, const char *string ) -> char * {
 	if( DeclaredConfigVar *const controller = var->controller ) {

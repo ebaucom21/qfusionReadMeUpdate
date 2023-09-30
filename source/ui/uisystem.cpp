@@ -93,6 +93,10 @@ static BoolConfigVar v_debugNativelyDrawnItems { "ui_debugNativelyDrawnItems"_as
 	.byDefault = false, .flags = CVAR_DEVELOPER, }
 };
 
+static ColorConfigVar v_testColor { "ui_testColor"_asView, {
+	.byDefault = COLOR_RGBA( 192, 120, 192, 32 ), .flags = CVAR_ARCHIVE,
+}};
+
 namespace wsw::ui {
 
 class QmlSandbox : public QObject {
@@ -228,33 +232,38 @@ public:
 
 	Q_PROPERTY( bool isShowingActionRequests READ isShowingActionRequests NOTIFY isShowingActionRequestsChanged );
 
-	Q_INVOKABLE void registerNativelyDrawnItem( QQuickItem *item );
-	Q_INVOKABLE void unregisterNativelyDrawnItem( QQuickItem *item );
-
 	Q_SIGNAL void hudOccludersChanged();
-	Q_INVOKABLE void registerHudOccluder( QQuickItem *item );
-	Q_INVOKABLE void unregisterHudOccluder( QQuickItem *item );
-	Q_INVOKABLE void updateHudOccluder( QQuickItem *item );
+	// Asks Qml
+	Q_SIGNAL void hudOccludersRetrievalRequested();
+	// Qml should call this method in reply
+	Q_INVOKABLE void supplyHudOccluder( QQuickItem *item );
+
 	[[nodiscard]]
 	Q_INVOKABLE bool isHudItemOccluded( QQuickItem *item );
 
-	Q_INVOKABLE void registerNativelyDrawnItemsOccluder( QQuickItem *item );
-	Q_INVOKABLE void unregisterNativelyDrawnItemsOccluder( QQuickItem *item );
-	// There's no need to track changes of these occluders
-	// as natively drawn items and occluders are checked every frame prior to drawing
+	// Asks Qml
+	Q_SIGNAL void nativelyDrawnItemsOccludersRetrievalRequested();
+	// Qml should call this method in reply
+	Q_INVOKABLE void supplyNativelyDrawnItemsOccluder( QQuickItem *item );
+
+	// Asks Qml
+	Q_SIGNAL void nativelyDrawnItemsRetrievalRequested();
+	// Qml should call this method in reply
+	Q_INVOKABLE void supplyNativelyDrawnItem( QQuickItem *item );
 
 	Q_INVOKABLE QVariant getCVarValue( const QString &name ) const;
 	Q_INVOKABLE void setCVarValue( const QString &name, const QVariant &value );
-	Q_INVOKABLE void markPendingCVarChanges( QQuickItem *control, const QString &name,
-										     const QVariant &value, bool allowMulti = false );
-	Q_INVOKABLE bool hasControlPendingCVarChanges( QQuickItem *control ) const;
 
 	Q_PROPERTY( bool hasPendingCVarChanges READ hasPendingCVarChanges NOTIFY hasPendingCVarChangesChanged );
+
 	Q_INVOKABLE void commitPendingCVarChanges();
 	Q_INVOKABLE void rollbackPendingCVarChanges();
+	Q_INVOKABLE void reportPendingCVarChanges( const QString &name, const QVariant &value );
 
-	Q_INVOKABLE void registerCVarAwareControl( QQuickItem *control );
-	Q_INVOKABLE void unregisterCVarAwareControl( QQuickItem *control );
+	Q_SIGNAL void pendingCVarChangesCommitted();
+	Q_SIGNAL void checkingCVarChangesRequested();
+	Q_SIGNAL void reportingPendingCVarChangesRequested();
+	Q_SIGNAL void rollingPendingCVarChangesBackRequested();
 
 	Q_INVOKABLE void ensureObjectDestruction( QObject *object );
 
@@ -442,18 +451,16 @@ private:
 	// Shared for sandbox instances (it is a shared context as well)
 	std::unique_ptr<QOpenGLContext> m_externalContext;
 
-	NativelyDrawn *m_nativelyDrawnListHead { nullptr };
+	// For tracking changes
+	wsw::Vector<QRectF> m_oldHudOccluders;
+	wsw::Vector<QRectF> m_hudOccluders;
 
-	static constexpr const int kMaxNativelyDrawnItems = 32;
-	static constexpr const int kMaxOccludersOfNativelyDrawnItems = 16;
+	wsw::Vector<NativelyDrawn *> m_nativelyDrawnItems;
+	wsw::Vector<NativelyDrawn *> m_nativelyDrawnUnderlayHeap;
+	wsw::Vector<NativelyDrawn *> m_nativelyDrawnOverlayHeap;
+	wsw::Vector<QRectF> m_occludersOfNativelyDrawnItems;
 
-	int m_numNativelyDrawnItems { 0 };
-
-	wsw::Vector<QQuickItem *> m_hudOccluders;
-	wsw::Vector<QQuickItem *> m_nativelyDrawnItemsOccluders;
-
-	QSet<QQuickItem *> m_cvarAwareControls;
-	QMap<QQuickItem *, QPair<QVariant, cvar_t *>> m_pendingCVarChanges;
+	wsw::Vector<QPair<QString, QVariant>> m_pendingCVarChanges;
 
 	std::unique_ptr<QmlSandbox> m_menuSandbox;
 	std::unique_ptr<QmlSandbox> m_hudSandbox;
@@ -600,7 +607,7 @@ private:
 	bool isDebuggingNativelyDrawnItems() const;
 
 	[[nodiscard]]
-	bool hasPendingCVarChanges() const { return !m_pendingCVarChanges.isEmpty(); }
+	bool hasPendingCVarChanges() const { return !m_pendingCVarChanges.empty(); }
 
 	[[nodiscard]]
 	bool isReactingToDroppedConnection() const { return m_reconnectBehaviour != std::nullopt; }
@@ -623,6 +630,8 @@ private:
 	auto findCVarOrThrow( const QByteArray &name ) const -> cvar_t *;
 
 	void updateCVarAwareControls();
+	void updateHudOccluders();
+
 	void checkPropertyChanges();
 	void setActiveMenuMask( unsigned activeMask );
 
@@ -1086,6 +1095,8 @@ void QtUISystem::leaveUIRenderingMode() {
 	}
 }
 
+static const QString kVisiblePropertyName( "visible" );
+
 void QtUISystem::drawSelfInMainContext() {
 	if( !m_menuSandbox ) {
 		return;
@@ -1098,62 +1109,60 @@ void QtUISystem::drawSelfInMainContext() {
 		return lhs->m_nativeZ > rhs->m_nativeZ;
 	};
 
-	assert( m_nativelyDrawnItemsOccluders.size() <= kMaxOccludersOfNativelyDrawnItems );
-	wsw::StaticVector<QRectF, kMaxOccludersOfNativelyDrawnItems> occluderBounds;
-	for( const QQuickItem *occluder: m_nativelyDrawnItemsOccluders ) {
-		occluderBounds.emplace_back( occluder->mapRectToScene( occluder->boundingRect() ) );
-	}
-
 	const int64_t timestamp = getFrameTimestamp();
 	const int64_t delta = wsw::min( (int64_t)33, timestamp - m_lastDrawFrameTimestamp );
 	m_lastDrawFrameTimestamp = timestamp;
 
-	wsw::StaticVector<NativelyDrawn *, kMaxNativelyDrawnItems> underlayHeap, overlayHeap;
-	for( NativelyDrawn *nativelyDrawn = m_nativelyDrawnListHead; nativelyDrawn; nativelyDrawn = nativelyDrawn->next ) {
+	// Ask Qml subscribers for actual values
+
+	m_nativelyDrawnItems.clear();
+	m_occludersOfNativelyDrawnItems.clear();
+
+	Q_EMIT nativelyDrawnItemsOccludersRetrievalRequested();
+	Q_EMIT nativelyDrawnItemsRetrievalRequested();
+
+	m_nativelyDrawnOverlayHeap.clear();
+	m_nativelyDrawnUnderlayHeap.clear();
+
+	for( NativelyDrawn *nativelyDrawn : m_nativelyDrawnItems ) {
 		const QQuickItem *item = nativelyDrawn->m_selfAsItem;
 		assert( item );
 
-		const QVariant visibleProperty( QQmlProperty::read( item, "visible" ) );
+		const QVariant visibleProperty( QQmlProperty::read( item, kVisiblePropertyName ) );
 		assert( !visibleProperty.isNull() && visibleProperty.isValid() );
-		if( !visibleProperty.toBool() ) {
-			continue;
-		}
-
-		if( nativelyDrawn->m_nativeZ < 0 ) {
-			underlayHeap.push_back( nativelyDrawn );
-			std::push_heap( underlayHeap.begin(), underlayHeap.end(), cmp );
-			continue;
-		}
-
-		// Don't draw natively drawn items on top of occluders.
-		// TODO: We either draw everything or draw nothing, a proper clipping/
-		// fragmented drawing would be a correct solution.
-		// Still, this the current approach produces acceptable results.
-
-		bool occluded = false;
-		const QRectF itemBounds( item->mapRectToScene( item->boundingRect() ) );
-		for( const QRectF &bounds: occluderBounds ) {
-			if( bounds.intersects( itemBounds ) ) {
-				occluded = true;
-				break;
+		if( visibleProperty.toBool() ) {
+			if( nativelyDrawn->m_nativeZ < 0 ) {
+				m_nativelyDrawnUnderlayHeap.push_back( nativelyDrawn );
+				std::push_heap( m_nativelyDrawnUnderlayHeap.begin(), m_nativelyDrawnUnderlayHeap.end(), cmp );
+			} else {
+				// Don't draw natively drawn items on top of occluders.
+				// TODO: We either draw everything or draw nothing, a proper clipping/
+				// fragmented drawing would be a correct solution.
+				// Still, this the current approach produces acceptable results.
+				bool occluded = false;
+				const QRectF itemBounds( item->mapRectToScene( item->boundingRect() ) );
+				for( const QRectF &bounds: m_occludersOfNativelyDrawnItems ) {
+					if( bounds.intersects( itemBounds ) ) {
+						occluded = true;
+						break;
+					}
+				}
+				if( !occluded ) {
+					m_nativelyDrawnOverlayHeap.push_back( nativelyDrawn );
+					std::push_heap( m_nativelyDrawnOverlayHeap.begin(), m_nativelyDrawnOverlayHeap.end(), cmp );
+				}
 			}
 		}
-		if( occluded ) {
-			continue;
-		}
-
-		overlayHeap.push_back( nativelyDrawn );
-		std::push_heap( overlayHeap.begin(), overlayHeap.end(), cmp );
 	}
 
 	// This is quite inefficient as we switch rendering modes for different kinds of items.
 	// Unfortunately this is mandatory for maintaining the desired Z order.
 	// Considering the low number of items of this kind the performance impact should be negligible.
 
-	while( !underlayHeap.empty() ) {
-		std::pop_heap( underlayHeap.begin(), underlayHeap.end(), cmp );
-		underlayHeap.back()->drawSelfNatively( timestamp, delta );
-		underlayHeap.pop_back();
+	while( !m_nativelyDrawnUnderlayHeap.empty() ) {
+		std::pop_heap( m_nativelyDrawnUnderlayHeap.begin(), m_nativelyDrawnUnderlayHeap.end(), cmp );
+		m_nativelyDrawnUnderlayHeap.back()->drawSelfNatively( timestamp, delta );
+		m_nativelyDrawnUnderlayHeap.pop_back();
 	}
 
 	NativelyDrawn::recycleResourcesInMainContext();
@@ -1174,23 +1183,21 @@ void QtUISystem::drawSelfInMainContext() {
 		}
 	}
 
-	while( !overlayHeap.empty() ) {
-		std::pop_heap( overlayHeap.begin(), overlayHeap.end(), cmp );
-		overlayHeap.back()->drawSelfNatively( timestamp, delta );
-		overlayHeap.pop_back();
+	while( !m_nativelyDrawnOverlayHeap.empty() ) {
+		std::pop_heap( m_nativelyDrawnOverlayHeap.begin(), m_nativelyDrawnOverlayHeap.end(), cmp );
+		m_nativelyDrawnOverlayHeap.back()->drawSelfNatively( timestamp, delta );
+		m_nativelyDrawnOverlayHeap.pop_back();
 	}
 
-	if( !m_activeMenuMask ) {
-		return;
+	if( m_activeMenuMask ) {
+		R_Set2DMode( true );
+		vec4_t color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		// TODO: Check why CL_BeginRegistration()/CL_EndRegistration() never gets called
+		auto *cursorMaterial = R_RegisterPic( "gfx/ui/cursor.tga" );
+		// TODO: Account for screen pixel density
+		R_DrawStretchPic( (int)m_mouseXY[0], (int)m_mouseXY[1], 32, 32, 0.0f, 0.0f, 1.0f, 1.0f, color, cursorMaterial );
+		R_Set2DMode( false );
 	}
-
-	R_Set2DMode( true );
-	vec4_t color = { 1.0f, 1.0f, 1.0f, 1.0f };
-	// TODO: Check why CL_BeginRegistration()/CL_EndRegistration() never gets called
-	auto *cursorMaterial = R_RegisterPic( "gfx/ui/cursor.tga" );
-	// TODO: Account for screen pixel density
-	R_DrawStretchPic( (int)m_mouseXY[0], (int)m_mouseXY[1], 32, 32, 0.0f, 0.0f, 1.0f, 1.0f, color, cursorMaterial );
-	R_Set2DMode( false );
 }
 
 void QtUISystem::drawBackgroundMapIfNeeded() {
@@ -1546,6 +1553,7 @@ void QtUISystem::checkPropertyChanges() {
 	m_hudDataModel.checkPropertyChanges( timestamp );
 
 	updateCVarAwareControls();
+	updateHudOccluders();
 }
 
 bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
@@ -1802,53 +1810,26 @@ bool QtUISystem::isDebuggingNativelyDrawnItems() const {
 	return v_debugNativelyDrawnItems.get();
 }
 
-void QtUISystem::registerNativelyDrawnItem( QQuickItem *item ) {
+void QtUISystem::supplyNativelyDrawnItem( QQuickItem *item ) {
 	auto *const nativelyDrawn = dynamic_cast<NativelyDrawn *>( item );
 	if( !nativelyDrawn ) {
 		wsw::failWithLogicError( "An item is not an instance of NativelyDrawn" );
 	}
-	if( m_numNativelyDrawnItems == kMaxNativelyDrawnItems ) {
-		wsw::failWithLogicError( "Too many natively drawn items" );
-	}
-	wsw::link( nativelyDrawn, &this->m_nativelyDrawnListHead );
-	nativelyDrawn->m_isLinked = true;
-	m_numNativelyDrawnItems++;
+	assert( nativelyDrawn->m_selfAsItem == item );
+	assert( std::find( m_nativelyDrawnItems.begin(), m_nativelyDrawnItems.end(), nativelyDrawn ) == m_nativelyDrawnItems.end() );
+	m_nativelyDrawnItems.push_back( nativelyDrawn );
 }
 
-void QtUISystem::unregisterNativelyDrawnItem( QQuickItem *item ) {
-	auto *nativelyDrawn = dynamic_cast<NativelyDrawn *>( item );
-	if( !nativelyDrawn ) {
-		wsw::failWithLogicError( "An item is not an instance of NativelyDrawn" );
-	}
-	if( !nativelyDrawn->m_isLinked ) {
-		wsw::failWithLogicError( "The NativelyDrawn instance is not linked to the list" );
-	}
-	wsw::unlink( nativelyDrawn, &this->m_nativelyDrawnListHead );
-	nativelyDrawn->m_isLinked = false;
-	m_numNativelyDrawnItems--;
-	assert( m_numNativelyDrawnItems >= 0 );
-}
-
-void QtUISystem::registerHudOccluder( QQuickItem *item ) {
-	if( const auto it = std::find( m_hudOccluders.begin(), m_hudOccluders.end(), item ); it != m_hudOccluders.end() ) {
-		wsw::failWithLogicError( "This HUD occluder item has been already registered" );
-	}
-	m_hudOccluders.push_back( item );
-	Q_EMIT hudOccludersChanged();
-}
-
-void QtUISystem::unregisterHudOccluder( QQuickItem *item ) {
-	if( const auto it = std::find( m_hudOccluders.begin(), m_hudOccluders.end(), item ); it != m_hudOccluders.end() ) {
-		m_hudOccluders.erase( it );
-		Q_EMIT hudOccludersChanged();
-	} else {
-		wsw::failWithLogicError( "This HUD occluder item has not been registered" );
+void QtUISystem::supplyNativelyDrawnItemsOccluder( QQuickItem *item ) {
+	if( QQmlProperty::read( item, kVisiblePropertyName ).toBool() ) {
+		m_occludersOfNativelyDrawnItems.push_back( item->mapRectToScene( item->boundingRect() ) );
 	}
 }
 
-void QtUISystem::updateHudOccluder( QQuickItem * ) {
-	// TODO: Just set a pending update flag and check during properties update?
-	Q_EMIT hudOccludersChanged();
+void QtUISystem::supplyHudOccluder( QQuickItem *item ) {
+	if( QQmlProperty::read( item, kVisiblePropertyName ).toBool() ) {
+		m_hudOccluders.emplace_back( item->mapRectToScene( item->boundingRect() ) );
+	}
 }
 
 bool QtUISystem::isHudItemOccluded( QQuickItem *item ) {
@@ -1856,35 +1837,12 @@ bool QtUISystem::isHudItemOccluded( QQuickItem *item ) {
 	itemRect.setWidth( itemRect.width() + 10.0 );
 	itemRect.setHeight( itemRect.height() + 10.0 );
 	itemRect.moveTopLeft( QPointF( itemRect.x() - 5.0, itemRect.y() - 5.0 ) );
-	for( const QQuickItem *occluder : m_hudOccluders ) {
-		if( occluder->isVisible() ) {
-			const QRectF occluderRect( occluder->mapRectToScene( occluder->boundingRect() ) );
-			if( occluderRect.intersects( itemRect ) ) {
-				return true;
-			}
+	for( const QRectF &occluderRect : m_hudOccluders ) {
+		if( occluderRect.intersects( itemRect ) ) {
+			return true;
 		}
 	}
 	return false;
-}
-
-void QtUISystem::registerNativelyDrawnItemsOccluder( QQuickItem *item ) {
-	auto &occluders = m_nativelyDrawnItemsOccluders;
-	if( const auto it = std::find( occluders.begin(), occluders.end(), item ); it != occluders.end() ) {
-		wsw::failWithLogicError( "This occluder of natively drawn items has been already registered" );
-	}
-	if( occluders.size() == kMaxOccludersOfNativelyDrawnItems ) {
-		wsw::failWithLogicError( "Too many occluders of natively drawn items" );
-	}
-	occluders.push_back( item );
-}
-
-void QtUISystem::unregisterNativelyDrawnItemsOccluder( QQuickItem *item ) {
-	auto &occluders = m_nativelyDrawnItemsOccluders;
-	const auto it = std::find( occluders.begin(), occluders.end(), item );
-	if( it == occluders.end() ) {
-		wsw::failWithLogicError( "This occluder of natively drawn items has not been registered" );
-	}
-	occluders.erase( it );
 }
 
 auto QtUISystem::findCVarOrThrow( const QByteArray &name ) const -> cvar_t * {
@@ -1915,142 +1873,84 @@ void QtUISystem::setCVarValue( const QString &name, const QVariant &value ) {
 	Cvar_ForceSet( nameBytes.constData(), value.toString().toLatin1().constData() );
 }
 
-void QtUISystem::markPendingCVarChanges( QQuickItem *control, const QString &name,
-										 const QVariant &value, bool allowMulti ) {
-	const QByteArray expectedCVarName( name.toLatin1() );
-	auto it = m_pendingCVarChanges.find( control );
-	if( it == m_pendingCVarChanges.end() ) {
-		// TODO: Use `it` as a hint
-		m_pendingCVarChanges.insert( control, { value, findCVarOrThrow( expectedCVarName ) } );
-		if( m_pendingCVarChanges.size() == 1 ) {
-			Q_EMIT hasPendingCVarChangesChanged( true );
-		}
-		return;
-	}
-
-	assert( !m_pendingCVarChanges.empty() );
-	if( allowMulti ) {
-		bool hasFoundCVarEntry = false;
-		// Qt maps are, surprisingly, multi-maps
-		for(;; it++) {
-			if( it == m_pendingCVarChanges.constEnd() || it.key() != control ) {
-				break;
-			}
-			const cvar_t *const var = it->second;
-			if( expectedCVarName.compare( var->name, Qt::CaseInsensitive ) == 0 ) {
-				// Check if changes really going to have an effect
-				if( QVariant( var->string ) != value ) {
-					it->first = value;
-				} else {
-					m_pendingCVarChanges.erase( it );
-					if( m_pendingCVarChanges.isEmpty() ) {
-						Q_EMIT hasPendingCVarChangesChanged( false );
-					}
-				}
-				hasFoundCVarEntry = true;
-				break;
-			}
-		}
-		if( !hasFoundCVarEntry ) {
-			m_pendingCVarChanges.insertMulti( control, { value, findCVarOrThrow( expectedCVarName ) } );
-		}
-	} else {
-		const cvar_t *const var = it->second;
-		if( expectedCVarName.compare( var->name, Qt::CaseInsensitive ) != 0 ) {
-			wsw::failWithLogicError( "Multiple CVar values for this control are disallowed" );
-		}
-		// Check if changes really going to have an effect
-		if( QVariant( var->string ) != value ) {
-			it->first = value;
-		} else {
-			m_pendingCVarChanges.erase( it );
-			if( m_pendingCVarChanges.isEmpty() ) {
-				Q_EMIT hasPendingCVarChangesChanged( false );
-			}
-		}
-	}
-}
-
-bool QtUISystem::hasControlPendingCVarChanges( QQuickItem *control ) const {
-	return m_pendingCVarChanges.contains( control );
-}
-
 void QtUISystem::commitPendingCVarChanges() {
-	if( m_pendingCVarChanges.isEmpty() ) {
-		return;
-	}
-
-	auto [restartVideo, restartSound] = std::make_pair( false, false );
-	for( const auto &[value, cvar]: m_pendingCVarChanges ) {
-		Cvar_ForceSet( cvar->name, value.toString().toLatin1().constData() );
-		if( cvar->flags & CVAR_LATCH_VIDEO ) {
-			restartVideo = true;
-		}
-		if( cvar->flags & CVAR_LATCH_SOUND ) {
-			restartSound = true;
-		}
-	}
-
+	// Ask again for getting actual values
 	m_pendingCVarChanges.clear();
-	Q_EMIT hasPendingCVarChangesChanged( false );
+	Q_EMIT reportingPendingCVarChangesRequested();
 
-	if( restartVideo ) {
-		CL_Cbuf_AppendCommand( "vid_restart" );
+	if( hasPendingCVarChanges() ) {
+		assert( !m_pendingCVarChanges.empty() );
+
+		bool shouldRestartVideo = false;
+		bool shouldRestartSound = false;
+
+		for( const auto &[name, value] : qAsConst( m_pendingCVarChanges ) ) {
+			const QByteArray nameBytes( name.toUtf8() );
+			const QByteArray valueBytes( value.toString().toLatin1().constData() );
+
+			const auto flags = Cvar_Flags( nameBytes.constData() );
+			if( flags & CVAR_LATCH_VIDEO ) {
+				shouldRestartVideo = true;
+			}
+			if( flags & CVAR_LATCH_SOUND ) {
+				shouldRestartSound = true;
+			}
+
+			Cvar_ForceSet( nameBytes.constData(), valueBytes.constData() );
+		}
+
+		m_pendingCVarChanges.clear();
+		assert( !hasPendingCVarChanges() );
+		Q_EMIT hasPendingCVarChangesChanged( false );
+
+		if( shouldRestartVideo ) {
+			CL_Cbuf_AppendCommand( "vid_restart" );
+		}
+		if( shouldRestartSound ) {
+			CL_Cbuf_AppendCommand( "s_restart" );
+		}
 	}
-	if( restartSound ) {
-		CL_Cbuf_AppendCommand( "s_restart" );
-	}
+
+	Q_EMIT pendingCVarChangesCommitted();
 }
 
 void QtUISystem::rollbackPendingCVarChanges() {
-	if( m_pendingCVarChanges.isEmpty() ) {
-		return;
-	}
-
-	QMapIterator<QQuickItem *, QPair<QVariant, cvar_t *>> it( m_pendingCVarChanges );
-	while( it.hasNext() ) {
-		(void)it.next();
-		QMetaObject::invokeMethod( it.key(), "rollbackChanges" );
-	}
-
+	Q_EMIT rollingPendingCVarChangesBackRequested();
 	m_pendingCVarChanges.clear();
 	Q_EMIT hasPendingCVarChangesChanged( false );
 }
 
-void QtUISystem::registerCVarAwareControl( QQuickItem *control ) {
-	assert( control );
-	if( m_cvarAwareControls.contains( control ) ) {
-		wsw::failWithLogicError( "A CVar-aware control has been already registered" );
-	}
-	m_cvarAwareControls.insert( control );
-}
-
-void QtUISystem::unregisterCVarAwareControl( QQuickItem *control ) {
-	assert( control );
-	if( !m_cvarAwareControls.remove( control ) ) {
-		wsw::failWithLogicError( "Failed to unregister a CVar-aware control" );
-	}
+void QtUISystem::reportPendingCVarChanges( const QString &name, const QVariant &value ) {
+	assert( value.isValid() );
+	m_pendingCVarChanges.emplace_back( qMakePair( name, value ) );
 }
 
 void QtUISystem::updateCVarAwareControls() {
-	// Check whether pending changes still hold
+	const bool hadPendingChanges = hasPendingCVarChanges();
+	assert( hadPendingChanges == !m_pendingCVarChanges.empty() );
+	m_pendingCVarChanges.clear();
 
-	const bool hadPendingChanges = !m_pendingCVarChanges.isEmpty();
-	QMutableMapIterator<QQuickItem *, QPair<QVariant, cvar_t *>> it( m_pendingCVarChanges );
-	while( it.hasNext() ) {
-		(void)it.next();
-		auto [value, cvar] = it.value();
-		if( QVariant( cvar->string ) == value ) {
-			it.remove();
-		}
+	// Ask all connected controls
+	Q_EMIT reportingPendingCVarChangesRequested();
+
+	if( const bool hasChanges = hasPendingCVarChanges(); hasChanges != hadPendingChanges ) {
+		Q_EMIT hasPendingCVarChangesChanged( hasChanges );
 	}
 
-	if( hadPendingChanges && m_pendingCVarChanges.isEmpty() ) {
-		Q_EMIT hasPendingCVarChangesChanged( false );
-	}
+	// TODO: Should we reorder these checks?
+	Q_EMIT checkingCVarChangesRequested();
+}
 
-	for( QQuickItem *control : m_cvarAwareControls ) {
-		QMetaObject::invokeMethod( control, "checkCVarChanges", QGenericReturnArgument() );
+void QtUISystem::updateHudOccluders() {
+	m_oldHudOccluders.clear();
+	std::swap( m_oldHudOccluders, m_hudOccluders );
+	assert( m_hudOccluders.empty() );
+
+	Q_EMIT hudOccludersRetrievalRequested();
+
+	if( !std::equal( m_oldHudOccluders.begin(), m_oldHudOccluders.end(), m_hudOccluders.begin(), m_hudOccluders.end() ) ) {
+		// Force subscribers to update their visibility
+		Q_EMIT hudOccludersChanged();
 	}
 }
 

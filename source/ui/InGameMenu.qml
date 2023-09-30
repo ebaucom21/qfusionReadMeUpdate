@@ -36,14 +36,10 @@ Rectangle {
             // replace the entire stack
             stackView.replace(null, model[currentIndex]["component"])
         }
-        
-        Component.onCompleted: UI.ui.registerHudOccluder(tabBar)
-        Component.onDestruction: UI.ui.unregisterHudOccluder(tabBar)
-        onWidthChanged: UI.ui.updateHudOccluder(tabBar)
-        onHeightChanged: UI.ui.updateHudOccluder(tabBar)
-        onXChanged: UI.ui.updateHudOccluder(tabBar)
-        onYChanged: UI.ui.updateHudOccluder(tabBar)
-        onVisibleChanged: UI.ui.updateHudOccluder(tabBar)
+        Connections {
+            target: UI.ui
+            onHudOccludersRetrievalRequested: UI.ui.supplyHudOccluder(tabBar)
+        }
     }
 
     Item {
@@ -62,13 +58,10 @@ Rectangle {
             clip: true
         }
 
-        Component.onCompleted: UI.ui.registerHudOccluder(mainPane)
-        Component.onDestruction: UI.ui.unregisterHudOccluder(mainPane)
-        onWidthChanged: UI.ui.updateHudOccluder(mainPane)
-        onHeightChanged: UI.ui.updateHudOccluder(mainPane)
-        onXChanged: UI.ui.updateHudOccluder(mainPane)
-        onYChanged: UI.ui.updateHudOccluder(mainPane)
-        onVisibleChanged: UI.ui.updateHudOccluder(mainPane)
+        Connections {
+            target: UI.ui
+            onHudOccludersRetrievalRequested: UI.ui.supplyHudOccluder(mainPane)
+        }
     }
 
     Component {

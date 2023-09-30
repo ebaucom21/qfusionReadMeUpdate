@@ -10,28 +10,57 @@ Rectangle {
     property color modelColor
     property bool fullbright
     property bool drawNativePart
-    property int selectedIndex
-    property string selectedValue
     property bool applyImmediately: true
-    property bool suppressSignals: true
     property string cvarName
     property string defaultModel
-    property int defaultModelIndex: -1
-    readonly property var models: UI.ui.playerModels
+
+    QtObject {
+        id: impl
+        property var pendingValue
+        property bool suppressSignals: true
+        readonly property var models: UI.ui.playerModels
+        property int defaultModelIndex: -1
+        property int selectedIndex
+        property string selectedValue
+
+        onSelectedIndexChanged: {
+            impl.selectedValue = impl.models[impl.selectedIndex]
+            if (!impl.suppressSignals) {
+                if (root.applyImmediately) {
+                    UI.ui.setCVarValue(root.cvarName, impl.selectedValue)
+                } else {
+                    impl.pendingValue = impl.selectedValue
+                }
+            }
+        }
+
+        function mapValueToIndex(value) {
+            for (let i = 0; i < impl.models.length; ++i) {
+                if (impl.models[i] == value) {
+                    return i
+                }
+            }
+            return impl.defaultModelIndex
+        }
+
+        function getActualIndex() {
+            return impl.mapValueToIndex(UI.ui.getCVarValue(root.cvarName).toLowerCase())
+        }
+    }
 
     ToolButton {
         width: 56; height: 56
         anchors.horizontalCenter: parent.left
         anchors.verticalCenter: parent.verticalCenter
         icon.source: "qrc:/ModelLeftArrow.svg"
-        onClicked: selectedIndex = selectedIndex ? selectedIndex - 1 : models.length - 1
+        onClicked: impl.selectedIndex = impl.selectedIndex ? impl.selectedIndex - 1 : impl.models.length - 1
     }
 
     NativelyDrawnModel {
         visible: drawNativePart
         anchors.fill: parent
-        modelName: "models/players/" + models[selectedIndex] + "/tris.iqm"
-        skinName: "models/players/" + models[selectedIndex] + (fullbright ? "/fullbright" : "/default")
+        modelName: "models/players/" + impl.models[impl.selectedIndex] + "/tris.iqm"
+        skinName: "models/players/" + impl.models[impl.selectedIndex] + (root.fullbright ? "/fullbright" : "/default")
         viewOrigin: Qt.vector3d(64.0, 0, 0.0)
         modelOrigin: Qt.vector3d(0.0, 0.0, -16.0)
         desiredModelHeight: 56.0
@@ -46,7 +75,7 @@ Rectangle {
         anchors.horizontalCenter: parent.right
         anchors.verticalCenter: parent.verticalCenter
         icon.source: "qrc:/ModelRightArrow.svg"
-        onClicked: selectedIndex = selectedIndex + 1 < models.length ? selectedIndex + 1 : 0
+        onClicked: impl.selectedIndex = impl.selectedIndex + 1 < impl.models.length ? impl.selectedIndex + 1 : 0
     }
 
     Label {
@@ -57,54 +86,45 @@ Rectangle {
         font.letterSpacing: 1.75
         font.capitalization: Font.Capitalize
         style: Text.Raised
-        text: selectedValue
+        text: impl.selectedValue
     }
 
-    onSelectedIndexChanged: {
-        selectedValue = models[selectedIndex]
-        if (!suppressSignals) {
-            if (applyImmediately) {
-                UI.ui.setCVarValue(cvarName, selectedValue)
-            } else {
-                UI.ui.markPendingCVarChanges(root, cvarName, selectedValue)
+    Connections {
+        target: UI.ui
+        onCheckingCVarChangesRequested: {
+            const index = impl.getActualIndex()
+            if (!root.applyImmediately && typeof(impl.pendingValue) !== "undefined") {
+                if (impl.mapValueToIndex(impl.pendingValue.toLowerCase()) === index) {
+                    impl.pendingValue = undefined
+                }
+            }
+            if (index !== impl.selectedIndex) {
+                if (root.applyImmediately || typeof(impl.pendingValue) === "undefined") {
+                    impl.suppressSignals = true
+                    impl.selectedIndex   = index
+                    impl.suppressSignals = false
+                }
             }
         }
-    }
-
-    function mapValueToIndex(value) {
-        for (let i = 0; i < models.length; ++i) {
-            if (models[i] == value) {
-                return i
+        onReportingPendingCVarChangesRequested: {
+            if (typeof(impl.pendingValue) !== "undefined") {
+                UI.ui.reportPendingCVarChanges(root.cvarName, impl.pendingValue)
             }
         }
-        return defaultModelIndex
-    }
-
-    function getActualIndex() {
-        return mapValueToIndex(UI.ui.getCVarValue(cvarName).toLowerCase())
-    }
-
-    function checkCVarChanges() {
-        const index = getActualIndex()
-        if (index !== selectedIndex) {
-            suppressSignals = true
-            selectedIndex = index
-            suppressSignals = false
+        onRollingPendingCVarChangesBackRequested: {
+            impl.selectedIndex = impl.getActualIndex()
+            impl.pendingValue  = undefined
         }
-    }
-
-    function rollbackChanges() {
-        selectedIndex = getActualIndex()
+        onPendingCVarChangesCommitted: {
+            impl.pendingValue = undefined
+        }
     }
 
     Component.onCompleted: {
-        defaultModelIndex = mapValueToIndex(defaultModel)
-        console.assert(defaultModelIndex >= 0, "Failed to find an index for a default model")
-        selectedIndex = getActualIndex()
-        selectedValue = models[selectedIndex]
-        UI.ui.registerCVarAwareControl(root)
-        suppressSignals = false
+        impl.defaultModelIndex = impl.mapValueToIndex(root.defaultModel)
+        console.assert(impl.defaultModelIndex >= 0, "Failed to find an index for a default model")
+        impl.selectedIndex     = impl.getActualIndex()
+        impl.selectedValue     = impl.models[impl.selectedIndex]
+        impl.suppressSignals   = false
     }
-
-    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

@@ -13,31 +13,84 @@ RowLayout {
     property string cvarName
     property bool applyImmediately: true
 
-    property var customColor
-    property int selectedIndex: -1
-    property color selectedColor: typeof(customColor) !== "undefined" ? customColor : UI.ui.consoleColors[selectedIndex]
+    readonly property color selectedColor: impl.selectedColor
+
+    QtObject {
+        id: impl
+
+        // We have decided to fall back to procedural code for updates, otherwise things quickly become non-manageable
+        property var pendingValue
+        property var customColor
+        property int selectedIndex: 0
+        property var selectedColor
+
+        function toQuakeColorString(color) {
+            // Let Qt convert it to "#RRGGBB". This is more robust than a manual floating-point -> 0.255 conversion.
+            let qtColorString = '' + color
+            let r = parseInt(qtColorString.substring(1, 3), 16)
+            let g = parseInt(qtColorString.substring(3, 5), 16)
+            let b = parseInt(qtColorString.substring(5, 7), 16)
+            return r + " " + g + " " + b
+        }
+
+        function indexOfColor(maybeColor) {
+            const colors = UI.ui.consoleColors
+            // Compare by hex strings
+            const givenString = '' + maybeColor
+            for (let i = 0; i < colors.length; ++i) {
+                if (('' + colors[i]) === givenString) {
+                    return i
+                }
+            }
+            return -1
+        }
+
+        function getCVarData() {
+            const rawString  = UI.ui.getCVarValue(cvarName)
+            const maybeColor = UI.ui.colorFromRgbString(rawString)
+            if (!maybeColor) {
+                // White (TODO: Avoid hardcoding this value)
+                return [7, undefined]
+            }
+            const index = impl.indexOfColor(maybeColor)
+            if (index >= 0) {
+                return [index, undefined]
+            }
+            return [UI.ui.consoleColors.length, maybeColor]
+        }
+    }
 
     Repeater {
         model: UI.ui.consoleColors
 
         delegate: ColorPickerColorItem {
             layoutIndex: index
-            selected: layoutIndex === root.selectedIndex
+            selected: layoutIndex === impl.selectedIndex
             color: UI.ui.consoleColors[index]
             onMouseEnter: root.expandAt(index)
             onMouseLeave: root.shrinkBack()
-            onClicked: root.selectedIndex = index
+            onClicked: {
+                // We do not touch the custom color
+                impl.selectedIndex = index
+                impl.selectedColor = UI.ui.consoleColors[index]
+                updateCVarColor(impl.selectedColor)
+            }
         }
     }
 
     ColorPickerColorItem {
-        visible: !!customColor
+        visible: !!impl.customColor
         layoutIndex: UI.ui.consoleColors.length
-        selected: layoutIndex === root.selectedIndex
-        color: customColor ? customColor : "transparent"
+        selected: layoutIndex === impl.selectedIndex
+        color: impl.customColor ? impl.customColor : "transparent"
         onMouseEnter: root.expandAt(index)
         onMouseLeave: root.shrinkBack()
-        onClicked: root.selectedIndex = UI.ui.consoleColors.length
+        onClicked: {
+            // We do not touch the custom color
+            impl.selectedIndex = UI.ui.consoleColors.length
+            impl.selectedColor = impl.customColor
+            updateCVarColor(impl.selectedColor)
+        }
     }
 
     ColorPickerItem {
@@ -46,7 +99,7 @@ RowLayout {
         haloColor: Material.accentColor
         onMouseEnter: root.expandAt(index)
         onMouseLeave: root.shrinkBack()
-        onClicked: popup.openForColor(root.customColor)
+        onClicked: popup.openForColor(impl.customColor)
 
         readonly property color crossColor: containsMouse ? Material.accentColor : Material.foreground
 
@@ -67,114 +120,97 @@ RowLayout {
         }
     }
 
-    function checkCVarChanges() {
-        let [index, maybeNewCustomColor] = getCVarData()
-        if (index !== selectedIndex || maybeNewCustomColor !== customColor) {
-            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
-                customColor = maybeNewCustomColor
-                selectedIndex = index
+    Connections {
+        target: UI.ui
+        onCheckingCVarChangesRequested: {
+            const [index, maybeCustomColor] = impl.getCVarData()
+            if (!root.applyImmediately && typeof(impl.pendingValue) !== "undefined") {
+                if (maybeCustomColor) {
+                    if (impl.toQuakeColorString(maybeCustomColor) === impl.pendingValue) {
+                        impl.pendingValue = undefined
+                    }
+                } else {
+                    if (impl.toQuakeColorString(UI.ui.consoleColors[index]) === impl.pendingValue) {
+                        impl.pendingValue = undefined
+                    }
+                }
+            }
+            if (index !== impl.selectedIndex || maybeCustomColor !== impl.customColor) {
+                if (root.applyImmediately || typeof(impl.pendingValue) === "undefined") {
+                    impl.customColor   = maybeCustomColor
+                    impl.selectedIndex = index
+                    impl.selectedColor = maybeCustomColor ? maybeCustomColor : UI.ui.consoleColors[index]
+                }
             }
         }
-    }
-
-    function rollbackChanges() {
-        let [index, maybeCustomColor] = getCVarData()
-        customColor = maybeCustomColor
-        selectedIndex = index
-    }
-
-    function indexOfColor(maybeColor) {
-        let colors = UI.ui.consoleColors
-        // Compare by hex strings
-        let givenString = '' + maybeColor
-        for (let i = 0; i < colors.length; ++i) {
-            if (('' + colors[i]) === givenString) {
-                return i
+        onReportingPendingCVarChangesRequested: {
+            if (typeof(impl.pendingValue) !== "undefined") {
+                UI.ui.reportPendingCVarChanges(root.cvarName, impl.pendingValue)
             }
         }
-        return -1
-    }
+        onRollingPendingCVarChangesBackRequested: {
+            const [index, maybeCustomColor] = impl.getCVarData()
+            impl.customColor   = maybeCustomColor
+            impl.selectedIndex = index
+            impl.selectedColor = maybeCustomColor ? maybeCustomColor : UI.ui.consoleColors[index]
 
-    function getCVarData() {
-        let rawString = UI.ui.getCVarValue(cvarName)
-        let maybeColor = UI.ui.colorFromRgbString(rawString)
-        if (!maybeColor) {
-            return [-1, undefined]
+            impl.pendingValue = undefined
         }
-        let index = indexOfColor(maybeColor)
-        if (index != -1) {
-            return [index, undefined]
+        onPendingCVarChangesCommitted: {
+            impl.pendingValue = undefined
         }
-        return [UI.ui.consoleColors.length, maybeColor]
     }
 
     function expandAt(hoveredIndex) {
         for (let i = 0; i < children.length; ++i) {
-            let child = children[i]
-            if (!(child instanceof ColorPickerItem)) {
-                continue
+            const child = children[i]
+            if (child instanceof ColorPickerItem) {
+                const childIndex = child.layoutIndex
+                if (childIndex !== hoveredIndex) {
+                    child.startShift(childIndex < hoveredIndex)
+                }
             }
-            let childIndex = child.layoutIndex
-            if (childIndex == hoveredIndex) {
-                continue
-            }
-            child.startShift(childIndex < hoveredIndex)
         }
     }
 
     function shrinkBack() {
         for (let i = 0; i < children.length; ++i) {
-            let child = children[i]
+            const child = children[i]
             if (child instanceof ColorPickerItem) {
                 child.revertShift()
             }
         }
     }
 
-    function toQuakeColorString(color) {
-        // Let Qt convert it to "#RRGGBB". This is more robust than a manual floating-point -> 0.255 conversion.
-        let qtColorString = '' + color
-        let r = parseInt(qtColorString.substring(1, 3), 16)
-        let g = parseInt(qtColorString.substring(3, 5), 16)
-        let b = parseInt(qtColorString.substring(5, 7), 16)
-        return r + " " + g + " " + b
-    }
-
     function updateCVarColor(color) {
-        let value = toQuakeColorString(color)
+        const value = impl.toQuakeColorString(color)
         if (applyImmediately) {
             UI.ui.setCVarValue(cvarName, value)
         } else {
-            UI.ui.markPendingCVarChanges(root, cvarName, value)
+            impl.pendingValue = value
         }
     }
 
     function setSelectedCustomColor(color) {
-        customColor = color
-        let customColorIndex = UI.ui.consoleColors.length
-        if (selectedIndex != customColorIndex) {
-            // This triggers updateCVarColor()
-            selectedIndex = customColorIndex
+        const index = impl.indexOfColor(color)
+        if (index < 0) {
+            impl.customColor   = color
+            impl.selectedIndex = UI.ui.consoleColors.length
+            impl.selectedColor = color
         } else {
-            // The index remains the same, force color update
-            updateCVarColor(color)
+            impl.customColor   = undefined
+            impl.selectedIndex = index
+            impl.selectedColor = UI.ui.consoleColors[index]
         }
-    }
-
-    onSelectedIndexChanged: {
-        if (selectedIndex >= 0) {
-            updateCVarColor(UI.ui.consoleColors[selectedIndex] || customColor)
-        }
+        updateCVarColor(color)
     }
 
     Component.onCompleted: {
-        UI.ui.registerCVarAwareControl(root)
-        let [index, maybeCustomColor] = getCVarData()
-        customColor = maybeCustomColor
-        selectedIndex = index
+        const [index, maybeCustomColor] = impl.getCVarData()
+        impl.customColor   = maybeCustomColor
+        impl.selectedIndex = index
+        impl.selectedColor = maybeCustomColor ? maybeCustomColor : UI.ui.consoleColors[index]
     }
-
-    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 
     Popup {
         id: popup
@@ -229,7 +265,7 @@ RowLayout {
         onHeightChanged: repositionBlurRegion()
 
         onAboutToHide: {
-            rootItem.leavePopupMode()
+            rootItem.resetPopupMode()
         }
 
         function repositionBlurRegion() {
@@ -237,8 +273,7 @@ RowLayout {
                 const globalPos = parent.mapToGlobal(0, 0)
                 const inset     = 2
 
-                // TODO: It should not be named "enter/leave" as we violate balancing semantics of calls
-                rootItem.enterPopupMode(Qt.rect(globalPos.x + inset + popup.x, globalPos.y + inset + popup.y,
+                rootItem.setOrUpdatePopupMode(Qt.rect(globalPos.x + inset + popup.x, globalPos.y + inset + popup.y,
                     background.width - 2 * inset, background.height - 2 * inset))
             }
         }

@@ -11,38 +11,68 @@ Slider {
 
     property string cvarName: ""
     property bool applyImmediately: true
-    property bool suppressSignals: true
 
-    function checkCVarChanges() {
-        let newValue = UI.ui.getCVarValue(cvarName)
-        if (value != newValue) {
-            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
-                value = newValue
+    QtObject {
+        id: impl
+        property bool suppressSignals: true
+        property var pendingValue
+
+        function getCurrNumericVarValue() {
+            const textValue = UI.ui.getCVarValue(root.cvarName)
+            let parsedValue = parseFloat(textValue)
+            if (isNaN(parsedValue)) {
+                parsedValue = 0.0
             }
+            return Math.max(root.from, Math.min(parsedValue, root.to))
         }
     }
 
-    function rollbackChanges() {
-        suppressSignals = true
-        value = UI.ui.getCVarValue(cvarName)
-        suppressSignals = false
+    Connections {
+        target: UI.ui
+        onCheckingCVarChangesRequested: {
+            const newValue = impl.getCurrNumericVarValue()
+            if (!applyImmediately && typeof(impl.pendingValue) !== "undefined") {
+                if (impl.pendingValue === newValue) {
+                    impl.pendingValue = undefined
+                }
+            }
+            if (root.value != newValue) {
+                if (applyImmediately || typeof(impl.pendingValue) === "undefined") {
+                    console.assert(!impl.suppressSignals)
+                    impl.suppressSignals = true
+                    root.value           = newValue
+                    impl.suppressSignals = false
+                }
+            }
+        }
+        onReportingPendingCVarChangesRequested: {
+            if (typeof(impl.pendingValue) !== "undefined") {
+                UI.ui.reportPendingCVarChanges(cvarName, impl.pendingValue)
+            }
+        }
+        onRollingPendingCVarChangesBackRequested: {
+            impl.suppressSignals = true
+            root.value           = impl.getCurrNumericVarValue()
+            impl.pendingValue    = undefined
+            impl.suppressSignals = false
+        }
+        onPendingCVarChangesCommitted: {
+            impl.pendingValue = undefined
+        }
     }
 
     onValueChanged: {
-        if (!suppressSignals) {
+        if (!impl.suppressSignals) {
             if (applyImmediately) {
                 UI.ui.setCVarValue(cvarName, value)
             } else {
-                UI.ui.markPendingCVarChanges(root, cvarName, value)
+                impl.pendingValue = value
             }
         }
     }
 
     Component.onCompleted: {
-        value = UI.ui.getCVarValue(cvarName)
-        UI.ui.registerCVarAwareControl(root)
-        suppressSignals = false
+        value                = impl.getCurrNumericVarValue()
+        impl.suppressSignals = false
     }
-
-    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

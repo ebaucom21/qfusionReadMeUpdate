@@ -27,7 +27,6 @@ protected:
 	// Allows accessing QQuickItem functionality while iterating over generic NativelyDrawn things (casts are unsafe)
 	QQuickItem *m_selfAsItem { nullptr };
 	unsigned m_reloadRequestMask { 0 };
-	bool m_isLinked { false };
 
 	static wsw::Vector<shader_s *> s_materialsToRecycle;
 public:

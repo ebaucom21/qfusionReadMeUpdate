@@ -31,13 +31,19 @@ MouseArea {
     implicitHeight: Math.max(marker.height, defaultLabelHeight) + 4
     implicitWidth: marker.width + defaultLabelWidth + 12
 
-    Component.onCompleted: UI.keysAndBindings.registerCommandItem(root, commandNum)
-    Component.onDestruction: UI.keysAndBindings.unregisterCommandItem(root, commandNum)
+    Connections {
+        target: UI.keysAndBindings
+        onCommandExternalHighlightChanged: {
+            if (root.commandNum === targetCommandNum) {
+                externallyHighlighted = targetHighlighted
+            }
+        }
+    }
 
     onContainsMouseChanged: {
         // Don't highlight
         if (!isInEditorMode) {
-            UI.keysAndBindings.onCommandItemContainsMouseChanged(root, commandNum, containsMouse)
+            UI.keysAndBindings.onCommandItemContainsMouseChanged(commandNum, containsMouse)
         }
     }
 

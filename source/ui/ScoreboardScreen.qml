@@ -43,13 +43,10 @@ Rectangle {
         width: Math.max(teamTablesLoader.item.width, specsPane.width)
         height: teamTablesLoader.item.height + column.anchors.topMargin + column.height
 
-        Component.onCompleted: UI.ui.registerHudOccluder(hudOccluder)
-        Component.onDestruction: UI.ui.unregisterHudOccluder(hudOccluder)
-        onWidthChanged: UI.ui.updateHudOccluder(hudOccluder)
-        onHeightChanged: UI.ui.updateHudOccluder(hudOccluder)
-        onXChanged: UI.ui.updateHudOccluder(hudOccluder)
-        onYChanged: UI.ui.updateHudOccluder(hudOccluder)
-        onVisibleChanged: UI.ui.updateHudOccluder(hudOccluder)
+        Connections {
+            target: UI.ui
+            onHudOccludersRetrievalRequested: UI.ui.supplyHudOccluder(hudOccluder)
+        }
     }
 
     Column {

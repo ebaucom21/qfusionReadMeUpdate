@@ -33,8 +33,10 @@ Item {
         height: parent.height
         anchors.centerIn: parent
 
-        Component.onCompleted: UI.ui.registerNativelyDrawnItem(underlying)
-        Component.onDestruction: UI.ui.unregisterNativelyDrawnItem(underlying)
+        Connections {
+            target: UI.ui
+            onNativelyDrawnItemsRetrievalRequested: UI.ui.supplyNativelyDrawnItem(underlying)
+        }
     }
 
     Loader {
