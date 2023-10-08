@@ -23,6 +23,15 @@ Item {
     property real barHeightFrac: idle ? 0.0 : 1.0
     Behavior on barHeightFrac { SmoothedAnimation { duration: 500 } }
 
+    Connections {
+        target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: {
+            if (numEnabledIndicators) {
+                Hud.ui.supplyDisplayedHudItemAndMargin(root, 32.0)
+            }
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
         // Don't leave the gap between team score elements even if all indicators are hidden

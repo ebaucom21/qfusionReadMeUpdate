@@ -12,6 +12,15 @@ Item {
     implicitWidth: 240
     implicitHeight: list.contentHeight + 20
 
+    Connections {
+        target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: {
+            if (list.count) {
+                Hud.ui.supplyDisplayedHudItemAndMargin(list, 4.0)
+            }
+        }
+    }
+
     ListView {
         id: list
         model: Hud.dataModel.getFragsFeedModel()

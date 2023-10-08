@@ -4,6 +4,7 @@ import QtQuick.Controls.Material 2.12
 import net.warsow 2.6
 
 Item {
+    id: root
     implicitWidth: separator.width + 2 * (sideMargin + Math.max(minutesLabel.width, secondsLabel.width)) + 16
     implicitHeight: separator.height + matchStateLabel.anchors.topMargin + matchStateLabel.height
 
@@ -17,6 +18,11 @@ Item {
 
     readonly property real sideMargin: 8
     readonly property string matchStateString: Hud.dataModel.matchStateString
+
+    Connections {
+        target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(root, 4.0)
+    }
 
     Label {
         id: minutesLabel

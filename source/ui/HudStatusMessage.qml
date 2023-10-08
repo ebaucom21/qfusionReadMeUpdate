@@ -16,6 +16,7 @@ Item {
         }
     }
 
+
     Timer {
         id: timer
         interval: 3000
@@ -50,13 +51,13 @@ Item {
                 property: "transformXScale"
                 from: 1.0; to: 0.0
                 easing.type: Easing.InCubic
-                duration: 48
+                duration: 64
             }
             NumberAnimation {
                 property: "transformYScale"
                 from: 1.0; to: 0.0
                 easing.type: Easing.InCubic
-                duration: 48
+                duration: 64
             }
         }
     }
@@ -64,6 +65,14 @@ Item {
     Component {
         id: component
         Label {
+            id: instantiatedItem
+            width: implicitWidth
+            height: implicitHeight
+            // We must report individual items and not the stack view, otherwise we lose items in transitions
+            Connections {
+                target: Hud.ui
+                onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(instantiatedItem, 4.0)
+            }
             property string message
             property real transformXScale
             property real transformYScale

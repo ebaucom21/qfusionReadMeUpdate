@@ -232,6 +232,11 @@ public:
 
 	Q_PROPERTY( bool isShowingActionRequests READ isShowingActionRequests NOTIFY isShowingActionRequestsChanged );
 
+	// Asks Qml
+	Q_SIGNAL void displayedHudItemsRetrievalRequested();
+	// Qml should call this method in reply
+	Q_INVOKABLE void supplyDisplayedHudItemAndMargin( QQuickItem *item, qreal margin );
+
 	Q_SIGNAL void hudOccludersChanged();
 	// Asks Qml
 	Q_SIGNAL void hudOccludersRetrievalRequested();
@@ -459,6 +464,11 @@ private:
 	wsw::Vector<NativelyDrawn *> m_nativelyDrawnUnderlayHeap;
 	wsw::Vector<NativelyDrawn *> m_nativelyDrawnOverlayHeap;
 	wsw::Vector<QRectF> m_occludersOfNativelyDrawnItems;
+
+	wsw::Vector<QPair<QRectF, qreal>> m_boundsOfDrawnHudItems;
+	// Avoid using std::vector<bool>
+	wsw::Vector<uint8_t> m_drawnCellsMaskOfHudImage;
+	wsw::Vector<QPair<unsigned, unsigned>> m_columnRangesOfCellGridRows;
 
 	wsw::Vector<QPair<QString, QVariant>> m_pendingCVarChanges;
 
@@ -1095,8 +1105,6 @@ void QtUISystem::leaveUIRenderingMode() {
 	}
 }
 
-static const QString kVisiblePropertyName( "visible" );
-
 void QtUISystem::drawSelfInMainContext() {
 	if( !m_menuSandbox ) {
 		return;
@@ -1128,9 +1136,7 @@ void QtUISystem::drawSelfInMainContext() {
 		const QQuickItem *item = nativelyDrawn->m_selfAsItem;
 		assert( item );
 
-		const QVariant visibleProperty( QQmlProperty::read( item, kVisiblePropertyName ) );
-		assert( !visibleProperty.isNull() && visibleProperty.isValid() );
-		if( visibleProperty.toBool() ) {
+		if( item->isVisible() ) {
 			if( nativelyDrawn->m_nativeZ < 0 ) {
 				m_nativelyDrawnUnderlayHeap.push_back( nativelyDrawn );
 				std::push_heap( m_nativelyDrawnUnderlayHeap.begin(), m_nativelyDrawnUnderlayHeap.end(), cmp );
@@ -1170,15 +1176,117 @@ void QtUISystem::drawSelfInMainContext() {
 	// Don't blit initial FBO content
 	if( m_menuSandbox->m_hasValidFboContent ) {
 		if( m_activeMenuMask || m_isShowingScoreboard ) {
+			const QSize size( m_menuSandbox->m_window->size() );
+			shader_s *const material = R_WrapMenuTextureHandleInMaterial( m_menuSandbox->m_framebufferObject->texture() );
 			R_Set2DMode( true );
-			R_DrawExternalTextureOverlay( m_menuSandbox->m_framebufferObject->texture() );
+			R_DrawStretchPic( 0, 0, size.width(), size.height(), 0.0f, 1.0f, 1.0f, 0.0f, colorWhite, material );
 			R_Set2DMode( false );
 		}
 	}
 	if( m_hudSandbox && m_hudSandbox->m_hasValidFboContent ) {
 		if( m_isShowingHud || m_isShowingChatPopup || m_isShowingTeamChatPopup || m_isShowingActionRequests ) {
+			shader_s *const material = R_WrapHudTextureHandleInMaterial( m_hudSandbox->m_framebufferObject->texture() );
+
+			m_boundsOfDrawnHudItems.clear();
+			Q_EMIT displayedHudItemsRetrievalRequested();
+
+			const qreal windowWidth  = m_hudSandbox->m_window->width();
+			const qreal windowHeight = m_hudSandbox->m_window->height();
+
+			// We cannot just blit texture regions that correspond to HUD items
+			// as items may ovelap and are alpha-blended.
+			// Instead, we mark non-overlapping grid regions that are (partially or fully) occupied by HUD items.
+
+			constexpr unsigned cellWidth  = 64;
+			constexpr unsigned cellHeight = 64;
+			const unsigned numGridColumns = (unsigned)( std::ceil( windowWidth ) / cellWidth ) + 1;
+			const unsigned numGridRows    = (unsigned)( std::ceil( windowHeight ) / cellHeight ) + 1;
+
+			// Let items make their footprint on the grid.
+
+			m_drawnCellsMaskOfHudImage.resize( numGridRows * numGridColumns );
+			auto *const __restrict maskData = m_drawnCellsMaskOfHudImage.data();
+			std::fill( maskData, maskData + m_drawnCellsMaskOfHudImage.size(), 0 );
+
+			m_columnRangesOfCellGridRows.resize( numGridRows );
+			for( unsigned row = 0; row < numGridRows; ++row ) {
+				m_columnRangesOfCellGridRows[row] = { numGridColumns, 0u };
+			}
+
+			for( const auto &[itemRect, margin]: m_boundsOfDrawnHudItems ) {
+				assert( margin >= 0.0 );
+				const auto minX = (unsigned)wsw::max( std::round( itemRect.x() - margin ), 0.0 );
+				const auto maxX = (unsigned)wsw::min( std::round( itemRect.x() + itemRect.width() + margin ), windowWidth - 1.0 );
+				const auto minY = (unsigned)wsw::max( std::round( itemRect.y() - margin ), 0.0 );
+				const auto maxY = (unsigned)wsw::min( std::round( itemRect.y() + itemRect.height() + margin ), windowHeight - 1.0 );
+				// This accounts for degenerate/clipped out rectangles
+				if( minX < maxX && minY < maxY ) [[likely]] {
+					const unsigned minColumn = minX / cellWidth;
+					const unsigned minRow    = minY / cellHeight;
+					const unsigned maxColumn = maxX / cellWidth;
+					const unsigned maxRow    = maxY / cellHeight;
+					assert( minRow <= maxRow && maxRow < numGridRows );
+					assert( minColumn <= maxColumn && maxColumn < numGridColumns );
+					for( unsigned row = minRow; row <= maxRow; ++row ) {
+						for( unsigned column = minColumn; column <= maxColumn; ++column ) {
+							assert( row * numGridColumns + column < numGridRows * numGridColumns );
+							maskData[row * numGridColumns + column] = 1;
+						}
+						// Track min/max columns in row to optimize the scanning pass
+						auto &[minColumnInRow, maxColumnInRow] = m_columnRangesOfCellGridRows[row];
+						minColumnInRow = wsw::min( minColumnInRow, minColumn );
+						maxColumnInRow = wsw::max( maxColumnInRow, maxColumn );
+					}
+				}
+			}
+
+			// Draw grid cells which have been marked by items
 			R_Set2DMode( true );
-			R_DrawExternalTextureOverlay( m_hudSandbox->m_framebufferObject->texture() );
+
+			const float rcpWindowWidth  = 1.0f / (float)windowWidth;
+			const float rcpWindowHeight = 1.0f / (float)windowHeight;
+
+#if 0
+			int numCellsDrawn = 0;
+			for( unsigned row = 0; row < numGridRows; ++row ) {
+				const auto y = (int)row * (int)cellHeight;
+				const auto [minColumnInRow, maxColumnInRow] = m_columnRangesOfCellGridRows[row];
+				for( unsigned column = minColumnInRow; column <= maxColumnInRow; ++column ) {
+					assert( row * numGridColumns + column < numGridRows * numGridColumns );
+					if( maskData[row * numGridColumns + column] ) {
+						const auto x   = (int)column * (int)cellWidth;
+						const float s1 = 0.0f + (float)x * rcpWindowWidth;
+						const float t1 = 1.0f - (float)y * rcpWindowHeight;
+						const float s2 = 0.0f + (float)( x + cellWidth ) * rcpWindowWidth;
+						const float t2 = 1.0f - (float)( y + cellHeight ) * rcpWindowHeight;
+						const float color[4] { 1.0f, 1.0f, 1.0f, 0.25f };
+						R_DrawStretchPic( x, y, cellWidth, cellHeight, s1, t1, s2, t2, color, cgs.shaderWhite );
+						numCellsDrawn++;
+					}
+				}
+			}
+			uiNotice() << "Drawn" << numCellsDrawn << "cells of" << numGridRows * numGridColumns << "in" << numGridRows << "rows";
+#endif
+
+			for( unsigned row = 0; row < numGridRows; ++row ) {
+				const auto y = (int)row * (int)cellHeight;
+				// No iterations for unaffected lines
+				const auto [minColumnInRow, maxColumnInRow] = m_columnRangesOfCellGridRows[row];
+				for( unsigned column = minColumnInRow; column <= maxColumnInRow; ++column ) {
+					assert( row * numGridColumns + column < numGridRows * numGridColumns );
+					if( maskData[row * numGridColumns + column] ) {
+						const auto x   = (int)column * (int)cellWidth;
+						const float s1 = 0.0f + (float)x * rcpWindowWidth;
+						const float t1 = 1.0f - (float)y * rcpWindowHeight;
+						const float s2 = 0.0f + (float)( x + cellWidth ) * rcpWindowWidth;
+						const float t2 = 1.0f - (float)( y + cellHeight ) * rcpWindowHeight;
+						// TODO: Build and supply a single dynamic mesh for all tiles at once
+						// TODO: Consolidate tiles
+						R_DrawStretchPic( x, y, cellWidth, cellHeight, s1, t1, s2, t2, colorWhite, material );
+					}
+				}
+			}
+
 			R_Set2DMode( false );
 		}
 	}
@@ -1821,13 +1929,13 @@ void QtUISystem::supplyNativelyDrawnItem( QQuickItem *item ) {
 }
 
 void QtUISystem::supplyNativelyDrawnItemsOccluder( QQuickItem *item ) {
-	if( QQmlProperty::read( item, kVisiblePropertyName ).toBool() ) {
+	if( item->isVisible() ) {
 		m_occludersOfNativelyDrawnItems.push_back( item->mapRectToScene( item->boundingRect() ) );
 	}
 }
 
 void QtUISystem::supplyHudOccluder( QQuickItem *item ) {
-	if( QQmlProperty::read( item, kVisiblePropertyName ).toBool() ) {
+	if( item->isVisible() ) {
 		m_hudOccluders.emplace_back( item->mapRectToScene( item->boundingRect() ) );
 	}
 }
@@ -1843,6 +1951,13 @@ bool QtUISystem::isHudItemOccluded( QQuickItem *item ) {
 		}
 	}
 	return false;
+}
+
+void QtUISystem::supplyDisplayedHudItemAndMargin( QQuickItem *item, qreal margin ) {
+	assert( margin >= 0.0 );
+	if( item->isVisible() ) {
+		m_boundsOfDrawnHudItems.emplace_back( qMakePair( item->mapRectToScene( item->boundingRect() ), margin ) );
+	}
 }
 
 auto QtUISystem::findCVarOrThrow( const QByteArray &name ) const -> cvar_t * {

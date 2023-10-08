@@ -445,7 +445,8 @@ class TextureCache : TextureManagementShared {
 	TextureFactory m_factory;
 
 	Texture *m_builtinTextures[(size_t)BuiltinTexNum::Portal0] {};
-	Texture *m_uiTextureWrapper { nullptr };
+	Texture *m_menuTextureWrapper { nullptr };
+	Texture *m_hudTextureWrapper { nullptr };
 
 	struct PortalRenderTargetComponents : public RenderTargetComponents {
 		unsigned drawSceneFrameNum { 0 };
@@ -473,6 +474,8 @@ class TextureCache : TextureManagementShared {
 
 	void applyFilterOrAnisoInList( Texture *listHead, TextureFilter filter,
 								   int aniso, bool applyFilter, bool applyAniso );
+	[[nodiscard]]
+	auto wrapTextureHandle( GLuint externalTexNum, Texture *reuse ) -> Texture *;
 public:
 	TextureCache();
 	~TextureCache();
@@ -528,7 +531,9 @@ public:
 	auto coronaTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::Corona ); }
 
 	[[nodiscard]]
-	auto wrapUITextureHandle( GLuint externalTexNum ) -> Texture *;
+	auto wrapMenuTextureHandle( GLuint externalTexNum ) -> Texture * { return wrapTextureHandle( externalTexNum, m_menuTextureWrapper ); }
+	[[nodiscard]]
+	auto wrapHudTextureHandle( GLuint externalTexNum ) -> Texture * { return wrapTextureHandle( externalTexNum, m_hudTextureWrapper ); }
 
 	void createPrimaryRenderTargetAttachments() {}
 	void releasePrimaryRenderTargetAttachments() {}

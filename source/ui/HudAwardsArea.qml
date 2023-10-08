@@ -6,7 +6,8 @@ import net.warsow 2.6
 Item {
     id: root
     implicitHeight: listView.contentHeight + 144
-    implicitWidth: rootItem.width
+    // Just for anchoring other items
+    implicitWidth: 0.5 * rootItem.width
 
     ListView {
         id: listView
@@ -81,6 +82,11 @@ Item {
         delegate: Label {
             id: listDelegate
             Component.onDestruction: Hud.ui.ensureObjectDestruction(listDelegate)
+            // We must report individual items, so we correctly account for transitions
+            Connections {
+                target: Hud.ui
+                onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(listDelegate, 4.0)
+            }
             property real transformXScale
             property real transformYScale
             transform: Scale {

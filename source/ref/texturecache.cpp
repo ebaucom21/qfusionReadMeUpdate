@@ -61,7 +61,8 @@ TextureCache::TextureCache() {
 	m_builtinTextures[(unsigned)BuiltinTexNum::Particle]     = m_factory.createBuiltinParticleTexture();
 	m_builtinTextures[(unsigned)BuiltinTexNum::Corona]       = m_factory.createBuiltinCoronaTexture();
 
-	m_uiTextureWrapper = m_factory.createUITextureHandleWrapper();
+	m_menuTextureWrapper = m_factory.createUITextureHandleWrapper();
+	m_hudTextureWrapper  = m_factory.createUITextureHandleWrapper();
 
 	const auto side = wsw::min<unsigned>( 1 << Q_log2( wsw::max( 1, r_portalmaps_maxtexsize->integer ) ),
 										  wsw::min( 1024, glConfig.maxRenderbufferSize ) );
@@ -88,7 +89,8 @@ TextureCache::TextureCache() {
 }
 
 TextureCache::~TextureCache() {
-	m_factory.releaseBuiltinTexture( m_uiTextureWrapper );
+	m_factory.releaseBuiltinTexture( m_menuTextureWrapper );
+	m_factory.releaseBuiltinTexture( m_hudTextureWrapper );
 	for( Texture *texture: m_builtinTextures ) {
 		m_factory.releaseBuiltinTexture( texture );
 	}
@@ -194,14 +196,13 @@ auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned fla
 	return getTexture( name, ""_asView, flags, &m_materialCubemapsHead, m_materialCubemapBins, &TextureFactory::loadMaterialCubemap );
 }
 
-auto TextureCache::wrapUITextureHandle( GLuint externalHandle ) -> Texture * {
-	assert( m_uiTextureWrapper );
-	Texture *texture = m_uiTextureWrapper;
-	texture->texnum = externalHandle;
-	texture->width = glConfig.width;
-	texture->height = glConfig.height;
-	texture->samples = 1;
-	return texture;
+auto TextureCache::wrapTextureHandle( GLuint externalHandle, Texture *reuse ) -> Texture * {
+	assert( reuse );
+	reuse->texnum  = externalHandle;
+	reuse->width   = glConfig.width;
+	reuse->height  = glConfig.height;
+	reuse->samples = 4;
+	return reuse;
 }
 
 const std::pair<wsw::StringView, TextureManagementShared::TextureFilter> TextureManagementShared::kTextureFilterNames[3] {

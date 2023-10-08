@@ -17,6 +17,15 @@ Item {
     readonly property color evenRowColor: Qt.rgba(0.0, 0.0, 0.0, 0.7)
     readonly property color oddRowColor: Qt.rgba(0.03, 0.03, 0.03, 0.7)
 
+    Connections {
+        target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: {
+            if (list.count) {
+                Hud.ui.supplyDisplayedHudItemAndMargin(list, 64.0)
+            }
+        }
+    }
+
     ListView {
         id: list
         anchors.centerIn: parent

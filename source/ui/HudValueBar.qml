@@ -17,6 +17,11 @@ Item {
     property real value
     property real frac
 
+    Connections {
+        target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(root, 32.0)
+    }
+
     Rectangle {
         id: back
         anchors.centerIn: parent

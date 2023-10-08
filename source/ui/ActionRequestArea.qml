@@ -6,8 +6,18 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 ListView {
+    id: root
     spacing: 16
     model: Hud.actionRequestsModel
+
+    Connections {
+        target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: {
+            if (root.count) {
+                Hud.ui.supplyDisplayedHudItemAndMargin(root, 64.0)
+            }
+        }
+    }
 
     delegate: Item {
         id: listDelegate

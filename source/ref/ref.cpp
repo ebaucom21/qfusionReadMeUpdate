@@ -346,38 +346,51 @@ void R_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2,
 	R_DrawRotatedStretchPic( x, y, w, h, s1, t1, s2, t2, 0, color, shader );
 }
 
-void R_DrawExternalTextureOverlay( GLuint externalTexNum ) {
-	Texture *texture = TextureCache::instance()->wrapUITextureHandle( externalTexNum );
+static shader_s g_externalTextureMaterialStorage[2];
+static shaderpass_t g_externalTextureMaterialPassStorage[2];
 
-	R_DrawStretchQuick( 0, 0, rf.width2D, rf.height2D, 0.0f, 1.0f, 1.0f, 0.0f, colorWhite,
-		GLSL_PROGRAM_TYPE_NONE, texture, GLSTATE_SRCBLEND_SRC_ALPHA | GLSTATE_DSTBLEND_ONE_MINUS_SRC_ALPHA );
+static const wsw::HashedStringView kExternalMenuImage( "$externalmenuimage" );
+static const wsw::HashedStringView kExternalHudImage( "$externalhudimage" );
+
+static shader_s *R_WrapExternalTextureHandle( GLuint externalTexNum, int storageIndex ) {
+	assert( storageIndex == 0 || storageIndex == 1 );
+	shaderpass_t *const p = &g_externalTextureMaterialPassStorage[storageIndex];
+	shader_t *const s     = &g_externalTextureMaterialStorage[storageIndex];
+
+	wsw::HashedStringView name;
+	Texture *texture;
+	if( externalTexNum == 0 ) {
+		name = kExternalMenuImage;
+		texture = TextureCache::instance()->wrapMenuTextureHandle( externalTexNum );
+	} else {
+		name = kExternalHudImage;
+		texture = TextureCache::instance()->wrapHudTextureHandle( externalTexNum );
+	}
+
+	s->vattribs  = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT;
+	s->sort      = SHADER_SORT_NEAREST;
+	s->numpasses = 1;
+	s->name      = name;
+	s->passes    = p;
+
+	p->rgbgen.type      = RGB_GEN_CONST;
+	VectorCopy( colorWhite, p->rgbgen.args );
+	p->alphagen.type    = ALPHA_GEN_CONST;
+	p->alphagen.args[0] = colorWhite[3];
+	p->tcgen            = TC_GEN_BASE;
+	p->images[0]        = texture;
+	p->flags            = GLSTATE_SRCBLEND_SRC_ALPHA | GLSTATE_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+	p->program_type     = GLSL_PROGRAM_TYPE_NONE;
+
+	return s;
 }
 
-static const wsw::HashedStringView kBuiltinImage( "$builtinimage" );
+shader_s *R_WrapMenuTextureHandleInMaterial( unsigned externalTexNum ) {
+	return R_WrapExternalTextureHandle( externalTexNum, 0 );
+}
 
-void R_DrawStretchQuick( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
-						 const vec4_t color, int program_type, Texture *image, int blendMask ) {
-	static shaderpass_t p;
-	static shader_t s;
-
-	s.vattribs = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT;
-	s.sort = SHADER_SORT_NEAREST;
-	s.numpasses = 1;
-	s.name = kBuiltinImage;
-	s.passes = &p;
-
-	p.rgbgen.type = RGB_GEN_CONST;
-	VectorCopy( color, p.rgbgen.args );
-	p.alphagen.type = ALPHA_GEN_CONST;
-	p.alphagen.args[0] = color[3];
-	p.tcgen = TC_GEN_BASE;
-	p.images[0] = image;
-	p.flags = blendMask;
-	p.program_type = program_type;
-
-	R_DrawRotatedStretchPic( x, y, w, h, s1, t1, s2, t2, 0, color, &s );
-
-	RB_FlushDynamicMeshes();
+shader_s *R_WrapHudTextureHandleInMaterial( unsigned externalTexNum ) {
+	return R_WrapExternalTextureHandle( externalTexNum, 1 );
 }
 
 mesh_vbo_t *R_InitPostProcessingVBO( void ) {

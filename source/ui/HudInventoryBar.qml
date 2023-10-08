@@ -16,6 +16,15 @@ Item {
     readonly property real animDuration: 100
     readonly property real cardRadius: 9
 
+    Connections {
+        target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: {
+            if (list.count) {
+                Hud.ui.supplyDisplayedHudItemAndMargin(list, 32.0)
+            }
+        }
+    }
+
     ListView {
         id: list
         anchors.centerIn: parent

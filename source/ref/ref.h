@@ -475,10 +475,9 @@ void        R_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, fl
 							  const vec4_t color, const shader_s *shader );
 void        R_DrawRotatedStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
 									 float angle, const vec4_t color, const shader_s *shader );
-void        R_DrawStretchQuick( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
-								const vec4_t color, int program_type, Texture *image, int blendMask );
 
-void        R_DrawExternalTextureOverlay( unsigned externalTexNum );
+shader_s *R_WrapMenuTextureHandleInMaterial( unsigned externalTexNum );
+shader_s *R_WrapHudTextureHandleInMaterial( unsigned externalTexNum );
 
 struct model_s;
 

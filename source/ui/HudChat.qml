@@ -18,9 +18,19 @@ Item {
     readonly property color defaultMaterialAccent: Material.accent
 
     Loader {
+        id: loader
         anchors.fill: parent
         active: Hud.ui.isShowingChatPopup || Hud.ui.isShowingTeamChatPopup
         sourceComponent: chatComponent
+    }
+
+    Connections {
+        target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: {
+            if (loader.item) {
+                Hud.ui.supplyDisplayedHudItemAndMargin(loader.item, 64.0)
+            }
+        }
     }
 
     Component {

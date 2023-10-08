@@ -12,6 +12,15 @@ Item {
     opacity: 0.9
 
     Connections {
+        target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: {
+            if (list.count) {
+                Hud.ui.supplyDisplayedHudItemAndMargin(list, 4.0)
+            }
+        }
+    }
+
+    Connections {
         target: Hud.dataModel
         onIsMessageFeedFadingOutChanged: {
             if (isMessageFeedFadingOut) {

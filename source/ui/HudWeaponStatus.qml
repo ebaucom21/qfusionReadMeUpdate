@@ -10,6 +10,11 @@ Item {
     implicitWidth: 256
     implicitHeight: 192
 
+    Connections {
+        target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(back, 64.0)
+    }
+
     Rectangle {
         id: back
         anchors.centerIn: parent
