@@ -1247,43 +1247,70 @@ void QtUISystem::drawSelfInMainContext() {
 			const float rcpWindowHeight = 1.0f / (float)windowHeight;
 
 #if 0
-			int numCellsDrawn = 0;
+			int numCellsDrawn = 0, numStripesDrawn = 0;
 			for( unsigned row = 0; row < numGridRows; ++row ) {
-				const auto y = (int)row * (int)cellHeight;
 				const auto [minColumnInRow, maxColumnInRow] = m_columnRangesOfCellGridRows[row];
-				for( unsigned column = minColumnInRow; column <= maxColumnInRow; ++column ) {
-					assert( row * numGridColumns + column < numGridRows * numGridColumns );
-					if( maskData[row * numGridColumns + column] ) {
-						const auto x   = (int)column * (int)cellWidth;
-						const float s1 = 0.0f + (float)x * rcpWindowWidth;
-						const float t1 = 1.0f - (float)y * rcpWindowHeight;
-						const float s2 = 0.0f + (float)( x + cellWidth ) * rcpWindowWidth;
-						const float t2 = 1.0f - (float)( y + cellHeight ) * rcpWindowHeight;
-						const float color[4] { 1.0f, 1.0f, 1.0f, 0.25f };
-						R_DrawStretchPic( x, y, cellWidth, cellHeight, s1, t1, s2, t2, color, cgs.shaderWhite );
-						numCellsDrawn++;
+				unsigned column = minColumnInRow;
+				const auto y    = (int)row * (int)cellHeight;
+				for(;; ) {
+					// Try detecting the start of the next stripe of marked cells, or stop attempts.
+					// This also accounts for empty (non-marked at all) rows.
+					while( column <= maxColumnInRow && !maskData[row * numGridColumns + column] ) {
+						++column;
 					}
+					// TODO: We would like to use labeled breaks which can be activated from the preceding loop
+					if( !( column <= maxColumnInRow ) ) {
+						break;
+					}
+					const auto stripeStartColumn = column;
+					++column;
+					while( column <= maxColumnInRow && maskData[row * numGridColumns + column] ) {
+						++column;
+					}
+					const auto x           = (int)stripeStartColumn * (int)cellWidth;
+					const auto stripeWidth = (int)cellWidth * (int)( column - stripeStartColumn );
+					const float s1         = 0.0f + (float)x * rcpWindowWidth;
+					const float t1         = 1.0f - (float)y * rcpWindowHeight;
+					const float s2         = 0.0f + (float)( x + stripeWidth ) * rcpWindowWidth;
+					const float t2         = 1.0f - (float)( y + cellHeight ) * rcpWindowHeight;
+					const float color[4] {
+						(float)(numStripesDrawn % 2 ), 1.0f - (float)( numStripesDrawn % 2 ), 1.0f, 0.25f
+					};
+					R_DrawStretchPic( x, y, stripeWidth, cellHeight, s1, t1, s2, t2, color, cgs.shaderWhite );
+					numCellsDrawn += (int)( column - stripeStartColumn );
+					numStripesDrawn++;
 				}
 			}
-			uiNotice() << "Drawn" << numCellsDrawn << "cells of" << numGridRows * numGridColumns << "in" << numGridRows << "rows";
+			uiNotice() << "Drawn" << numCellsDrawn << "cells of" << numGridRows * numGridColumns
+				<< "as" << numStripesDrawn << "stripes in" << numGridRows << "rows";
 #endif
 
 			for( unsigned row = 0; row < numGridRows; ++row ) {
-				const auto y = (int)row * (int)cellHeight;
-				// No iterations for unaffected lines
 				const auto [minColumnInRow, maxColumnInRow] = m_columnRangesOfCellGridRows[row];
-				for( unsigned column = minColumnInRow; column <= maxColumnInRow; ++column ) {
-					assert( row * numGridColumns + column < numGridRows * numGridColumns );
-					if( maskData[row * numGridColumns + column] ) {
-						const auto x   = (int)column * (int)cellWidth;
-						const float s1 = 0.0f + (float)x * rcpWindowWidth;
-						const float t1 = 1.0f - (float)y * rcpWindowHeight;
-						const float s2 = 0.0f + (float)( x + cellWidth ) * rcpWindowWidth;
-						const float t2 = 1.0f - (float)( y + cellHeight ) * rcpWindowHeight;
-						// TODO: Build and supply a single dynamic mesh for all tiles at once
-						// TODO: Consolidate tiles
-						R_DrawStretchPic( x, y, cellWidth, cellHeight, s1, t1, s2, t2, colorWhite, material );
+				unsigned column = minColumnInRow;
+				const auto y    = (int)row * (int)cellHeight;
+				for(;; ) {
+					// Try detecting the start of the next stripe of marked cells, or stop attempts.
+					// This also accounts for empty (non-marked at all) rows.
+					while( column <= maxColumnInRow && !maskData[row * numGridColumns + column] ) {
+						++column;
 					}
+					// TODO: We would like to use labeled breaks which can be activated from the preceding loop
+					if( !( column <= maxColumnInRow ) ) {
+						break;
+					}
+					const auto stripeStartColumn = column;
+					++column;
+					while( column <= maxColumnInRow && maskData[row * numGridColumns + column] ) {
+						++column;
+					}
+					const auto x           = (int)stripeStartColumn * (int)cellWidth;
+					const auto stripeWidth = (int)cellWidth * (int)( column - stripeStartColumn );
+					const float s1         = 0.0f + (float)x * rcpWindowWidth;
+					const float t1         = 1.0f - (float)y * rcpWindowHeight;
+					const float s2         = 0.0f + (float)( x + stripeWidth ) * rcpWindowWidth;
+					const float t2         = 1.0f - (float)( y + cellHeight ) * rcpWindowHeight;
+					R_DrawStretchPic( x, y, stripeWidth, cellHeight, s1, t1, s2, t2, colorWhite, material );
 				}
 			}
 
