@@ -173,6 +173,9 @@ public:
 	bool isShowingScoreboard() const override;
 	void setScoreboardShown( bool shown ) override;
 
+	[[nodiscard]]
+	bool suggestsUsingVSync() const override;
+
 	void toggleChatPopup() override;
 	void toggleTeamChatPopup() override;
 
@@ -2258,6 +2261,10 @@ bool QtUISystem::isShowingScoreboard() const {
 
 void QtUISystem::setScoreboardShown( bool shown ) {
 	m_isRequestedToShowScoreboard = shown;
+}
+
+bool QtUISystem::suggestsUsingVSync() const {
+	return ( m_activeMenuMask & ( MainMenu | InGameMenu | ConnectionScreen ) ) != 0;
 }
 
 void QtUISystem::toggleChatPopup() {

@@ -1446,9 +1446,9 @@ void SCR_UpdateScreen( void ) {
 	uiSystem->refresh();
 
 	// TODO: Pass as flags
-	const bool forcevsync = ( cls.state == CA_DISCONNECTED && scr_con_current );
+	const bool forcevsync = cls.state == CA_DISCONNECTED || uiSystem->suggestsUsingVSync();
 	const bool forceclear = true;
-	const bool timedemo = cl_timedemo->integer && cls.demoPlayer.playing;
+	const bool timedemo   = cl_timedemo->integer && cls.demoPlayer.playing;
 
 	RF_BeginFrame( forceclear, forcevsync, timedemo );
 
@@ -5412,11 +5412,7 @@ void CL_Frame( int realMsec, int gameMsec ) {
 
 	int minMsec;
 	float maxFps;
-	if( cls.state == CA_DISCONNECTED ) {
-		maxFps = 60;
-		minMsec = 1000.0f / maxFps;
-		roundingMsec += 1000.0f / maxFps - minMsec;
-	} else if( cl_maxfps->integer > 0 && !( cl_timedemo->integer && cls.demoPlayer.playing ) ) {
+	if( cl_maxfps->integer > 0 && !( cl_timedemo->integer && cls.demoPlayer.playing ) ) {
 		const int absMinFps = 24;
 
 		// do not allow setting cl_maxfps to very low values to prevent cheating

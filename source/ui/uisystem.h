@@ -65,6 +65,9 @@ public:
 	[[nodiscard]]
 	virtual bool isShowingScoreboard() const = 0;
 
+	[[nodiscard]]
+	virtual bool suggestsUsingVSync() const = 0;
+
 	virtual void toggleChatPopup() = 0;
 	virtual void toggleTeamChatPopup() = 0;
 
