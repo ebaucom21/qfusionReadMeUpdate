@@ -506,6 +506,9 @@ void *VID_GetWindowHandle( void ) {
 	return ( void * )cl_hwnd;
 }
 
+void VID_WindowInitialized( void ) {
+}
+
 rserr_t VID_Sys_Init( const char *applicationName, const char *screenshotsPrefix, int startupColor,
 					  const int *iconXPM, void *parentWindow, bool verbose ) {
 	return R_Init( applicationName, screenshotsPrefix, startupColor,

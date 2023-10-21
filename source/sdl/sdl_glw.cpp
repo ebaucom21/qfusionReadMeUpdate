@@ -18,11 +18,34 @@
 
  */
 
+#include <QVariant>
+#include <QtPlatformHeaders/QGLXNativeContext>
+
+#include <SDL.h>
+#include <SDL_syswm.h>
+
 #include <SDL.h>
 #include <SDL_syswm.h>
 
 #include "../ref/local.h"
 #include "sdl_glw.h"
+
+extern SDL_Window *sdl_window;
+
+// TODO: Make Win32 SDL builds up-to-date
+#ifndef X_PROTOCOL
+#error This code is X11-specific
+#endif
+
+typedef Drawable ( *GlxGetCurrentDrawableFn )();
+typedef int ( *GlxMakeContextCurrentFn )( Display *, GLXDrawable, GLXDrawable, GLXContext );
+
+static GlxMakeContextCurrentFn qglXMakeContextCurrent;
+
+static Display *g_savedDisplay      = nullptr;
+static Window g_savedWindow         = None;
+static Drawable g_savedDrawable     = None;
+static Drawable g_savedReadDrawable = None;
 
 glwstate_t glw_state = {NULL, NULL};
 
@@ -237,4 +260,60 @@ void GLimp_AppActivate( bool active, bool minimize, bool destroy ) {
 
 void GLimp_SetSwapInterval( int swapInterval ) {
 	SDL_GL_SetSwapInterval( swapInterval );
+}
+
+void VID_WindowInitialized() {
+	SDL_SysWMinfo info;
+	SDL_GetVersion( &info.version );
+	if( !SDL_GetWindowWMInfo( sdl_window, &info ) ) {
+		Com_Error( ERR_FATAL, "Failed to get SDL_SysWMinfo" );
+	}
+
+	const auto getGlxAddress = []( const char *name ) -> void * {
+		auto result = SDL_GL_GetProcAddress( name );
+		if( !result ) {
+			Com_Error( ERR_FATAL, "Failed to retrieve %s address", name );
+		}
+		return result;
+	};
+
+	const auto getDrawable     = (GlxGetCurrentDrawableFn)getGlxAddress( "glXGetCurrentDrawable" );
+	const auto getReadDrawable = (GlxGetCurrentDrawableFn)getGlxAddress( "glXGetCurrentReadDrawable" );
+	qglXMakeContextCurrent     = (GlxMakeContextCurrentFn)getGlxAddress( "glXMakeContextCurrent" );
+
+	Drawable drawable = getDrawable();
+	if( drawable == None ) {
+		Com_Error( ERR_FATAL, "Failed to retrieve the current Drawable" );
+	}
+	Drawable readDrawable = getReadDrawable();
+	if( readDrawable == None ) {
+		Com_Error( ERR_FATAL, "Failed to retrieve the current read Drawable" );
+	}
+	if( drawable != info.info.x11.window ) {
+		Com_Error( ERR_FATAL, "The current drawable does not match the current window" );
+	}
+
+	// Save these values once for further use.
+	// Note that trying to save inside GLimp_BeginUIRenderingHacks() leads to saving wrong drawables
+	// in some cases (namely in case of using some of Qml graphical effects)
+
+	g_savedDisplay      = info.info.x11.display;
+	g_savedWindow       = info.info.x11.window;
+	g_savedDrawable     = drawable;
+	g_savedReadDrawable = readDrawable;
+}
+
+QVariant VID_GetMainContextHandle() {
+	auto context = (GLXContext)glw_state.sdl_glcontext;
+	assert( context && g_savedDisplay && g_savedWindow );
+	return QVariant::fromValue( QGLXNativeContext( context, g_savedDisplay, g_savedWindow ) );
+}
+
+bool GLimp_BeginUIRenderingHacks() {
+	return true;
+}
+
+bool GLimp_EndUIRenderingHacks() {
+	assert( g_savedDisplay && g_savedDrawable && g_savedReadDrawable && glw_state.sdl_glcontext );
+	return qglXMakeContextCurrent( g_savedDisplay, g_savedDrawable, g_savedReadDrawable, (GLXContext)glw_state.sdl_glcontext ) == True;
 }

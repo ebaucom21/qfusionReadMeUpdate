@@ -692,11 +692,6 @@ static void VID_ModeList_f( const CmdArgs & ) {
 	}
 }
 
-static void VID_NewWindow( int width, int height ) {
-	viddef.width  = width;
-	viddef.height = height;
-}
-
 static rserr_t VID_Sys_Init_( void *parentWindow, bool verbose ) {
 	return VID_Sys_Init( APPLICATION_UTF8, APP_SCREENSHOTS_PREFIX, APP_STARTUP_COLOR, nullptr, parentWindow, verbose );
 }
@@ -818,8 +813,10 @@ static rserr_t VID_ChangeMode( void ) {
 	}
 
 	if( err == rserr_ok ) {
-		// let the sound and input subsystems know about the new window
-		VID_NewWindow( w, h );
+		viddef.width  = w;
+		viddef.height = h;
+		// Let various subsystems know about the new window
+		VID_WindowInitialized();
 	}
 
 	return err;
