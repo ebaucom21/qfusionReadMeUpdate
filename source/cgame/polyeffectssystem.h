@@ -48,6 +48,8 @@ public:
     PolyEffectsSystem();
 	~PolyEffectsSystem();
 
+	void clear();
+
 	[[nodiscard]]
 	auto createCurvedBeamEffect( shader_s *material ) -> CurvedBeam *;
 	void updateCurvedBeamEffect( CurvedBeam *, const float *fromColor, const float *toColor,

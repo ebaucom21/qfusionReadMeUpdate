@@ -515,6 +515,11 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 	m_transientEffectsSystem.spawnPlasmaImpactEffect( origin, impactNormal );
 }
 
+void EffectsSystemFacade::clear() {
+	m_transientEffectsSystem.clear();
+	m_trackedEffectsSystem.clear();
+}
+
 void EffectsSystemFacade::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
 	m_transientEffectsSystem.simulateFrameAndSubmit( currTime, request );
 	m_trackedEffectsSystem.simulateFrameAndSubmit( currTime, request );

@@ -93,6 +93,8 @@ public:
 	SimulatedHullsSystem();
 	~SimulatedHullsSystem();
 
+	void clear();
+
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
 private:
 	static constexpr unsigned kNumVerticesForSubdivLevel[5] { 12, 42, 162, 642, 2562 };

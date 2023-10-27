@@ -32,9 +32,19 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 class DrawSceneRequest;
 struct model_s;
+struct cgs_skeleton_s;
 
 struct CurvedPolyTrailProps;
 struct StraightPolyTrailProps;
+
+struct TeleEffectParams {
+	const float *origin { nullptr };
+	const float *axis { nullptr };
+	model_s *model { nullptr };
+	cgs_skeleton_s *skel { nullptr };
+	const float *colorRgb { nullptr };
+	int animFrame { 0 };
+};
 
 class TrackedEffectsSystem {
 public:
@@ -68,18 +78,23 @@ public:
 	void touchPlayerTrail( int entNum, const float *origin, int64_t currTime );
 	void touchCorpseTrail( int entNum, const float *origin, int64_t currTime );
 
-	void spawnPlayerTeleInEffect( int entNum, const float *origin, model_s *model ) {
-		spawnPlayerTeleEffect( entNum, origin, model, 0 );
+	// It's logical to consider teleportation effects "transient", not "tracked",
+	// but we track these effects as they can be severely abused by gametype scripts.
+
+	void spawnPlayerTeleInEffect( int entNum, int64_t currTime, const TeleEffectParams &params ) {
+		spawnPlayerTeleEffect( entNum, currTime, params, 0 );
 	}
 
-	void spawnPlayerTeleOutEffect( int entNum, const float *origin, model_s *model ) {
-		spawnPlayerTeleEffect( entNum, origin, model, 1 );
+	void spawnPlayerTeleOutEffect( int entNum, int64_t currTime, const TeleEffectParams &params ) {
+		spawnPlayerTeleEffect( entNum, currTime, params, 1 );
 	}
 
 	void resetEntityEffects( int entNum );
 
 	void updateStraightLaserBeam( int ownerNum, const float *from, const float *to, int64_t currTime );
 	void updateCurvedLaserBeam( int ownerNum, std::span<const vec3_t> points, int64_t currTime );
+
+	void clear();
 
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 private:
@@ -133,10 +148,12 @@ private:
 	struct TeleEffect {
 		TeleEffect *prev { nullptr }, *next { nullptr };
 		int64_t spawnTime { 0 };
-		model_s *model;
+		model_s *model { nullptr };
 		unsigned lifetime { 0 };
 		float origin[3];
 		float color[3];
+		mat3_t axis;
+		int animFrame { 0 };
 		int clientNum { std::numeric_limits<int>::max() };
 		int inOutIndex { std::numeric_limits<int>::max() };
 	};
@@ -194,7 +211,7 @@ private:
 
 	void updateAttachedCurvedPolyTrail( CurvedPolyTrail *trail, const float *origin, int64_t currTime );
 
-	void spawnPlayerTeleEffect( int clientNum, const float *origin, model_s *model, int inOrOutIndex );
+	void spawnPlayerTeleEffect( int entNum, int64_t currTime, const TeleEffectParams &params, int inOrOutIndex );
 
 	static constexpr unsigned kClippedTrailsBin = ParticleSystem::kClippedTrailFlocksBin;
 	static constexpr unsigned kNonClippedTrailsBin = ParticleSystem::kNonClippedTrailFlocksBin;

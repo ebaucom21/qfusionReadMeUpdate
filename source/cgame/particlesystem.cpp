@@ -23,15 +23,18 @@ ParticleSystem::ParticleSystem() {
 }
 
 ParticleSystem::~ParticleSystem() {
-	for( FlocksBin &bin: m_bins ) {
-		ParticleFlock *nextFlock = nullptr;
-		for( ParticleFlock *flock = bin.head; flock; flock = nextFlock ) {
-			nextFlock = flock->next;
-			unlinkAndFree( flock );
-		}
-	}
+	clear();
 	for( CMShapeList *list : m_freeShapeLists ) {
 		CM_FreeShapeList( cl.cms, list );
+	}
+}
+
+void ParticleSystem::clear() {
+	for( FlocksBin &bin: m_bins ) {
+		for( ParticleFlock *flock = bin.head, *nextFlock; flock; flock = nextFlock ) { nextFlock = flock->next;
+			unlinkAndFree( flock );
+		}
+		assert( !bin.head );
 	}
 }
 

@@ -106,6 +106,28 @@ static ParticleColorsForTeamHolder laserImpactParticleColorsHolder {
 	}
 };
 
+static void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const vec3_t laser_dir,
+							   const vec4_t color, DrawSceneRequest *drawSceneRequest ) {
+	entity_t ent;
+	vec3_t ndir;
+	vec3_t angles;
+
+	memset( &ent, 0, sizeof( ent ) );
+	VectorCopy( pos, ent.origin );
+	VectorMA( ent.origin, 2, dir, ent.origin );
+	ent.renderfx = RF_FULLBRIGHT | RF_NOSHADOW;
+	ent.scale = 1.45f;
+	Vector4Set( ent.shaderRGBA, color[0] * 255, color[1] * 255, color[2] * 255, color[3] * 255 );
+	ent.model = cgs.media.modLasergunWallExplo;
+	VectorNegate( laser_dir, ndir );
+	VecToAngles( ndir, angles );
+	angles[2] = anglemod( -360.0f * cg.time * 0.001f );
+
+	AnglesToAxis( angles, ent.axis );
+
+	drawSceneRequest->addEntity( &ent );
+}
+
 static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 	if( !trace || trace->ent < 0 ) {
 		return;

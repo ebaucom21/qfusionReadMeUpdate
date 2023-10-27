@@ -886,7 +886,11 @@ void CG_Reset( void ) {
 
 	CG_SC_ResetFragsFeed( {} );
 
-	CG_ClearLocalEntities();
+	// TODO: calling effectsSystem.clear() should be sufficient (it is not in the current codebase state)
+	cg.effectsSystem.clear();
+	cg.particleSystem.clear();
+	cg.polyEffectsSystem.clear();
+	cg.simulatedHullsSystem.clear();
 
 	// start up announcer events queue from clean
 	CG_ClearAnnouncerEvents();
@@ -1063,8 +1067,6 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 
 	CG_ClearLightStyles();
 
-	CG_ClearLocalEntities();
-
 	// get configstrings
 	CG_RegisterConfigStrings();
 
@@ -1101,7 +1103,6 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 */
 void CG_Shutdown( void ) {
 	CG_SC_ResetFragsFeed( {} );
-	CG_FreeLocalEntities();
 	CG_DemocamShutdown();
 	CG_UnregisterCGameCommands();
 	CrosshairState::handleCGameShutdown();

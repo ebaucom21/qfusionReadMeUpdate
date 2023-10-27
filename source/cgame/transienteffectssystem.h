@@ -79,6 +79,8 @@ public:
 
 	void spawnDashEffect( const float *origin, const float *dir );
 
+	void clear();
+
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
 private:
 	struct EntityEffect {

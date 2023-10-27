@@ -1279,8 +1279,36 @@ void CG_AddPModel( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 
 	CG_AddHeadIcon( cent, drawSceneRequest );
 
-	// add teleporter sfx if needed
-	CG_PModel_SpawnTeleportEffect( cent );
+	if( cent->localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_IN] | cent->localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_OUT] ) {
+		vec3_t color;
+		if( ISVIEWERENTITY( cent->current.number ) ) {
+			VectorSet( color, 0.1f, 0.1f, 0.1f );
+		} else {
+			VectorSet( color, 0.5f, 0.5f, 0.5f );
+			if( cg_raceGhosts->integer && GS_RaceGametype() ) {
+				VectorScale( color, cg_raceGhostsAlpha->value, color );
+			}
+		}
+		TeleEffectParams params {
+			.axis      = cent->ent.axis,
+			.model     = cent->ent.model,
+			.skel      = cent->skel,
+			.colorRgb  = color,
+			.animFrame = cent->ent.frame,
+		};
+		for( int ev = LOCALEFFECT_EV_PLAYER_TELEPORT_IN; ev <= LOCALEFFECT_EV_PLAYER_TELEPORT_OUT; ++ev ) {
+			if( cent->localEffects[ev] ) {
+				cent->localEffects[ev] = 0;
+				if( ev == LOCALEFFECT_EV_PLAYER_TELEPORT_IN ) {
+					params.origin = cent->teleportedTo;
+					cg.effectsSystem.spawnPlayerTeleInEffect( cent->current.number, cg.time, params );
+				} else {
+					params.origin = cent->teleportedFrom;
+					cg.effectsSystem.spawnPlayerTeleOutEffect( cent->current.number, cg.time, params );
+				}
+			}
+		}
+	}
 
 	if( !cent->current.weapon ) {
 		return;

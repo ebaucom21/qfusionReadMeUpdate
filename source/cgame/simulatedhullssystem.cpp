@@ -325,25 +325,29 @@ SimulatedHullsSystem::SimulatedHullsSystem() {
 }
 
 SimulatedHullsSystem::~SimulatedHullsSystem() {
-	for( FireHull *hull = m_fireHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		unlinkAndFreeFireHull( hull );
-	}
-	for( FireClusterHull *hull = m_fireClusterHullsHead, *next = nullptr; hull; hull = next ) { next = hull->next;
-		unlinkAndFreeFireClusterHull( hull );
-	}
-	for( BlastHull *hull = m_blastHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		unlinkAndFreeBlastHull( hull );
-	}
-	for( SmokeHull *hull = m_smokeHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		unlinkAndFreeSmokeHull( hull );
-	}
-	for( WaveHull *hull = m_waveHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		unlinkAndFreeWaveHull( hull );
-	}
+	clear();
 	for( CMShapeList *shapeList: m_freeShapeLists ) {
 		CM_FreeShapeList( cl.cms, shapeList );
 	}
 	CM_FreeShapeList( cl.cms, m_tmpShapeList );
+}
+
+void SimulatedHullsSystem::clear() {
+	for( FireHull *hull = m_fireHullsHead, *nextHull; hull; hull = nextHull ) { nextHull = hull->next;
+		unlinkAndFreeFireHull( hull );
+	}
+	for( FireClusterHull *hull = m_fireClusterHullsHead, *next; hull; hull = next ) { next = hull->next;
+		unlinkAndFreeFireClusterHull( hull );
+	}
+	for( BlastHull *hull = m_blastHullsHead, *nextHull; hull; hull = nextHull ) { nextHull = hull->next;
+		unlinkAndFreeBlastHull( hull );
+	}
+	for( SmokeHull *hull = m_smokeHullsHead, *nextHull; hull; hull = nextHull ) { nextHull = hull->next;
+		unlinkAndFreeSmokeHull( hull );
+	}
+	for( WaveHull *hull = m_waveHullsHead, *nextHull; hull; hull = nextHull ) { nextHull = hull->next;
+		unlinkAndFreeWaveHull( hull );
+	}
 }
 
 void SimulatedHullsSystem::unlinkAndFreeSmokeHull( SmokeHull *hull ) {

@@ -31,31 +31,35 @@ PolyEffectsSystem::PolyEffectsSystem() {
 }
 
 PolyEffectsSystem::~PolyEffectsSystem() {
-	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead, *next = nullptr; beam; beam = next ) {
-		next = beam->next;
+	clear();
+	CM_FreeShapeList( cl.cms, m_tmpShapeList );
+}
+
+void PolyEffectsSystem::clear() {
+	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead, *next; beam; beam = next ) { next = beam->next;
 		destroyCurvedBeamEffect( beam );
 	}
-	for( StraightBeamEffect *beam = m_straightLaserBeamsHead, *next = nullptr; beam; beam = next ) {
-		next = beam->next;
+	assert( !m_curvedLaserBeamsHead );
+	for( StraightBeamEffect *beam = m_straightLaserBeamsHead, *next; beam; beam = next ) { next = beam->next;
 		destroyStraightBeamEffect( beam );
 	}
-	for( TransientBeamEffect *beam = m_transientBeamsHead, *next = nullptr; beam; beam = next ) {
-		next = beam->next;
+	assert( !m_straightLaserBeamsHead );
+	for( TransientBeamEffect *beam = m_transientBeamsHead, *next; beam; beam = next ) { next = beam->next;
 		destroyTransientBeamEffect( beam );
 	}
-	for( TracerEffect *tracer = m_tracerEffectsHead, *next = nullptr; tracer; tracer = next ) {
-		next = tracer->next;
+	assert( !m_transientBeamsHead );
+	for( TracerEffect *tracer = m_tracerEffectsHead, *next; tracer; tracer = next ) { next = tracer->next;
 		destroyTracerEffect( tracer );
 	}
-	for( ImpactRosetteEffect *rosette = m_impactRosetteEffectsHead, *next = nullptr; rosette; rosette = next ) {
-		next = rosette->next;
+	assert( !m_tracerEffectsHead );
+	for( ImpactRosetteEffect *rosette = m_impactRosetteEffectsHead, *next; rosette; rosette = next ) { next = rosette->next;
 		destroyImpactRosetteEffect( rosette );
 	}
-	for( RibbonEffect *ribbon = m_ribbonEffectsHead, *next = nullptr; ribbon; ribbon = next ) {
-		next = ribbon->next;
+	assert( !m_impactRosetteEffectsHead );
+	for( RibbonEffect *ribbon = m_ribbonEffectsHead, *next; ribbon; ribbon = next ) { next = ribbon->next;
 		destroyRibbonEffect( ribbon );
 	}
-	CM_FreeShapeList( cl.cms, m_tmpShapeList );
+	assert( !m_ribbonEffectsHead );
 }
 
 auto PolyEffectsSystem::createCurvedBeamEffect( shader_s *material ) -> CurvedBeam * {

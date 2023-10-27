@@ -158,14 +158,16 @@ public:
 	void spawnWorldLaserBeam( const float *from, const float *to, float width );
 	void spawnGameDebugBeam( const float *from, const float *to, const float *color, int parm );
 
-	void spawnPlayerTeleInEffect( int entNum, const float *origin, model_s *model ) {
-		m_trackedEffectsSystem.spawnPlayerTeleInEffect( entNum, origin, model );
+	void spawnPlayerTeleInEffect( int entNum, int64_t currTime, const TeleEffectParams &params ) {
+		m_trackedEffectsSystem.spawnPlayerTeleInEffect( entNum, currTime, params );
 	}
-	void spawnPlayerTeleOutEffect( int entNum, const float *origin, model_s *model ) {
-		m_trackedEffectsSystem.spawnPlayerTeleOutEffect( entNum, origin, model );
+	void spawnPlayerTeleOutEffect( int entNum, int64_t currTime, const TeleEffectParams &params ) {
+		m_trackedEffectsSystem.spawnPlayerTeleOutEffect( entNum, currTime, params );
 	}
 
 	void resetEntityEffects( int entNum ) { m_trackedEffectsSystem.resetEntityEffects( entNum ); }
+
+	void clear();
 
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 private:

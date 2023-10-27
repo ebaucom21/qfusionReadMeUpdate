@@ -32,18 +32,26 @@ static constexpr unsigned kCachedSmokeBulgeMaskSize    = 642;
 static constexpr unsigned kNumCachedSmokeBulgeMasks    = 8;
 
 TransientEffectsSystem::~TransientEffectsSystem() {
-	for( EntityEffect *effect = m_entityEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
+	clear();
+}
+
+void TransientEffectsSystem::clear() {
+	for( EntityEffect *effect = m_entityEffectsHead, *next; effect; effect = next ) { next = effect->next;
 		unlinkAndFreeEntityEffect( effect );
 	}
-	for( PolyEffect *effect = m_polyEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
+	assert( !m_entityEffectsHead );
+	for( PolyEffect *effect = m_polyEffectsHead, *next; effect; effect = next ) { next = effect->next;
 		unlinkAndFreePolyEffect( effect );
 	}
-	for( LightEffect *effect = m_lightEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
+	assert( !m_polyEffectsHead );
+	for( LightEffect *effect = m_lightEffectsHead, *next; effect; effect = next ) { next = effect->next;
 		unlinkAndFreeLightEffect( effect );
 	}
-	for( DelayedEffect *effect = m_delayedEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
+	assert( !m_lightEffectsHead );
+	for( DelayedEffect *effect = m_delayedEffectsHead, *next; effect; effect = next ) { next = effect->next;
 		unlinkAndFreeDelayedEffect( effect );
 	}
+	assert( !m_delayedEffectsHead );
 }
 
 #define asByteColor( r, g, b, a ) {  \

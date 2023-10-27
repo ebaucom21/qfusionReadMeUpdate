@@ -43,23 +43,29 @@ struct StraightPolyTrailProps {
 };
 
 TrackedEffectsSystem::~TrackedEffectsSystem() {
-	// TODO: unlinkAndFree() does some unnecessary extra work that slows the dtor down
+	clear();
+}
+
+void TrackedEffectsSystem::clear() {
 	unlinkAndFreeItemsInList( m_attachedParticleTrailsHead );
 	unlinkAndFreeItemsInList( m_lingeringParticleTrailsHead );
+	assert( !m_attachedParticleTrailsHead && !m_lingeringParticleTrailsHead );
 
 	unlinkAndFreeItemsInList( m_attachedStraightPolyTrailsHead );
 	unlinkAndFreeItemsInList( m_lingeringStraightPolyTrailsHead );
+	assert( !m_attachedStraightPolyTrailsHead && !m_lingeringStraightPolyTrailsHead );
 
 	unlinkAndFreeItemsInList( m_attachedCurvedPolyTrailsHead );
 	unlinkAndFreeItemsInList( m_lingeringCurvedPolyTrailsHead );
+	assert( !m_attachedCurvedPolyTrailsHead && !m_lingeringCurvedPolyTrailsHead );
 
 	unlinkAndFreeItemsInList( m_teleEffectsHead );
+	assert( !m_teleEffectsHead );
 }
 
 template <typename Effect>
 void TrackedEffectsSystem::unlinkAndFreeItemsInList( Effect *head ) {
-	for( Effect *effect = head, *next = nullptr; effect; effect = next ) {
-		next = effect->next;
+	for( Effect *effect = head, *next; effect; effect = next ) { next = effect->next;
 		unlinkAndFree( effect );
 	}
 }
@@ -109,32 +115,43 @@ void TrackedEffectsSystem::unlinkAndFree( TeleEffect *teleEffect ) {
 	assert( teleEffect->inOutIndex == 0 || teleEffect->inOutIndex == 1 );
 
 	wsw::unlink( teleEffect, &m_teleEffectsHead );
+	assert( m_attachedClientEffects[teleEffect->clientNum].teleEffects[teleEffect->inOutIndex] == teleEffect );
 	m_attachedClientEffects[teleEffect->clientNum].teleEffects[teleEffect->inOutIndex] = nullptr;
-	// TODO: Release the model!!!!
 	teleEffect->~TeleEffect();
-	// TODO: Release bone poses
 	m_teleEffectsAllocator.free( teleEffect );
 }
 
-void TrackedEffectsSystem::spawnPlayerTeleEffect( int clientNum, const float *origin, model_s *model, int inOrOutIndex ) {
+void TrackedEffectsSystem::spawnPlayerTeleEffect( int entNum, int64_t currTime, const TeleEffectParams &params, int inOrOutIndex ) {
+	const int clientNum = entNum - 1;
 	assert( (unsigned)clientNum < (unsigned)MAX_CLIENTS );
 	assert( inOrOutIndex == 0 || inOrOutIndex == 1 );
 
-	TeleEffect **ppEffect = &m_attachedClientEffects[clientNum].teleEffects[inOrOutIndex];
-	if( !*ppEffect ) [[likely]] {
+	void *mem;
+	// Note: this path seemingly requires a custom gametype script code for testing
+	// (usually resetEntityEffects() kicks in just before teleportation processing).
+	if( TeleEffect *existing = m_attachedClientEffects[clientNum].teleEffects[inOrOutIndex] ) {
+		wsw::unlink( existing, &m_teleEffectsHead );
+		existing->~TeleEffect();
+		mem = existing;
+	} else {
 		assert( !m_teleEffectsAllocator.isFull() );
-		*ppEffect = new( m_teleEffectsAllocator.allocOrNull() )TeleEffect;
-		wsw::link( *ppEffect, &m_teleEffectsHead );
+		mem = m_teleEffectsAllocator.allocOrNull();
 	}
 
-	TeleEffect *const __restrict effect = *ppEffect;
-	VectorCopy( origin, effect->origin );
-	effect->spawnTime = m_lastTime;
-	effect->lifetime = 3000u;
-	effect->clientNum = clientNum;
+	auto *const effect = new( mem )TeleEffect;
+	effect->spawnTime  = currTime;
+	effect->animFrame  = params.animFrame;
+	effect->lifetime   = 1000;
+	effect->clientNum  = clientNum;
 	effect->inOutIndex = inOrOutIndex;
-	// TODO: Alloc bones, try reusing bones
-	effect->model = model;
+	effect->model      = params.model;
+
+	VectorCopy( params.origin, effect->origin );
+	VectorCopy( params.colorRgb, effect->color );
+	Matrix3_Copy( params.axis, effect->axis );
+
+	wsw::link( effect, &m_teleEffectsHead );
+	m_attachedClientEffects[clientNum].teleEffects[inOrOutIndex] = effect;
 }
 
 auto TrackedEffectsSystem::allocParticleTrail( int entNum, unsigned trailIndex,
@@ -1235,19 +1252,41 @@ void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		}
 	}
 
-	// Simulate
 	for( TeleEffect *effect = m_teleEffectsHead, *nextEffect = nullptr; effect; effect = nextEffect ) {
 		nextEffect = effect->next;
-		if( effect->spawnTime + effect->lifetime >= currTime ) [[unlikely]] {
+		if( effect->spawnTime + effect->lifetime <= currTime ) [[unlikely]] {
 			unlinkAndFree( effect );
 			continue;
 		}
 
-		const float frac = (float)( currTime - effect->spawnTime ) * Q_Rcp((float)effect->lifetime );
-		// TODO: Simulate
-		(void)frac;
+		const float lifetimeFrac  = (float)( currTime - effect->spawnTime ) * Q_Rcp( (float)effect->lifetime );
+		assert( lifetimeFrac >= 0.0f && lifetimeFrac <= 1.0f );
+		const float colorFadeFrac = 1.0f - lifetimeFrac;
 
-		// TODO: Submit
+		entity_t entity;
+		memset( &entity, 0, sizeof( entity ) );
+
+		entity.rtype        = RT_MODEL;
+		entity.renderfx     = RF_NOSHADOW;
+		entity.model        = effect->model;
+		entity.customShader = cgs.media.shaderTeleportShellGfx;
+		entity.shaderTime   = cg.time;
+		entity.scale        = 1.0f;
+		entity.frame        = effect->animFrame;
+		entity.oldframe     = effect->animFrame;
+		entity.backlerp     = 1.0f;
+
+		entity.shaderRGBA[0] = (uint8_t)( 255.0f * effect->color[2] * colorFadeFrac );
+		entity.shaderRGBA[1] = (uint8_t)( 255.0f * effect->color[1] * colorFadeFrac );
+		entity.shaderRGBA[2] = (uint8_t)( 255.0f * effect->color[2] * colorFadeFrac );
+		entity.shaderRGBA[3] = 255;
+
+		Matrix3_Copy( effect->axis, entity.axis );
+		VectorCopy( effect->origin, entity.origin );
+		VectorCopy( effect->origin, entity.origin2 );
+
+		CG_SetBoneposesForTemporaryEntity( &entity );
+		drawSceneRequest->addEntity( &entity );
 	}
 
 	PolyEffectsSystem *const polyEffectsSystem = &cg.polyEffectsSystem;

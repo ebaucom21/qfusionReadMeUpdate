@@ -55,7 +55,7 @@ enum {
 	, LOCALEFFECT_LASERBEAM
 	, LOCALEFFECT_LASERBEAM_SMOKE_TRAIL
 	, LOCALEFFECT_EV_WEAPONBEAM
-	, MAX_LOCALEFFECTS = 64
+	, MAX_LOCALEFFECTS = 5
 };
 
 typedef struct {
@@ -704,16 +704,7 @@ bool CG_ChaseStep( int step );
 bool CG_SwitchChaseCamMode( void );
 void CG_ClearChaseCam();
 
-//
-// cg_lents.c
-//
-void CG_ClearLocalEntities();
-void CG_AddLocalEntities( DrawSceneRequest *request );
-void CG_FreeLocalEntities();
-
 inline void CG_SmallPileOfGibs( const vec3_t origin, int damage, const vec3_t initialVelocity, int team ) {}
-void CG_PModel_SpawnTeleportEffect( centity_t *cent );
-void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const vec3_t laser_dir, const vec4_t color, DrawSceneRequest *drawSceneRequest );
 
 //
 // cg_decals.c

@@ -186,6 +186,8 @@ public:
 	ParticleSystem();
 	~ParticleSystem();
 
+	void clear();
+
 	// Use this non-templated interface to reduce call site code bloat
 
 	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams );
