@@ -11,9 +11,6 @@ using wsw::operator""_asView;
 // TODO: This should be shared...
 static const wsw::StringView kPlaceholder( "-"_asView );
 
-wsw::StringView CG_PlayerName( unsigned );
-wsw::StringView CG_PlayerClan( unsigned );
-
 namespace wsw::ui {
 
 void Scoreboard::clearSchema() {

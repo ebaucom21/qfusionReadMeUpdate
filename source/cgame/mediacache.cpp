@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/snd_public.h"
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstaticstring.h"
+#include "../qcommon/wswfs.h"
 #include "../client/client.h"
 #include "mediacache.h"
 
@@ -206,4 +207,124 @@ void CG_RegisterFonts( void ) {
 		cgs.fontSystemBigSize = ceilf( DEFAULT_SYSTEM_FONT_BIG_SIZE * scale );
 		cgs.fontSystemBig = SCR_RegisterFont( cgs.fontSystemFamily, QFONT_STYLE_NONE, cgs.fontSystemBigSize );
 	}
+}
+
+class CrosshairMaterialCache {
+protected:
+	const wsw::StringView m_pathPrefix;
+
+	mutable wsw::StringSpanStorage<unsigned, unsigned> m_knownImageFiles;
+	struct CacheEntry {
+		shader_s *material { nullptr };
+		unsigned cachedRequestedSize { 0 };
+		std::pair<unsigned, unsigned> cachedActualSize { 0, 0 };
+	};
+	mutable wsw::StaticVector<CacheEntry, 16> m_cacheEntries;
+public:
+	explicit CrosshairMaterialCache( const wsw::StringView &pathPrefix ) noexcept : m_pathPrefix( pathPrefix ) {}
+
+	[[nodiscard]]
+	auto getMaterialForNameAndSize( const wsw::StringView &name, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
+		CacheEntry *foundEntry = nullptr;
+		// TODO: Isn't this design fragile?
+		assert( m_cacheEntries.size() == m_knownImageFiles.size() );
+		for( unsigned i = 0; i < m_cacheEntries.size(); ++i ) {
+			if( m_knownImageFiles[i].equalsIgnoreCase( name ) ) {
+				foundEntry = std::addressof( m_cacheEntries[i] );
+				break;
+			}
+		}
+		if( foundEntry ) {
+			if( foundEntry->cachedRequestedSize != size ) {
+				wsw::StaticString<256> filePath;
+				makeCrosshairFilePath( &filePath, m_pathPrefix, name );
+				ImageOptions options {
+					.desiredSize         = std::make_pair( size, size ),
+					.borderWidth         = 1,
+					.fitSizeForCrispness = true,
+					.useOutlineEffect    = true,
+				};
+				R_UpdateExplicitlyManaged2DMaterialImage( foundEntry->material, filePath.data(), options );
+				foundEntry->cachedRequestedSize = size;
+				if( foundEntry->material ) {
+					foundEntry->cachedActualSize = R_GetShaderDimensions( foundEntry->material ).value();
+				}
+			}
+			if( foundEntry->material ) {
+				return std::make_tuple( foundEntry->material, foundEntry->cachedActualSize.first, foundEntry->cachedActualSize.second );
+			}
+		}
+		return std::nullopt;
+	}
+
+	[[nodiscard]]
+	auto getFileSpans() const -> const wsw::StringSpanStorage<unsigned, unsigned> & {
+		if( m_knownImageFiles.empty() ) {
+			wsw::fs::SearchResultHolder searchResultHolder;
+			const wsw::StringView extension( ".svg" );
+			if( const auto maybeSearchResult = searchResultHolder.findDirFiles( m_pathPrefix, extension ) ) {
+				m_knownImageFiles.reserveSpans( m_cacheEntries.capacity() );
+				for( const wsw::StringView &fileName: *maybeSearchResult ) {
+					if( m_knownImageFiles.size() > m_cacheEntries.capacity() ) {
+						cgWarning() << "Too many crosshair image files in" << m_pathPrefix;
+						break;
+					}
+					if( fileName.endsWith( extension ) ) {
+						m_knownImageFiles.add( fileName.dropRight( extension.size() ) );
+					} else {
+						m_knownImageFiles.add( fileName );
+					}
+				}
+			}
+			if( m_knownImageFiles.empty() ) {
+				cgWarning() << "Failed to find crosshair files in" << m_pathPrefix;
+			}
+		}
+		return m_knownImageFiles;
+	}
+
+	void initMaterials() {
+		assert( m_cacheEntries.empty() );
+		for( unsigned i = 0, maxEntries = getFileSpans().size(); i < maxEntries; ++i ) {
+			m_cacheEntries.emplace_back( CacheEntry {
+				.material = R_CreateExplicitlyManaged2DMaterial()
+			});
+		}
+	}
+
+	void destroyMaterials() {
+		for( CacheEntry &entry: m_cacheEntries ) {
+			R_ReleaseExplicitlyManaged2DMaterial( entry.material );
+		}
+		m_cacheEntries.clear();
+	}
+};
+
+static CrosshairMaterialCache g_regularCrosshairsMaterialCache( kRegularCrosshairsDirName );
+static CrosshairMaterialCache g_strongCrosshairsMaterialCache( kStrongCrosshairsDirName );
+
+auto getRegularCrosshairFiles() -> const wsw::StringSpanStorage<unsigned, unsigned> & {
+	return g_regularCrosshairsMaterialCache.getFileSpans();
+}
+
+auto getStrongCrosshairFiles() -> const wsw::StringSpanStorage<unsigned, unsigned> & {
+	return g_strongCrosshairsMaterialCache.getFileSpans();
+}
+
+auto getRegularCrosshairMaterial( const wsw::StringView &name, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
+	return g_regularCrosshairsMaterialCache.getMaterialForNameAndSize( name, size );
+}
+
+auto getStrongCrosshairMaterial( const wsw::StringView &name, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
+	return g_strongCrosshairsMaterialCache.getMaterialForNameAndSize( name, size );
+}
+
+void CG_InitCrosshairs() {
+	g_regularCrosshairsMaterialCache.initMaterials();
+	g_strongCrosshairsMaterialCache.initMaterials();
+}
+
+void CG_ShutdownCrosshairs() {
+	g_regularCrosshairsMaterialCache.destroyMaterials();
+	g_strongCrosshairsMaterialCache.destroyMaterials();
 }

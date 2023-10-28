@@ -7,6 +7,7 @@
 
 #include "../qcommon/wswexceptions.h"
 #include "../qcommon/outputmessages.h"
+#include "cgameimports.h"
 
 namespace wsw { class StringView; }
 

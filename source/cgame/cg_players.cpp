@@ -233,13 +233,3 @@ void CG_ResetClientInfos( void ) {
 		}
 	}
 }
-
-wsw::StringView CG_PlayerName( unsigned playerNum ) {
-	assert( playerNum < (unsigned)MAX_CLIENTS );
-	return wsw::StringView( cgs.clientInfo[playerNum].name );
-}
-
-wsw::StringView CG_PlayerClan( unsigned playerNum ) {
-	assert( playerNum < (unsigned)MAX_CLIENTS );
-	return wsw::StringView( cgs.clientInfo[playerNum].clan );
-}

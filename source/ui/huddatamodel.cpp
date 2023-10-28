@@ -4,31 +4,10 @@
 #include "../qcommon/configvars.h"
 #include "../gameshared/gs_public.h"
 #include "../client/client.h"
-#include "../cgame/crosshairstate.h"
+#include "../cgame/mediacache.h"
 
 #include <QColor>
 #include <QQmlEngine>
-
-// Hacks
-int CG_RealClientTeam();
-bool CG_HasTwoTeams();
-int CG_ActiveWeapon();
-bool CG_HasWeapon( int weapon );
-int CG_Health();
-int CG_Armor();
-int CG_TeamAlphaDisplayedColor();
-int CG_TeamBetaDisplayedColor();
-int CG_TeamToForcedTeam( int team );
-wsw::ui::ObjectiveIndicatorState CG_HudIndicatorState( int );
-std::optional<wsw::StringView> CG_HudIndicatorIconPath( int );
-std::optional<wsw::StringView> CG_HudIndicatorStatusString( int );
-auto CG_GetMatchClockTime() -> std::pair<int, int>;
-auto CG_WeaponAmmo( int weapon ) -> std::pair<int, int>;
-std::optional<unsigned> CG_ActiveChasePov();
-bool CG_IsPovAlive();
-wsw::StringView CG_PlayerName( unsigned playerNum );
-wsw::StringView CG_PlayerClan( unsigned playerClan );
-wsw::StringView CG_LocationName( unsigned location );
 
 using wsw::operator""_asView;
 
@@ -129,10 +108,10 @@ public:
 	[[nodiscard]]
 	auto getAvailableRegularCrosshairs() const -> QStringList {
 		if( m_availableRegularCrosshairs.empty() ) {
-			const wsw::StringSpanStorage<unsigned, unsigned> &crosshairs = CrosshairState::getRegularCrosshairs();
-			m_availableRegularCrosshairs.reserve( crosshairs.size() );
+			const wsw::StringSpanStorage<unsigned, unsigned> &crosshairs = getRegularCrosshairFiles();
+			m_availableRegularCrosshairs.reserve( (int)crosshairs.size() );
 			for( const wsw::StringView &name: crosshairs ) {
-				m_availableRegularCrosshairs.append( QString::fromLatin1( name.data(), name.size() ) );
+				m_availableRegularCrosshairs.append( QString::fromLatin1( name.data(), (int)name.size() ) );
 			}
 		}
 		return m_availableRegularCrosshairs;
@@ -141,10 +120,10 @@ public:
 	[[nodiscard]]
 	auto getAvailableStrongCrosshairs() const -> QStringList {
 		if( m_availableStrongCrosshairs.empty() ) {
-			const wsw::StringSpanStorage<unsigned, unsigned> &crosshairs = CrosshairState::getStrongCrosshairs();
-			m_availableStrongCrosshairs.reserve( crosshairs.size() );
+			const wsw::StringSpanStorage<unsigned, unsigned> &crosshairs = getStrongCrosshairFiles();
+			m_availableStrongCrosshairs.reserve( (int)crosshairs.size() );
 			for( const wsw::StringView &name: crosshairs ) {
-				m_availableStrongCrosshairs.append( QString::fromLatin1( name.data(), name.size() ) );
+				m_availableStrongCrosshairs.append( QString::fromLatin1( name.data(), (int)name.size() ) );
 			}
 		}
 		return m_availableStrongCrosshairs;
@@ -734,18 +713,18 @@ auto HudDataModel::getAvailableStrongCrosshairs() const -> QStringList {
 }
 
 auto HudDataModel::getRegularCrosshairFilePath( const QByteArray &fileName ) const -> QByteArray {
-	return getCrosshairFilePath( CrosshairState::kRegularCrosshairsDirName, fileName );
+	return getCrosshairFilePath( kRegularCrosshairsDirName, fileName );
 }
 
 auto HudDataModel::getStrongCrosshairFilePath( const QByteArray &fileName ) const -> QByteArray {
-	return getCrosshairFilePath( CrosshairState::kStrongCrosshairsDirName, fileName );
+	return getCrosshairFilePath( kStrongCrosshairsDirName, fileName );
 }
 
 auto HudDataModel::getCrosshairFilePath( const wsw::StringView &prefix, const QByteArray &fileName ) -> QByteArray {
 	QByteArray result;
 	if( !fileName.isEmpty() ) {
 		const wsw::StringView fileNameView( fileName.data(), (size_t)fileName.size() );
-		CrosshairState::makeFilePath<QByteArray, QLatin1String>( &result, prefix, fileNameView );
+		makeCrosshairFilePath<QByteArray, QLatin1String>( &result, prefix, fileNameView );
 	}
 	return result;
 }
@@ -1043,7 +1022,8 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 
 	for( int i = 0; i < 3; ++i ) {
 		const auto oldIndicatorState( m_indicatorStates[i] );
-		if( oldIndicatorState != ( m_indicatorStates[i] = CG_HudIndicatorState( i ) ) ) {
+		m_indicatorStates[i] = wsw::ui::ObjectiveIndicatorState( CG_HudIndicatorState( i ) );
+		if( oldIndicatorState != m_indicatorStates[i] ) {
 			if( i == 0 ) {
 				Q_EMIT indicator1StateChanged( getIndicator1State() );
 			} else if( i == 1 ) {

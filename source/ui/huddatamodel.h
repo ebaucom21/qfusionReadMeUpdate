@@ -10,6 +10,7 @@
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/wswstaticstring.h"
 #include "hudlayoutmodel.h"
+#include "cgameimports.h"
 
 struct ReplicatedScoreboardData;
 class StringConfigVar;
@@ -211,25 +212,31 @@ struct ObjectiveIndicatorState {
 	Q_GADGET
 
 public:
-	QColor color;
-	int anim { 0 };
-	int progress { 0 };
-	int iconNum { 0 };
-	int stringNum { 0 };
-	bool enabled { false };
+	BasicObjectiveIndicatorState m_underlying;
 
-	Q_PROPERTY( QColor color MEMBER color );
-	Q_PROPERTY( int anim MEMBER anim );
-	Q_PROPERTY( int progress MEMBER progress );
-	Q_PROPERTY( int iconNum MEMBER iconNum );
-	Q_PROPERTY( int stringNum MEMBER stringNum );
-	Q_PROPERTY( bool enabled MEMBER enabled );
+	ObjectiveIndicatorState() = default;
+	explicit ObjectiveIndicatorState( const BasicObjectiveIndicatorState &underlying )  : m_underlying( underlying ) {}
+
+	Q_PROPERTY( QColor color READ getColor );
+	Q_PROPERTY( int anim READ getAnim );
+	Q_PROPERTY( int progress READ getProgress );
+	Q_PROPERTY( int iconNum READ getIconNum );
+	Q_PROPERTY( int stringNum READ getStringNum );
+	Q_PROPERTY( bool enabled READ getEnabled );
 
 	[[nodiscard]]
-	bool operator!=( const ObjectiveIndicatorState &that ) const {
-		return color == that.color && anim == that.anim && progress == that.progress &&
-			iconNum == that.iconNum && stringNum == that.stringNum && enabled == that.enabled;
+	auto getColor() const -> QColor {
+		return QColor::fromRgb( m_underlying.color[0], m_underlying.color[1], m_underlying.color[2] );
 	}
+
+	[[nodiscard]] auto getAnim() const -> int { return m_underlying.anim; }
+	[[nodiscard]] auto getProgress() const -> int { return m_underlying.progress; }
+	[[nodiscard]] auto getIconNum() const -> int { return m_underlying.iconNum; }
+	[[nodiscard]] auto getStringNum() const -> int { return m_underlying.stringNum; }
+	[[nodiscard]] bool getEnabled() const { return m_underlying.enabled; }
+
+	[[nodiscard]]
+	bool operator!=( const ObjectiveIndicatorState &that ) const { return m_underlying != that.m_underlying; }
 };
 
 class HudDataModel : public QObject {

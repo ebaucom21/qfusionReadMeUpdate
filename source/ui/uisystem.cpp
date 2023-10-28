@@ -5,7 +5,6 @@
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/qcommon.h"
 #include "../client/client.h"
-#include "../cgame/crosshairstate.h"
 #include "actionrequestmodel.h"
 #include "callvotesmodel.h"
 #include "chatmodel.h"
@@ -73,15 +72,7 @@ QVariant VID_GetMainContextHandle();
 bool GLimp_BeginUIRenderingHacks();
 bool GLimp_EndUIRenderingHacks();
 
-// Hacks
-int CG_RealClientTeam();
-bool CG_HasTwoTeams();
-bool CG_IsOperator();
-bool CG_IsChallenger();
-bool CG_CanBeReady();
-bool CG_IsReady();
-int CG_MyRealTeam();
-std::optional<unsigned> CG_ActiveChasePov();
+
 
 static FloatConfigVar v_mouseSensitivity { "ui_mouseSensitivity"_asView, {
 	.byDefault = 1.0f, .minInclusive = 0.1f, .maxInclusive = 5.0f, .flags = CVAR_ARCHIVE, }

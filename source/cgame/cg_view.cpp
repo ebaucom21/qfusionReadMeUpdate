@@ -2,6 +2,7 @@
 Copyright (C) 1997-2001 Id Software, Inc.
 Copyright (C) 2002-2003 Victor Luchits
 Copyright (C) 2007 Daniel Lindenfelser
+Copyright (C) 2009 German Garcia Fernandez ("Jal")
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -23,8 +24,253 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../client/client.h"
 #include "../ui/uisystem.h"
+#include "../qcommon/qcommon.h"
+#include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
+#include "../qcommon/wswfs.h"
+
+using wsw::operator""_asView;
+
+extern cvar_t *cg_showHUD;
+extern cvar_t *cg_showTeamInfo;
+extern cvar_t *cg_showTimer;
+extern cvar_t *cg_showPlayerNames;
+extern cvar_t *cg_showPlayerNames_alpha;
+extern cvar_t *cg_showPlayerNames_barWidth;
+extern cvar_t *cg_showPlayerNames_zfar;
+extern cvar_t *cg_showPointedPlayer;
+
+extern cvar_t *cg_viewSize;
+extern cvar_t *cg_showFPS;
+extern cvar_t *cg_draw2D;
+
+extern cvar_t *cg_showZoomEffect;
+
+extern cvar_t *cg_showViewBlends;
+
+static vrect_t scr_vrect;
+
+static int64_t demo_initial_timestamp;
+static int64_t demo_time;
+
+static bool CamIsFree;
+
+#define CG_DemoCam_UpdateDemoTime() ( demo_time = cg.time - demo_initial_timestamp )
+
+typedef struct cg_democam_s
+{
+	int type;
+	int64_t timeStamp;
+	vec3_t origin;
+	vec3_t angles;
+	int fov;
+	float speed;
+	struct cg_democam_s *next;
+} cg_democam_t;
+
+cg_democam_t *currentcam;
+
+static vec3_t cam_origin, cam_angles, cam_velocity;
+static float cam_fov = 90;
+static int cam_viewtype;
+static int cam_POVent;
+static bool cam_3dPerson;
+
+static short freecam_delta_angles[3];
 
 cg_chasecam_t chaseCam;
+
+static bool postmatchsilence_set = false, demostream = false, background = false;
+static unsigned lastSecond = 0;
+
+static int oldState = -1;
+static int oldAlphaScore, oldBetaScore;
+static bool scoresSet = false;
+
+int CG_DemoCam_GetViewType( void ) {
+	return cam_viewtype;
+}
+
+bool CG_DemoCam_GetThirdPerson( void ) {
+	if( !currentcam ) {
+		return ( chaseCam.mode == CAM_THIRDPERSON );
+	}
+	return ( cam_viewtype == VIEWDEF_PLAYERVIEW && cam_3dPerson );
+}
+
+void CG_DemoCam_GetViewDef( cg_viewdef_t *view ) {
+	view->POVent = cam_POVent;
+	view->thirdperson = cam_3dPerson;
+	view->playerPrediction = false;
+	view->drawWeapon = false;
+	view->draw2D = false;
+}
+
+float CG_DemoCam_GetOrientation( vec3_t origin, vec3_t angles, vec3_t velocity ) {
+	VectorCopy( cam_angles, angles );
+	VectorCopy( cam_origin, origin );
+	VectorCopy( cam_velocity, velocity );
+
+	if( !currentcam || !currentcam->fov ) {
+		return bound( MIN_FOV, cg_fov->value, MAX_FOV );
+	}
+
+	return cam_fov;
+}
+
+// TODO: Should it belong to the same place where prediction gets executed?
+int CG_DemoCam_FreeFly( void ) {
+	usercmd_t cmd;
+	const float SPEED = 500;
+
+	if( cgs.demoPlaying && CamIsFree ) {
+		vec3_t wishvel, wishdir, forward, right, up, moveangles;
+		float fmove, smove, upmove, wishspeed, maxspeed;
+		int i;
+
+		maxspeed = 250;
+
+		// run frame
+		NET_GetUserCmd( NET_GetCurrentUserCmdNum() - 1, &cmd );
+		cmd.msec = cg.realFrameTime;
+
+		for( i = 0; i < 3; i++ )
+			moveangles[i] = SHORT2ANGLE( cmd.angles[i] ) + SHORT2ANGLE( freecam_delta_angles[i] );
+
+		AngleVectors( moveangles, forward, right, up );
+		VectorCopy( moveangles, cam_angles );
+
+		fmove = cmd.forwardmove * SPEED / 127.0f;
+		smove = cmd.sidemove * SPEED / 127.0f;
+		upmove = cmd.upmove * SPEED / 127.0f;
+		if( cmd.buttons & BUTTON_SPECIAL ) {
+			maxspeed *= 2;
+		}
+
+		for( i = 0; i < 3; i++ )
+			wishvel[i] = forward[i] * fmove + right[i] * smove;
+		wishvel[2] += upmove;
+
+		wishspeed = VectorNormalize2( wishvel, wishdir );
+		if( wishspeed > maxspeed ) {
+			wishspeed = maxspeed / wishspeed;
+			VectorScale( wishvel, wishspeed, wishvel );
+			wishspeed = maxspeed;
+		}
+
+		VectorMA( cam_origin, (float)cg.realFrameTime * 0.001f, wishvel, cam_origin );
+
+		cam_POVent = 0;
+		cam_3dPerson = false;
+		return VIEWDEF_CAMERA;
+	}
+
+	return VIEWDEF_PLAYERVIEW;
+}
+
+static void CG_Democam_SetCameraPositionFromView( void ) {
+	if( cg.view.type == VIEWDEF_PLAYERVIEW ) {
+		VectorCopy( cg.view.origin, cam_origin );
+		VectorCopy( cg.view.angles, cam_angles );
+		VectorCopy( cg.view.velocity, cam_velocity );
+		cam_fov = cg.view.refdef.fov_x;
+	}
+
+	if( !CamIsFree ) {
+		int i;
+		usercmd_t cmd;
+
+		NET_GetUserCmd( NET_GetCurrentUserCmdNum() - 1, &cmd );
+
+		for( i = 0; i < 3; i++ )
+			freecam_delta_angles[i] = ANGLE2SHORT( cam_angles[i] ) - cmd.angles[i];
+	}
+}
+
+static int CG_Democam_CalcView( void ) {
+	VectorClear( cam_velocity );
+	return VIEWDEF_PLAYERVIEW;
+}
+
+bool CG_DemoCam_Update( void ) {
+	if( !cgs.demoPlaying ) {
+		return false;
+	}
+
+	if( !demo_initial_timestamp && cg.frame.valid ) {
+		demo_initial_timestamp = cg.time;
+	}
+
+	CG_DemoCam_UpdateDemoTime();
+
+	cam_3dPerson = false;
+	cam_viewtype = VIEWDEF_PLAYERVIEW;
+	cam_POVent = cg.frame.playerState.POVnum;
+
+	if( CamIsFree ) {
+		cam_viewtype = CG_DemoCam_FreeFly();
+	} else if( currentcam ) {
+		cam_viewtype = CG_Democam_CalcView();
+	}
+
+	CG_Democam_SetCameraPositionFromView();
+
+	return true;
+}
+
+bool CG_DemoCam_IsFree( void ) {
+	return CamIsFree;
+}
+
+static void CG_DemoFreeFly_Cmd_f( const CmdArgs &cmdArgs ) {
+	if( Cmd_Argc() > 1 ) {
+		if( !Q_stricmp( Cmd_Argv( 1 ), "on" ) ) {
+			CamIsFree = true;
+		} else if( !Q_stricmp( Cmd_Argv( 1 ), "off" ) ) {
+			CamIsFree = false;
+		}
+	} else {
+		CamIsFree = !CamIsFree;
+	}
+
+	VectorClear( cam_velocity );
+}
+
+static void CG_CamSwitch_Cmd_f( const CmdArgs & ) {
+
+}
+
+void CG_DemocamInit( void ) {
+	demo_time = 0;
+	demo_initial_timestamp = 0;
+
+	if( !cgs.demoPlaying ) {
+		return;
+	}
+
+	if( !*cgs.demoName ) {
+		CG_Error( "CG_DemocamInit: no demo name string\n" );
+	}
+
+	// add console commands
+	CL_Cmd_Register( "demoFreeFly"_asView, CG_DemoFreeFly_Cmd_f );
+	CL_Cmd_Register( "camswitch"_asView, CG_CamSwitch_Cmd_f );
+}
+
+void CG_DemocamShutdown( void ) {
+	if( !cgs.demoPlaying ) {
+		return;
+	}
+
+	// remove console commands
+	CL_Cmd_Unregister( "demoFreeFly"_asView );
+	CL_Cmd_Unregister( "camswitch"_asView );
+}
+
+void CG_DemocamReset( void ) {
+	demo_time = 0;
+	demo_initial_timestamp = 0;
+}
 
 int CG_LostMultiviewPOV( void );
 
@@ -82,13 +328,7 @@ bool CG_ChaseStep( int step ) {
 	return false;
 }
 
-/*
-* CG_AddLocalSounds
-*/
 static void CG_AddLocalSounds( void ) {
-	static bool postmatchsilence_set = false, demostream = false, background = false;
-	static unsigned lastSecond = 0;
-
 	// add local announces
 	if( GS_Countdown() ) {
 		if( GS_MatchDuration() ) {
@@ -153,11 +393,8 @@ static void CG_AddLocalSounds( void ) {
 * Flashes game window in case of important events (match state changes, etc) for user to notice
 */
 static void CG_FlashGameWindow( void ) {
-	static int oldState = -1;
 	int newState;
 	bool flash = false;
-	static int oldAlphaScore, oldBetaScore;
-	static bool scoresSet = false;
 
 	// notify player of important match states
 	newState = GS_MatchState();
@@ -208,9 +445,6 @@ float CG_GetSensitivityScale( float sens, float zoomSens ) {
 	return sensScale;
 }
 
-/*
-* CG_AddKickAngles
-*/
 void CG_AddKickAngles( vec3_t viewangles ) {
 	float time;
 	float uptime;
@@ -239,9 +473,6 @@ void CG_AddKickAngles( vec3_t viewangles ) {
 	}
 }
 
-/*
-* CG_CalcViewFov
-*/
 static float CG_CalcViewFov( void ) {
 	float frac;
 	float fov, zoomfov;
@@ -257,9 +488,6 @@ static float CG_CalcViewFov( void ) {
 	return fov - ( fov - zoomfov ) * frac;
 }
 
-/*
-* CG_CalcViewBob
-*/
 static void CG_CalcViewBob( void ) {
 	float bobMove, bobTime, bobScale;
 
@@ -306,16 +534,10 @@ static void CG_CalcViewBob( void ) {
 	cg.bobFracSin = fabs( sin( bobTime * M_PI ) );
 }
 
-/*
-* CG_ResetKickAngles
-*/
 void CG_ResetKickAngles( void ) {
 	memset( cg.kickangles, 0, sizeof( cg.kickangles ) );
 }
 
-/*
-* CG_StartKickAnglesEffect
-*/
 void CG_StartKickAnglesEffect( vec3_t source, float knockback, float radius, int time ) {
 	float kick;
 	float side;
@@ -404,9 +626,6 @@ void CG_StartKickAnglesEffect( vec3_t source, float knockback, float radius, int
 	}
 }
 
-/*
-* CG_StartFallKickEffect
-*/
 void CG_StartFallKickEffect( int bounceTime ) {
 	if( !cg_viewBob->integer ) {
 		cg.fallEffectTime = 0;
@@ -429,16 +648,10 @@ void CG_StartFallKickEffect( int bounceTime ) {
 	}
 }
 
-/*
-* CG_ResetColorBlend
-*/
 void CG_ResetColorBlend( void ) {
 	memset( cg.colorblends, 0, sizeof( cg.colorblends ) );
 }
 
-/*
-* CG_StartColorBlendEffect
-*/
 void CG_StartColorBlendEffect( float r, float g, float b, float a, int time ) {
 	int i, bnum = -1;
 
@@ -478,9 +691,6 @@ void CG_StartColorBlendEffect( float r, float g, float b, float a, int time ) {
 	cg.colorblends[bnum].blendtime = time;
 }
 
-/*
-* CG_DamageIndicatorAdd
-*/
 void CG_DamageIndicatorAdd( int damage, const vec3_t dir ) {
 	int i;
 	int64_t damageTime;
@@ -550,9 +760,6 @@ void CG_DamageIndicatorAdd( int damage, const vec3_t dir ) {
 #undef INDICATOR_EPSILON_UP
 }
 
-/*
-* CG_ResetDamageIndicator
-*/
 void CG_ResetDamageIndicator( void ) {
 	int i;
 
@@ -561,11 +768,6 @@ void CG_ResetDamageIndicator( void ) {
 }
 
 
-//============================================================================
-
-/*
-* CG_AddEntityToScene
-*/
 void CG_AddEntityToScene( entity_t *ent, DrawSceneRequest *drawSceneRequest ) {
 	if( ent->model && ( !ent->boneposes || !ent->oldboneposes ) ) {
 		if( R_SkeletalGetNumBones( ent->model, NULL ) ) {
@@ -576,11 +778,6 @@ void CG_AddEntityToScene( entity_t *ent, DrawSceneRequest *drawSceneRequest ) {
 	drawSceneRequest->addEntity( ent );
 }
 
-//============================================================================
-
-/*
-* CG_SkyPortal
-*/
 int CG_SkyPortal( void ) {
 	float fov = 0;
 	float scale = 0;
@@ -609,9 +806,6 @@ int CG_SkyPortal( void ) {
 	return 0;
 }
 
-/*
-* CG_RenderFlags
-*/
 static int CG_RenderFlags( void ) {
 	int rdflags, contents;
 
@@ -652,9 +846,6 @@ static int CG_RenderFlags( void ) {
 	return rdflags;
 }
 
-/*
-* CG_InterpolatePlayerState
-*/
 static void CG_InterpolatePlayerState( player_state_t *playerState ) {
 	int i;
 	player_state_t *ps, *ops;
@@ -689,9 +880,6 @@ static void CG_InterpolatePlayerState( player_state_t *playerState ) {
 	}
 }
 
-/*
-* CG_ThirdPersonOffsetView
-*/
 static void CG_ThirdPersonOffsetView( cg_viewdef_t *view ) {
 	float dist, f, r;
 	vec3_t dest, stop;
@@ -741,9 +929,6 @@ static void CG_ThirdPersonOffsetView( cg_viewdef_t *view ) {
 	VectorCopy( chase_dest, view->origin );
 }
 
-/*
-* CG_ViewSmoothPredictedSteps
-*/
 void CG_ViewSmoothPredictedSteps( vec3_t vieworg ) {
 	int timeDelta;
 
@@ -754,9 +939,6 @@ void CG_ViewSmoothPredictedSteps( vec3_t vieworg ) {
 	}
 }
 
-/*
-* CG_ViewSmoothFallKick
-*/
 float CG_ViewSmoothFallKick( void ) {
 	// fallkick offset
 	if( cg.fallEffectTime > cg.time ) {
@@ -769,11 +951,6 @@ float CG_ViewSmoothFallKick( void ) {
 	return 0.0f;
 }
 
-/*
-* CG_SwitchChaseCamMode
-*
-* Returns whether the mode was actually switched.
-*/
 bool CG_SwitchChaseCamMode( void ) {
 	bool chasecam = ( cg.frame.playerState.pmove.pm_type == PM_CHASECAM )
 					&& ( cg.frame.playerState.POVnum != (unsigned)( cgs.playerNum + 1 ) );
@@ -808,9 +985,6 @@ void CG_ClearChaseCam() {
 	memset( &chaseCam, 0, sizeof( chaseCam ) );
 }
 
-/*
-* CG_UpdateChaseCam
-*/
 static void CG_UpdateChaseCam( void ) {
 	bool chasecam = ( cg.frame.playerState.pmove.pm_type == PM_CHASECAM )
 					&& ( cg.frame.playerState.POVnum != (unsigned)( cgs.playerNum + 1 ) );
@@ -845,9 +1019,6 @@ static void CG_UpdateChaseCam( void ) {
 	}
 }
 
-/*
-* CG_SetupViewDef
-*/
 static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 	memset( view, 0, sizeof( cg_viewdef_t ) );
 
@@ -986,9 +1157,6 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 	}
 }
 
-/*
-* CG_RenderView
-*/
 #define WAVE_AMPLITUDE  0.015   // [0..1]
 #define WAVE_FREQUENCY  0.6     // [0..1]
 void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t serverTime, unsigned extrapolationTime ) {
@@ -1158,21 +1326,6 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	cg.viewFrameCount++;
 }
 
-vrect_t scr_vrect;
-
-extern cvar_t *cg_viewSize;
-extern cvar_t *cg_showFPS;
-extern cvar_t *cg_draw2D;
-
-extern cvar_t *cg_showZoomEffect;
-
-extern cvar_t *cg_showViewBlends;
-
-/*
-* CG_CalcVrect
-*
-* Sets scr_vrect, the coordinates of the rendered window
-*/
 void CG_CalcVrect( void ) {
 	int size;
 
@@ -1199,22 +1352,6 @@ void CG_CalcVrect( void ) {
 		scr_vrect.x = ( cgs.vidWidth - scr_vrect.width ) / 2;
 		scr_vrect.y = ( cgs.vidHeight - scr_vrect.height ) / 2;
 	}
-}
-
-void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color ) {
-	int64_t incomingAcknowledged, outgoingSequence;
-
-	if( cgs.demoPlaying ) {
-		return;
-	}
-
-	NET_GetCurrentState( &incomingAcknowledged, &outgoingSequence, NULL );
-	if( outgoingSequence - incomingAcknowledged < CMD_BACKUP - 1 ) {
-		return;
-	}
-	x = CG_HorizontalAlignForWidth( x, align, w );
-	y = CG_VerticalAlignForHeight( y, align, h );
-	R_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cgs.media.shaderNet );
 }
 
 void CG_DrawRSpeeds( int x, int y, int align, struct qfontface_s *font, const vec4_t color ) {
@@ -1342,7 +1479,561 @@ static void CG_SCRDrawViewBlend( void ) {
 	R_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorblend, cgs.shaderWhite );
 }
 
+void CG_ClearPointedNum( void ) {
+	cg.pointedNum = 0;
+	cg.pointRemoveTime = 0;
+	cg.pointedHealth = 0;
+	cg.pointedArmor = 0;
+}
+
+static void CG_UpdatePointedNum( void ) {
+	// disable cases
+	if( CG_IsScoreboardShown() || cg.view.thirdperson || cg.view.type != VIEWDEF_PLAYERVIEW || !cg_showPointedPlayer->integer ) {
+		CG_ClearPointedNum();
+		return;
+	}
+
+	if( cg.predictedPlayerState.stats[STAT_POINTED_PLAYER] ) {
+		bool mega = false;
+
+		cg.pointedNum = cg.predictedPlayerState.stats[STAT_POINTED_PLAYER];
+		cg.pointRemoveTime = cg.time + 150;
+
+		cg.pointedHealth = 3.2 * ( cg.predictedPlayerState.stats[STAT_POINTED_TEAMPLAYER] & 0x1F );
+		mega = cg.predictedPlayerState.stats[STAT_POINTED_TEAMPLAYER] & 0x20 ? true : false;
+		cg.pointedArmor = 5 * ( cg.predictedPlayerState.stats[STAT_POINTED_TEAMPLAYER] >> 6 & 0x3F );
+		if( mega ) {
+			cg.pointedHealth += 100;
+			if( cg.pointedHealth > 200 ) {
+				cg.pointedHealth = 200;
+			}
+		}
+	}
+
+	if( cg.pointRemoveTime <= cg.time ) {
+		CG_ClearPointedNum();
+	}
+
+	if( cg.pointedNum && cg_showPointedPlayer->integer == 2 ) {
+		if( cg_entities[cg.pointedNum].current.team != cg.predictedPlayerState.stats[STAT_TEAM] ) {
+			CG_ClearPointedNum();
+		}
+	}
+}
+
+int CG_HorizontalAlignForWidth( const int x, int align, int width ) {
+	int nx = x;
+
+	if( align % 3 == 0 ) { // left
+		nx = x;
+	}
+	if( align % 3 == 1 ) { // center
+		nx = x - width / 2;
+	}
+	if( align % 3 == 2 ) { // right
+		nx = x - width;
+	}
+
+	return nx;
+}
+
+int CG_VerticalAlignForHeight( const int y, int align, int height ) {
+	int ny = y;
+
+	if( align / 3 == 0 ) { // top
+		ny = y;
+	} else if( align / 3 == 1 ) { // middle
+		ny = y - height / 2;
+	} else if( align / 3 == 2 ) { // bottom
+		ny = y - height;
+	}
+
+	return ny;
+}
+
+static void CG_DrawHUDRect( int x, int y, int align, int w, int h, int val, int maxval, vec4_t color, struct shader_s *shader ) {
+	float frac;
+	vec2_t tc[2];
+
+	if( val < 1 || maxval < 1 || w < 1 || h < 1 ) {
+		return;
+	}
+
+	if( !shader ) {
+		shader = cgs.shaderWhite;
+	}
+
+	if( val >= maxval ) {
+		frac = 1.0f;
+	} else {
+		frac = (float)val / (float)maxval;
+	}
+
+	tc[0][0] = 0.0f;
+	tc[0][1] = 1.0f;
+	tc[1][0] = 0.0f;
+	tc[1][1] = 1.0f;
+	if( h > w ) {
+		h = (int)( (float)h * frac + 0.5 );
+		if( align / 3 == 0 ) { // top
+			tc[1][1] = 1.0f * frac;
+		} else if( align / 3 == 1 ) {   // middle
+			tc[1][0] = ( 1.0f - ( 1.0f * frac ) ) * 0.5f;
+			tc[1][1] = ( 1.0f * frac ) * 0.5f;
+		} else if( align / 3 == 2 ) {   // bottom
+			tc[1][0] = 1.0f - ( 1.0f * frac );
+		}
+	} else {
+		w = (int)( (float)w * frac + 0.5 );
+		if( align % 3 == 0 ) { // left
+			tc[0][1] = 1.0f * frac;
+		}
+		if( align % 3 == 1 ) { // center
+			tc[0][0] = ( 1.0f - ( 1.0f * frac ) ) * 0.5f;
+			tc[0][1] = ( 1.0f * frac ) * 0.5f;
+		}
+		if( align % 3 == 2 ) { // right
+			tc[0][0] = 1.0f - ( 1.0f * frac );
+		}
+	}
+
+	x = CG_HorizontalAlignForWidth( x, align, w );
+	y = CG_VerticalAlignForHeight( y, align, h );
+
+	R_DrawStretchPic( x, y, w, h, tc[0][0], tc[1][0], tc[0][1], tc[1][1], color, shader );
+}
+
+static void CG_DrawTeamMates() {
+	centity_t *cent;
+	vec3_t dir, drawOrigin;
+	vec2_t coords;
+	vec4_t color;
+	int i;
+	int pic_size = 18 * cgs.vidHeight / 600;
+
+	if( !cg_showTeamInfo->integer ) {
+		return;
+	}
+
+	if( cg.predictedPlayerState.stats[STAT_TEAM] < TEAM_ALPHA ) {
+		return;
+	}
+
+	for( i = 0; i < gs.maxclients; i++ ) {
+		trace_t trace;
+
+		if( !cgs.clientInfo[i].name[0] || ISVIEWERENTITY( i + 1 ) ) {
+			continue;
+		}
+
+		cent = &cg_entities[i + 1];
+		if( cent->serverFrame != cg.frame.serverFrame ) {
+			continue;
+		}
+
+		if( cent->current.team != cg.predictedPlayerState.stats[STAT_TEAM] ) {
+			continue;
+		}
+
+		VectorSet( drawOrigin, cent->ent.origin[0], cent->ent.origin[1], cent->ent.origin[2] + playerbox_stand_maxs[2] + 16 );
+		VectorSubtract( drawOrigin, cg.view.origin, dir );
+
+		// ignore, if not in view
+		if( DotProduct( dir, &cg.view.axis[AXIS_FORWARD] ) < 0 ) {
+			continue;
+		}
+
+		if( !cent->current.modelindex || !cent->current.solid ||
+			cent->current.solid == SOLID_BMODEL || cent->current.team == TEAM_SPECTATOR ) {
+			continue;
+		}
+
+		// find the 3d point in 2d screen
+		RF_TransformVectorToScreen( &cg.view.refdef, drawOrigin, coords );
+		if( ( coords[0] < 0 || coords[0] > cgs.vidWidth ) || ( coords[1] < 0 || coords[1] > cgs.vidHeight ) ) {
+			continue;
+		}
+
+		CG_Trace( &trace, cg.view.origin, vec3_origin, vec3_origin, cent->ent.origin, cg.predictedPlayerState.POVnum, MASK_OPAQUE );
+		if( cg_showTeamInfo->integer == 1 && trace.fraction == 1.0f ) {
+			continue;
+		}
+
+		coords[0] -= pic_size / 2;
+		coords[1] -= pic_size / 2;
+		Q_clamp( coords[0], 0, cgs.vidWidth - pic_size );
+		Q_clamp( coords[1], 0, cgs.vidHeight - pic_size );
+
+		CG_TeamColor( cg.predictedPlayerState.stats[STAT_TEAM], color );
+
+		shader_s *shader;
+		if( cent->current.effects & EF_CARRIER ) {
+			shader = cgs.media.shaderTeamCarrierIndicator;
+		} else {
+			shader = cgs.media.shaderTeamMateIndicator;
+		}
+
+		R_DrawStretchPic( coords[0], coords[1], pic_size, pic_size, 0, 0, 1, 1, color, shader );
+	}
+}
+
+static void CG_DrawPlayerNames() {
+	qfontface_s *font = cgs.fontSystemMedium;
+	const float *color = colorWhite;
+	static vec4_t alphagreen = { 0, 1, 0, 0 }, alphared = { 1, 0, 0, 0 }, alphayellow = { 1, 1, 0, 0 }, alphamagenta = { 1, 0, 1, 1 }, alphagrey = { 0.85, 0.85, 0.85, 1 };
+	centity_t *cent;
+	vec4_t tmpcolor;
+	vec3_t dir, drawOrigin;
+	vec2_t coords;
+	float dist, fadeFrac;
+	trace_t trace;
+	int i;
+
+	if( !cg_showPlayerNames->integer && !cg_showPointedPlayer->integer ) {
+		return;
+	}
+
+	CG_UpdatePointedNum();
+
+	for( i = 0; i < gs.maxclients; i++ ) {
+		int pointed_health, pointed_armor;
+
+		if( !cgs.clientInfo[i].name[0] || ISVIEWERENTITY( i + 1 ) ) {
+			continue;
+		}
+
+		cent = &cg_entities[i + 1];
+		if( cent->serverFrame != cg.frame.serverFrame ) {
+			continue;
+		}
+
+		if( cent->current.effects & EF_PLAYER_HIDENAME ) {
+			continue;
+		}
+
+		// only show the pointed player
+		if( !cg_showPlayerNames->integer && ( cent->current.number != cg.pointedNum ) ) {
+			continue;
+		}
+
+		if( ( cg_showPlayerNames->integer == 2 ) && ( cent->current.team != cg.predictedPlayerState.stats[STAT_TEAM] ) ) {
+			continue;
+		}
+
+		if( !cent->current.modelindex || !cent->current.solid ||
+			cent->current.solid == SOLID_BMODEL || cent->current.team == TEAM_SPECTATOR ) {
+			continue;
+		}
+
+		// Kill if behind the view
+		VectorSubtract( cent->ent.origin, cg.view.origin, dir );
+		dist = VectorNormalize( dir ) * cg.view.fracDistFOV;
+
+		if( DotProduct( dir, &cg.view.axis[AXIS_FORWARD] ) < 0 ) {
+			continue;
+		}
+
+		Vector4Copy( color, tmpcolor );
+
+		if( cent->current.number != cg.pointedNum ) {
+			if( dist > cg_showPlayerNames_zfar->value ) {
+				continue;
+			}
+
+			fadeFrac = ( cg_showPlayerNames_zfar->value - dist ) / ( cg_showPlayerNames_zfar->value * 0.25f );
+			Q_clamp( fadeFrac, 0.0f, 1.0f );
+
+			tmpcolor[3] = cg_showPlayerNames_alpha->value * color[3] * fadeFrac;
+		} else {
+			fadeFrac = (float)( cg.pointRemoveTime - cg.time ) / 150.0f;
+			Q_clamp( fadeFrac, 0.0f, 1.0f );
+
+			tmpcolor[3] = color[3] * fadeFrac;
+		}
+
+		if( tmpcolor[3] <= 0.0f ) {
+			continue;
+		}
+
+		CG_Trace( &trace, cg.view.origin, vec3_origin, vec3_origin, cent->ent.origin, cg.predictedPlayerState.POVnum, MASK_OPAQUE );
+		if( trace.fraction < 1.0f && trace.ent != cent->current.number ) {
+			continue;
+		}
+
+		VectorSet( drawOrigin, cent->ent.origin[0], cent->ent.origin[1], cent->ent.origin[2] + playerbox_stand_maxs[2] + 16 );
+
+		// find the 3d point in 2d screen
+		RF_TransformVectorToScreen( &cg.view.refdef, drawOrigin, coords );
+		if( ( coords[0] < 0 || coords[0] > cgs.vidWidth ) || ( coords[1] < 0 || coords[1] > cgs.vidHeight ) ) {
+			continue;
+		}
+
+		SCR_DrawString( coords[0], coords[1], ALIGN_CENTER_BOTTOM, cgs.clientInfo[i].name, font, tmpcolor );
+
+		// if not the pointed player we are done
+		if( cent->current.number != cg.pointedNum ) {
+			continue;
+		}
+
+		pointed_health = cg.pointedHealth;
+		pointed_armor = cg.pointedArmor;
+
+		// pointed player hasn't a health value to be drawn, so skip adding the bars
+		if( pointed_health && cg_showPlayerNames_barWidth->integer > 0 ) {
+			int x, y;
+			int barwidth = SCR_strWidth( "_", font, 0 ) * cg_showPlayerNames_barWidth->integer; // size of 8 characters
+			int barheight = SCR_FontHeight( font ) * 0.25; // quarter of a character height
+			int barseparator = barheight * 0.333;
+
+			alphagreen[3] = alphared[3] = alphayellow[3] = alphamagenta[3] = alphagrey[3] = tmpcolor[3];
+
+			// soften the alpha of the box color
+			tmpcolor[3] *= 0.4f;
+
+			// we have to align first, then draw as left top, cause we want the bar to grow from left to right
+			x = CG_HorizontalAlignForWidth( coords[0], ALIGN_CENTER_TOP, barwidth );
+			y = CG_VerticalAlignForHeight( coords[1], ALIGN_CENTER_TOP, barheight );
+
+			// draw the background box
+			CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight * 3, 100, 100, tmpcolor, NULL );
+
+			y += barseparator;
+
+			if( pointed_health > 100 ) {
+				alphagreen[3] = alphamagenta[3] = 1.0f;
+				CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, 100, 100, alphagreen, NULL );
+				CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health - 100, 100, alphamagenta, NULL );
+				alphagreen[3] = alphamagenta[3] = alphared[3];
+			} else {
+				if( pointed_health <= 33 ) {
+					CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphared, NULL );
+				} else if( pointed_health <= 66 ) {
+					CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphayellow, NULL );
+				} else {
+					CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphagreen, NULL );
+				}
+			}
+
+			if( pointed_armor ) {
+				y += barseparator + barheight;
+				CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_armor, 150, alphagrey, NULL );
+			}
+		}
+	}
+}
+
+void CrosshairState::checkValueVar( cvar_t *var, Style style ) {
+	if( const wsw::StringView name( var->string ); !name.empty() ) {
+		bool found = false;
+		for( const wsw::StringView &file: ( style == Strong ? getStrongCrosshairFiles() : getRegularCrosshairFiles() ) ) {
+			if( file.equalsIgnoreCase( name ) ) {
+				found = true;
+				break;
+			}
+		}
+		if( !found ) {
+			Cvar_ForceSet( var->name, "" );
+		}
+	}
+}
+
+void CrosshairState::checkSizeVar( cvar_t *var, const SizeProps &sizeProps ) {
+	if( var->integer < (int)sizeProps.minSize || var->integer > (int)sizeProps.maxSize ) {
+		char buffer[16];
+		Cvar_ForceSet( var->name, va_r( buffer, sizeof( buffer ), "%d", (int)( sizeProps.defaultSize ) ) );
+	}
+}
+
+void CrosshairState::checkColorVar( cvar_s *var, float *cachedColor, int *oldPackedColor ) {
+	const int packedColor = COM_ReadColorRGBString( var->string );
+	if( packedColor == -1 ) {
+		constexpr const char *defaultString = "255 255 255";
+		if( !Q_stricmp( var->string, defaultString ) ) {
+			Cvar_ForceSet( var->name, defaultString );
+		}
+	}
+	// Update cached color values if their addresses are supplied and the packed value has changed
+	// (tracking the packed value allows using cheap comparisons of a single integer)
+	if( !oldPackedColor || ( packedColor != *oldPackedColor ) ) {
+		if( oldPackedColor ) {
+			*oldPackedColor = packedColor;
+		}
+		if( cachedColor ) {
+			float r = 1.0f, g = 1.0f, b = 1.0f;
+			if( packedColor != -1 ) {
+				constexpr float normalizer = 1.0f / 255.0f;
+				r = COLOR_R( packedColor ) * normalizer;
+				g = COLOR_G( packedColor ) * normalizer;
+				b = COLOR_B( packedColor ) * normalizer;
+			}
+			Vector4Set( cachedColor, r, g, b, 1.0f );
+		}
+	}
+}
+
+static_assert( WEAP_NONE == 0 && WEAP_GUNBLADE == 1 );
+static inline const char *kWeaponNames[WEAP_TOTAL - 1] = {
+	"gb", "mg", "rg", "gl", "rl", "pg", "lg", "eb", "sw", "ig"
+};
+
+void CrosshairState::initPersistentState() {
+	wsw::StaticString<64> varNameBuffer;
+	varNameBuffer << "cg_crosshair_"_asView;
+	const auto prefixLen = varNameBuffer.length();
+
+	wsw::StaticString<8> sizeStringBuffer;
+	(void)sizeStringBuffer.assignf( "%d", kRegularCrosshairSizeProps.defaultSize );
+
+	for( int i = 0; i < WEAP_TOTAL - 1; ++i ) {
+		assert( std::strlen( kWeaponNames[i] ) == 2 );
+		const wsw::StringView weaponName( kWeaponNames[i], 2 );
+
+		varNameBuffer.erase( prefixLen );
+		varNameBuffer << weaponName;
+		s_valueVars[i] = Cvar_Get( varNameBuffer.data(), "1", CVAR_ARCHIVE );
+
+		varNameBuffer.erase( prefixLen );
+		varNameBuffer << "size_"_asView << weaponName;
+		s_sizeVars[i] = Cvar_Get( varNameBuffer.data(), sizeStringBuffer.data(), CVAR_ARCHIVE );
+		checkSizeVar( s_sizeVars[i], kRegularCrosshairSizeProps );
+
+		varNameBuffer.erase( prefixLen );
+		varNameBuffer << "color_"_asView << weaponName;
+		s_colorVars[i] = Cvar_Get( varNameBuffer.data(), "255 255 255", CVAR_ARCHIVE );
+		checkColorVar( s_colorVars[i] );
+	}
+
+	cg_crosshair = Cvar_Get( "cg_crosshair", "1", CVAR_ARCHIVE );
+	checkValueVar( cg_crosshair, Regular );
+
+	cg_crosshair_size = Cvar_Get( "cg_crosshair_size", sizeStringBuffer.data(), CVAR_ARCHIVE );
+	checkSizeVar( cg_crosshair_size, kRegularCrosshairSizeProps );
+
+	cg_crosshair_color = Cvar_Get( "cg_crosshair_color", "255 255 255", CVAR_ARCHIVE );
+	checkColorVar( cg_crosshair_color );
+
+	cg_crosshair_strong = Cvar_Get( "cg_crosshair_strong", "1", CVAR_ARCHIVE );
+	checkValueVar( cg_crosshair_strong, Strong );
+
+	(void)sizeStringBuffer.assignf( "%d", kStrongCrosshairSizeProps.defaultSize );
+	cg_crosshair_strong_size = Cvar_Get( "cg_crosshair_strong_size", sizeStringBuffer.data(), CVAR_ARCHIVE );
+	checkSizeVar( cg_crosshair_strong_size, kStrongCrosshairSizeProps );
+
+	cg_crosshair_strong_color = Cvar_Get( "cg_crosshair_strong_color", "255 255 255", CVAR_ARCHIVE );
+	checkColorVar( cg_crosshair_strong_color );
+
+	cg_crosshair_damage_color = Cvar_Get( "cg_crosshair_damage_color", "255 0 0", CVAR_ARCHIVE );
+	checkColorVar( cg_crosshair_damage_color );
+
+	cg_separate_weapon_settings = Cvar_Get( "cg_separate_weapon_settings", "0", CVAR_ARCHIVE );
+}
+
+void CrosshairState::updateSharedPart() {
+	checkColorVar( cg_crosshair_damage_color, s_damageColor, &s_oldPackedDamageColor );
+}
+
+void CrosshairState::update( [[maybe_unused]] unsigned weapon ) {
+	assert( weapon > 0 && weapon < WEAP_TOTAL );
+
+	const bool isStrong  = m_style == Strong;
+	if( isStrong ) {
+		m_sizeVar  = cg_crosshair_strong_size;
+		m_colorVar = cg_crosshair_strong_color;
+		m_valueVar = cg_crosshair_strong;
+	} else {
+		if( cg_separate_weapon_settings->integer ) {
+			m_sizeVar  = s_sizeVars[weapon - 1];
+			m_colorVar = s_colorVars[weapon - 1];
+			m_valueVar = s_valueVars[weapon - 1];
+		} else {
+			m_sizeVar  = cg_crosshair_size;
+			m_colorVar = cg_crosshair_color;
+			m_valueVar = cg_crosshair;
+		}
+	}
+
+	checkSizeVar( m_sizeVar, isStrong ? kStrongCrosshairSizeProps : kRegularCrosshairSizeProps );
+	checkColorVar( m_colorVar, m_varColor, &m_oldPackedColor );
+	checkValueVar( m_valueVar, m_style );
+
+	m_decayTimeLeft = wsw::max( 0, m_decayTimeLeft - cg.frameTime );
+}
+
+void CrosshairState::clear() {
+	m_decayTimeLeft  = 0;
+	m_oldPackedColor = -1;
+}
+
+auto CrosshairState::getDrawingColor() -> const float * {
+	if( m_decayTimeLeft > 0 ) {
+		const float frac = 1.0f - Q_Sqrt( (float) m_decayTimeLeft * m_invDecayTime );
+		assert( frac >= 0.0f && frac <= 1.0f );
+		VectorLerp( s_damageColor, frac, m_varColor, m_drawColor );
+		return m_drawColor;
+	}
+	return m_varColor;
+}
+
+[[nodiscard]]
+auto CrosshairState::getDrawingMaterial() -> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
+	if( const wsw::StringView name = wsw::StringView( m_valueVar->string ); !name.empty() ) {
+		if( const auto size = (unsigned)m_sizeVar->integer ) {
+			const bool isStrong   = m_style == Strong;
+			const auto &sizeProps = isStrong ? kStrongCrosshairSizeProps : kRegularCrosshairSizeProps;
+			if( size >= sizeProps.minSize && size <= sizeProps.maxSize ) {
+				return isStrong ? getStrongCrosshairMaterial( name, size ) : getRegularCrosshairMaterial( name, size );
+			}
+		}
+	}
+	return std::nullopt;
+}
+
+void CG_ScreenCrosshairDamageUpdate() {
+	cg.crosshairState.touchDamageState();
+	cg.strongCrosshairState.touchDamageState();
+}
+
+static void drawCrosshair( CrosshairState *state ) {
+	if( auto maybeMaterialAndDimensions = state->getDrawingMaterial() ) {
+		auto [material, width, height] = *maybeMaterialAndDimensions;
+		const int x = ( cgs.vidWidth - (int)width ) / 2;
+		const int y = ( cgs.vidHeight - (int)height ) / 2;
+		R_DrawStretchPic( x, y, (int)width, (int)height, 0, 0, 1, 1, state->getDrawingColor(), material );
+	}
+}
+
+void CG_UpdateCrosshair() {
+	CrosshairState::updateSharedPart();
+	if( unsigned weapon = cg.predictedPlayerState.stats[STAT_WEAPON] ) {
+		cg.crosshairState.update( weapon );
+		cg.strongCrosshairState.update( weapon );
+	} else {
+		cg.crosshairState.clear();
+		cg.strongCrosshairState.clear();
+	}
+}
+
+void CG_DrawCrosshair() {
+	const auto *const playerState = &cg.predictFromPlayerState;
+	const auto weapon = playerState->stats[STAT_WEAPON];
+	if( !weapon ) {
+		return;
+	}
+
+	const auto *const firedef = GS_FiredefForPlayerState( playerState, weapon );
+	if( !firedef ) {
+		return;
+	}
+
+	if( firedef->fire_mode == FIRE_MODE_STRONG ) {
+		::drawCrosshair( &cg.strongCrosshairState );
+	}
+	::drawCrosshair( &cg.crosshairState );
+}
+
 void CG_Draw2DView( void ) {
+	CG_UpdateCrosshair();
+
 	if( !cg.view.draw2D ) {
 		return;
 	}
@@ -1354,7 +2045,20 @@ void CG_Draw2DView( void ) {
 		cg.motd = NULL;
 	}
 
-	CG_DrawHUD();
+
+	if( cg_showHUD->integer ) {
+		if( !CG_IsScoreboardShown() ) {
+			CG_DrawTeamMates();
+			CG_DrawPlayerNames();
+		}
+
+		// TODO: Does it work for chasers?
+		if( cg.predictedPlayerState.pmove.pm_type == PM_NORMAL ) {
+			if( !wsw::ui::UISystem::instance()->isShown() ) {
+				CG_DrawCrosshair();
+			}
+		}
+	}
 
 	CG_DrawRSpeeds( cgs.vidWidth, cgs.vidHeight / 2 + 8 * cgs.vidHeight / 600,
 					ALIGN_RIGHT_TOP, cgs.fontSystemSmall, colorWhite );

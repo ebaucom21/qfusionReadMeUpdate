@@ -2,8 +2,6 @@
 #include "scoreboard.h"
 #include "local.h"
 
-wsw::StringView CG_PlayerName( unsigned );
-
 namespace wsw::ui {
 
 auto PlayersModel::roleNames() const -> QHash<int, QByteArray> {

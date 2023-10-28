@@ -8,6 +8,7 @@
 
 #include "../qcommon/wswstringview.h"
 #include "../qcommon/wswvector.h"
+#include "../qcommon/stringspanstorage.h"
 
 struct sfx_s;
 struct model_s;
@@ -309,5 +310,30 @@ public:
 
 	CachedMaterial shaderRaceGhostEffect { this, wsw::StringView( "gfx/raceghost" ) };
 };
+
+// TODO: Return a java-style iterator
+[[nodiscard]]
+auto getRegularCrosshairFiles() -> const wsw::StringSpanStorage<unsigned, unsigned> &;
+
+// TODO: Return a java-style iterator
+[[nodiscard]]
+auto getStrongCrosshairFiles() -> const wsw::StringSpanStorage<unsigned, unsigned> &;
+
+static constexpr wsw::StringView kRegularCrosshairsDirName { "/gfx/hud/crosshairs/regular" };
+static constexpr wsw::StringView kStrongCrosshairsDirName { "/gfx/hud/crosshairs/strong" };
+
+template <typename Container, typename Appendable = wsw::StringView>
+static void makeCrosshairFilePath( Container *container, const wsw::StringView &prefix, const wsw::StringView &fileName ) {
+	container->clear();
+	container->append( Appendable( prefix.data(), prefix.size() ) );
+	container->append( Appendable( "/", 1 ) );
+	container->append( Appendable( fileName.data(), fileName.size() ) );
+	container->append( Appendable( ".svg", 4 ) );
+}
+
+[[nodiscard]]
+auto getRegularCrosshairMaterial( const wsw::StringView &name, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>>;
+[[nodiscard]]
+auto getStrongCrosshairMaterial( const wsw::StringView &name, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>>;
 
 #endif

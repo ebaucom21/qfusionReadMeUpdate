@@ -9,8 +9,6 @@
 
 #include <array>
 
-extern cvar_t *cg_showChasers;
-std::optional<unsigned> CG_ActiveChasePov();
 
 using wsw::operator""_asView;
 

@@ -118,12 +118,207 @@ typedef struct {
 	float yawVelocity;
 } centity_t;
 
-#include "cg_pmodels.h"
+extern cvar_t *cg_weaponFlashes;
+extern cvar_t *cg_gunx;
+extern cvar_t *cg_guny;
+extern cvar_t *cg_gunz;
+extern cvar_t *cg_debugPlayerModels;
+extern cvar_t *cg_debugWeaponModels;
+extern cvar_t *cg_gunbob;
+extern cvar_t *cg_gun_fov;
+extern cvar_t *cg_handOffset;
+
+enum {
+	WEAPMODEL_NOANIM,
+	WEAPMODEL_STANDBY,
+	WEAPMODEL_ATTACK_WEAK,
+	WEAPMODEL_ATTACK_STRONG,
+	WEAPMODEL_WEAPDOWN,
+	WEAPMODEL_WEAPONUP,
+
+	VWEAP_MAXANIMS
+};
+
+#define WEAPONINFO_MAX_FIRE_SOUNDS 4
+
+//equivalent to pmodelinfo_t. Shared by different players, etc.
+typedef struct weaponinfo_s {
+	char name[MAX_QPATH];
+	bool inuse;
+
+	struct  model_s *model[WEAPMODEL_PARTS]; //one weapon consists of several models
+
+	int firstframe[VWEAP_MAXANIMS];         //animation script
+	int lastframe[VWEAP_MAXANIMS];
+	int loopingframes[VWEAP_MAXANIMS];
+	unsigned int frametime[VWEAP_MAXANIMS];
+
+	orientation_t tag_projectionsource;
+	byte_vec4_t outlineColor;
+
+	// handOffset
+	vec3_t handpositionOrigin;
+	vec3_t handpositionAngles;
+
+	// flash
+	int64_t flashTime;
+	bool flashFade;
+	float flashRadius;
+	vec3_t flashColor;
+
+	// barrel
+	int64_t barrelTime;
+	float barrelSpeed;
+
+	// sfx
+	int num_fire_sounds;
+	struct sfx_s *sound_fire[WEAPONINFO_MAX_FIRE_SOUNDS];
+	int num_strongfire_sounds;
+	struct sfx_s *sound_strongfire[WEAPONINFO_MAX_FIRE_SOUNDS];
+	struct sfx_s *sound_reload;
+} weaponinfo_t;
+
+extern weaponinfo_t cg_pWeaponModelInfos[WEAP_TOTAL];
+
+enum {
+	BASE_CHANNEL,
+	EVENT_CHANNEL,
+	PLAYERANIM_CHANNELS
+};
+
+typedef struct {
+	int newanim[PMODEL_PARTS];
+} gs_animationbuffer_t;
+
+typedef struct {
+	int anim;
+	int frame;
+	int64_t startTimestamp;
+	float lerpFrac;
+} gs_animstate_t;
+
+typedef struct {
+	// animations in the mixer
+	gs_animstate_t curAnims[PMODEL_PARTS][PLAYERANIM_CHANNELS];
+	gs_animationbuffer_t buffer[PLAYERANIM_CHANNELS];
+
+	// results
+	int frame[PMODEL_PARTS];
+	int oldframe[PMODEL_PARTS];
+	float lerpFrac[PMODEL_PARTS];
+} gs_pmodel_animationstate_t;
+
+typedef struct {
+	int firstframe[PMODEL_TOTAL_ANIMATIONS];
+	int lastframe[PMODEL_TOTAL_ANIMATIONS];
+	int loopingframes[PMODEL_TOTAL_ANIMATIONS];
+	float frametime[PMODEL_TOTAL_ANIMATIONS];
+} gs_pmodel_animationset_t;
+
+int GS_UpdateBaseAnims( entity_state_t *state, vec3_t velocity );
+void GS_PModel_AnimToFrame( int64_t curTime, gs_pmodel_animationset_t *animSet, gs_pmodel_animationstate_t *anim );
+void GS_PlayerModel_ClearEventAnimations( gs_pmodel_animationset_t *animSet, gs_pmodel_animationstate_t *animState );
+void GS_PlayerModel_AddAnimation( gs_pmodel_animationstate_t *animState, int loweranim, int upperanim, int headanim, int channel );
+
+#define SKM_MAX_BONES 256
+
+//pmodelinfo_t is the playermodel structure as originally readed
+//Consider it static 'read-only', cause it is shared by different players
+typedef struct pmodelinfo_s {
+	char *name;
+	int sex;
+
+	struct  model_s *model;
+	struct cg_sexedSfx_s *sexedSfx;
+
+	int numRotators[PMODEL_PARTS];
+	int rotator[PMODEL_PARTS][16];
+	int rootanims[PMODEL_PARTS];
+
+	gs_pmodel_animationset_t animSet; // animation script
+
+	struct pmodelinfo_s *next;
+} pmodelinfo_t;
+
+typedef struct {
+	//static data
+	pmodelinfo_t *pmodelinfo;
+	struct Skin *skin;
+
+	//dynamic
+	gs_pmodel_animationstate_t animState;
+
+	vec3_t angles[PMODEL_PARTS];                // for rotations
+	vec3_t oldangles[PMODEL_PARTS];             // for rotations
+
+	//effects
+	orientation_t projectionSource;     // for projectiles
+	// weapon. Not sure about keeping it here
+	int64_t flash_time;
+	int64_t barrel_time;
+} pmodel_t;
+
+extern pmodel_t cg_entPModels[MAX_EDICTS];      //a pmodel handle for each cg_entity
+
+//
+// cg_pmodels.c
+//
+
+//utils
+void CG_AddShellEffects( entity_t *ent, int effects, DrawSceneRequest *drawSceneRequest );
+bool CG_GrabTag( orientation_t *tag, entity_t *ent, const char *tagname );
+void CG_PlaceModelOnTag( entity_t *ent, entity_t *dest, orientation_t *tag );
+void CG_PlaceRotatedModelOnTag( entity_t *ent, entity_t *dest, orientation_t *tag );
+void CG_MoveToTag( vec3_t move_origin,
+				   mat3_t move_axis,
+				   const vec3_t space_origin,
+				   const mat3_t space_axis,
+				   const vec3_t tag_origin,
+				   const mat3_t tag_axis );
+
+//pmodels
+void CG_PModelsInit( void );
+void CG_PModelsShutdown( void );
+void CG_ResetPModels( void );
+void CG_RegisterBasePModel( void );
+struct pmodelinfo_s *CG_RegisterPlayerModel( const char *filename );
+void CG_AddPModel( centity_t *cent, DrawSceneRequest *drawSceneRequest );
+bool CG_PModel_GetProjectionSource( int entnum, orientation_t *tag_result );
+void CG_UpdatePlayerModelEnt( centity_t *cent );
+void CG_PModel_AddAnimation( int entNum, int loweranim, int upperanim, int headanim, int channel );
+void CG_PModel_ClearEventAnimations( int entNum );
+
+//
+// cg_wmodels.c
+//
+void CG_WModelsInit();
+void CG_WModelsShutdown();
+struct weaponinfo_s *CG_CreateWeaponZeroModel( char *cgs_name );
+struct weaponinfo_s *CG_RegisterWeaponModel( char *cgs_name, int weaponTag );
+void CG_AddWeaponOnTag( entity_t *ent, orientation_t *tag, int weapon, int effects, bool addCoronaLight, orientation_t *projectionSource, int64_t flash_time, int64_t barrel_time, DrawSceneRequest *drawSceneRequest );
+struct weaponinfo_s *CG_GetWeaponInfo( int currentweapon );
+
+//=================================================
+//				VIEW WEAPON
+//=================================================
+
+typedef struct {
+	entity_t ent;
+
+	unsigned int POVnum;
+	int weapon;
+
+	// animation
+	int baseAnim;
+	int64_t baseAnimStartTime;
+	int eventAnim;
+	int64_t eventAnimStartTime;
+
+	// other effects
+	orientation_t projectionSource;
+} cg_viewweapon_t;
 
 #include "mediacache.h"
-#include "crosshairstate.h"
-
-#define STAT_MINUS              10  // num frame for '-' stats digit
 
 typedef struct bonenode_s {
 	int bonenum;
@@ -224,8 +419,6 @@ typedef struct {
 	bool flipped;
 } cg_viewdef_t;
 
-#include "cg_democams.h"
-
 #include "../qcommon/configstringstorage.h"
 
 // this is not exactly "static" but still...
@@ -323,6 +516,71 @@ typedef struct {
 #include "effectssystemfacade.h"
 #include "simulatedhullssystem.h"
 
+struct shader_s;
+
+struct SizeProps { unsigned minSize, maxSize, defaultSize; };
+
+constexpr const SizeProps kRegularCrosshairSizeProps { 16, 48, 24 };
+constexpr const SizeProps kStrongCrosshairSizeProps { 48, 72, 64 };
+
+class CrosshairState {
+public:
+	enum Style : bool { Regular, Strong };
+
+private:
+	cvar_t *m_valueVar { nullptr };
+	cvar_t *m_colorVar { nullptr };
+	cvar_t *m_sizeVar { nullptr };
+
+	static inline cvar_t *s_sizeVars[WEAP_TOTAL - 1] {};
+	static inline cvar_t *s_colorVars[WEAP_TOTAL - 1] {};
+	static inline cvar_t *s_valueVars[WEAP_TOTAL - 1] {};
+
+	static inline cvar_t *cg_crosshair { nullptr };
+	static inline cvar_t *cg_crosshair_size { nullptr };
+	static inline cvar_t *cg_crosshair_color { nullptr };
+	static inline cvar_t *cg_crosshair_strong { nullptr };
+	static inline cvar_t *cg_crosshair_strong_size { nullptr };
+	static inline cvar_t *cg_crosshair_strong_color { nullptr };
+	static inline cvar_t *cg_crosshair_damage_color { nullptr };
+	static inline cvar_t *cg_separate_weapon_settings { nullptr };
+	static inline float s_damageColor[4] {};
+	static inline int s_oldPackedDamageColor { -1 };
+
+	const int m_decayTime;
+	const float m_invDecayTime;
+
+	int m_decayTimeLeft { 0 };
+	int m_oldPackedColor { -1 };
+	float m_varColor[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+	float m_drawColor[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+
+	const Style m_style;
+
+	// Don't use var->modified flags as this is error-prone (multiple subsystems could reset it).
+	// Just check values caching whether its needed. We do the same for the UI var tracking code.
+
+	static void checkValueVar( cvar_t *var, Style style );
+	static void checkSizeVar( cvar_t *var, const SizeProps &sizeProps );
+	static void checkColorVar( cvar_t *var, float *cachedColor = nullptr, int *oldPackedColor = nullptr );
+public:
+	CrosshairState( Style style, unsigned decayTime ) noexcept
+		: m_decayTime( (int)decayTime ), m_invDecayTime( 1.0f / (float)decayTime ), m_style( style ) {}
+
+	void touchDamageState() { m_decayTimeLeft = m_decayTime; }
+
+	static void initPersistentState();
+	static void updateSharedPart();
+
+	void update( unsigned weapon );
+	void clear();
+
+	[[nodiscard]]
+	auto getDrawingColor() -> const float *;
+	[[nodiscard]]
+	auto getDrawingMaterial() -> std::optional<std::tuple<shader_s *, unsigned, unsigned>>;
+};
+
 typedef struct cg_state_s {
 	int64_t time;
 	float delay;
@@ -415,7 +673,7 @@ typedef struct cg_state_s {
 	cg_viewweapon_t weapon;
 	cg_viewdef_t view;
 
-	CrosshairState crosshairState { CrosshairState::Weak, 350 };
+	CrosshairState crosshairState { CrosshairState::Regular, 350 };
 	CrosshairState strongCrosshairState { CrosshairState::Strong, 300 };
 
 	ParticleSystem particleSystem;
@@ -454,7 +712,6 @@ void CG_AddCentityOutLineEffect( centity_t *cent );
 void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname, DrawSceneRequest * );
 
 void CG_ResetItemTimers( void );
-centity_t *CG_GetItemTimerEnt( int num );
 
 //
 // cg_draw.c
@@ -464,6 +721,8 @@ int CG_VerticalAlignForHeight( const int y, int align, int height );
 
 void CG_RegisterLevelMinimap( void );
 void CG_RegisterFonts( void );
+void CG_InitCrosshairs();
+void CG_ShutdownCrosshairs();
 
 struct model_s *CG_RegisterModel( const char *name );
 
@@ -499,16 +758,9 @@ void CG_Predict_TouchTriggers( pmove_t *pm, const vec3_t previous_origin );
 //
 // cg_screen.c
 //
-extern vrect_t scr_vrect;
-
-void CG_ScreenInit( void );
 void CG_Draw2D( void );
 void CG_CalcVrect( void );
 void CG_CenterPrint( const char *str );
-
-void CG_InitHUD();
-void CG_ShutdownHUD();
-void CG_DrawHUD();
 
 void CG_LoadingString( const char *str );
 bool CG_LoadingItemName( const char *str );
@@ -517,10 +769,6 @@ void CG_DrawCrosshair();
 void CG_DrawKeyState( int x, int y, int w, int h, int align, const char *key );
 
 void CG_ScreenCrosshairDamageUpdate( void );
-
-void CG_DrawPlayerNames();
-void CG_DrawTeamMates( void );
-void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color );
 
 void CG_ClearPointedNum( void );
 
@@ -644,8 +892,6 @@ void CG_OverrideWeapondef( int index, const char *cstring );
 
 void CG_StartBackgroundTrack( void );
 
-const char *CG_TranslateColoredString( const char *string, char *dst, size_t dst_size );
-
 //
 // cg_svcmds.c
 //
@@ -689,6 +935,9 @@ extern cvar_t *cg_colorCorrection;
 
 // Viewport bobbing on fall/high jumps
 extern cvar_t *cg_viewBob;
+
+void CG_DemocamInit( void );
+void CG_DemocamShutdown( void );
 
 void CG_ResetKickAngles( void );
 void CG_ResetColorBlend( void );
