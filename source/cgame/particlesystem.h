@@ -5,8 +5,8 @@ struct CMShapeList;
 
 template <typename> class SingletonHolder;
 
-#include "../qcommon/freelistallocator.h"
-#include "../qcommon/randomgenerator.h"
+#include "../common/freelistallocator.h"
+#include "../common/randomgenerator.h"
 #include "../ref/ref.h"
 
 #include <span>

@@ -4,61 +4,16 @@ include_directories(${ZLIB_INCLUDE_DIR} ${CURL_INCLUDE_DIR})
 
 file(GLOB SERVER_HEADERS
     "*.h"
-	"../gameshared/q_*.h"
-	"../gameshared/anorms.h"
-	"../gameshared/config.h"	
-	"../qcommon/*.h"
-	"../angelwrap/qas_public.h"
+	"../common/q_*.h"
+	"../common/anorms.h"
+	"../common/config.h"
+	"../common/*.h"
 	"../game/g_public.h"
 	"../server/*.h"
 )
 
 file(GLOB SERVER_SOURCES
-	"../qcommon/asyncstream.cpp"
-	"../qcommon/autoupdate.cpp"
-	"../qcommon/cm_*.cpp"
-	"../qcommon/cmdargssplitter.cpp"
-	"../qcommon/compression.cpp"
-	"../qcommon/configvars.cpp"
-	"../qcommon/configstringstorage.cpp"
-	"../qcommon/base64.cpp"
-    "../qcommon/bsp.cpp"
-    "../qcommon/patch.cpp"
-    "../qcommon/common.cpp"
-    "../qcommon/files.cpp"
-	"../qcommon/glob.cpp"
-	"../qcommon/hash.cpp"
-	"../qcommon/half_float.cpp"
-	"../qcommon/cmdsystem.cpp"
-    "../qcommon/mem.cpp"
-    "../qcommon/net.cpp"
-    "../qcommon/net_chan.cpp"
-    "../qcommon/msg.cpp"
-    "../qcommon/cvar.cpp"
-	"../qcommon/configvars.cpp"
-    "../qcommon/library.cpp"
-	"../qcommon/lifecycle.cpp"
-	"../qcommon/md5.cpp"
-	"../qcommon/mmcommon.cpp"
-    "../qcommon/maplist.cpp"
-	"../qcommon/outputmessages.cpp"
-    "../qcommon/snap_demos.cpp"
-    "../qcommon/snap_write.cpp"
-	"../qcommon/snap_tables.cpp"
-    "../qcommon/ascript.cpp"
-    "../qcommon/anticheat.cpp"
-    "../qcommon/wswcurl.cpp"
-	"../qcommon/wswexceptions.cpp"
-	"../qcommon/wswfs.cpp"
-	"../qcommon/wswsortbyfield.cpp"
-	"../qcommon/wswstringview.cpp"
-    "../qcommon/threads.cpp"
-	"../qcommon/sysfeatures.cpp"
-	"../qcommon/q_trie.cpp"
-	"../qcommon/userinfo.cpp"
-    "*.cpp"
-    "../gameshared/q_*.cpp"
-)
+	"../common/lifecycle.cpp")
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     file(GLOB SERVER_PLATFORM_SOURCES 
@@ -92,17 +47,15 @@ else()
 endif()
 
 if (MSVC)
-	set_source_files_properties("../qcommon/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "/arch:AVX")
-	set_source_files_properties("../../third-party/sqlite-amalgamation/sqlite3.c" PROPERTIES COMPILE_FLAGS "/fp:precise")
+	set_source_files_properties("../common/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "/arch:AVX")
 else()
-	set_source_files_properties("../qcommon/cm_trace_sse42.cpp" PROPERTIES COMPILE_FLAGS "-msse4.2")
-	set_source_files_properties("../qcommon/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "-mavx")
-	set_source_files_properties("../../third-party/sqlite-amalgamation/sqlite3.c" PROPERTIES COMPILE_FLAGS "-fno-fast-math")
+	set_source_files_properties("../common/cm_trace_sse42.cpp" PROPERTIES COMPILE_FLAGS "-msse4.2")
+	set_source_files_properties("../common/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "-mavx")
 endif()
 
 add_executable(${QFUSION_SERVER_NAME} ${SERVER_BINARY_TYPE} ${SERVER_HEADERS} ${SERVER_SOURCES} ${SERVER_PLATFORM_SOURCES})
-add_dependencies(${QFUSION_SERVER_NAME} game)
-target_link_libraries(${QFUSION_SERVER_NAME} PRIVATE ${CURL_LIBRARY} ${ZLIB_LIBRARY} ${SERVER_PLATFORM_LIBRARIES})
+add_dependencies(${QFUSION_SERVER_NAME} game execommon)
+target_link_libraries(${QFUSION_SERVER_NAME} PRIVATE execommon ${SERVER_PLATFORM_LIBRARIES})
 qf_set_output_dir(${QFUSION_SERVER_NAME} "")
 
 set_target_properties(${QFUSION_SERVER_NAME} PROPERTIES COMPILE_DEFINITIONS "DEDICATED_ONLY")

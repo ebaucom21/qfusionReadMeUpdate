@@ -1,10 +1,10 @@
 #ifndef WSW_e85f918d_1654_4d38_a893_87bdd3af22ad_H
 #define WSW_e85f918d_1654_4d38_a893_87bdd3af22ad_H
 
-#include "../gameshared/q_math.h"
-#include "../gameshared/q_shared.h"
-#include "../gameshared/q_comref.h"
-#include "../qcommon/wswstringview.h"
+#include "../common/q_math.h"
+#include "../common/q_shared.h"
+#include "../common/q_comref.h"
+#include "../common/wswstringview.h"
 
 class ChatHandlersChain;
 struct edict_s;

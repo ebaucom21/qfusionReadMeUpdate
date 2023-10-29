@@ -3,12 +3,12 @@
 
 #include <QObject>
 
-#include "../gameshared/q_arch.h"
+#include "../common/q_arch.h"
 
-#include "../qcommon/wswstringview.h"
-#include "../qcommon/wswfs.h"
-#include "../qcommon/wswvector.h"
-#include "../qcommon/stringspanstorage.h"
+#include "../common/wswstringview.h"
+#include "../common/wswfs.h"
+#include "../common/wswvector.h"
+#include "../common/stringspanstorage.h"
 
 namespace wsw::ui {
 

@@ -23,12 +23,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
 #include "cg_local.h"
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 #include "../client/input.h"
 #include "../client/keys.h"
 #include "../client/client.h"
-#include "../qcommon/cmdargs.h"
-#include "../qcommon/cmdcompat.h"
+#include "../common/cmdargs.h"
+#include "../common/cmdcompat.h"
 
 using wsw::operator""_asView;
 

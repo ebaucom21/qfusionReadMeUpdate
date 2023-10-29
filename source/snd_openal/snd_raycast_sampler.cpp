@@ -1,4 +1,4 @@
-#include "../gameshared/q_collision.h"
+#include "../common/q_collision.h"
 #include "snd_raycast_sampler.h"
 #include "snd_env_effects.h"
 

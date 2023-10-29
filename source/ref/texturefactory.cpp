@@ -18,15 +18,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "local.h"
-#include "../qcommon/hash.h"
-#include "../qcommon/links.h"
-#include "../qcommon/qcommon.h"
-#include "../qcommon/wswfs.h"
-#include "../qcommon/singletonholder.h"
+#include "../common/hash.h"
+#include "../common/links.h"
+#include "../common/common.h"
+#include "../common/wswfs.h"
+#include "../common/singletonholder.h"
 #include "../client/imageloading.h"
 
 #ifdef DEBUG_NOISE
-#include "../qcommon/noise.h"
+#include "../common/noise.h"
 #endif
 
 using wsw::operator""_asView;

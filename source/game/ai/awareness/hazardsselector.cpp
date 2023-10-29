@@ -1,7 +1,7 @@
 #include "hazardsselector.h"
 #include "awarenessmodule.h"
 #include "../bot.h"
-#include "../../../qcommon/links.h"
+#include "../../../common/links.h"
 
 #include <algorithm>
 

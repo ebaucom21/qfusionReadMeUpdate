@@ -31,7 +31,7 @@
 */
 #include <assert.h>
 #include "../ref/local.h"
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 #include "win_glw.h"
 
 #include <QVariant>

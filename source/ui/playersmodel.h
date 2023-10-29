@@ -3,9 +3,9 @@
 
 #include <QAbstractListModel>
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswstaticvector.h"
+#include "../common/common.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswstaticvector.h"
 
 struct ReplicatedScoreboardData;
 

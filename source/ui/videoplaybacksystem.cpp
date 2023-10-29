@@ -45,10 +45,10 @@ SOFTWARE.
 #include <QImage>
 #include <QVideoSurfaceFormat>
 
-#include "../qcommon/links.h"
-#include "../qcommon/qcommon.h"
-#include "../qcommon/singletonholder.h"
-#include "../qcommon/textstreamwriterextras.h"
+#include "../common/links.h"
+#include "../common/common.h"
+#include "../common/singletonholder.h"
+#include "../common/textstreamwriterextras.h"
 #include "local.h"
 
 #define PL_MPEG_IMPLEMENTATION

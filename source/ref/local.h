@@ -21,15 +21,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef R_LOCAL_H
 #define R_LOCAL_H
 
-#include "../gameshared/q_arch.h"
-#include "../gameshared/q_math.h"
-#include "../gameshared/q_shared.h"
-#include "../gameshared/q_cvar.h"
-#include "../qcommon/qfiles.h"
-#include "../qcommon/bsp.h"
-#include "../qcommon/patch.h"
-#include "../qcommon/qcommon.h"
-#include "../qcommon/outputmessages.h"
+#include "../common/q_arch.h"
+#include "../common/q_math.h"
+#include "../common/q_shared.h"
+#include "../common/q_cvar.h"
+#include "../common/qfiles.h"
+#include "../common/bsp.h"
+#include "../common/patch.h"
+#include "../common/common.h"
+#include "../common/outputmessages.h"
 
 #ifdef ALIGN
 #undef ALIGN
@@ -72,7 +72,7 @@ typedef struct superLightStyle_s {
 #include "glimp.h"
 #include "surface.h"
 
-#include "../qcommon/wswvector.h"
+#include "../common/wswvector.h"
 
 enum {
 	IT_NONE
@@ -268,8 +268,8 @@ public:
 	RenderTargetDepthBuffer *depthBuffer { nullptr };
 };
 
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/freelistallocator.h"
+#include "../common/wswstaticstring.h"
+#include "../common/freelistallocator.h"
 
 #include <memory>
 

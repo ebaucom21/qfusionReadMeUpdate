@@ -6,11 +6,11 @@
 
 #include <optional>
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/wswstringview.h"
-#include "../qcommon/wswstaticvector.h"
-#include "../qcommon/wswvector.h"
-#include "../qcommon/stringspanstorage.h"
+#include "../common/common.h"
+#include "../common/wswstringview.h"
+#include "../common/wswstaticvector.h"
+#include "../common/wswvector.h"
+#include "../common/stringspanstorage.h"
 
 namespace wsw::ui {
 

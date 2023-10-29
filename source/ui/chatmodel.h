@@ -5,11 +5,11 @@
 #include <QDateTime>
 #include <QList>
 
-#include "../gameshared/q_arch.h"
-#include "../gameshared/q_shared.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswvector.h"
-#include "../qcommon/freelistallocator.h"
+#include "../common/q_arch.h"
+#include "../common/q_shared.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswvector.h"
+#include "../common/freelistallocator.h"
 
 // TODO we can use a specialized one based on a freelist allocator
 #include <deque>

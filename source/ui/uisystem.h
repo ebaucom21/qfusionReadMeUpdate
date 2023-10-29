@@ -5,9 +5,9 @@
 #include <optional>
 #include <span>
 
-#include "../gameshared/q_shared.h"
-#include "../gameshared/q_math.h"
-#include "../gameshared/q_comref.h"
+#include "../common/q_shared.h"
+#include "../common/q_math.h"
+#include "../common/q_comref.h"
 
 struct MessageFault;
 struct ReplicatedScoreboardData;

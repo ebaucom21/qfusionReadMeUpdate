@@ -2,7 +2,7 @@
 #define WSW_98953973_42bd_4ce9_a3ab_72ce908bd1c3_H
 
 #include "../ailocal.h"
-#include "../../../qcommon/wswstaticvector.h"
+#include "../../../common/wswstaticvector.h"
 #include "firetargetcache.h"
 
 class Bot;

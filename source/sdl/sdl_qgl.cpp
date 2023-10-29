@@ -47,7 +47,7 @@ and Zephaniah E. Hull. Adapted by Victor Luchits for qfusion project.
 
 #include <SDL.h>
 
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 #include "sdl_glw.h"
 
 #define QGL_EXTERN

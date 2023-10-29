@@ -1,5 +1,5 @@
 #include "local.h"
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 #include "../ref/ref.h"
 
 #include <QColor>

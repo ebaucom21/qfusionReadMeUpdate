@@ -1,5 +1,5 @@
 #include "fastroutingresultscache.h"
-#include "../../../qcommon/links.h"
+#include "../../../common/links.h"
 
 #include <algorithm>
 

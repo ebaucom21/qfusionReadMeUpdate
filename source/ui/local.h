@@ -5,8 +5,8 @@
 #include <QImage>
 #include <array>
 
-#include "../qcommon/wswexceptions.h"
-#include "../qcommon/outputmessages.h"
+#include "../common/wswexceptions.h"
+#include "../common/outputmessages.h"
 #include "cgameimports.h"
 
 namespace wsw { class StringView; }

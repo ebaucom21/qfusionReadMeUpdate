@@ -1,16 +1,16 @@
 #ifndef WSW_0778b312_c4f6_4400_bcec_132900009562_H
 #define WSW_0778b312_c4f6_4400_bcec_132900009562_H
 
-#include "../gameshared/q_shared.h"
-#include "../qcommon/memspecbuilder.h"
-#include "../qcommon/wswtonum.h"
-#include "../qcommon/qcommon.h"
+#include "../common/q_shared.h"
+#include "../common/memspecbuilder.h"
+#include "../common/wswtonum.h"
+#include "../common/common.h"
 
 #include "vattribs.h"
 #include "shader.h"
 #include "glimp.h"
-#include "../qcommon/wswstaticvector.h"
-#include "../qcommon/stringspanstorage.h"
+#include "../common/wswstaticvector.h"
+#include "../common/stringspanstorage.h"
 
 using wsw::operator""_asView;
 
@@ -458,7 +458,7 @@ public:
 	auto getBool() -> std::optional<bool>;
 };
 
-#include "../qcommon/freelistallocator.h"
+#include "../common/freelistallocator.h"
 #include <vector>
 
 struct PlaceholderSpan {

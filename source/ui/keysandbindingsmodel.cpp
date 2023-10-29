@@ -1,8 +1,8 @@
 #include <QQuickItem>
 
 #include "keysandbindingsmodel.h"
-#include "../qcommon/wswexceptions.h"
-#include "../qcommon/wswstaticstring.h"
+#include "../common/wswexceptions.h"
+#include "../common/wswstaticstring.h"
 #include "../client/keys.h"
 
 using wsw::operator""_asView;

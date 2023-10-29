@@ -21,12 +21,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "g_local.h"
 #include "chat.h"
-#include "../qcommon/base64.h"
-#include "../qcommon/configstringstorage.h"
-#include "../qcommon/wswstringsplitter.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswstring.h"
-#include "../qcommon/wswvector.h"
+#include "../common/base64.h"
+#include "../common/configstringstorage.h"
+#include "../common/wswstringsplitter.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswstring.h"
+#include "../common/wswvector.h"
 
 using wsw::operator""_asView;
 

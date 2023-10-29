@@ -21,15 +21,15 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/cmdargs.h"
+#include "../common/wswstaticstring.h"
+#include "../common/cmdargs.h"
 #include "../client/client.h"
 #include "../ui/uisystem.h"
-#include "../qcommon/wswtonum.h"
-#include "../qcommon/cmdargssplitter.h"
-#include "../qcommon/cmdcompat.h"
+#include "../common/wswtonum.h"
+#include "../common/cmdargssplitter.h"
+#include "../common/cmdcompat.h"
 #include "../ui/uisystem.h"
-#include "../gameshared/gs_public.h"
+#include "../common/gs_public.h"
 #include "../client/snd_public.h"
 #include "cg_local.h"
 #include "../ui/uisystem.h"

@@ -18,10 +18,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
-#include "../../gameshared/q_arch.h"
-#include "../../gameshared/q_math.h"
-#include "../../gameshared/q_shared.h"
-#include "../../gameshared/q_cvar.h"
+#include "../../common/q_arch.h"
+#include "../../common/q_math.h"
+#include "../../common/q_shared.h"
+#include "../../common/q_cvar.h"
 #include "../../game/g_local.h"
 #include "ascript.h"
 #include "addon/addon_math.h"
@@ -33,9 +33,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "addon/addon_vec3.h"
 #include "addon/addon_cvar.h"
 #include "addon/addon_stringutils.h"
-#include "../../qcommon/qcommon.h"
-#include "../../qcommon/wswstringsplitter.h"
-#include "../../qcommon/wswstaticstring.h"
+#include "../../common/common.h"
+#include "../../common/wswstringsplitter.h"
+#include "../../common/wswstaticstring.h"
 
 #define QAS_SECTIONS_SEPARATOR ';'
 #define QAS_FILE_EXTENSION     ".as"

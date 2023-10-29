@@ -24,7 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "scoreboard.h"
 #include "chat.h"
 #include "commandshandler.h"
-#include "../qcommon/configvars.h"
+#include "../common/configvars.h"
 
 game_locals_t game;
 level_locals_t level;
@@ -157,21 +157,21 @@ void G_Printf( const char *format, ... ) {
 }
 
 /*
-* G_GS_Malloc - Used only for gameshared linking
+* G_GS_Malloc - Used only for common linking
 */
 static void *G_GS_Malloc( size_t size ) {
 	return Q_malloc( size );
 }
 
 /*
-* G_GS_Free - Used only for gameshared linking
+* G_GS_Free - Used only for common linking
 */
 static void G_GS_Free( void *data ) {
 	Q_free( data );
 }
 
 /*
-* G_GS_Trace - Used only for gameshared linking
+* G_GS_Trace - Used only for common linking
 */
 static void G_GS_Trace( trace_t *tr, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int ignore, int contentmask, int timeDelta ) {
 	edict_t *passent = NULL;
@@ -184,7 +184,7 @@ static void G_GS_Trace( trace_t *tr, const vec3_t start, const vec3_t mins, cons
 
 /*
 * G_InitGameShared
-* give gameshared access to some utilities
+* give common access to some utilities
 */
 static void G_InitGameShared( void ) {
 	memset( &gs, 0, sizeof( gs_state_t ) );

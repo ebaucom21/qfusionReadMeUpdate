@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "snd_local.h"
 
 // Hack... set quality hint based on sound fx name
-#include "../gameshared/gs_qrespath.h"
+#include "../common/gs_qrespath.h"
 
 #include <memory>
 

@@ -1,8 +1,8 @@
 #ifndef WSW_86716366_baac_4acf_9b1c_cb6d22b28663_H
 #define WSW_86716366_baac_4acf_9b1c_cb6d22b28663_H
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/stringspanstorage.h"
+#include "../common/common.h"
+#include "../common/stringspanstorage.h"
 #include "local.h"
 
 #include <QAbstractListModel>

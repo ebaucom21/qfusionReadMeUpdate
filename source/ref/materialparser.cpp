@@ -3,7 +3,7 @@
 #include "program.h"
 #include "shader.h"
 
-#include "../qcommon/hash.h"
+#include "../common/hash.h"
 
 static bool isANumber( const wsw::StringView &view ) {
 	for( char ch: view ) {

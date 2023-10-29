@@ -31,7 +31,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // by Jalisk0
 
 #include "cg_local.h"
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 
 pmodel_t cg_entPModels[MAX_EDICTS];
 pmodelinfo_t *cg_PModelInfos;

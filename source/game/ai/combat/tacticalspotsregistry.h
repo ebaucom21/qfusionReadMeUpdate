@@ -3,9 +3,9 @@
 
 #include "../ailocal.h"
 #include "../navigation/aasroutecache.h"
-#include "../../../qcommon/wswstaticvector.h"
+#include "../../../common/wswstaticvector.h"
 #include "../bot.h"
-#include "../../../qcommon/links.h"
+#include "../../../common/links.h"
 
 #include <memory>
 

@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "effectssystemfacade.h"
 
 #include "cg_local.h"
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 #include "../client/snd_public.h"
 
 void EffectsSystemFacade::startSound( sfx_s *sfx, const float *origin, float attenuation ) {

@@ -20,16 +20,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // console.c
 
 #include "client.h"
-#include "../qcommon/cmdargs.h"
-#include "../qcommon/cmdcompat.h"
-#include "../qcommon/cmdsystem.h"
-#include "../qcommon/freelistallocator.h"
-#include "../qcommon/podbufferholder.h"
-#include "../qcommon/singletonholder.h"
-#include "../qcommon/wswstringsplitter.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswvector.h"
-#include "../qcommon/wswfs.h"
+#include "../common/cmdargs.h"
+#include "../common/cmdcompat.h"
+#include "../common/cmdsystem.h"
+#include "../common/freelistallocator.h"
+#include "../common/podbufferholder.h"
+#include "../common/singletonholder.h"
+#include "../common/wswstringsplitter.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswvector.h"
+#include "../common/wswfs.h"
 
 #include <mutex>
 

@@ -53,8 +53,8 @@ endif()
 
 file(GLOB CLIENT_HEADERS
     "*.h"
-	"../gameshared/*.h"
-	"../qcommon/*.h"
+	"../common/*.h"
+	"../common/*.h"
 	"../angelwrap/qas_public.h"
 	"../ref/r_public.h"
 	"../cgame/cg_public.h"
@@ -68,70 +68,30 @@ file(GLOB CLIENT_HEADERS
 )
 
 file(GLOB CLIENT_COMMON_SOURCES
-	"../qcommon/asyncstream.cpp"
-	"../qcommon/autoupdate.cpp"
-	"../qcommon/base64.cpp"
-	"../qcommon/bsp.cpp"
-	"../qcommon/cm_*.cpp"
-	"../qcommon/cmdsystem.cpp"
-	"../qcommon/cmdargssplitter.cpp"
-	"../qcommon/common.cpp"
-	"../qcommon/compression.cpp"
-	"../qcommon/configstringstorage.cpp"
-	"../qcommon/cvar.cpp"
-	"../qcommon/configvars.cpp"
-	"../qcommon/files.cpp"
-	"../qcommon/glob.cpp"
-	"../qcommon/half_float.cpp"
-	"../qcommon/hash.cpp"
-	"../qcommon/library.cpp"
-	"../qcommon/lifecycle.cpp"
-	"../qcommon/md5.cpp"
-	"../qcommon/maplist.cpp"
-	"../qcommon/mm*.cpp"
-	"../qcommon/msg.cpp"
-	"../qcommon/net.cpp"
-	"../qcommon/net_chan.cpp"
-	"../qcommon/noise.cpp"
-	"../qcommon/outputmessages.cpp"
-	"../qcommon/patch.cpp"
-	"../qcommon/q_trie.cpp"
-	"../qcommon/snap_*.cpp"
-	"../qcommon/sysfeatures.cpp"
-	"../qcommon/threads.cpp"
-	"../qcommon/wswcurl.cpp"
-	"../qcommon/wswexceptions.cpp"
-	"../qcommon/wswfs.cpp"
-	"../qcommon/wswsortbyfield.h"
-	"../qcommon/wswstringview.cpp"
-	"../qcommon/userinfo.cpp"
-    "../server/*.cpp"
+	"../common/lifecycle.cpp"
+	"../common/noise.cpp"
+	"../server/sv_main.cpp"
     "*.cpp"
 	"../ui/*.cpp"
 	"../cgame/*.cpp"
 	"../ftlib/*.cpp"
 	"../snd_openal/*.cpp"
-	"../gameshared/*.cpp"
 	"../../third-party/recastnavigation/Recast/Source/*.cpp"
 )
 
 file(GLOB REF_HEADERS
 		"../ref/*.h"
-		"../gameshared/q_*.h"
-		"../gameshared/anorms.h"
-		"../gameshared/config.h"
-		"../qcommon/bsp.h"
-		"../qcommon/patch.h"
-		"../qcommon/iqm.h"
-		"../qcommon/qfiles.h"
+		"../common/q_*.h"
+		"../common/anorms.h"
+		"../common/config.h"
+		"../common/bsp.h"
+		"../common/patch.h"
+		"../common/iqm.h"
+		"../common/qfiles.h"
 		)
 
 file(GLOB REF_COMMON_SOURCES
-		"../ref/*.cpp"
-		"../gameshared/q_*.cpp"
-		"../qcommon/bsp.cpp"
-		"../qcommon/patch.cpp"
-		)
+		"../ref/*.cpp")
 
 if (USE_SDL2)
 	file(GLOB REF_PLATFORM_SOURCES
@@ -284,12 +244,12 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif()
 
 if (MSVC)
-	set_source_files_properties("../qcommon/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "/arch:AVX")
+	set_source_files_properties("../common/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "/arch:AVX")
 	set_source_files_properties("../../third-party/sqlite-amalgamation/sqlite3.c" PROPERTIES COMPILE_FLAGS "/fp:precise")
 else()
 	set_source_files_properties("../ref/frontendsse41.cpp" PROPERTIES COMPILE_FLAGS "-msse4.1")
-	set_source_files_properties("../qcommon/cm_trace_sse42.cpp" PROPERTIES COMPILE_FLAGS "-msse4.2")
-	set_source_files_properties("../qcommon/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "-mavx")
+	set_source_files_properties("../common/cm_trace_sse42.cpp" PROPERTIES COMPILE_FLAGS "-msse4.2")
+	set_source_files_properties("../common/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "-mavx")
 	set_source_files_properties("../../third-party/sqlite-amalgamation/sqlite3.c" PROPERTIES COMPILE_FLAGS "-fno-fast-math")
 endif()
 
@@ -304,7 +264,7 @@ add_executable(${QFUSION_CLIENT_NAME} ${CLIENT_BINARY_TYPE}
 		       ${BUNDLE_RESOURCES}
 )
 
-add_dependencies(${QFUSION_CLIENT_NAME} game)
+add_dependencies(${QFUSION_CLIENT_NAME} game execommon)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set_target_properties(${QFUSION_CLIENT_NAME} PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${QFUSION_MAC_INFO_PLIST})
@@ -356,8 +316,7 @@ set(QT_STATIC_EXPLICIT_PLUGINS
 )
 
 target_link_libraries(${QFUSION_CLIENT_NAME} PRIVATE
-					  ${CURL_LIBRARY}
-					  ${ZLIB_LIBRARY}
+		              execommon
 					  ${REF_PLATFORM_LIBRARIES}
 					  ${OGG_LIBRARY}
 					  ${VORBIS_LIBRARIES}

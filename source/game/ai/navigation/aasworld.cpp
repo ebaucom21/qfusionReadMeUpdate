@@ -19,13 +19,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "aasworld.h"
 #include "aaselementsmask.h"
 #include "aasareaswalker.h"
-#include "../../../qcommon/wswstaticvector.h"
-#include "../../../qcommon/wswvector.h"
-#include "../../../qcommon/wswfs.h"
+#include "../../../common/wswstaticvector.h"
+#include "../../../common/wswvector.h"
+#include "../../../common/wswfs.h"
 #include "../ailocal.h"
 #include "../rewriteme.h"
-#include "../../../qcommon/md5.h"
-#include "../../../qcommon/base64.h"
+#include "../../../common/md5.h"
+#include "../../../common/base64.h"
 
 #include <memory>
 #include <tuple>

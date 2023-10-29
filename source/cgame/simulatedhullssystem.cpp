@@ -1,10 +1,10 @@
 #include "simulatedhullssystem.h"
 
-#include "../qcommon/links.h"
+#include "../common/links.h"
 #include "../client/client.h"
-#include "../qcommon/wswvector.h"
-#include "../qcommon/memspecbuilder.h"
-#include "../qcommon/mmcommon.h"
+#include "../common/wswvector.h"
+#include "../common/memspecbuilder.h"
+#include "../common/mmcommon.h"
 
 #include <memory>
 #include <unordered_map>

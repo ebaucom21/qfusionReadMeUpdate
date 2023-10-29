@@ -19,11 +19,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 #include "client.h"
 #include "../ui/uisystem.h"
-#include "../qcommon/wswstaticvector.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/singletonholder.h"
-#include "../qcommon/cmdargs.h"
-#include "../qcommon/cmdcompat.h"
+#include "../common/wswstaticvector.h"
+#include "../common/wswstaticstring.h"
+#include "../common/singletonholder.h"
+#include "../common/cmdargs.h"
+#include "../common/cmdcompat.h"
 
 #include <tuple>
 #include <algorithm>

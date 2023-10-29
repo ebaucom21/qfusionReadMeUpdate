@@ -2,7 +2,7 @@
 //
 #include "resource.h"
 
-#include "../qcommon/version.h"
+#include "../common/version.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -72,7 +72,7 @@ BEGIN
             VALUE "CompanyName", APP_COPYRIGHT_OWNER "\0"
             VALUE "FileDescription", APPLICATION "\0"
             VALUE "FileVersion", APP_FILEVERSION_RC_STR "\0"
-            VALUE "LegalCopyright", "Copyright © 2004-2013\0"
+            VALUE "LegalCopyright", "Copyright ï¿½ 2004-2013\0"
             VALUE "LegalTrademarks", APP_COPYRIGHT_OWNER " - Picmip Studios\0"
 #ifdef SVN_REVSTR
             VALUE "PrivateBuild", SVN_REVSTR "\0"

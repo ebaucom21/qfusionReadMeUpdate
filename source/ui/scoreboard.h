@@ -1,12 +1,12 @@
 #ifndef WSW_955f6ab1_1bd9_4796_8984_0f1b743c660c_H
 #define WSW_955f6ab1_1bd9_4796_8984_0f1b743c660c_H
 
-#include "../qcommon/qcommon.h"
-#include "../gameshared/q_shared.h"
-#include "../gameshared/q_comref.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswstaticvector.h"
-#include "../qcommon/stringspanstorage.h"
+#include "../common/common.h"
+#include "../common/q_shared.h"
+#include "../common/q_comref.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswstaticvector.h"
+#include "../common/stringspanstorage.h"
 
 #include <array>
 

@@ -1,4 +1,4 @@
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 #include <windows.h>
 
 /*

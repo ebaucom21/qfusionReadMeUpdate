@@ -3,8 +3,8 @@
 
 // TODO: lift it to the top level
 #include "../game/ai/vec3.h"
-#include "../qcommon/wswstring.h"
-#include "../qcommon/wswstaticvector.h"
+#include "../common/wswstring.h"
+#include "../common/wswstaticvector.h"
 #include <array>
 
 namespace wsw::snd {

@@ -22,12 +22,12 @@
 #ifndef QFUSION_SERVER_H
 #define QFUSION_SERVER_H
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/cmdcompat.h"
-#include "../qcommon/configstringstorage.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/mmcommon.h"
-#include "../qcommon/outputmessages.h"
+#include "../common/common.h"
+#include "../common/cmdcompat.h"
+#include "../common/configstringstorage.h"
+#include "../common/wswstaticstring.h"
+#include "../common/mmcommon.h"
+#include "../common/outputmessages.h"
 #include "../game/g_public.h"
 
 #include <cstdlib>
@@ -240,6 +240,7 @@ void SV_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQu
 void SV_Cmd_Unregister( const wsw::StringView &name );
 
 void SV_Cmd_ExecuteNow( const char *text );
+void SV_Cmd_ExecuteNow2( const wsw::String &text );
 
 void SV_Cbuf_AppendCommand( const char *text );
 
@@ -312,6 +313,9 @@ bool SV_Web_Running( void );
 const char *SV_Web_UpstreamBaseUrl( void );
 bool SV_Web_AddGameClient( const char *session, int clientNum, const netadr_t *netAdr );
 void SV_Web_RemoveGameClient( const char *session );
+
+void SV_NotifyClientOfStartedBuiltinServer();
+void SV_NotifyBuiltinServerOfShutdownGameRequest();
 
 #define svDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Server, wsw::MessageCategory::Debug ) ).getWriter()
 #define svNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Server, wsw::MessageCategory::Notice ) ).getWriter()

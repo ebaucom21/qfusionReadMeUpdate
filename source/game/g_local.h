@@ -19,21 +19,21 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_local.h -- local definitions for game module
 
-#include "../gameshared/q_arch.h"
-#include "../gameshared/q_math.h"
-#include "../gameshared/q_shared.h"
-#include "../gameshared/q_cvar.h"
-#include "../gameshared/q_comref.h"
-#include "../gameshared/q_collision.h"
+#include "../common/q_arch.h"
+#include "../common/q_math.h"
+#include "../common/q_shared.h"
+#include "../common/q_cvar.h"
+#include "../common/q_comref.h"
+#include "../common/q_collision.h"
 
-#include "../gameshared/gs_public.h"
+#include "../common/gs_public.h"
 #include "g_public.h"
 #include "g_syscalls.h"
 #include "g_gametypes.h"
 
-#include "../qcommon/mmcommon.h"
-#include "../qcommon/cmdargs.h"
-#include "../qcommon/outputmessages.h"
+#include "../common/mmcommon.h"
+#include "../common/cmdargs.h"
+#include "../common/outputmessages.h"
 
 #include <array>
 #include <cmath>
@@ -1078,9 +1078,9 @@ typedef struct {
 #define G_MAX_TIME_DELTAS   8
 #define G_MAX_TIME_DELTAS_MASK ( G_MAX_TIME_DELTAS - 1 )
 
-#include "../qcommon/userinfo.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswtonum.h"
+#include "../common/userinfo.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswtonum.h"
 
 class FloodState {
 	int64_t m_timestamps[MAX_FLOOD_MESSAGES] {};

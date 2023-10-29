@@ -1,8 +1,8 @@
 #include "huddatamodel.h"
 #include "local.h"
-#include "../qcommon/qcommon.h"
-#include "../qcommon/configvars.h"
-#include "../gameshared/gs_public.h"
+#include "../common/common.h"
+#include "../common/configvars.h"
+#include "../common/gs_public.h"
 #include "../client/client.h"
 #include "../cgame/mediacache.h"
 

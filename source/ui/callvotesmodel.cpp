@@ -1,8 +1,8 @@
 #include "callvotesmodel.h"
 #include "../client/client.h"
-#include "../qcommon/base64.h"
-#include "../qcommon/compression.h"
-#include "../qcommon/wswstringsplitter.h"
+#include "../common/base64.h"
+#include "../common/compression.h"
+#include "../common/wswstringsplitter.h"
 #include "local.h"
 
 #include <QJsonObject>

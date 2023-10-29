@@ -1,12 +1,12 @@
 #include "snd_leaf_props_cache.h"
 #include "snd_effect_sampler.h"
 #include "snd_computation_host.h"
-#include "../qcommon/glob.h"
-#include "../qcommon/singletonholder.h"
-#include "../qcommon/wswstringview.h"
-#include "../qcommon/wswstringsplitter.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswfs.h"
+#include "../common/glob.h"
+#include "../common/singletonholder.h"
+#include "../common/wswstringview.h"
+#include "../common/wswstringsplitter.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswfs.h"
 
 #include <new>
 #include <limits>

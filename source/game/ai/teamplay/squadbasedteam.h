@@ -5,7 +5,7 @@
 #include "../awareness/enemiestracker.h"
 #include "../navigation/aasroutecache.h"
 #include "../navigation/aasworld.h"
-#include "../../../qcommon/wswstaticvector.h"
+#include "../../../common/wswstaticvector.h"
 
 #include <utility>
 

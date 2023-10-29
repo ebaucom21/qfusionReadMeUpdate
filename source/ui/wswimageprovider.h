@@ -5,8 +5,8 @@
 #include <QThreadPool>
 #include <QRunnable>
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/wswstaticstring.h"
+#include "../common/common.h"
+#include "../common/wswstaticstring.h"
 
 namespace wsw::ui {
 

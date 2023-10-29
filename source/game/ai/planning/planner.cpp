@@ -5,7 +5,7 @@
 #include "../baseai.h"
 #include "../groundtracecache.h"
 #include "../navigation/aasworld.h"
-#include "../../../gameshared/q_collision.h"
+#include "../../../common/q_collision.h"
 
 #include <algorithm>
 

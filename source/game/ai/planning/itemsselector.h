@@ -3,7 +3,7 @@
 
 #include "../ailocal.h"
 #include "goalentities.h"
-#include "../../../qcommon/wswstaticvector.h"
+#include "../../../common/wswstaticvector.h"
 
 struct SelectedNavEntity {
 	int64_t timeoutAt;

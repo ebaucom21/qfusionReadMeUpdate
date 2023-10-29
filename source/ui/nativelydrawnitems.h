@@ -6,8 +6,8 @@
 #include <QColor>
 #include <QRectF>
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/wswvector.h"
+#include "../common/common.h"
+#include "../common/wswvector.h"
 // TODO:
 #include "../cgame/cg_local.h"
 

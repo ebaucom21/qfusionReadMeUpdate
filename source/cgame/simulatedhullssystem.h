@@ -4,9 +4,9 @@
 #include <span>
 
 #include "../ref/ref.h"
-#include "../qcommon/randomgenerator.h"
-#include "../qcommon/freelistallocator.h"
-#include "../qcommon/wswvector.h"
+#include "../common/randomgenerator.h"
+#include "../common/freelistallocator.h"
+#include "../common/wswvector.h"
 
 struct CMShapeList;
 

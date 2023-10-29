@@ -23,10 +23,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define AS_USE_STLNAMES 1
 
-#include "../../gameshared/q_arch.h"
-#include "../../gameshared/q_math.h"
-#include "../../gameshared/q_shared.h"
-#include "../../gameshared/q_cvar.h"
+#include "../../common/q_arch.h"
+#include "../../common/q_math.h"
+#include "../../common/q_shared.h"
+#include "../../common/q_cvar.h"
 #include "ascript.h"
 
 #include <new>

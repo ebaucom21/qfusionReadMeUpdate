@@ -1,5 +1,5 @@
 #include <sys/time.h>
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 
 /*
 * Sys_Microseconds

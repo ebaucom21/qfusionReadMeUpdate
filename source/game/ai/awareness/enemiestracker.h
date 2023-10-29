@@ -2,11 +2,11 @@
 #define WSW_3da5c088_b618_40ab_885f_273c60bffd82_H
 
 #include "../component.h"
-#include "../../../qcommon/freelistallocator.h"
-#include "../../../qcommon/wswstaticdeque.h"
-#include "../../../qcommon/wswstaticvector.h"
+#include "../../../common/freelistallocator.h"
+#include "../../../common/wswstaticdeque.h"
+#include "../../../common/wswstaticvector.h"
 #include "../vec3.h"
-#include "../../../gameshared/q_comref.h"
+#include "../../../common/q_comref.h"
 #include <limits>
 
 inline bool HasQuad( const edict_t *ent ) {

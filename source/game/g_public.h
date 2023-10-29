@@ -80,7 +80,7 @@ struct CmdArgs;
 
 class DeclaredConfigVar;
 
-#include "../qcommon/maplist.h"
+#include "../common/maplist.h"
 
 //
 // functions provided by the main engine

@@ -1,5 +1,5 @@
 #include "snd_effects_allocator.h"
-#include "../qcommon/singletonholder.h"
+#include "../common/singletonholder.h"
 
 static SingletonHolder<EffectsAllocator> instanceHolder;
 

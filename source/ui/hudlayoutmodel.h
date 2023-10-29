@@ -1,9 +1,9 @@
 #ifndef WSW_8c488c22_5afd_4fad_9e25_9304dd129d10_H
 #define WSW_8c488c22_5afd_4fad_9e25_9304dd129d10_H
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswvector.h"
+#include "../common/common.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswvector.h"
 
 #include <QAbstractListModel>
 #include <QQuickItem>

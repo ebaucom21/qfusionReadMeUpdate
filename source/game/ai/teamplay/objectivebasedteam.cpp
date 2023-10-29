@@ -4,7 +4,7 @@
 #include "../navigation/aasroutecache.h"
 #include "../combat/advantageproblemsolver.h"
 #include "../bot.h"
-#include "../../../qcommon/links.h"
+#include "../../../common/links.h"
 
 #include <cmath>
 #include <cstdlib>

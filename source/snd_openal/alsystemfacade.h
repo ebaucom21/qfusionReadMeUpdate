@@ -1,6 +1,6 @@
-#include "../gameshared/q_math.h"
+#include "../common/q_math.h"
 #include "../client/snd_public.h"
-#include "../qcommon/wswstaticvector.h"
+#include "../common/wswstaticvector.h"
 
 #include "backend.h"
 #include "snd_local.h"

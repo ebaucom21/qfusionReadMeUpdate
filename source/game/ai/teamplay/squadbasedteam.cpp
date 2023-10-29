@@ -3,7 +3,7 @@
 #include "teamplaylocal.h"
 #include "../groundtracecache.h"
 #include "../bot.h"
-#include "../../../qcommon/links.h"
+#include "../../../common/links.h"
 
 #include <limits>
 #include <cmath>

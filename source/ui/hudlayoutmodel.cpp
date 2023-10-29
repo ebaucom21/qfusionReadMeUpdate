@@ -1,9 +1,9 @@
 #include "hudlayoutmodel.h"
-#include "../qcommon/wswexceptions.h"
-#include "../qcommon/wswfs.h"
-#include "../qcommon/wswtonum.h"
-#include "../qcommon/wswstaticvector.h"
-#include "../qcommon/wswstringsplitter.h"
+#include "../common/wswexceptions.h"
+#include "../common/wswfs.h"
+#include "../common/wswtonum.h"
+#include "../common/wswstaticvector.h"
+#include "../common/wswstringsplitter.h"
 
 #include <QPointF>
 #include <QSizeF>

@@ -21,15 +21,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define CGAME_HARD_LINKED
 
-#include "../gameshared/q_arch.h"
-#include "../gameshared/q_math.h"
-#include "../gameshared/q_shared.h"
-#include "../gameshared/q_cvar.h"
-#include "../gameshared/q_comref.h"
-#include "../gameshared/q_collision.h"
+#include "../common/q_arch.h"
+#include "../common/q_math.h"
+#include "../common/q_shared.h"
+#include "../common/q_cvar.h"
+#include "../common/q_comref.h"
+#include "../common/q_collision.h"
 
-#include "../gameshared/gs_public.h"
-#include "../qcommon/outputmessages.h"
+#include "../common/gs_public.h"
+#include "../common/outputmessages.h"
 #include "../ref/ref.h"
 
 #include "cg_public.h"
@@ -419,7 +419,7 @@ typedef struct {
 	bool flipped;
 } cg_viewdef_t;
 
-#include "../qcommon/configstringstorage.h"
+#include "../common/configstringstorage.h"
 
 // this is not exactly "static" but still...
 typedef struct {

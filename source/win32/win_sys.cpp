@@ -19,8 +19,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 // sys_win.h
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/cmdargs.h"
+#include "../common/common.h"
+#include "../common/cmdargs.h"
 #include "../client/keys.h"
 
 #include "winquake.h"

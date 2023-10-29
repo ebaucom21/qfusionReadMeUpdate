@@ -19,13 +19,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "server.h"
-#include "../qcommon/cmdsystem.h"
-#include "../qcommon/singletonholder.h"
-#include "../qcommon/pipeutils.h"
-#include "../qcommon/compression.h"
-#include "../qcommon/demometadata.h"
-#include "../qcommon/wswtonum.h"
-#include "../gameshared/gs_public.h"
+#include "../common/cmdsystem.h"
+#include "../common/singletonholder.h"
+#include "../common/pipeutils.h"
+#include "../common/compression.h"
+#include "../common/demometadata.h"
+#include "../common/wswtonum.h"
+#include "../common/gs_public.h"
 
 using wsw::operator""_asView;
 
@@ -117,11 +117,6 @@ static struct {
 		memset( &gi, 0, sizeof( gi ) );
 	}
 } sv;
-
-#ifndef DEDICATED_ONLY
-extern qbufPipe_t *g_svCmdPipe;
-extern qbufPipe_t *g_clCmdPipe;
-#endif
 
 // IPv4
 cvar_t *sv_ip;
@@ -1241,12 +1236,7 @@ void SV_InitGame( void ) {
 	netadr_t address, ipv6_address;
 	bool socket_opened = false;
 
-#ifndef DEDICATED_ONLY
-	// make sure the client is down
-	callOverPipe( g_clCmdPipe, CL_Disconnect, nullptr, true );
-	callOverPipe( g_clCmdPipe, SCR_BeginLoadingPlaque );
-	QBufPipe_Finish( g_clCmdPipe );
-#endif
+	SV_NotifyClientOfStartedBuiltinServer();
 
 	if( svs.initialized ) {
 		// cause any connected clients to reconnect
@@ -1486,9 +1476,8 @@ void SV_Map( const char *level, bool devmap ) {
 
 	SV_MOTD_Update();
 
-#ifndef DEDICATED_ONLY
-	//callOverPipe( g_clCmdPipe, SCR_BeginLoadingPlaque );
-#endif
+	// TODO:??? SCR_BeginLoadingPlaque()
+
 	SV_BroadcastCommand( "changing\n" );
 	SV_SendClientMessages();
 	SV_SpawnServer( level, devmap );
@@ -5674,10 +5663,6 @@ void HandleClientCommand_Motd( client_t *client, const CmdArgs &cmdArgs ) {
 	}
 }
 
-CmdSystem *CL_GetCmdSystem();
-
-void CL_RegisterCmdWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc );
-
 class SVCmdSystem: public CmdSystem {
 	void registerSystemCommands() override {
 		checkCallingThread();
@@ -5763,71 +5748,12 @@ void SV_Cmd_ExecuteText( int when, const char *text ) {
 	}
 }
 
-#ifndef DEDICATED_ONLY
-
-static void executeCmdByBuiltinServer( const wsw::String &string ) {
-	g_svCmdSystemHolder.instance()->executeNow( wsw::StringView { string.data(), string.size() } );
-}
-
-static void redirectCmdExecutionToBuiltinServer( const CmdArgs &cmdArgs ) {
-	wsw::StaticString<MAX_STRING_CHARS> text;
-	// TODO: Preserve the original string?
-	for( const wsw::StringView &arg: cmdArgs.allArgs ) {
-		text << arg << ' ';
-	}
-	text[text.size() - 1] = '\n';
-
-	const wsw::String boxedText( text.data(), text.size() );
-	callOverPipe( g_svCmdPipe, &executeCmdByBuiltinServer, boxedText );
-}
-
-void Con_AcceptCompletionResult( unsigned requestId, const CompletionResult &result );
-
-static void executeCmdCompletionByBuiltinServer( unsigned requestId, const wsw::String &partial, CompletionQueryFunc queryFunc ) {
-	// The point is in executing the queryFunc safely in the server thread in a robust fashion
-	CompletionResult queryResult = queryFunc( wsw::StringView { partial.data(), partial.size() } );
-	callOverPipe( g_clCmdPipe, Con_AcceptCompletionResult, requestId, queryResult );
-}
-
-static void redirectCmdCompletionToBuiltinServer( const wsw::StringView &, unsigned requestId,
-												  const wsw::StringView &partial, CompletionQueryFunc queryFunc ) {
-	wsw::String boxedPartial { partial.data(), partial.size() };
-
-	callOverPipe( g_svCmdPipe, executeCmdCompletionByBuiltinServer, requestId, boxedPartial, queryFunc );
-}
-
-static void registerBuiltinServerCmdOnClientSide( const wsw::String &name, CompletionQueryFunc completionFunc ) {
-	const wsw::StringView nameView( name.data(), name.size(), wsw::StringView::ZeroTerminated );
-	if( completionFunc ) {
-		CL_RegisterCmdWithCompletion( nameView, redirectCmdExecutionToBuiltinServer, completionFunc,
-									  redirectCmdCompletionToBuiltinServer );
-	} else {
-		CL_GetCmdSystem()->registerCommand( nameView, redirectCmdExecutionToBuiltinServer );
-	}
-}
-
-static void unregisterBuiltinServerCmdOnClientSide( const wsw::String &name ) {
-	CL_GetCmdSystem()->unregisterCommand( wsw::StringView { name.data(), name.size(), wsw::StringView::ZeroTerminated } );
-}
-
-#endif
-
-void SV_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionFunc ) {
-	g_svCmdSystemHolder.instance()->registerCommand( name, cmdFunc );
-#ifndef DEDICATED_ONLY
-	callOverPipe( g_clCmdPipe, registerBuiltinServerCmdOnClientSide, wsw::String { name.data(), name.size() }, completionFunc );
-#endif
-}
-
-void SV_Cmd_Unregister( const wsw::StringView &name ) {
-	g_svCmdSystemHolder.instance()->unregisterCommand( name );
-#ifndef DEDICATED_ONLY
-	callOverPipe( g_clCmdPipe, unregisterBuiltinServerCmdOnClientSide, wsw::String( name.data(), name.size() ) );
-#endif
-}
-
 void SV_Cmd_ExecuteNow( const char *text ) {
 	g_svCmdSystemHolder.instance()->executeNow( wsw::StringView( text ) );
+}
+
+void SV_Cmd_ExecuteNow2( const wsw::String &text ) {
+	g_svCmdSystemHolder.instance()->executeNow( wsw::StringView( text.data(), text.size() ) );
 }
 
 void SV_Cbuf_AppendCommand( const char *text ) {

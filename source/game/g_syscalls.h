@@ -18,7 +18,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
-#include "../qcommon/maplist.h"
+#include "../common/maplist.h"
 
 #ifdef GAME_HARD_LINKED
 #define GAME_IMPORT gi_imp_local

@@ -1,11 +1,11 @@
 #ifndef WSW_09180ffb_50be_4694_b83a_1e336d950fea_H
 #define WSW_09180ffb_50be_4694_b83a_1e336d950fea_H
 
-#include "../qcommon/freelistallocator.h"
-#include "../qcommon/wswstringview.h"
-#include "../qcommon/wswstring.h"
-#include "../qcommon/commandshandler.h"
-#include "../qcommon/cmdargs.h"
+#include "../common/freelistallocator.h"
+#include "../common/wswstringview.h"
+#include "../common/wswstring.h"
+#include "../common/commandshandler.h"
+#include "../common/cmdargs.h"
 
 class ClientCommandsHandler : public wsw::CommandsHandler<wsw::VarArgCommandCallback<bool, edict_t *, uint64_t, const CmdArgs &>> {
 	static inline const wsw::StringView kScriptTag { "script" };

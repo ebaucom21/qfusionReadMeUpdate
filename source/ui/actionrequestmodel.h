@@ -3,11 +3,11 @@
 
 #include <QAbstractListModel>
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/wswstringview.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswstaticvector.h"
-#include "../qcommon/wswstring.h"
+#include "../common/common.h"
+#include "../common/wswstringview.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswstaticvector.h"
+#include "../common/wswstring.h"
 
 namespace wsw::ui {
 

@@ -1,5 +1,5 @@
 #include "particlesystem.h"
-#include "../qcommon/links.h"
+#include "../common/links.h"
 #include "../client/client.h"
 #include "cg_local.h"
 

@@ -24,7 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <span>
 
-#include "../qcommon/podbufferholder.h"
+#include "../common/podbufferholder.h"
 
 struct alignas( 32 )Frustum {
 	alignas( 32 ) float planeX[8];

@@ -21,9 +21,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "g_local.h"
 #include "chat.h"
-#include "../qcommon/wswstringsplitter.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswstaticvector.h"
+#include "../common/wswstringsplitter.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswstaticvector.h"
 #include "ai/vec3.h"
 
 #include <chrono>
@@ -290,9 +290,9 @@ void G_CheckCvars( void ) {
 		g_allow_falldamage->modified = false;
 	}
 
-	// update gameshared server settings
+	// update common server settings
 
-	// FIXME: This should be restructured so gameshared settings are the master settings
+	// FIXME: This should be restructured so common settings are the master settings
 	GS_GamestatSetFlag( GAMESTAT_FLAG_INSTAGIB, ( g_instagib->integer != 0 ) );
 	GS_GamestatSetFlag( GAMESTAT_FLAG_FALLDAMAGE, ( g_allow_falldamage->integer != 0 ) );
 	GS_GamestatSetFlag( GAMESTAT_FLAG_SELFDAMAGE, ( g_allow_selfdamage->integer != 0 ) );

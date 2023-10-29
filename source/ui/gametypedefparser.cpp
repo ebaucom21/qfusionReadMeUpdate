@@ -1,8 +1,8 @@
 #include "gametypesmodel.h"
 
-#include "../qcommon/wswfs.h"
-#include "../qcommon/wswstringsplitter.h"
-#include "../qcommon/wswtonum.h"
+#include "../common/wswfs.h"
+#include "../common/wswstringsplitter.h"
+#include "../common/wswtonum.h"
 
 using wsw::operator""_asView;
 

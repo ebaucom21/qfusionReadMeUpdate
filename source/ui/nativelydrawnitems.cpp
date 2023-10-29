@@ -3,7 +3,7 @@
 
 #include <QQmlProperty>
 
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 #include "../cgame/cg_boneposes.h"
 
 namespace wsw::ui {

@@ -1,7 +1,7 @@
 #include "chat.h"
 #include "g_local.h"
-#include "../qcommon/singletonholder.h"
-#include "../qcommon/wswstringview.h"
+#include "../common/singletonholder.h"
+#include "../common/wswstringview.h"
 
 #include <cstdint>
 #include <sstream>

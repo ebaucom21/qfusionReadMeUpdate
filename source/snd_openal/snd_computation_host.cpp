@@ -1,8 +1,8 @@
 #include "snd_computation_host.h"
 #include "snd_local.h"
 
-#include "../qcommon/links.h"
-#include "../qcommon/singletonholder.h"
+#include "../common/links.h"
+#include "../common/singletonholder.h"
 
 #include <thread>
 

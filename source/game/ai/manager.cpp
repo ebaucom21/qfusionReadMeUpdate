@@ -4,7 +4,7 @@
 #include "evolutionmanager.h"
 #include "bot.h"
 #include "combat/tacticalspotsregistry.h"
-#include "../../qcommon/links.h"
+#include "../../common/links.h"
 
 #include <algorithm>
 

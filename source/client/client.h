@@ -19,15 +19,15 @@
  */
 // client.h -- primary header for client
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/cmdcompat.h"
-#include "../qcommon/configstringstorage.h"
-#include "../qcommon/outputmessages.h"
+#include "../common/common.h"
+#include "../common/cmdcompat.h"
+#include "../common/configstringstorage.h"
+#include "../common/outputmessages.h"
 #include "../ref/ref.h"
 #include "../cgame/cg_public.h"
 #include "../ftlib/ftlib.h"
 #include "snd_public.h"
-#include "../qcommon/steam.h"
+#include "../common/steam.h"
 
 #include "vid.h"
 #include "input.h"
@@ -348,6 +348,11 @@ void CL_Cbuf_PrependCommand( const char *text );
 void CL_Cbuf_PrependCommand( const wsw::StringView &text );
 
 void CL_Cbuf_ExecutePendingCommands();
+
+void Con_AcceptCompletionResult( unsigned requestId, const CompletionResult &result );
+void CL_RegisterCmdWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc );
+void CL_RunCompletionFuncSync( const wsw::StringView &, unsigned requestId, const wsw::StringView &partial,
+							   CompletionQueryFunc queryFunc );
 
 void CL_UpdateClientCommandsToServer( msg_t *msg );
 void CL_AddReliableCommand( const char *cmd );

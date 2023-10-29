@@ -21,10 +21,10 @@
 #ifndef WSW_43c64bed_a1ec_442c_a8cb_2fa107edfa89_H
 #define WSW_43c64bed_a1ec_442c_a8cb_2fa107edfa89_H
 
-#include "../gameshared/q_keycodes.h"
+#include "../common/q_keycodes.h"
 
-#include "../qcommon/wswstaticvector.h"
-#include "../qcommon/wswstring.h"
+#include "../common/wswstaticvector.h"
+#include "../common/wswstring.h"
 
 template <typename> class SingletonHolder;
 

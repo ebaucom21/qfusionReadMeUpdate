@@ -6,9 +6,9 @@
 
 #include <array>
 
-#include "../qcommon/configvars.h"
-#include "../qcommon/wswstaticvector.h"
-#include "../qcommon/wswstaticstring.h"
+#include "../common/configvars.h"
+#include "../common/wswstaticvector.h"
+#include "../common/wswstaticstring.h"
 #include "hudlayoutmodel.h"
 #include "cgameimports.h"
 

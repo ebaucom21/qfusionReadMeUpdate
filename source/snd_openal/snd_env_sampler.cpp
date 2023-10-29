@@ -6,7 +6,7 @@
 #include "snd_effects_allocator.h"
 #include "snd_propagation.h"
 
-#include "../gameshared/q_comref.h"
+#include "../common/q_comref.h"
 
 #include <algorithm>
 #include <limits>

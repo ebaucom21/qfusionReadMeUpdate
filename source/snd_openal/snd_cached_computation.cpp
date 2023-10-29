@@ -1,6 +1,6 @@
 #include "snd_cached_computation.h"
 
-#include "../gameshared/q_comref.h"
+#include "../common/q_comref.h"
 
 #include <initializer_list>
 

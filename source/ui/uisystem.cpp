@@ -1,9 +1,9 @@
 #include "uisystem.h"
-#include "../qcommon/configvars.h"
-#include "../qcommon/links.h"
-#include "../qcommon/singletonholder.h"
-#include "../qcommon/wswstaticvector.h"
-#include "../qcommon/qcommon.h"
+#include "../common/configvars.h"
+#include "../common/links.h"
+#include "../common/singletonholder.h"
+#include "../common/wswstaticvector.h"
+#include "../common/common.h"
 #include "../client/client.h"
 #include "actionrequestmodel.h"
 #include "callvotesmodel.h"
@@ -41,7 +41,7 @@
 
 #include <clocale>
 #include <span>
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 
 #ifdef _WIN32
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);

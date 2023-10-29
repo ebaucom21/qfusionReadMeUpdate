@@ -21,18 +21,19 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-#include "../qcommon/asyncstream.h"
-#include "../qcommon/cmdsystem.h"
-#include "../qcommon/demometadata.h"
-#include "../qcommon/singletonholder.h"
-#include "../qcommon/pipeutils.h"
-#include "../qcommon/maplist.h"
-#include "../qcommon/mmcommon.h"
-#include "../qcommon/hash.h"
-#include "../qcommon/q_trie.h"
-#include "../qcommon/textstreamwriterextras.h"
-#include "../qcommon/wswtonum.h"
+#include "../common/asyncstream.h"
+#include "../common/cmdsystem.h"
+#include "../common/demometadata.h"
+#include "../common/singletonholder.h"
+#include "../common/pipeutils.h"
+#include "../common/maplist.h"
+#include "../common/mmcommon.h"
+#include "../common/hash.h"
+#include "../common/q_trie.h"
+#include "../common/textstreamwriterextras.h"
+#include "../common/wswtonum.h"
 #include "../ui/uisystem.h"
+#include "../server/server.h"
 
 #include "serverlist.h"
 
@@ -167,8 +168,8 @@ static graphsamp_t values[1024];
 #define ENV_CNT ( CS_PLAYERINFOS + MAX_CLIENTS * PLAYER_MULT )
 #define TEXTURE_CNT ( ENV_CNT + 1 )
 
-extern qbufPipe_s *g_svCmdPipe;
-extern qbufPipe_s *g_clCmdPipe;
+//extern qbufPipe_s *g_svCmdPipe;
+//extern qbufPipe_s *g_clCmdPipe;
 
 static void *cge = nullptr;
 static void *module_handle;
@@ -2009,8 +2010,7 @@ void CL_Disconnect( const char *message, bool isCalledByBuiltinServer /* TODO!!!
 
 	if( cls.state != CA_DISCONNECTED ) {
 		if( !isCalledByBuiltinServer ) {
-			callOverPipe( g_svCmdPipe, SV_ShutdownGame, nullptr, false );
-			QBufPipe_Finish( g_svCmdPipe );
+			SV_NotifyBuiltinServerOfShutdownGameRequest();
 		}
 
 		if( cl_timedemo && cl_timedemo->integer ) {
@@ -5376,10 +5376,6 @@ static void CL_NetFrame( int realMsec, int gameMsec ) {
 }
 
 void CL_Frame( int realMsec, int gameMsec ) {
-#ifndef DEDICATED_ONLY
-	(void)QBufPipe_ReadCmds( g_clCmdPipe );
-#endif
-
 	static int allRealMsec = 0, allGameMsec = 0, extraMsec = 0;
 	static float roundingMsec = 0.0f;
 

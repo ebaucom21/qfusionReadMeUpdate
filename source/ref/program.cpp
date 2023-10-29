@@ -23,13 +23,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 #include "program.h"
-#include "../qcommon/links.h"
-#include "../qcommon/memspecbuilder.h"
-#include "../qcommon/singletonholder.h"
-#include "../qcommon/wswfs.h"
-#include "../qcommon/wswstring.h"
-#include "../qcommon/wswstringsplitter.h"
-#include "../qcommon/textstreamwriterextras.h"
+#include "../common/links.h"
+#include "../common/memspecbuilder.h"
+#include "../common/singletonholder.h"
+#include "../common/wswfs.h"
+#include "../common/wswstring.h"
+#include "../common/wswstringsplitter.h"
+#include "../common/textstreamwriterextras.h"
 
 using wsw::operator""_asView;
 

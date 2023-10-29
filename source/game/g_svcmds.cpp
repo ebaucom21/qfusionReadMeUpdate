@@ -20,9 +20,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "g_local.h"
 #include "chat.h"
-#include "../qcommon/net.h"
-#include "../qcommon/links.h"
-#include "../qcommon/cmdargs.h"
+#include "../common/net.h"
+#include "../common/links.h"
+#include "../common/cmdargs.h"
 
 #include <new>
 
@@ -850,7 +850,7 @@ unsigned GIPFilter::ParseFilterV4MappedToV6( const char *filter, uint8_t *prefix
 }
 
 bool GIPFilter::StringToAddress( const char *s, netadr_t *addr ) {
-	// Too bad we can't really use stuff from qcommon that is stateful and has extra dependencies
+	// Too bad we can't really use stuff from common that is stateful and has extra dependencies
 	// Utilize generic prefix/mask parsing facilities
 
 	alignas( 8 )uint8_t prefix[16];

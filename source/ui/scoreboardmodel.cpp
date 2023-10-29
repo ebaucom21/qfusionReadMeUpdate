@@ -1,6 +1,6 @@
 #include "scoreboardmodel.h"
-#include "../qcommon/enumtokenmatcher.h"
-#include "../qcommon/configvars.h"
+#include "../common/enumtokenmatcher.h"
+#include "../common/configvars.h"
 #include "uisystem.h"
 #include "local.h"
 

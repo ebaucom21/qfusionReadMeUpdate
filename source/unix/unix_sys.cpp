@@ -17,7 +17,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-/* we need __APPLE__ here because __MACOSX__ is defined in ../game/q_shared.h from ../qcommon/qcommon.h
+/* we need __APPLE__ here because __MACOSX__ is defined in ../game/q_shared.h from ../common/common.h
 which defines HAVE_STRCASECMP if SDL.h isn't called first, causing a bunch of warnings
 FIXME:  This will be remidied once a native Mac port is complete
 */
@@ -47,7 +47,7 @@ FIXME:  This will be remidied once a native Mac port is complete
 #include <machine/param.h>
 #endif
 
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 #include "glob.h"
 
 #if !defined( USE_SDL2 ) || defined( DEDICATED_ONLY )

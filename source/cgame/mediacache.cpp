@@ -20,9 +20,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 #include "../client/snd_public.h"
-#include "../qcommon/qcommon.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswfs.h"
+#include "../common/common.h"
+#include "../common/wswstaticstring.h"
+#include "../common/wswfs.h"
 #include "../client/client.h"
 #include "mediacache.h"
 

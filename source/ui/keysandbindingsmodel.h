@@ -9,9 +9,9 @@
 #include <array>
 #include <unordered_map>
 
-#include "../qcommon/qcommon.h"
-#include "../qcommon/wswstring.h"
-#include "../qcommon/wswvector.h"
+#include "../common/common.h"
+#include "../common/wswstring.h"
+#include "../common/wswvector.h"
 
 class QQuickItem;
 

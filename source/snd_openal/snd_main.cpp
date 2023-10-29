@@ -21,9 +21,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "snd_local.h"
 #include "snd_env_sampler.h"
 #include "../client/client.h"
-#include "../qcommon/singletonholder.h"
-#include "../qcommon/cmdargs.h"
-#include "../qcommon/cmdcompat.h"
+#include "../common/singletonholder.h"
+#include "../common/cmdargs.h"
+#include "../common/cmdcompat.h"
 #include "alsystemfacade.h"
 
 using wsw::operator""_asView;

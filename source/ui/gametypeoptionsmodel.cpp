@@ -1,8 +1,8 @@
 #include "gametypeoptionsmodel.h"
 #include "local.h"
 #include "../client/client.h"
-#include "../qcommon/wswstringsplitter.h"
-#include "../qcommon/wswtonum.h"
+#include "../common/wswstringsplitter.h"
+#include "../common/wswtonum.h"
 
 using wsw::operator""_asView;
 

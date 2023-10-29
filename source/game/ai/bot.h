@@ -1,8 +1,8 @@
 #ifndef WSW_da942a7a_e77d_4eaf_9ad8_e1b4b6fc5240_H
 #define WSW_da942a7a_e77d_4eaf_9ad8_e1b4b6fc5240_H
 
-#include "../../qcommon/wswstaticvector.h"
-#include "../../qcommon/links.h"
+#include "../../common/wswstaticvector.h"
+#include "../../common/links.h"
 #include "awareness/awarenessmodule.h"
 #include "planning/planningmodule.h"
 #include "baseai.h"

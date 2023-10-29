@@ -1,5 +1,5 @@
 #include "scoreboard.h"
-#include "../qcommon/singletonholder.h"
+#include "../common/singletonholder.h"
 #include "g_local.h"
 
 #include <algorithm>

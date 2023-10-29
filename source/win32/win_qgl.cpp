@@ -49,7 +49,7 @@ and Zephaniah E. Hull. Adapted by Victor Luchits for qfusion project.
 
 #include <windows.h>
 #include <GL/gl.h>
-#include "../qcommon/qcommon.h"
+#include "../common/common.h"
 #include "win_glw.h"
 
 #ifdef min

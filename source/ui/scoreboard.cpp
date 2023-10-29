@@ -1,9 +1,9 @@
 #include "scoreboard.h"
 
 #include "local.h"
-#include "../gameshared/q_shared.h"
-#include "../qcommon/wswstringsplitter.h"
-#include "../qcommon/wswtonum.h"
+#include "../common/q_shared.h"
+#include "../common/wswstringsplitter.h"
+#include "../common/wswtonum.h"
 #include "../client/client.h"
 
 using wsw::operator""_asView;

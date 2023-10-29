@@ -20,8 +20,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "g_local.h"
 #include "scoreboard.h"
-#include "../qcommon/hash.h"
-#include "../qcommon/wswstringsplitter.h"
+#include "../common/hash.h"
+#include "../common/wswstringsplitter.h"
 
 using wsw::operator""_asView;
 

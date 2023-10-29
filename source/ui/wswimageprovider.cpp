@@ -8,7 +8,7 @@
 #include <QBuffer>
 
 #include "local.h"
-#include "../qcommon/wswfs.h"
+#include "../common/wswfs.h"
 #include "../client/imageloading.h"
 #include "../ref/ref.h"
 

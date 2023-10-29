@@ -22,9 +22,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef WSW_4d42a1db_cb72_4adf_97c9_3317a0fae4b9_H
 #define WSW_4d42a1db_cb72_4adf_97c9_3317a0fae4b9_H
 
-#include "../qcommon/freelistallocator.h"
-#include "../qcommon/randomgenerator.h"
-#include "../gameshared/q_shared.h"
+#include "../common/freelistallocator.h"
+#include "../common/randomgenerator.h"
+#include "../common/q_shared.h"
 // TODO:!!!!!!!!! Lift it to the top level!
 #include "../game/ai/vec3.h"
 #include "particlesystem.h"

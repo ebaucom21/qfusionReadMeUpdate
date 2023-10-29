@@ -1,5 +1,5 @@
 #include "classifiedentitiescache.h"
-#include "../../qcommon/singletonholder.h"
+#include "../../common/singletonholder.h"
 
 namespace wsw::ai {
 

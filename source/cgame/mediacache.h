@@ -1,14 +1,14 @@
 #ifndef WSW_7f020248_88b8_40f2_ae59_1e97c51e2f82_H
 #define WSW_7f020248_88b8_40f2_ae59_1e97c51e2f82_H
 
-#include "../gameshared/q_shared.h"
-#include "../gameshared/q_comref.h"
-#include "../gameshared/q_math.h"
-#include "../gameshared/gs_public.h"
+#include "../common/q_shared.h"
+#include "../common/q_comref.h"
+#include "../common/q_math.h"
+#include "../common/gs_public.h"
 
-#include "../qcommon/wswstringview.h"
-#include "../qcommon/wswvector.h"
-#include "../qcommon/stringspanstorage.h"
+#include "../common/wswstringview.h"
+#include "../common/wswvector.h"
+#include "../common/stringspanstorage.h"
 
 struct sfx_s;
 struct model_s;

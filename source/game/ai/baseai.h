@@ -5,8 +5,8 @@
 #include "planning/goalentities.h"
 #include "navigation/aasworld.h"
 #include "navigation/aasroutecache.h"
-#include "../../qcommon/wswstaticvector.h"
-#include "../../gameshared/q_comref.h"
+#include "../../common/wswstaticvector.h"
+#include "../../common/q_comref.h"
 
 class alignas ( 4 )AiEntityPhysicsState
 {
