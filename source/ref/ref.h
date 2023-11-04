@@ -269,6 +269,8 @@ struct alignas( 16 ) Particle {
 	uint16_t activationDelay;
 
 	uint8_t bounceCount;
+	// Is not guaranteed to be correct/meaningful in all cases, check the actual usage
+	uint8_t originalIndex;
 
 	// TODO: All of this ties Particle to fixed AppearanceRules, allow supplying different instance data
 

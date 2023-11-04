@@ -3,100 +3,317 @@
 #include "../client/client.h"
 #include "cg_local.h"
 
+struct PolyTrailOfParticles {
+	int64_t spawnedAt { 0 };
+	// Global for the entire associated flock
+	int64_t detachedAt { 0 };
+	PolyTrailOfParticles *prev { nullptr }, *next { nullptr };
+	CurvedPolyTrailProps props;
+
+	struct ParticleEntry {
+		PolyEffectsSystem::CurvedBeamPoly poly;
+		// For the related particle
+		float lingeringFrac { 0.0f };
+		// For the related particle
+		int64_t detachedAt { 0 };
+		// We waste 8 bytes on alignment anyway
+		// TODO: Optimize the memory layout
+		int64_t touchedAt { 0 };
+		// TODO: Allow varying size of the buffer
+		// TODO: Use a circular buffer
+		wsw::StaticVector<Vec3, 32> points;
+		wsw::StaticVector<int64_t, 32> timestamps;
+	};
+
+	ParticleEntry *particleEntries { nullptr };
+	unsigned numEntries { 0 };
+	unsigned binIndex { 0 };
+
+	~PolyTrailOfParticles() {
+		for( unsigned i = 0; i < numEntries; ++i ) {
+			particleEntries[i].~ParticleEntry();
+		}
+	}
+};
+
+auto ParticleSystem::ParticleTrailBin::calcSizeOfFlockData( unsigned maxParticlesPerFlock ) -> SizeSpec {
+	// TODO: Use MemSpecBuilder?
+	unsigned sizeSoFar                  = sizeof( ParticleFlock );
+	const unsigned flockParamsOffset  = sizeSoFar;
+	assert( !( flockParamsOffset % alignof( ConicalFlockParams ) ) );
+	sizeSoFar += sizeof( ConicalFlockParams );
+	const unsigned updateParamsOffset = sizeSoFar;
+	assert( !( updateParamsOffset % alignof( ParticleTrailUpdateParams ) ) );
+	sizeSoFar += sizeof( ParticleTrailUpdateParams );
+	const unsigned originsOffset = sizeSoFar;
+	assert( !( originsOffset % alignof( vec3_t ) ) );
+	sizeSoFar += sizeof( vec3_t ) * maxParticlesPerFlock;
+	assert( sizeSoFar < std::numeric_limits<uint16_t>::max() );
+	// TODO: Align using generic facilities
+	if( const auto rem = sizeSoFar % 16 ) {
+		sizeSoFar += 16 - rem;
+	}
+	const unsigned particleDataOffset = sizeSoFar;
+	sizeSoFar += sizeof( Particle ) * maxParticlesPerFlock;
+	return SizeSpec {
+		.elementSize = sizeSoFar,
+		.flockParamsOffset = (uint16_t)flockParamsOffset, .updateParamsOffset = (uint16_t)updateParamsOffset,
+		.originsOffset = (uint16_t)originsOffset, .particleDataOffset = (uint16_t)particleDataOffset,
+	};
+}
+
+ParticleSystem::RegularFlocksBin::RegularFlocksBin( unsigned maxParticlesPerFlock, unsigned maxFlocks )
+	: allocator( sizeof( ParticleFlock ) + maxParticlesPerFlock * sizeof( Particle ), maxFlocks )
+	, maxParticlesPerFlock( maxParticlesPerFlock ) {}
+
+ParticleSystem::ParticleTrailBin::ParticleTrailBin( unsigned maxParticlesPerFlock, unsigned maxFlocks )
+	: allocator( calcSizeOfFlockData( maxParticlesPerFlock ).elementSize, maxFlocks )
+	, trailFlockParamsOffset( calcSizeOfFlockData( maxParticlesPerFlock ).flockParamsOffset )
+	, trailUpdateParamsOffset( calcSizeOfFlockData( maxParticlesPerFlock ).updateParamsOffset )
+	, originsDataOffset( calcSizeOfFlockData( maxParticlesPerFlock ).originsOffset )
+	, particleDataOffset( calcSizeOfFlockData( maxParticlesPerFlock ).particleDataOffset )
+	, maxParticlesPerFlock( maxParticlesPerFlock ) {}
+
+ParticleSystem::PolyTrailBin::PolyTrailBin( unsigned maxParticlesPerFlock, unsigned maxFlocks )
+	: allocator( sizeof( PolyTrailOfParticles ) + maxParticlesPerFlock * sizeof( PolyTrailOfParticles::ParticleEntry ), maxFlocks ) {}
+
 ParticleSystem::ParticleSystem() {
 	// TODO: All of this asks for exception-safety
+	m_tmpShapeList = CM_AllocShapeList( cl.cms );
+	if( !m_tmpShapeList ) [[unlikely]] {
+		wsw::failWithBadAlloc();
+	}
 
-	do {
-		if( CMShapeList *list = CM_AllocShapeList( cl.cms ) ) [[likely]] {
-			m_freeShapeLists.push_back( list );
-		} else {
-			wsw::failWithBadAlloc();
-		}
-	} while( !m_freeShapeLists.full() );
+	constexpr std::pair<unsigned, unsigned> regularBinProps[5] {
+		{ kMaxSmallFlockSize, kMaxSmallFlocks }, { kMaxMediumFlockSize, kMaxMediumFlocks },
+		{ kMaxLargeFlockSize, kMaxLargeFlocks }, { kMaxClippedTrailFlockSize, kMaxClippedTrailFlocks },
+		{ kMaxNonClippedTrailFlockSize, kMaxNonClippedTrailFlocks },
+	};
 
-	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxSmallFlockSize, kMaxSmallFlocks );
-	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxMediumFlockSize, kMaxMediumFlocks );
-	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxLargeFlockSize, kMaxLargeFlocks );
-	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxClippedTrailFlockSize, kMaxClippedTrailFlocks );
-	auto *lastBin = new( m_bins.unsafe_grow_back() )FlocksBin( kMaxNonClippedTrailFlockSize, kMaxNonClippedTrailFlocks );
-	lastBin->needsShapeLists = false;
+	for( unsigned i = 0; i < 5; ++i ) {
+		const auto [flockSize, maxFlocks] = regularBinProps[i];
+		auto *const bin      = new( m_regularFlockBins.unsafe_grow_back() )RegularFlocksBin( flockSize, maxFlocks );
+		bin->indexOfTrailBin = i < 3 ? i : ~0u;
+		bin->needsClipping   = i < 4;
+	}
+
+	constexpr std::pair<unsigned, unsigned> trailsOfParticlesProps[3] {
+		{ kMaxSmallTrailFlockSize, kMaxSmallFlocks }, { kMaxMediumTrailFlockSize, kMaxMediumFlocks },
+		{ kMaxLargeTrailFlockSize, kMaxLargeFlocks },
+	};
+
+	for( const auto &[flockSize, maxFlocks] : trailsOfParticlesProps ) {
+		// Allocate few extra slots for lingering trails
+		new( m_trailsOfParticlesBins.unsafe_grow_back() )ParticleTrailBin( flockSize, maxFlocks + 8 );
+		new( m_polyTrailBins.unsafe_grow_back() )PolyTrailBin( flockSize, maxFlocks + 8 );
+	}
 }
 
 ParticleSystem::~ParticleSystem() {
 	clear();
-	for( CMShapeList *list : m_freeShapeLists ) {
-		CM_FreeShapeList( cl.cms, list );
-	}
+
+	CM_FreeShapeList( cl.cms, m_tmpShapeList );
 }
 
 void ParticleSystem::clear() {
-	for( FlocksBin &bin: m_bins ) {
-		for( ParticleFlock *flock = bin.head, *nextFlock; flock; flock = nextFlock ) { nextFlock = flock->next;
+	// Dependent trail bins get cleared automatically
+	for( RegularFlocksBin &bin: m_regularFlockBins ) {
+		for( ParticleFlock *flock = bin.head, *next; flock; flock = next ) { next = flock->next;
 			unlinkAndFree( flock );
 		}
 		assert( !bin.head );
 	}
+	for( ParticleTrailBin &bin: m_trailsOfParticlesBins ) {
+		for( ParticleFlock *flock = bin.lingeringFlocksHead, *next; flock; flock = next ) { next = flock->next;
+			unlinkAndFree( flock );
+		}
+		assert( !bin.lingeringFlocksHead );
+	}
+	for( PolyTrailBin &bin: m_polyTrailBins ) {
+		assert( !bin.activeTrailsHead );
+		for( PolyTrailOfParticles *trail = bin.lingeringTrailsHead, *next; trail; trail = next ) { next = trail->next;
+			unlinkAndFree( trail );
+		}
+		assert( !bin.lingeringTrailsHead );
+	}
 }
 
 void ParticleSystem::unlinkAndFree( ParticleFlock *flock ) {
-	FlocksBin &bin = m_bins[flock->binIndex];
-	wsw::unlink( flock, &bin.head );
-	if( flock->shapeList ) {
-		m_freeShapeLists.push_back( flock->shapeList );
+	if( flock->globalBinIndex < m_regularFlockBins.size() ) {
+		assert( flock->groupBinIndex < m_regularFlockBins.size() );
+		RegularFlocksBin &primaryBin = m_regularFlockBins[flock->groupBinIndex];
+		wsw::unlink( flock, &primaryBin.head );
+		if( ParticleFlock *trailFlock = flock->trailFlockOfParticles ) {
+			assert( trailFlock->globalBinIndex >= m_regularFlockBins.size() );
+			assert( trailFlock->groupBinIndex < m_trailsOfParticlesBins.size() );
+			assert( trailFlock->groupBinIndex == primaryBin.indexOfTrailBin );
+			ParticleTrailBin &trailBin = m_trailsOfParticlesBins[trailFlock->groupBinIndex];
+			wsw::link( trailFlock, &trailBin.lingeringFlocksHead );
+		}
+		if( PolyTrailOfParticles *polyTrail = flock->polyTrailOfParticles ) {
+			assert( polyTrail->binIndex == primaryBin.indexOfTrailBin );
+			PolyTrailBin &trailBin = m_polyTrailBins[primaryBin.indexOfTrailBin];
+			wsw::unlink( polyTrail, &trailBin.activeTrailsHead );
+			wsw::link( polyTrail, &trailBin.lingeringTrailsHead );
+			polyTrail->detachedAt = cg.time;
+		}
+		flock->~ParticleFlock();
+		primaryBin.allocator.free( flock );
+	} else {
+		assert( !flock->trailFlockOfParticles );
+		assert( flock->groupBinIndex < m_trailsOfParticlesBins.size() );
+		ParticleTrailBin &trailBin = m_trailsOfParticlesBins[flock->groupBinIndex];
+		wsw::unlink( flock, &trailBin.lingeringFlocksHead );
+		flock->~ParticleFlock();
+		trailBin.allocator.free( flock );
 	}
-	flock->~ParticleFlock();
-	bin.allocator.free( flock );
 }
 
-auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime,
-								  const Particle::AppearanceRules &appearanceRules ) -> ParticleFlock * {
-	assert( binIndex < std::size( m_bins ) );
-	FlocksBin &bin = m_bins[binIndex];
+void ParticleSystem::unlinkAndFree( PolyTrailOfParticles *trail ) {
+	assert( trail->binIndex < m_polyTrailBins.size() );
+	PolyTrailBin &trailBin = m_polyTrailBins[trail->binIndex];
+	// Trails always become lingering prior to the unlinkAndFree() call
+	wsw::unlink( trail, &trailBin.lingeringTrailsHead );
+	trail->~PolyTrailOfParticles();
+	trailBin.allocator.free( trail );
+}
 
-	CMShapeList *shapeList = nullptr;
-	uint8_t *mem = bin.allocator.allocOrNull();
-	if( !mem ) [[unlikely]] {
+auto ParticleSystem::createFlock( unsigned regularBinIndex, const Particle::AppearanceRules &appearanceRules,
+								  const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+								  const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) -> ParticleFlock * {
+	assert( regularBinIndex < std::size( m_regularFlockBins ) );
+	RegularFlocksBin &primaryBin = m_regularFlockBins[regularBinIndex];
+
+	[[maybe_unused]]
+	uint8_t *primaryMem = primaryBin.allocator.allocOrNull();
+	if( !primaryMem ) [[unlikely]] {
 		ParticleFlock *oldestFlock = nullptr;
 		auto leastTimeout = std::numeric_limits<int64_t>::max();
-		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
+		for( ParticleFlock *flock = primaryBin.head; flock; flock = flock->next ) {
 			if( flock->timeoutAt < leastTimeout ) {
 				leastTimeout = flock->timeoutAt;
-				oldestFlock = flock;
+				oldestFlock  = flock;
 			}
 		}
 		assert( oldestFlock );
-		wsw::unlink( oldestFlock, &bin.head );
-		shapeList = oldestFlock->shapeList;
+		wsw::unlink( oldestFlock, &primaryBin.head );
 		oldestFlock->~ParticleFlock();
-		mem = (uint8_t *)oldestFlock;
+		primaryMem = (uint8_t *)oldestFlock;
 	}
 
-	assert( mem );
-	if( bin.needsShapeLists && !shapeList ) {
-		assert( !m_freeShapeLists.empty() );
-		shapeList = m_freeShapeLists.back();
-		m_freeShapeLists.pop_back();
-	}
+	assert( primaryMem );
 
-	auto *const particles = (Particle *)( mem + sizeof( ParticleFlock ) );
+	auto *const particles = (Particle *)( primaryMem + sizeof( ParticleFlock ) );
 	assert( ( (uintptr_t)particles % 16 ) == 0 );
 
-	auto *const flock = new( mem )ParticleFlock {
-		.appearanceRules = appearanceRules,
-		.particles       = particles,
-		.binIndex        = binIndex,
-		.shapeList       = shapeList,
+	auto *const primaryFlock = new( primaryMem )ParticleFlock {
+		.appearanceRules           = appearanceRules,
+		.particles                 = particles,
+		.needsClipping             = primaryBin.needsClipping,
+		.globalBinIndex            = (uint8_t)regularBinIndex,
+		.groupBinIndex             = (uint8_t)regularBinIndex,
+		.underlyingStorageCapacity = (uint8_t)primaryBin.maxParticlesPerFlock,
 	};
 
-	wsw::link( flock, &bin.head );
-	return flock;
+	if( paramsOfParticleTrail ) {
+		assert( primaryBin.indexOfTrailBin < m_trailsOfParticlesBins.size() );
+		ParticleTrailBin &trailsBin = m_trailsOfParticlesBins[primaryBin.indexOfTrailBin];
+		uint8_t *trailMem           = trailsBin.allocator.allocOrNull();
+		if( !trailMem ) [[unlikely]] {
+			ParticleFlock *oldestFlock = nullptr;
+			auto leastTimeout          = std::numeric_limits<int64_t>::max();
+			for( ParticleFlock *flock = trailsBin.lingeringFlocksHead; flock; flock = flock->next ) {
+				if( flock->timeoutAt < leastTimeout ) {
+					leastTimeout = flock->timeoutAt;
+					oldestFlock  = flock;
+				}
+			}
+			assert( oldestFlock );
+			wsw::unlink( oldestFlock, &trailsBin.lingeringFlocksHead );
+			oldestFlock->~ParticleFlock();
+			trailMem = (uint8_t *)oldestFlock;
+		}
+
+		assert( !( (uintptr_t)trailMem % 16 ) );
+
+		auto *const trailFlock = new( trailMem )ParticleFlock {
+			.appearanceRules           = paramsOfParticleTrail->appearanceRules,
+			.particles                 = (Particle *)( trailMem + trailsBin.particleDataOffset ),
+			.needsClipping             = false,
+			.globalBinIndex            = (uint8_t)( m_regularFlockBins.size() + primaryBin.indexOfTrailBin ),
+			.groupBinIndex             = (uint8_t)primaryBin.indexOfTrailBin,
+			.underlyingStorageCapacity = (uint8_t)trailsBin.maxParticlesPerFlock,
+		};
+
+		trailFlock->lastParticleTrailDropOrigins = (vec3_t *)( trailMem + trailsBin.originsDataOffset );
+		trailFlock->flockParamsTemplate          = new( trailMem + trailsBin.trailFlockParamsOffset )
+			ConicalFlockParams( paramsOfParticleTrail->flockParamsTemplate );
+		trailFlock->particleTrailUpdateParams    = new( trailMem + trailsBin.trailUpdateParamsOffset )
+			ParticleTrailUpdateParams( paramsOfParticleTrail->updateParams );
+
+		primaryFlock->trailFlockOfParticles = trailFlock;
+	}
+
+	if( paramsOfPolyTrail ) {
+		assert( primaryBin.indexOfTrailBin < m_polyTrailBins.size() );
+		PolyTrailBin &trailBin = m_polyTrailBins[primaryBin.indexOfTrailBin];
+		uint8_t *trailMem      = trailBin.allocator.allocOrNull();
+		if( !trailMem ) [[unlikely]] {
+			// TODO: Take percentage of remaining trails in account?
+			PolyTrailOfParticles *oldestTrail = nullptr;
+			auto oldestDetachTime             = std::numeric_limits<int64_t>::max();
+			for( PolyTrailOfParticles *trail = trailBin.lingeringTrailsHead; trail; trail = trail->next ) {
+				assert( trail->detachedAt > 0 && trail->detachedAt < std::numeric_limits<int64_t>::max() );
+				if( trail->detachedAt < oldestDetachTime ) {
+					oldestDetachTime = trail->detachedAt;
+					oldestTrail      = trail;
+				}
+			}
+			if( oldestTrail ) [[likely]] {
+				wsw::unlink( oldestTrail, &trailBin.lingeringTrailsHead );
+			} else {
+				assert( !trailBin.lingeringTrailsHead );
+				auto oldestSpawnTime = std::numeric_limits<int64_t>::max();
+				for( PolyTrailOfParticles *trail = trailBin.activeTrailsHead; trail; trail = trail->next ) {
+					assert( trail->spawnedAt < std::numeric_limits<int64_t>::max() );
+					if( trail->spawnedAt < oldestSpawnTime ) {
+						oldestSpawnTime = trail->spawnedAt;
+						oldestTrail     = trail;
+					}
+				}
+				assert( oldestTrail );
+				wsw::unlink( oldestTrail, &trailBin.activeTrailsHead );
+			}
+			assert( oldestTrail );
+			oldestTrail->~PolyTrailOfParticles();
+			trailMem = (uint8_t *)oldestTrail;
+		}
+
+		assert( !( (uintptr_t)trailMem % 16 ) );
+		auto *const polyTrail  = new( trailMem )PolyTrailOfParticles {
+			.props    = paramsOfPolyTrail->props,
+			.binIndex = primaryBin.indexOfTrailBin,
+		};
+
+		auto *const entriesMem = (uint8_t *)( polyTrail + 1 );
+		assert( !( ( uintptr_t )entriesMem % 8 ) );
+		polyTrail->particleEntries = (PolyTrailOfParticles::ParticleEntry *)entriesMem;
+		assert( !polyTrail->numEntries );
+
+		wsw::link( polyTrail, &trailBin.activeTrailsHead );
+		primaryFlock->polyTrailOfParticles = polyTrail;
+	}
+
+	wsw::link( primaryFlock, &primaryBin.head );
+	return primaryFlock;
 }
 
 template <typename FlockParams>
 void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appearanceRules,
-										   const FlockParams &flockParams, unsigned binIndex, unsigned maxParticles ) {
-	const int64_t currTime = cg.time;
-	ParticleFlock *flock   = createFlock( binIndex, currTime, appearanceRules );
+										   const FlockParams &flockParams, unsigned binIndex, unsigned maxParticles,
+										   const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+										   const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) {
+	ParticleFlock *const __restrict flock = createFlock( binIndex, appearanceRules, paramsOfParticleTrail, paramsOfPolyTrail );
 
 	signed fillStride;
 	unsigned initialOffset, activatedCountMultiplier, delayedCountMultiplier;
@@ -115,7 +332,7 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 	const FillFlockResult fillResult = fillParticleFlock( std::addressof( flockParams ),
 														  flock->particles + initialOffset,
 														  maxParticles, std::addressof( appearanceRules ),
-														  &m_rng, currTime, fillStride );
+														  &m_rng, cg.time, fillStride );
 
 	flock->timeoutAt               = fillResult.resultTimeout;
 	flock->numActivatedParticles   = fillResult.numParticles * activatedCountMultiplier;
@@ -138,44 +355,100 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 		const unsigned varyingCount          = flock->maxBounceCount - flock->minBounceCount;
 		flock->keepOnImpactProbability       = std::pow( finalKeepProbability, Q_Rcp( (float)( varyingCount + 1 ) ) );
 	}
+
+	[[maybe_unused]] vec3_t dropOriginInitializer;
+	if( paramsOfPolyTrail || paramsOfParticleTrail ) {
+		VectorAdd( flockParams.origin, flockParams.offset, dropOriginInitializer );
+	}
+
+	if( paramsOfParticleTrail ) {
+		ParticleFlock *const __restrict trailFlock = flock->trailFlockOfParticles;
+		assert( trailFlock && trailFlock->flockParamsTemplate && trailFlock->particleTrailUpdateParams );
+		vec3_t *const __restrict dropOrigins = trailFlock->lastParticleTrailDropOrigins;
+		for( unsigned i = 0; i < flock->numActivatedParticles; ++i ) {
+			assert( flock->particles[i].originalIndex == i );
+			VectorCopy( dropOriginInitializer, dropOrigins[i] );
+		}
+		assert( flock->numDelayedParticles <= maxParticles - 1 );
+		for( unsigned i = 0; i < flock->numDelayedParticles; ++i ) {
+			const Particle *__restrict p = &flock->particles[maxParticles - 1 - i];
+			VectorCopy( dropOriginInitializer, dropOrigins[p->originalIndex] );
+		}
+		assert( !trailFlock->numActivatedParticles && !trailFlock->numDelayedParticles );
+		trailFlock->timeoutAt               = std::numeric_limits<int64_t>::max();
+		trailFlock->delayedParticlesOffset  = flock->underlyingStorageCapacity - 1;
+		trailFlock->drag                    = paramsOfParticleTrail->flockParamsTemplate.drag;
+		trailFlock->hasRotatingParticles    = paramsOfParticleTrail->flockParamsTemplate.angularVelocity.min != 0.0f ||
+											  paramsOfParticleTrail->flockParamsTemplate.angularVelocity.max != 0.0f;
+		assert( !trailFlock->minBounceCount && !trailFlock->maxBounceCount && !trailFlock->startBounceCounterDelay );
+	}
+
+	if( paramsOfPolyTrail ) {
+		PolyTrailOfParticles *const __restrict polyTrail = flock->polyTrailOfParticles;
+		assert( !polyTrail->numEntries );
+
+		assert( fillResult.numParticles == flock->numActivatedParticles + flock->numDelayedParticles );
+		// Construct entry objects as needed (they are non-trivial)
+		for( unsigned i = 0; i < fillResult.numParticles; ++i ) {
+			auto *const entry    = new( &polyTrail->particleEntries[i] )PolyTrailOfParticles::ParticleEntry;
+			// Set up properties that are kept the same during the lifetime
+			entry->poly.width    = paramsOfPolyTrail->props.width;
+			entry->poly.uvMode   = PolyEffectsSystem::UvModeFit {};
+			entry->poly.material = paramsOfPolyTrail->material ? paramsOfPolyTrail->material : cgs.shaderWhite;
+		}
+
+		polyTrail->spawnedAt  = cg.time;
+		polyTrail->numEntries = fillResult.numParticles;
+	}
 }
 
 void ParticleSystem::addSmallParticleFlock( const Particle::AppearanceRules &rules,
-											const EllipsoidalFlockParams &flockParams ) {
-	addParticleFlockImpl<EllipsoidalFlockParams>( rules, flockParams, 0, kMaxSmallFlockSize );
+											const EllipsoidalFlockParams &flockParams,
+											const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+											const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) {
+	addParticleFlockImpl<EllipsoidalFlockParams>( rules, flockParams, 0, kMaxSmallFlockSize, paramsOfParticleTrail, paramsOfPolyTrail );
 }
 
 void ParticleSystem::addSmallParticleFlock( const Particle::AppearanceRules &rules,
-											const ConicalFlockParams &flockParams ) {
-	addParticleFlockImpl<ConicalFlockParams>( rules, flockParams, 0, kMaxSmallFlockSize );
+											const ConicalFlockParams &flockParams,
+											const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+											const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) {
+	addParticleFlockImpl<ConicalFlockParams>( rules, flockParams, 0, kMaxSmallFlockSize, paramsOfParticleTrail, paramsOfPolyTrail );
 }
 
 void ParticleSystem::addMediumParticleFlock( const Particle::AppearanceRules &rules,
-											 const EllipsoidalFlockParams &flockParams ) {
-	addParticleFlockImpl<EllipsoidalFlockParams>( rules, flockParams, 1, kMaxMediumFlockSize );
+											 const EllipsoidalFlockParams &flockParams,
+											 const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+											 const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) {
+	addParticleFlockImpl<EllipsoidalFlockParams>( rules, flockParams, 1, kMaxMediumFlockSize, paramsOfParticleTrail, paramsOfPolyTrail );
 }
 
 void ParticleSystem::addMediumParticleFlock( const Particle::AppearanceRules &rules,
-											 const ConicalFlockParams &flockParams ) {
-	addParticleFlockImpl<ConicalFlockParams>( rules, flockParams, 1, kMaxMediumFlockSize );
+											 const ConicalFlockParams &flockParams,
+											 const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+											 const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) {
+	addParticleFlockImpl<ConicalFlockParams>( rules, flockParams, 1, kMaxMediumFlockSize, paramsOfParticleTrail, paramsOfPolyTrail );
 }
 
 void ParticleSystem::addLargeParticleFlock( const Particle::AppearanceRules &rules,
-											const EllipsoidalFlockParams &flockParams ) {
-	addParticleFlockImpl<EllipsoidalFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize );
+											const EllipsoidalFlockParams &flockParams,
+											const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+											const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) {
+	addParticleFlockImpl<EllipsoidalFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize, paramsOfParticleTrail, paramsOfPolyTrail );
 }
 
 void ParticleSystem::addLargeParticleFlock( const Particle::AppearanceRules &rules,
-											const ConicalFlockParams &flockParams ) {
-	addParticleFlockImpl<ConicalFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize );
+											const ConicalFlockParams &flockParams,
+											const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+											const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) {
+	addParticleFlockImpl<ConicalFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize, paramsOfParticleTrail, paramsOfPolyTrail );
 }
 
 auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules, unsigned binIndex ) -> ParticleFlock * {
 	assert( binIndex == kClippedTrailFlocksBin || binIndex == kNonClippedTrailFlocksBin );
 
-	// Don't let it evict anything
-	const int64_t currTime = std::numeric_limits<int64_t>::min();
-	ParticleFlock *flock   = createFlock( binIndex, currTime, rules );
+	// Don't let it evict anything TODO???
+	ParticleFlock *flock = createFlock( binIndex, rules, nullptr );
 
 	// Externally managed
 	flock->timeoutAt             = std::numeric_limits<int64_t>::max();
@@ -296,9 +569,10 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 			p->angularVelocity   = params->angularVelocity.min;
 		}
 
-		p->spawnTime   = currTime;
-		p->lifetime    = params->timeout.min + rng->nextBoundedFast( timeoutSpread );
-		p->bounceCount = 0;
+		p->spawnTime     = currTime;
+		p->lifetime      = params->timeout.min + rng->nextBoundedFast( timeoutSpread );
+		p->originalIndex = (uint8_t)i;
+		p->bounceCount   = 0;
 
 		p->activationDelay = params->activationDelay.min;
 		if( hasVariableDelay ) [[unlikely]] {
@@ -448,9 +722,10 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 			p->angularVelocity   = params->angularVelocity.min;
 		}
 
-		p->spawnTime   = currTime;
-		p->lifetime    = params->timeout.min + rng->nextBoundedFast( timeoutSpread );
-		p->bounceCount = 0;
+		p->spawnTime     = currTime;
+		p->lifetime      = params->timeout.min + rng->nextBoundedFast( timeoutSpread );
+		p->originalIndex = (uint8_t)i;
+		p->bounceCount   = 0;
 
 		p->activationDelay = params->activationDelay.min;
 		if( hasVariableDelay ) [[unlikely]] {
@@ -490,6 +765,86 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 	return FillFlockResult { .resultTimeout = resultTimeout, .numParticles = numParticles };
 }
 
+void updateParticleTrail( ParticleFlock *__restrict flock,
+						  ConicalFlockParams *__restrict flockParamsTemplate,
+						  const float *__restrict actualOrigin,
+						  float *__restrict lastDropOrigin,
+						  wsw::RandomGenerator *__restrict rng,
+						  int64_t currTime,
+						  const ParticleTrailUpdateParams &__restrict updateParams ) {
+	const unsigned maxParticlesInFlock = flock->underlyingStorageCapacity;
+	if( flock->numActivatedParticles + flock->numDelayedParticles < maxParticlesInFlock ) {
+		const float squareDistance = DistanceSquared( lastDropOrigin, actualOrigin );
+		if( squareDistance >= wsw::square( updateParams.dropDistance ) ) {
+			vec3_t dir, stepVec;
+			VectorSubtract( lastDropOrigin, actualOrigin, dir );
+
+			const float rcpDistance = Q_RSqrt( squareDistance );
+			const float distance    = squareDistance * rcpDistance;
+			// The dir is directed towards the old position
+			VectorScale( dir, rcpDistance, dir );
+			// Make steps of dropDistance units towards the new position
+			VectorScale( dir, -updateParams.dropDistance, stepVec );
+
+			VectorCopy( lastDropOrigin, flockParamsTemplate->origin );
+			VectorCopy( dir, flockParamsTemplate->dir );
+
+			unsigned stepNum    = 0;
+			const auto numSteps = (unsigned)wsw::max( 1.0f, distance * Q_Rcp( updateParams.dropDistance ) );
+			do {
+				const unsigned numParticlesSoFar = flock->numActivatedParticles + flock->numDelayedParticles;
+				if( numParticlesSoFar >= flock->underlyingStorageCapacity ) [[unlikely]] {
+					break;
+				}
+
+				signed fillStride;
+				unsigned initialOffset;
+				if( flockParamsTemplate->activationDelay.max == 0 ) {
+					// Delayed particles must not be spawned in this case
+					assert( !flock->numDelayedParticles );
+					fillStride    = +1;
+					initialOffset = flock->numActivatedParticles;
+				} else {
+					fillStride = -1;
+					if( flock->delayedParticlesOffset ) {
+						initialOffset = flock->delayedParticlesOffset - 1;
+					} else {
+						initialOffset = maxParticlesInFlock - 1;
+					}
+				}
+
+				const FillFlockResult fillResult = fillParticleFlock( flockParamsTemplate,
+																	  flock->particles + initialOffset,
+																	  updateParams.maxParticlesPerDrop,
+																	  std::addressof( flock->appearanceRules ),
+																	  rng, currTime, fillStride );
+				assert( fillResult.numParticles && fillResult.numParticles <= updateParams.maxParticlesPerDrop );
+
+				if( flockParamsTemplate->activationDelay.max == 0 ) {
+					flock->numActivatedParticles += fillResult.numParticles;
+				} else {
+					flock->numDelayedParticles += fillResult.numParticles;
+					if( flock->delayedParticlesOffset ) {
+						assert( flock->delayedParticlesOffset >= fillResult.numParticles );
+						flock->delayedParticlesOffset -= fillResult.numParticles;
+					} else {
+						assert( maxParticlesInFlock >= fillResult.numParticles );
+						flock->delayedParticlesOffset = maxParticlesInFlock - fillResult.numParticles;
+					}
+					assert( flock->delayedParticlesOffset + flock->numDelayedParticles <= maxParticlesInFlock );
+					assert( flock->numActivatedParticles <= flock->delayedParticlesOffset );
+				}
+
+				assert( flock->numDelayedParticles + flock->numActivatedParticles <= maxParticlesInFlock );
+
+				VectorAdd( flockParamsTemplate->origin, stepVec, flockParamsTemplate->origin );
+			} while( ++stepNum < numSteps );
+
+			VectorCopy( flockParamsTemplate->origin, lastDropOrigin );
+		}
+	}
+}
+
 [[nodiscard]]
 static inline bool canShowForCurrentCgFrame( unsigned affinityIndex, unsigned affinityModulo ) {
 	if( affinityModulo > 1 ) {
@@ -507,21 +862,53 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 	m_lastTime = currTime;
 
 	// We split simulation/rendering loops for a better instructions cache utilization
-	for( FlocksBin &bin: m_bins ) {
-		ParticleFlock *nextFlock = nullptr;
-		for( ParticleFlock *flock = bin.head; flock; flock = nextFlock ) {
-			nextFlock = flock->next;
+	for( RegularFlocksBin &bin: m_regularFlockBins ) {
+		for( ParticleFlock *flock = bin.head, *nextFlock; flock; flock = nextFlock ) { nextFlock = flock->next;
 			if( currTime < flock->timeoutAt ) [[likely]] {
 				// Otherwise, the flock could be awaiting filling externally, don't modify its timeout
 				if( flock->numActivatedParticles + flock->numDelayedParticles > 0 ) [[likely]] {
-					if( flock->shapeList ) {
+					if( flock->needsClipping ) {
 						simulate( flock, &m_rng, currTime, deltaSeconds );
 					} else {
 						simulateWithoutClipping( flock, currTime, deltaSeconds );
 					}
 				}
+				if( flock->trailFlockOfParticles ) {
+					simulateParticleTrailOfParticles( flock, &m_rng, currTime, deltaSeconds );
+				}
+				if( flock->polyTrailOfParticles ) {
+					simulatePolyTrailOfParticles( flock, flock->polyTrailOfParticles, currTime );
+				}
 			} else {
 				unlinkAndFree( flock );
+			}
+		}
+	}
+
+	for( ParticleTrailBin &bin: m_trailsOfParticlesBins ) {
+		for( ParticleFlock *flock = bin.lingeringFlocksHead, *nextFlock; flock; flock = nextFlock ) { nextFlock = flock->next;
+			if( currTime < flock->timeoutAt ) [[likely]] {
+				if( flock->numActivatedParticles + flock->numDelayedParticles ) {
+					simulateWithoutClipping( flock, currTime, deltaSeconds );
+				} else {
+					unlinkAndFree( flock );
+				}
+			} else {
+				unlinkAndFree( flock );
+			}
+		}
+	}
+
+	for( PolyTrailBin &bin: m_polyTrailBins ) {
+		for( PolyTrailOfParticles *trail = bin.lingeringTrailsHead, *next; trail; trail = next ) { next = trail->next;
+			// Lingering of trails of individual particles is independent,
+			// and could even happen prior to detaching a trail,
+			// but if we reach this condition, we are sure all individual trails have finished lingering.
+			assert( trail->props.lingeringLimit > 0 && trail->props.lingeringLimit < 1000 );
+			if( currTime < trail->detachedAt + trail->props.lingeringLimit ) {
+				simulatePolyTrailOfParticles( nullptr, trail, currTime );
+			} else {
+				unlinkAndFree( trail );
 			}
 		}
 	}
@@ -530,24 +917,49 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 	m_frameFlareColorLifespans.clear();
 	m_frameFlareAppearanceRules.clear();
 
-	for( FlocksBin &bin: m_bins ) {
+	for( RegularFlocksBin &bin: m_regularFlockBins ) {
 		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
-			if( const unsigned numParticles = flock->numActivatedParticles ) [[likely]] {
-				request->addParticles( flock->mins, flock->maxs, flock->appearanceRules, flock->particles, numParticles );
-				const Particle::AppearanceRules &rules = flock->appearanceRules;
-				if( !rules.lightProps.empty() ) [[unlikely]] {
-					// If the light display is tied to certain frames (e.g., every 3rd one, starting from 2nd absolute)
-					if( canShowForCurrentCgFrame( rules.lightFrameAffinityIndex, rules.lightFrameAffinityModulo ) ) {
-						tryAddingLight( flock, request );
-					}
-				}
-				if( rules.flareProps ) [[unlikely]] {
-					const Particle::FlareProps &props = *rules.flareProps;
-					if( canShowForCurrentCgFrame( props.flockFrameAffinityIndex, props.flockFrameAffinityModulo ) ) {
-						tryAddingFlares( flock, request );
-					}
+			if( flock->numActivatedParticles ) [[likely]] {
+				submitFlock( flock, request );
+			}
+			if( ParticleFlock *const trailFlock = flock->trailFlockOfParticles ) [[unlikely]] {
+				if( trailFlock->numActivatedParticles ) [[likely]] {
+					submitFlock( trailFlock, request );
 				}
 			}
+		}
+	}
+
+	for( ParticleTrailBin &bin: m_trailsOfParticlesBins ) {
+		for( ParticleFlock *flock = bin.lingeringFlocksHead; flock; flock = flock->next ) {
+			if( flock->numActivatedParticles ) [[likely]] {
+				submitFlock( flock, request );
+			}
+		}
+	}
+
+	for( PolyTrailBin &bin: m_polyTrailBins ) {
+		for( PolyTrailOfParticles *listHead : { bin.activeTrailsHead, bin.lingeringTrailsHead } ) {
+			for( PolyTrailOfParticles *trail = listHead; trail; trail = trail->next ) {
+				submitPolyTrail( trail, request );
+			}
+		}
+	}
+}
+
+void ParticleSystem::submitFlock( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest ) {
+	drawSceneRequest->addParticles( flock->mins, flock->maxs, flock->appearanceRules, flock->particles, flock->numActivatedParticles );
+	const Particle::AppearanceRules &rules = flock->appearanceRules;
+	if( !rules.lightProps.empty() ) [[unlikely]] {
+		// If the light display is tied to certain frames (e.g., every 3rd one, starting from 2nd absolute)
+		if( canShowForCurrentCgFrame( rules.lightFrameAffinityIndex, rules.lightFrameAffinityModulo ) ) {
+			tryAddingLight( flock, drawSceneRequest );
+		}
+	}
+	if( rules.flareProps ) [[unlikely]] {
+		const Particle::FlareProps &props = *rules.flareProps;
+		if( canShowForCurrentCgFrame( props.flockFrameAffinityIndex, props.flockFrameAffinityModulo ) ) {
+			tryAddingFlares( flock, drawSceneRequest );
 		}
 	}
 }
@@ -668,6 +1080,21 @@ void ParticleSystem::tryAddingFlares( ParticleFlock *flock, DrawSceneRequest *dr
 	}
 }
 
+void ParticleSystem::submitPolyTrail( PolyTrailOfParticles *__restrict trail, DrawSceneRequest *__restrict request ) {
+	for( unsigned i = 0; i < trail->numEntries; ++i ) {
+		PolyTrailOfParticles::ParticleEntry &__restrict entry = trail->particleEntries[i];
+		assert( entry.lingeringFrac >= 0.0f && entry.lingeringFrac <= 1.0f );
+		if( entry.poly.points.size() > 1 && entry.lingeringFrac < 1.0f ) {
+			VectorCopy( trail->props.fromColor, entry.poly.fromColor );
+			VectorCopy( trail->props.toColor, entry.poly.toColor );
+			const float alphaFrac   = 1.0f - entry.lingeringFrac;
+			entry.poly.fromColor[3] = alphaFrac * trail->props.fromColor[3];
+			entry.poly.toColor[3]   = alphaFrac * trail->props.toColor[3];
+			request->addDynamicMesh( &entry.poly );
+		}
+	}
+}
+
 void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float deltaSeconds, vec3_t resultBounds[2] ) {
 	assert( flock->numActivatedParticles );
 
@@ -715,8 +1142,7 @@ void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float d
 }
 
 [[nodiscard]]
-static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle &__restrict particle,
-												const Particle::AppearanceRules &__restrict rules ) -> float {
+static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle &__restrict particle ) -> float {
 	const auto offset                 = (int)particle.activationDelay;
 	const auto correctedDuration      = wsw::max( 1, particle.lifetime - offset );
 	const auto lifetimeSoFar          = (int)( currTime - particle.spawnTime );
@@ -726,7 +1152,7 @@ static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle
 
 void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGenerator *__restrict rng,
 							   int64_t currTime, float deltaSeconds ) {
-	assert( flock->shapeList && flock->numActivatedParticles + flock->numDelayedParticles > 0 );
+	assert( flock->numActivatedParticles + flock->numDelayedParticles > 0 );
 
 	auto timeoutOfParticlesLeft = std::numeric_limits<int64_t>::min();
 	if( const auto maybeTimeoutOfDelayedParticles = activateDelayedParticles( flock, currTime ) ) {
@@ -745,8 +1171,8 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 	runStepKinematics( flock, deltaSeconds, possibleBounds );
 
 	// TODO: Add a fused call
-	CM_BuildShapeList( cl.cms, flock->shapeList, possibleBounds[0], possibleBounds[1], MASK_SOLID );
-	CM_ClipShapeList( cl.cms, flock->shapeList, flock->shapeList, possibleBounds[0], possibleBounds[1] );
+	CM_BuildShapeList( cl.cms, m_tmpShapeList, possibleBounds[0], possibleBounds[1], MASK_SOLID );
+	CM_ClipShapeList( cl.cms, m_tmpShapeList, m_tmpShapeList, possibleBounds[0], possibleBounds[1] );
 
 	// TODO: Let the BoundsBuilder store 4-component vectors
 	VectorCopy( possibleBounds[0], flock->mins );
@@ -756,7 +1182,7 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 	assert( flock->restitution >= 0.0f && flock->restitution <= 1.0f );
 
 	// Skip collision calls if the built shape list is empty
-	if( CM_GetNumShapesInShapeList( flock->shapeList ) == 0 ) {
+	if( CM_GetNumShapesInShapeList( m_tmpShapeList ) == 0 ) {
 		unsigned particleIndex = 0;
 		do {
 			Particle *const __restrict p = flock->particles + particleIndex;
@@ -766,7 +1192,7 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 			if( particleTimeoutAt > currTime ) [[likely]] {
 				// Save the current origin as the old origin
 				VectorCopy( p->origin, p->oldOrigin );
-				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
+				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p );
 				timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
 				++particleIndex;
 			} else {
@@ -789,13 +1215,12 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 				continue;
 			}
 
-			CM_ClipToShapeList( cl.cms, flock->shapeList, &trace, p->oldOrigin,
-								p->origin, vec3_origin, vec3_origin, MASK_SOLID );
+			CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, p->oldOrigin, p->origin, vec3_origin, vec3_origin, MASK_SOLID );
 
 			if( trace.fraction == 1.0f ) [[likely]] {
 				// Save the current origin as the old origin
 				VectorCopy( p->origin, p->oldOrigin );
-				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
+				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p );
 				timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
 				++particleIndex;
 				continue;
@@ -852,7 +1277,7 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 			// This is not really correct but is OK.
 			VectorAdd( trace.endpos, reflectedVelocityDir, p->oldOrigin );
 
-			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
+			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p );
 			timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
 			++particleIndex;
 		} while( particleIndex < flock->numActivatedParticles );
@@ -862,7 +1287,7 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 }
 
 void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds ) {
-	assert( !flock->shapeList && flock->numActivatedParticles + flock->numDelayedParticles > 0 );
+	assert( flock->numActivatedParticles + flock->numDelayedParticles > 0 );
 
 	auto timeoutOfParticlesLeft = std::numeric_limits<int64_t>::min();
 	if( const auto maybeTimeoutOfDelayedParticles = activateDelayedParticles( flock, currTime ) ) {
@@ -884,7 +1309,7 @@ void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, i
 			boundsBuilder.addPoint( p->origin );
 
 			timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
-			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
+			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p );
 
 			if( flock->hasRotatingParticles ) {
 				p->rotationAngle += p->angularVelocity * deltaSeconds;
@@ -957,4 +1382,98 @@ auto ParticleSystem::activateDelayedParticles( ParticleFlock *flock, int64_t cur
 	assert( !flock->numDelayedParticles || flock->numActivatedParticles <= flock->delayedParticlesOffset );
 
 	return timeoutOfDelayedParticles ? std::optional( timeoutOfDelayedParticles ) : std::nullopt;
+}
+
+void ParticleSystem::simulateParticleTrailOfParticles( ParticleFlock *baseFlock, wsw::RandomGenerator *rng,
+													   int64_t currTime, float deltaSeconds ) {
+	ParticleFlock *const __restrict trailFlock               = baseFlock->trailFlockOfParticles;
+	ConicalFlockParams *const __restrict flockParamsTemplate = trailFlock->flockParamsTemplate;
+	const ParticleTrailUpdateParams &__restrict updateParams = *trailFlock->particleTrailUpdateParams;
+
+	// First, activate delayed particles
+	// TODO: We do not need the return result
+	(void)activateDelayedParticles( trailFlock, currTime );
+
+	// Second, dispose timed out particles prior to spawing next
+	for( unsigned i = 0; i < trailFlock->numActivatedParticles; ) {
+		Particle *__restrict p = trailFlock->particles + i;
+		if( const int64_t timeoutAt = p->spawnTime + p->lifetime; timeoutAt > currTime ) [[likely]] {
+			++i;
+		} else {
+			trailFlock->numActivatedParticles--;
+			trailFlock->particles[i] = trailFlock->particles[trailFlock->numActivatedParticles];
+		}
+	}
+
+	// Second, spawn particles if needed
+	for( unsigned i = 0; i < baseFlock->numActivatedParticles; ++i ) {
+		const Particle *const p     = &baseFlock->particles[i];
+		float *const lastDropOrigin = trailFlock->lastParticleTrailDropOrigins[p->originalIndex];
+		updateParticleTrail( trailFlock, flockParamsTemplate, p->origin, lastDropOrigin, rng, currTime, updateParams );
+	}
+
+	if( trailFlock->numActivatedParticles ) [[likely]] {
+		simulateWithoutClipping( trailFlock, currTime, deltaSeconds );
+	} else {
+		constexpr float minVal = std::numeric_limits<float>::max(), maxVal = std::numeric_limits<float>::lowest();
+		Vector4Set( trailFlock->mins, minVal, minVal, minVal, minVal );
+		Vector4Set( trailFlock->maxs, maxVal, maxVal, maxVal, maxVal );
+	}
+
+	trailFlock->timeoutAt = std::numeric_limits<int64_t>::max();
+}
+
+void ParticleSystem::simulatePolyTrailOfParticles( ParticleFlock *baseFlock, PolyTrailOfParticles *trail, int64_t currTime ) {
+	// TODO: Lift it out of the class scope
+	const auto updateTrailFn = TrackedEffectsSystem::updateCurvedPolyTrail;
+
+	if( baseFlock ) {
+		for( unsigned particleNum = 0; particleNum < baseFlock->numActivatedParticles; ++particleNum ) {
+			const Particle *const particle                   = &baseFlock->particles[particleNum];
+			PolyTrailOfParticles::ParticleEntry *const entry = &trail->particleEntries[particle->originalIndex];
+
+			assert( !entry->detachedAt );
+			entry->touchedAt = currTime;
+
+			updateTrailFn( trail->props, particle->origin, currTime, &entry->points, &entry->timestamps );
+			assert( entry->points.size() == entry->timestamps.size() );
+		}
+	}
+
+	assert( currTime > 0 );
+	assert( trail->props.lingeringLimit > 0 && trail->props.lingeringLimit < 1000 );
+	const float rcpLingeringLimit = Q_Rcp( (float)trail->props.lingeringLimit );
+	assert( trail->numEntries < 256 );
+	for( unsigned entryNum = 0; entryNum < trail->numEntries; ++entryNum ) {
+		PolyTrailOfParticles::ParticleEntry *const __restrict entry = &trail->particleEntries[entryNum];
+		if( entry->detachedAt <= 0 && entry->touchedAt != currTime ) {
+			entry->detachedAt = currTime;
+		}
+		if( entry->detachedAt > 0 ) {
+			const int64_t lingeringTime = currTime - entry->detachedAt;
+			if( lingeringTime < trail->props.lingeringLimit && entry->points.size() > 1 ) {
+				entry->lingeringFrac = (float)lingeringTime * rcpLingeringLimit;
+				assert( entry->lingeringFrac >= 0.0f && entry->lingeringFrac <= 1.0f );
+				// Update the lingering trail as usual.
+				// Submit the last known position as the current one.
+				// This allows trails to shrink naturally.
+				updateTrailFn( trail->props, entry->points.back().Data(), currTime, &entry->points, &entry->timestamps );
+			} else {
+				entry->points.clear();
+				entry->timestamps.clear();
+			}
+		}
+		if( const unsigned numNodes = entry->points.size(); numNodes > 1 ) [[likely]] {
+			BoundsBuilder boundsBuilder;
+			unsigned nodeNum = 0;
+			do {
+				boundsBuilder.addPoint( entry->points[nodeNum].Data() );
+			} while( ++nodeNum < numNodes );
+			boundsBuilder.storeToWithAddedEpsilon( entry->poly.cullMins, entry->poly.cullMaxs );
+			entry->poly.cullMins[3] = 0.0f, entry->poly.cullMaxs[3] = 1.0f;
+			entry->poly.points = std::span<const vec3_t>( (const vec3_t *)entry->points.data(), numNodes );
+		} else {
+			entry->poly.points = std::span<const vec3_t>();
+		}
+	}
 }

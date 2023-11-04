@@ -1883,17 +1883,20 @@ template <typename FlockParams>
 void EffectsSystemFacade::spawnOrPostponeImpactParticleEffect( unsigned delay,
 															   const FlockParams &flockParams,
 															   const Particle::AppearanceRules &appearanceRules,
-															   TransientEffectsSystem::ParticleFlockBin bin ) {
+															   TransientEffectsSystem::ParticleFlockBin bin,
+															   const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+															   const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) {
 	if( delay ) {
-		m_transientEffectsSystem.addDelayedParticleEffect( delay, bin, flockParams, appearanceRules );
+		m_transientEffectsSystem.addDelayedParticleEffect( delay, bin, flockParams, appearanceRules,
+														   paramsOfParticleTrail, paramsOfPolyTrail );
 	} else {
 		// TODO: Hide bins from ParticleSystem public interface
 		if( bin == TransientEffectsSystem::ParticleFlockBin::Small ) {
-			cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+			cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams, paramsOfParticleTrail, paramsOfPolyTrail );
 		} else if( bin == TransientEffectsSystem::ParticleFlockBin::Medium ) {
-			cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
+			cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams, paramsOfParticleTrail, paramsOfPolyTrail );
 		} else {
-			cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams );
+			cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams, paramsOfParticleTrail, paramsOfPolyTrail );
 		}
 	}
 }

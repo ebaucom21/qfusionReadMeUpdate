@@ -68,10 +68,14 @@ public:
 
 	void addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 								   const ConicalFlockParams &flockParams,
-								   const Particle::AppearanceRules &appearanceRules );
+								   const Particle::AppearanceRules &appearanceRules,
+								   const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
+								   const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail = nullptr );
 	void addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 								   const EllipsoidalFlockParams &flockParams,
-								   const Particle::AppearanceRules &appearanceRules );
+								   const Particle::AppearanceRules &appearanceRules,
+								   const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
+								   const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail = nullptr );
 
 	void addDelayedImpactRosetteEffect( unsigned delay, const PolyEffectsSystem::ImpactRosetteParams &params );
 
@@ -154,12 +158,18 @@ private:
 		ConicalFlockParams flockParams;
 		Particle::AppearanceRules appearanceRules;
 		ParticleFlockBin bin;
+		// TODO: Box these items instead of wasting memory with optional?
+		std::optional<ParamsOfParticleTrailOfParticles> paramsOfParticleTrail;
+		std::optional<ParamsOfPolyTrailOfParticles> paramsOfPolyTrail;
 	};
 
 	struct EllipsoidalFlockSpawnRecord {
 		EllipsoidalFlockParams flockParams;
 		Particle::AppearanceRules appearanceRules;
 		ParticleFlockBin bin;
+		// TODO: Box these items instead of wasting memory with optional?
+		std::optional<ParamsOfParticleTrailOfParticles> paramsOfParticleTrail;
+		std::optional<ParamsOfPolyTrailOfParticles> paramsOfPolyTrail;
 	};
 
 	struct ImpactRosetteSpawnRecord {

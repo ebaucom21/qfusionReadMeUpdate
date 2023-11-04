@@ -8,6 +8,10 @@ template <typename> class SingletonHolder;
 #include "../common/freelistallocator.h"
 #include "../common/randomgenerator.h"
 #include "../ref/ref.h"
+#include "../common/podbufferholder.h"
+// TODO: Lift it to the top level
+#include "../game/ai/vec3.h"
+#include "polyeffectssystem.h"
 
 #include <span>
 
@@ -88,6 +92,24 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 				  		wsw::RandomGenerator *__restrict rng,
 						int64_t currTime, signed signedStride = 1 ) -> FillFlockResult;
 
+struct ParticleTrailUpdateParams {
+	unsigned maxParticlesPerDrop { 1 };
+	float dropDistance { 8.0f };
+};
+
+struct ParamsOfParticleTrailOfParticles {
+	const Particle::AppearanceRules appearanceRules;
+	ConicalFlockParams flockParamsTemplate;
+	const ParticleTrailUpdateParams updateParams;
+};
+
+struct ParamsOfPolyTrailOfParticles {
+	CurvedPolyTrailProps props;
+	shader_s *material { nullptr };
+};
+
+struct PolyTrailOfParticles;
+
 struct alignas( 16 ) ParticleFlock {
 	Particle::AppearanceRules appearanceRules;
 	// Caution: No drag simulation is currently performed for non-clipped flocks
@@ -100,18 +122,35 @@ struct alignas( 16 ) ParticleFlock {
 	// Delayed particles are kept in the same memory chunk after the spawned ones.
 	// delayedParticlesOffset should be >= numActivatedParticles.
 	unsigned delayedParticlesOffset { 0 };
-	unsigned binIndex;
 	unsigned minBounceCount { 0 }, maxBounceCount { 0 };
 	unsigned startBounceCounterDelay { 0 };
 	float keepOnImpactProbability { 1.0f };
-	CMShapeList *shapeList;
 	// TODO: Make links work with "m_"
 	ParticleFlock *prev { nullptr }, *next { nullptr };
+	// Set if the flock is a trail flock of particles
+	ConicalFlockParams *flockParamsTemplate;
+	// Set if the flock is a trail flock of particles
+	const ParticleTrailUpdateParams *particleTrailUpdateParams;
+	// May be set if the flock is a regular flock
+	ParticleFlock *trailFlockOfParticles { nullptr };
+	// Set if the flock is a trail flock of particles
+	vec3_t *lastParticleTrailDropOrigins { nullptr };
+	// May be set if the flock is a regular flock
+	PolyTrailOfParticles *polyTrailOfParticles { nullptr };
 	float mins[4];
 	float maxs[4];
-	unsigned lastLightEmitterParticleIndex;
-	bool hasRotatingParticles;
+	unsigned lastLightEmitterParticleIndex { 0 };
+	bool hasRotatingParticles { false };
+	bool needsClipping { false };
+	uint8_t globalBinIndex { 255 };
+	uint8_t groupBinIndex { 255 };
+	uint8_t underlyingStorageCapacity { 0 };
 };
+
+void updateParticleTrail( ParticleFlock *flock, ConicalFlockParams *flockParamsTemplate,
+						  const float *actualOrigin, float *lastDropOrigin,
+						  wsw::RandomGenerator *rng, int64_t currTime,
+						  const ParticleTrailUpdateParams &updateParams );
 
 class ParticleSystem {
 public:
@@ -123,23 +162,51 @@ public:
 private:
 	template<typename> friend class SingletonHolder;
 
-	// TODO: Just align manually in the combined memory chunk
-	static_assert( sizeof( ParticleFlock ) % 16 == 0 );
-
-	struct FlocksBin {
-		ParticleFlock *head { nullptr };
+	// Note: Externally managed entity trails also are put in this kind of bins
+	struct RegularFlocksBin {
 		wsw::HeapBasedFreelistAllocator allocator;
-		const unsigned maxParticlesPerFlock;
-		bool needsShapeLists { true };
+		ParticleFlock *head { nullptr };
+		unsigned indexOfTrailBin { ~0u };
+		unsigned maxParticlesPerFlock { 0 };
+		bool needsClipping { false };
 
-		FlocksBin( unsigned maxParticlesPerFlock, unsigned maxFlocks )
-			: allocator( sizeof( ParticleFlock ) + sizeof( Particle ) * maxParticlesPerFlock, maxFlocks )
-			, maxParticlesPerFlock( maxParticlesPerFlock ) {}
+		RegularFlocksBin( unsigned maxParticlesPerFlock, unsigned maxFlocks );
 	};
 
-	static constexpr unsigned kMaxSmallFlocks  = 128;
-	static constexpr unsigned kMaxMediumFlocks = 64;
-	static constexpr unsigned kMaxLargeFlocks  = 20;
+	// Particle trails of individual porticles are put in this kind of bin
+	// TODO: The name can be confusing (see the RegularFlocksBin remark)
+	struct ParticleTrailBin {
+		wsw::HeapBasedFreelistAllocator allocator;
+		const uint16_t trailFlockParamsOffset { 0 };
+		const uint16_t trailUpdateParamsOffset { 0 };
+		const uint16_t originsDataOffset { 0 };
+		const uint16_t particleDataOffset { 0 };
+		unsigned maxParticlesPerFlock { 0 };
+		ParticleFlock *lingeringFlocksHead { nullptr };
+
+		struct SizeSpec {
+			unsigned elementSize;
+			uint16_t flockParamsOffset;
+			uint16_t updateParamsOffset;
+			uint16_t originsOffset;
+			uint16_t particleDataOffset;
+		};
+
+		[[nodiscard]] static auto calcSizeOfFlockData( unsigned maxParticlesPerFlock ) -> SizeSpec;
+		ParticleTrailBin( unsigned maxParticlesPerFlock, unsigned maxFlocks );
+	};
+
+	struct PolyTrailBin {
+		wsw::HeapBasedFreelistAllocator allocator;
+		PolyTrailOfParticles *activeTrailsHead { nullptr };
+		PolyTrailOfParticles *lingeringTrailsHead { nullptr };
+
+		PolyTrailBin( unsigned maxParticlesPerFlock, unsigned maxFlocks );
+	};
+
+	static constexpr unsigned kMaxSmallFlocks  = 64;
+	static constexpr unsigned kMaxMediumFlocks = 48;
+	static constexpr unsigned kMaxLargeFlocks  = 24;
 
 	static constexpr unsigned kMaxClippedTrailFlocks    = 32;
 	static constexpr unsigned kMaxNonClippedTrailFlocks = 16;
@@ -148,13 +215,18 @@ private:
 	static constexpr unsigned kMaxMediumFlockSize = 48;
 	static constexpr unsigned kMaxLargeFlockSize  = 144;
 
-	static constexpr unsigned kMaxNumberOfClippedFlocks = kMaxClippedTrailFlocks +
-		kMaxSmallFlocks + kMaxMediumFlocks + kMaxLargeFlocks;
+	// TODO: Vary by required trail length
+	static constexpr unsigned kMaxSmallTrailFlockSize  = 128;
+	// A ParticleAggregate cannot be larger
+	static constexpr unsigned kMaxMediumTrailFlockSize = 256;
+	static constexpr unsigned kMaxLargeTrailFlockSize  = 256;
 
-	wsw::StaticVector<CMShapeList *, kMaxNumberOfClippedFlocks> m_freeShapeLists;
-
-	wsw::StaticVector<FlocksBin, 5> m_bins;
+	wsw::StaticVector<RegularFlocksBin, 5> m_regularFlockBins;
+	wsw::StaticVector<ParticleTrailBin, 3> m_trailsOfParticlesBins;
+	wsw::StaticVector<PolyTrailBin, 3> m_polyTrailBins;
 	int64_t m_lastTime { 0 };
+
+	CMShapeList *m_tmpShapeList { nullptr };
 
 	wsw::RandomGenerator m_rng;
 
@@ -165,23 +237,35 @@ private:
 	wsw::StaticVector<Particle, 256> m_frameFlareParticles;
 
 	void unlinkAndFree( ParticleFlock *flock );
+	void unlinkAndFree( PolyTrailOfParticles *trail );
 
 	[[nodiscard]]
-	auto createFlock( unsigned binIndex, int64_t currTime, const Particle::AppearanceRules &rules ) -> ParticleFlock *;
+	auto createFlock( unsigned regularBinIndex, const Particle::AppearanceRules &rules,
+					  const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
+					  const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail = nullptr ) -> ParticleFlock *;
 
 	template <typename FlockParams>
 	void addParticleFlockImpl( const Particle::AppearanceRules &appearanceRules,
-							   const FlockParams &flockParams,
-							   unsigned binIndex, unsigned maxParticles );
+							   const FlockParams &flockParams, unsigned binIndex, unsigned maxParticles,
+							   const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+							   const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail );
 
 	static void runStepKinematics( ParticleFlock *__restrict flock, float deltaSeconds, vec3_t resultBounds[2] );
 
 	[[nodiscard]]
 	static auto activateDelayedParticles( ParticleFlock *flock, int64_t currTime ) -> std::optional<int64_t>;
 
-	static void simulate( ParticleFlock *__restrict flock, wsw::RandomGenerator *__restrict rng,
-						  int64_t currTime, float deltaSeconds );
-	static void simulateWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds );
+	void simulate( ParticleFlock *flock, wsw::RandomGenerator *rng, int64_t currTime, float deltaSeconds );
+	void simulateWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds );
+
+	void simulateParticleTrailOfParticles( ParticleFlock *baseFlock, wsw::RandomGenerator *rng, int64_t currTime, float deltaSeconds );
+	void simulatePolyTrailOfParticles( ParticleFlock *baseFlock, PolyTrailOfParticles *trail, int64_t currTime );
+
+	void submitFlock( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
+	void submitPolyTrail( PolyTrailOfParticles *trail, DrawSceneRequest *drawSceneRequest );
+
+	void tryAddingLight( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
+	void tryAddingFlares( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
 public:
 	ParticleSystem();
 	~ParticleSystem();
@@ -189,15 +273,28 @@ public:
 	void clear();
 
 	// Use this non-templated interface to reduce call site code bloat
+	// TODO: Get rid of user-visible distinction of bins!!!!!
 
-	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams );
-	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const ConicalFlockParams &flockParams );
+	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams,
+								const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
+								const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail = nullptr );
+	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const ConicalFlockParams &flockParams,
+								const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
+								const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail = nullptr );
 
-	void addMediumParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams );
-	void addMediumParticleFlock( const Particle::AppearanceRules &rules, const ConicalFlockParams &flockParams );
+	void addMediumParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams,
+								 const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
+								 const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail = nullptr );
+	void addMediumParticleFlock( const Particle::AppearanceRules &rules, const ConicalFlockParams &flockParams,
+								 const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
+								 const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail = nullptr );
 
-	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams );
-	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const ConicalFlockParams &flockParams );
+	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams,
+								const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
+								const ParamsOfPolyTrailOfParticles *paramsOfTrails = nullptr );
+	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const ConicalFlockParams &flockParams,
+								const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
+								const ParamsOfPolyTrailOfParticles *paramsOfTrails = nullptr );
 
 	// Caution: Trail particles aren't assumed to be bouncing by default
 	// (otherwise, respective flock fields should be set manually)
@@ -207,9 +304,6 @@ public:
 	void destroyTrailFlock( ParticleFlock *flock ) { unlinkAndFree( flock ); }
 
 	void runFrame( int64_t currTime, DrawSceneRequest *drawSceneRequest );
-
-	void tryAddingLight( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
-	void tryAddingFlares( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
 };
 
 #endif

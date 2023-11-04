@@ -23,17 +23,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/links.h"
 #include "../cgame/cg_local.h"
 
-struct CurvedPolyTrailProps {
-	float minDistanceBetweenNodes { 8.0f };
-	unsigned maxNodeLifetime { 0 };
-	// This value is not that permissive due to long segments for some trails.
-	float maxLength { 0.0f };
-	float width { 0.0f };
-	float fromColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
-	float toColor[4] { 1.0f, 1.0f, 1.0f, 0.2f };
-};
-
 struct StraightPolyTrailProps {
+	unsigned lingeringLimit { 200 };
 	float maxLength { 0.0f };
 	float tileLength { 0.0f };
 	float width { 0.0f };
@@ -170,11 +161,6 @@ auto TrackedEffectsSystem::allocParticleTrail( int entNum, unsigned trailIndex,
 		trail->particleFlock = cg.particleSystem.createTrailFlock( appearanceRules, particleSystemBin );
 
 		VectorCopy( origin, trail->lastDropOrigin );
-		if( particleSystemBin == kClippedTrailsBin ) {
-			trail->maxParticlesInFlock = ParticleSystem::kMaxClippedTrailFlockSize;
-		} else {
-			trail->maxParticlesInFlock = ParticleSystem::kMaxNonClippedTrailFlockSize;
-		}
 
 		assert( entNum && entNum < MAX_EDICTS );
 		assert( trailIndex == 0 || trailIndex == 1 );
@@ -189,85 +175,13 @@ auto TrackedEffectsSystem::allocParticleTrail( int entNum, unsigned trailIndex,
 }
 
 void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, const float *origin, int64_t currTime ) {
-	trail->touchedAt = currTime;
+	trail->touchedAt                = currTime;
+	trail->particleFlock->timeoutAt = std::numeric_limits<int64_t>::max();
 
-	ParticleFlock *__restrict flock = trail->particleFlock;
-	// Prevent an automatic disposal by the particles system
-	flock->timeoutAt = std::numeric_limits<int64_t>::max();
-
-	if( trail->lastParticleAt < currTime ) {
-		if( flock->numActivatedParticles + flock->numDelayedParticles < trail->maxParticlesInFlock ) {
-			const float squareDistance = DistanceSquared( trail->lastDropOrigin, origin );
-			if( squareDistance >= trail->dropDistance * trail->dropDistance ) {
-				vec3_t dir, stepVec;
-				VectorSubtract( trail->lastDropOrigin, origin, dir );
-
-				const float rcpDistance = Q_RSqrt( squareDistance );
-				const float distance    = squareDistance * rcpDistance;
-				// The dir is directed towards the old position
-				VectorScale( dir, rcpDistance, dir );
-				// Make steps of trail->dropDistance units towards the new position
-				VectorScale( dir, -trail->dropDistance, stepVec );
-
-				ConicalFlockParams *const __restrict params = trail->paramsTemplate;
-
-				VectorCopy( trail->lastDropOrigin, params->origin );
-				VectorCopy( dir, params->dir );
-
-				const unsigned numSteps = (unsigned)wsw::max( 1.0f, distance * Q_Rcp( trail->dropDistance ) );
-				for( unsigned stepNum = 0; stepNum < numSteps; ++stepNum ) {
-					const unsigned numParticlesSoFar = flock->numActivatedParticles + flock->numDelayedParticles;
-					if( numParticlesSoFar >= trail->maxParticlesInFlock ) [[unlikely]] {
-						break;
-					}
-
-					signed fillStride;
-					unsigned initialOffset;
-					if( params->activationDelay.max == 0 ) {
-						// Delayed particles must not be spawned in this case
-						assert( !flock->numDelayedParticles );
-						fillStride    = +1;
-						initialOffset = flock->numActivatedParticles;
-					} else {
-						fillStride = -1;
-						if( flock->delayedParticlesOffset ) {
-							initialOffset = flock->delayedParticlesOffset - 1;
-						} else {
-							initialOffset = trail->maxParticlesInFlock - 1;
-						}
-					}
-
-					const FillFlockResult fillResult = fillParticleFlock( params, flock->particles + initialOffset,
-																		  trail->maxParticlesPerDrop,
-																		  std::addressof( flock->appearanceRules ),
-																		  &m_rng, currTime, fillStride );
-					assert( fillResult.numParticles && fillResult.numParticles <= trail->maxParticlesPerDrop );
-
-					if( params->activationDelay.max == 0 ) {
-						flock->numActivatedParticles += fillResult.numParticles;
-					} else {
-						flock->numDelayedParticles += fillResult.numParticles;
-						if( flock->delayedParticlesOffset ) {
-							assert( flock->delayedParticlesOffset >= fillResult.numParticles );
-							flock->delayedParticlesOffset -= fillResult.numParticles;
-						} else {
-							assert( trail->maxParticlesInFlock >= fillResult.numParticles );
-							flock->delayedParticlesOffset = trail->maxParticlesInFlock - fillResult.numParticles;
-						}
-						assert( flock->delayedParticlesOffset + flock->numDelayedParticles <= trail->maxParticlesInFlock );
-						assert( flock->numActivatedParticles <= flock->delayedParticlesOffset );
-					}
-
-					assert( flock->numDelayedParticles + flock->numActivatedParticles <= trail->maxParticlesInFlock );
-
-					VectorAdd( params->origin, stepVec, params->origin );
-				}
-
-				VectorCopy( params->origin, trail->lastDropOrigin );
-				trail->lastParticleAt = currTime;
-			}
-		}
-	}
+	updateParticleTrail( trail->particleFlock, trail->paramsTemplate, origin, trail->lastDropOrigin, &m_rng, currTime, {
+		.maxParticlesPerDrop = trail->maxParticlesPerDrop,
+		.dropDistance        = trail->dropDistance,
+	});
 }
 
 auto TrackedEffectsSystem::allocStraightPolyTrail( int entNum, shader_s *material, const float *origin,
@@ -345,39 +259,40 @@ void TrackedEffectsSystem::updateAttachedStraightPolyTrail( StraightPolyTrail *t
 												   trail->lastFrom, trail->lastTo );
 }
 
-void TrackedEffectsSystem::updateAttachedCurvedPolyTrail( CurvedPolyTrail *trail, const float *origin,
-														  int64_t currTime ) {
-	assert( trail->points.size() == trail->timestamps.size() );
+void TrackedEffectsSystem::updateCurvedPolyTrail( const CurvedPolyTrailProps &__restrict props,
+												  const float *__restrict origin,
+												  int64_t currTime,
+												  wsw::StaticVector<Vec3, 32> *__restrict points,
+												  wsw::StaticVector<int64_t, 32> *__restrict timestamps ) {
+	assert( points->size() == timestamps->size() );
 
-	const CurvedPolyTrailProps &__restrict props = *trail->props;
-
-	if( !trail->points.empty() ) {
+	if( !points->empty() ) {
 		unsigned numTimedOutPoints = 0;
-		for(; numTimedOutPoints < trail->timestamps.size(); ++numTimedOutPoints ) {
-			if( trail->timestamps[numTimedOutPoints] + props.maxNodeLifetime > currTime ) {
+		for(; numTimedOutPoints < timestamps->size(); ++numTimedOutPoints ) {
+			if( ( *timestamps )[numTimedOutPoints] + props.maxNodeLifetime > currTime ) {
 				break;
 			}
 		}
 		if( numTimedOutPoints ) {
-			// TODO: Use some kind of deque, e.g. StaticDeque?
-			trail->points.erase( trail->points.begin(), trail->points.begin() + numTimedOutPoints );
-			trail->timestamps.erase( trail->timestamps.begin(), trail->timestamps.begin() + numTimedOutPoints );
+			// TODO: Use a circular buffer
+			points->erase( points->begin(), points->begin() + numTimedOutPoints );
+			timestamps->erase( timestamps->begin(), timestamps->begin() + numTimedOutPoints );
 		}
 	}
 
-	if( trail->points.size() > 1 ) {
+	if( points->size() > 1 ) {
 		float totalLength = 0.0f;
-		const unsigned maxSegmentNum = trail->points.size() - 2;
+		const unsigned maxSegmentNum = points->size() - 2;
 		for( unsigned segmentNum = 0; segmentNum <= maxSegmentNum; ++segmentNum ) {
-			const float *pt1 = trail->points[segmentNum + 0].Data();
-			const float *pt2 = trail->points[segmentNum + 1].Data();
+			const float *__restrict pt1 = ( *points )[segmentNum + 0].Data();
+			const float *__restrict pt2 = ( *points )[segmentNum + 1].Data();
 			totalLength += DistanceFast( pt1, pt2 );
 		}
 		if( totalLength > props.maxLength ) {
 			unsigned segmentNum = 0;
 			for(; segmentNum <= maxSegmentNum; ++segmentNum ) {
-				const float *pt1 = trail->points[segmentNum + 0].Data();
-				const float *pt2 = trail->points[segmentNum + 1].Data();
+				const float *__restrict pt1 = ( *points )[segmentNum + 0].Data();
+				const float *__restrict pt2 = ( *points )[segmentNum + 1].Data();
 				totalLength -= DistanceFast( pt1, pt2 );
 				if( totalLength <= props.maxLength ) {
 					break;
@@ -386,31 +301,37 @@ void TrackedEffectsSystem::updateAttachedCurvedPolyTrail( CurvedPolyTrail *trail
 			// This condition preserves the last segment that breaks the loop.
 			// segmentNum - 1 should be used instead if props.maxLength should never be reached.
 			if( const unsigned numPointsToDrop = segmentNum ) {
-				assert( numPointsToDrop <= trail->points.size() );
-				trail->points.erase( trail->points.begin(), trail->points.begin() + numPointsToDrop );
-				trail->timestamps.erase( trail->timestamps.begin(), trail->timestamps.begin() + numPointsToDrop );
+				assert( numPointsToDrop <= points->size() );
+				points->erase( points->begin(), points->begin() + numPointsToDrop );
+				timestamps->erase( timestamps->begin(), timestamps->begin() + numPointsToDrop );
 			}
 		}
 	}
 
 	bool shouldAddPoint = true;
-	if( !trail->points.empty() ) [[likely]] {
-		if( DistanceSquared( trail->points.back().Data(), origin ) < wsw::square( props.minDistanceBetweenNodes ) ) {
+	if( !points->empty() ) [[likely]] {
+		if( DistanceSquared( points->back().Data(), origin ) < wsw::square( props.minDistanceBetweenNodes ) ) {
 			shouldAddPoint = false;
 		} else {
-			if( trail->points.full() ) {
-				trail->points.erase( trail->points.begin() );
-				trail->timestamps.erase( trail->timestamps.begin() );
+			if( points->full() ) {
+				points->erase( points->begin() );
+				timestamps->erase( timestamps->begin() );
 			}
 		}
 	}
 
 	if( shouldAddPoint ) {
-		trail->points.push_back( Vec3( origin ) );
-		trail->timestamps.push_back( currTime );
+		points->push_back( Vec3( origin ) );
+		timestamps->push_back( currTime );
 	}
 
-	assert( trail->points.size() == trail->timestamps.size() );
+	assert( points->size() == timestamps->size() );
+}
+
+void TrackedEffectsSystem::updateAttachedCurvedPolyTrail( CurvedPolyTrail *trail, const float *origin,
+														  int64_t currTime ) {
+	const CurvedPolyTrailProps &props = *trail->props;
+	updateCurvedPolyTrail( props, origin, currTime, &trail->points, &trail->timestamps );
 
 	trail->touchedAt      = currTime;
 	trail->lastPointsSpan = { (const vec3_t *)trail->points.data(), trail->points.size() };
@@ -518,20 +439,20 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 	if( cg_projectilePolyTrail->integer ) {
 		[[maybe_unused]] shader_s *material;
 		[[maybe_unused]] const StraightPolyTrailProps *straightPolyTrailProps;
-		[[maybe_unused]] const CurvedPolyTrailProps *curvedPolyTrailProps;
+		[[maybe_unused]] const CurvedPolyTrailProps *CurvedPolyTrailProps;
 		if( cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer ) {
 			material               = cgs.media.shaderRocketPolyTrailCombined;
 			straightPolyTrailProps = &kRocketCombinedStraightPolyTrailProps;
-			curvedPolyTrailProps   = &kRocketCombinedCurvedPolyTrailProps;
+			CurvedPolyTrailProps   = &kRocketCombinedCurvedPolyTrailProps;
 		} else {
 			material               = cgs.media.shaderRocketPolyTrailStandalone;
 			straightPolyTrailProps = &kRocketStandaloneStraightPolyTrailProps;
-			curvedPolyTrailProps   = &kRocketStandaloneCurvedPolyTrailProps;
+			CurvedPolyTrailProps   = &kRocketStandaloneCurvedPolyTrailProps;
 		}
 
 		if( useCurvedTrail ) {
 			if( !effects->curvedPolyTrail ) [[unlikely]] {
-				effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, material, curvedPolyTrailProps );
+				effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, material, CurvedPolyTrailProps );
 			}
 			if( CurvedPolyTrail *trail = effects->curvedPolyTrail ) [[likely]] {
 				updateAttachedCurvedPolyTrail( trail, origin, currTime );
@@ -1219,36 +1140,43 @@ void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		}
 	}
 
-	constexpr int64_t lingeringLimit  = 192;
-	constexpr float rcpLingeringLimit = 1.0f / (float)lingeringLimit;
-
 	for( StraightPolyTrail *trail = m_lingeringStraightPolyTrailsHead, *nextTrail = nullptr; trail; trail = nextTrail ) {
 		nextTrail = trail->next;
-		if( trail->touchedAt + lingeringLimit <= currTime ) {
-			unlinkAndFree( trail );
-		} else {
-			const float lingeringFrac = (float)( currTime - trail->touchedAt ) * rcpLingeringLimit;
+		const int64_t lingeringTime  = currTime - trail->touchedAt;
+		const int64_t lingeringLimit = trail->props->lingeringLimit;
+		assert( lingeringLimit > 0 && lingeringLimit < 1000 );
+		if( lingeringTime < lingeringLimit ) [[likely]] {
+			const float lingeringFrac = (float)lingeringTime * Q_Rcp( (float)lingeringLimit );
 			vec4_t fadingOutFromColor, fadingOutToColor;
 			copyWithAlphaScale( trail->props->fromColor, fadingOutFromColor, 1.0f - lingeringFrac );
 			copyWithAlphaScale( trail->props->toColor, fadingOutToColor, 1.0f - lingeringFrac );
 			cg.polyEffectsSystem.updateStraightBeamEffect( trail->beam, fadingOutFromColor, fadingOutToColor,
 														   trail->lastWidth, trail->props->tileLength,
 														   trail->lastFrom, trail->lastTo );
+		} else {
+			unlinkAndFree( trail );
 		}
 	}
 
 	for( CurvedPolyTrail *trail = m_lingeringCurvedPolyTrailsHead, *nextTrail = nullptr; trail; trail = nextTrail ) {
 		nextTrail = trail->next;
-		if( trail->touchedAt + lingeringLimit <= currTime ) {
-			unlinkAndFree( trail );
-		} else {
-			const float lingeringFrac = (float)( currTime - trail->touchedAt ) * rcpLingeringLimit;
+		const int64_t lingeringTime  = currTime - trail->touchedAt;
+		const int64_t lingeringLimit = trail->props->lingeringLimit;
+		assert( lingeringLimit > 0 && lingeringLimit < 1000 );
+		if( lingeringTime < lingeringLimit && trail->points.size() > 1 ) {
+			// Update the lingering trail as usual.
+			// Submit the last known position as the current one.
+			// This allows trails to shrink naturally.
+			updateCurvedPolyTrail( *trail->props, trail->points.back().Data(), currTime, &trail->points, &trail->timestamps );
+			const float lingeringFrac = (float)lingeringTime * Q_Rcp( (float)lingeringLimit );
 			vec4_t fadingOutFromColor, fadingOutToColor;
 			copyWithAlphaScale( trail->props->fromColor, fadingOutFromColor, 1.0f - lingeringFrac );
 			copyWithAlphaScale( trail->props->toColor, fadingOutToColor, 1.0f - lingeringFrac );
 			cg.polyEffectsSystem.updateCurvedBeamEffect( trail->beam, fadingOutFromColor, fadingOutToColor,
 														 trail->props->width, PolyEffectsSystem::UvModeFit {},
 														 trail->lastPointsSpan );
+		} else {
+			unlinkAndFree( trail );
 		}
 	}
 

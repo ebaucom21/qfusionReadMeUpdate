@@ -854,17 +854,25 @@ void TransientEffectsSystem::spawnPelletImpactModel( const float *origin, const 
 
 void TransientEffectsSystem::addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 													   const ConicalFlockParams &flockParams,
-													   const Particle::AppearanceRules &appearanceRules ) {
+													   const Particle::AppearanceRules &appearanceRules,
+													   const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+													   const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) {
 	allocDelayedEffect( m_lastTime, flockParams.origin, delay, ConicalFlockSpawnRecord {
-		.flockParams = flockParams, .appearanceRules = appearanceRules, .bin = bin
+		.flockParams = flockParams, .appearanceRules = appearanceRules, .bin = bin,
+		.paramsOfParticleTrail = paramsOfParticleTrail ? std::optional( *paramsOfParticleTrail ) : std::nullopt,
+		.paramsOfPolyTrail     = paramsOfPolyTrail ? std::optional( *paramsOfPolyTrail ) : std::nullopt,
 	});
 }
 
 void TransientEffectsSystem::addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 													   const EllipsoidalFlockParams &flockParams,
-													   const Particle::AppearanceRules &appearanceRules ) {
+													   const Particle::AppearanceRules &appearanceRules,
+													   const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail,
+													   const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail ) {
 	allocDelayedEffect( m_lastTime, flockParams.origin, delay, EllipsoidalFlockSpawnRecord {
-		.flockParams = flockParams, .appearanceRules = appearanceRules, .bin = bin
+		.flockParams = flockParams, .appearanceRules = appearanceRules, .bin = bin,
+		.paramsOfParticleTrail = paramsOfParticleTrail ? std::optional( *paramsOfParticleTrail ) : std::nullopt,
+		.paramsOfPolyTrail     = paramsOfPolyTrail ? std::optional( *paramsOfPolyTrail ) : std::nullopt,
 	});
 }
 
@@ -1324,12 +1332,21 @@ void TransientEffectsSystem::spawnDelayedEffect( DelayedEffect *effect ) {
 				AngleVectors( m_effect->angles, modifiedFlockParams.dir, nullptr, nullptr );
 				flockParams = &modifiedFlockParams;
 			}
+			const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr;
+			if( record.paramsOfParticleTrail ) {
+				paramsOfParticleTrail = std::addressof( *record.paramsOfParticleTrail );
+			}
+			const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail = nullptr;
+			if( record.paramsOfPolyTrail ) {
+				paramsOfPolyTrail = std::addressof( *record.paramsOfPolyTrail );
+			}
 			// TODO: "using enum"
+			// TODO: Get rid of user-visible bins
 			using Pfb = ParticleFlockBin;
 			switch( record.bin ) {
-				case Pfb::Small: cg.particleSystem.addSmallParticleFlock( arules, *flockParams ); break;
-				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( arules, *flockParams ); break;
-				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( arules, *flockParams ); break;
+				case Pfb::Small: cg.particleSystem.addSmallParticleFlock( arules, *flockParams, paramsOfParticleTrail, paramsOfPolyTrail ); break;
+				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( arules, *flockParams, paramsOfParticleTrail, paramsOfPolyTrail ); break;
+				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( arules, *flockParams, paramsOfParticleTrail, paramsOfPolyTrail ); break;
 			}
 		}
 		void operator()( const EllipsoidalFlockSpawnRecord &record ) const {
@@ -1345,12 +1362,21 @@ void TransientEffectsSystem::spawnDelayedEffect( DelayedEffect *effect ) {
 				}
 				flockParams = &modifiedFlockParams;
 			}
+			const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr;
+			if( record.paramsOfParticleTrail ) {
+				paramsOfParticleTrail = std::addressof( *record.paramsOfParticleTrail );
+			}
+			const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail = nullptr;
+			if( record.paramsOfPolyTrail ) {
+				paramsOfPolyTrail = std::addressof( *record.paramsOfPolyTrail );
+			}
 			// TODO: "using enum"
+			// TODO: Get rid of user-visible bins
 			using Pfb = ParticleFlockBin;
 			switch( record.bin ) {
-				case Pfb::Small: cg.particleSystem.addSmallParticleFlock( arules, *flockParams ); break;
-				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( arules, *flockParams ); break;
-				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( arules, *flockParams ); break;
+				case Pfb::Small: cg.particleSystem.addSmallParticleFlock( arules, *flockParams, paramsOfParticleTrail, paramsOfPolyTrail ); break;
+				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( arules, *flockParams, paramsOfParticleTrail, paramsOfPolyTrail ); break;
+				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( arules, *flockParams, paramsOfParticleTrail, paramsOfPolyTrail ); break;
 			}
 		}
 		void operator()( const ImpactRosetteSpawnRecord &record ) const {

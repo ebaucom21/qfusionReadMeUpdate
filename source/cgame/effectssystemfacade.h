@@ -241,7 +241,9 @@ private:
 	void spawnOrPostponeImpactParticleEffect( unsigned delay, const FlockParams &flockParams,
 											  const Particle::AppearanceRules &appearanceRules,
 											  TransientEffectsSystem::ParticleFlockBin bin =
-												  TransientEffectsSystem::ParticleFlockBin::Small );
+												  TransientEffectsSystem::ParticleFlockBin::Small,
+											  const ParamsOfParticleTrailOfParticles *paramsOfParticleTrail = nullptr,
+											  const ParamsOfPolyTrailOfParticles *paramsOfPolyTrail = nullptr );
 
 	void spawnOrPostponeImpactRosetteEffect( unsigned delay, PolyEffectsSystem::ImpactRosetteParams &&params );
 

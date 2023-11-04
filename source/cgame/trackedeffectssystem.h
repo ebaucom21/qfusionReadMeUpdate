@@ -94,6 +94,9 @@ public:
 	void updateStraightLaserBeam( int ownerNum, const float *from, const float *to, int64_t currTime );
 	void updateCurvedLaserBeam( int ownerNum, std::span<const vec3_t> points, int64_t currTime );
 
+	static void updateCurvedPolyTrail( const CurvedPolyTrailProps &props, const float *origin, int64_t currTime,
+									   wsw::StaticVector<Vec3, 32> *points, wsw::StaticVector<int64_t, 32> *timestamps );
+
 	void clear();
 
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest );
@@ -104,7 +107,6 @@ private:
 		ConicalFlockParams *paramsTemplate { nullptr };
 		float lastDropOrigin[3];
 		int64_t touchedAt { 0 };
-		int64_t lastParticleAt { 0 };
 		float dropDistance { 12.0f };
 		unsigned maxParticlesPerDrop { 1 };
 		unsigned maxParticlesInFlock { ~0u };

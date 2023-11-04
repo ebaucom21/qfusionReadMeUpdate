@@ -30,6 +30,17 @@ class DrawSceneRequest;
 
 struct CMShapeList;
 
+struct CurvedPolyTrailProps {
+	float minDistanceBetweenNodes { 8.0f };
+	unsigned maxNodeLifetime { 250 };
+	unsigned lingeringLimit { 200 };
+	// This value is not that permissive due to long segments for some trails.
+	float maxLength { 250.0f };
+	float width { 4.0f };
+	float fromColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
+	float toColor[4] { 1.0f, 1.0f, 1.0f, 0.2f };
+};
+
 class PolyEffectsSystem {
 public:
 	// Opaque handles TODO optimize layout?
@@ -148,21 +159,13 @@ public:
 		shader_s *material { nullptr };
 	};
 
-	void spawnSimulatedRing( SimulatedRingParams &&params );
-
-	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
-private:
-	struct StraightBeamEffect : public StraightBeam {
-		StraightBeamEffect *prev { nullptr }, *next { nullptr };
-		QuadPoly poly;
-	};
-
+	// TODO: Extract it to the outer scope?
 	struct CurvedBeamPoly : public DynamicMesh {
 		// Points to an externally owned buffer
 		std::span<const vec3_t> points;
 		float fromColor[4];
 		float toColor[4];
-        float width;
+		float width;
 		CurvedBeamUVMode uvMode;
 
 		[[nodiscard]]
@@ -180,6 +183,15 @@ private:
 							  vec2_t *__restrict texCoords,
 							  byte_vec4_t *__restrict colors,
 							  uint16_t *__restrict indices ) const -> std::pair<unsigned, unsigned> override;
+	};
+
+	void spawnSimulatedRing( SimulatedRingParams &&params );
+
+	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
+private:
+	struct StraightBeamEffect : public StraightBeam {
+		StraightBeamEffect *prev { nullptr }, *next { nullptr };
+		QuadPoly poly;
 	};
 
 	struct CurvedBeamEffect : public CurvedBeam {
