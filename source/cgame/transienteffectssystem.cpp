@@ -23,9 +23,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../cgame/cg_local.h"
 #include "../client/client.h"
 #include "../common/links.h"
+#include "../common/configvars.h"
 
 #include <cstdlib>
 #include <cstring>
+
+extern BoolConfigVar v_explosionWave, v_explosionSmoke, v_explosionClusters;
+extern BoolConfigVar v_cartoonHitEffect;
 
 static constexpr unsigned kCachedSmokeBulgeSubdivLevel = 3;
 static constexpr unsigned kCachedSmokeBulgeMaskSize    = 642;
@@ -360,7 +364,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 	float fireHullScale;
 	unsigned fireHullTimeout;
 	std::span<const SimulatedHullsSystem::HullLayerParams> fireHullLayerParams;
-	if( cg_explosionsSmoke->integer ) {
+	if( v_explosionSmoke.get() ) {
 		fireHullScale       = 1.40f;
 		fireHullTimeout     = 550;
 		fireHullLayerParams = kFireHullParams.lightHullLayerParams;
@@ -398,7 +402,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		hull->layers[hull->numLayers - 1].overrideAppearanceRules = &g_fireOuterCloudAppearanceRules;
 	}
 
-	if( cg_explosionsWave->integer ) {
+	if( v_explosionWave.get() ) {
 		const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.05f };
 		if( auto *const hull = hullsSystem->allocWaveHull( m_lastTime, 250 ) ) {
 			hullsSystem->setupHullVertices( hull, fireOrigin, waveColor, 500.0f, 50.0f );
@@ -472,11 +476,11 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		}
 	}
 
-	if( cg_explosionsClusters->integer ) {
+	if( v_explosionClusters.get() ) {
 		std::span<const SimulatedHullsSystem::HullLayerParams> clusterHullLayerParams;
 		float minSpawnerSpeed, maxSpawnerSpeed;
 		unsigned maxSpawnedClusters;
-		if( cg_explosionsSmoke->integer ) {
+		if( v_explosionSmoke.get() ) {
 			clusterHullLayerParams = ::kFireHullParams.lightClusterHullLayerParams;
 			minSpawnerSpeed = 105.0f, maxSpawnerSpeed = 125.0f;
 			maxSpawnedClusters = 7;
@@ -545,7 +549,7 @@ void TransientEffectsSystem::spawnSmokeHull( int64_t currTime, const float *orig
 }
 
 void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const float *dir, int damage ) {
-	if( cg_cartoonHitEffect->integer ) {
+	if( v_cartoonHitEffect.get() ) {
 		float radius = 0.0f;
 		shader_s *material = nullptr;
 		if( damage > 64 ) {
@@ -652,7 +656,7 @@ void TransientEffectsSystem::spawnElectroboltLikeHitEffect( const float *origin,
 		},
 	});
 
-	if( cg_explosionsWave->integer ) {
+	if( v_explosionWave.get() ) {
 		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 200 ) ) {
 			const vec4_t hullColor { energyColor[0], energyColor[1], energyColor[2], 0.075f };
 			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 750.0f, 100.0f );
@@ -682,7 +686,7 @@ void TransientEffectsSystem::spawnPlasmaImpactEffect( const float *origin, const
 		.radiusLifespan = { .fadedIn = 96.0f, },
 	});
 
-	if( cg_explosionsWave->integer ) {
+	if( v_explosionWave.get() ) {
 		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 175 ) ) {
 			const vec4_t hullColor { colorGreen[0], colorGreen[1], colorGreen[2], 0.05f };
 			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 300.0f, 75.0f );
@@ -817,7 +821,7 @@ void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin
 		};
 	}
 
-	if( cg_explosionsWave->integer ) {
+	if( v_explosionWave.get() ) {
 		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 200 ) ) {
 			const vec4_t waveHullColor { 1.0f, 0.9f, 0.6f, 0.05f };
 			cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, waveHullColor, 300.0f, 30.0f );

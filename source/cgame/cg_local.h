@@ -118,16 +118,6 @@ typedef struct {
 	float yawVelocity;
 } centity_t;
 
-extern cvar_t *cg_weaponFlashes;
-extern cvar_t *cg_gunx;
-extern cvar_t *cg_guny;
-extern cvar_t *cg_gunz;
-extern cvar_t *cg_debugPlayerModels;
-extern cvar_t *cg_debugWeaponModels;
-extern cvar_t *cg_gunbob;
-extern cvar_t *cg_gun_fov;
-extern cvar_t *cg_handOffset;
-
 enum {
 	WEAPMODEL_NOANIM,
 	WEAPMODEL_STANDBY,
@@ -693,12 +683,6 @@ extern cg_state_t cg;
 
 extern centity_t cg_entities[MAX_EDICTS];
 
-//
-// cg_ents.c
-//
-extern cvar_t *cg_gun;
-extern cvar_t *cg_gun_alpha;
-
 const struct cmodel_s *CG_CModelForEntity( int entNum );
 void CG_SoundEntityNewState( centity_t *cent );
 void CG_AddEntities( DrawSceneRequest *drawSceneRequest );
@@ -726,25 +710,11 @@ void CG_ShutdownCrosshairs();
 
 struct model_s *CG_RegisterModel( const char *name );
 
-//
-// cg_players.c
-//
-extern cvar_t *cg_model;
-extern cvar_t *cg_skin;
-extern cvar_t *cg_hand;
-
 void CG_ResetClientInfos( void );
 void CG_LoadClientInfo( unsigned client, const wsw::StringView &configString );
 void CG_UpdateSexedSoundsRegistration( pmodelinfo_t *pmodelinfo );
 void CG_SexedSound( int entnum, int entchannel, const char *name, float fvol, float attn );
 struct sfx_s *CG_RegisterSexedSound( int entnum, const char *name );
-
-//
-// cg_predict.c
-//
-extern cvar_t *cg_predict;
-extern cvar_t *cg_predict_optimize;
-extern cvar_t *cg_showMiss;
 
 void CG_PredictedEvent( int entNum, int ev, int parm );
 void CG_Predict_ChangeWeapon( int new_weapon );
@@ -788,61 +758,6 @@ void CG_MessageMode2( const CmdArgs & );
 // cg_main.c
 //
 extern cvar_t *developer;
-extern cvar_t *cg_showClamp;
-
-// wsw
-extern cvar_t *cg_volume_hitsound;    // hit sound volume
-extern cvar_t *cg_autoaction_demo;
-extern cvar_t *cg_autoaction_screenshot;
-extern cvar_t *cg_autoaction_stats;
-extern cvar_t *cg_autoaction_spectator;
-extern cvar_t *cg_simpleItems; // simple items
-extern cvar_t *cg_simpleItemsSize; // simple items
-extern cvar_t *cg_volume_players; // players sound volume
-extern cvar_t *cg_volume_effects; // world sound volume
-extern cvar_t *cg_volume_announcer; // announcer sounds volume
-extern cvar_t *cg_projectileSmokeTrail;
-extern cvar_t *cg_projectileFireTrail;
-extern cvar_t *cg_projectilePolyTrail;
-extern cvar_t *cg_plasmaTrail;
-extern cvar_t *cg_playerTrail;
-extern cvar_t *cg_bloodTime;
-extern cvar_t *cg_bloodPalette;
-extern cvar_t *cg_bloodStyle;
-extern cvar_t *cg_showPOVBlood;
-extern cvar_t *cg_projectileFireTrailAlpha;
-
-extern cvar_t *cg_cartoonEffects;
-extern cvar_t *cg_cartoonHitEffect;
-
-extern cvar_t *cg_heavyRocketExplosions;
-extern cvar_t *cg_heavyGrenadeExplosions;
-extern cvar_t *cg_heavyShockwaveExplosions;
-
-extern cvar_t *cg_explosionsWave;
-extern cvar_t *cg_explosionsSmoke;
-extern cvar_t *cg_explosionsClusters;
-extern cvar_t *cg_gibs;
-extern cvar_t *cg_outlineModels;
-extern cvar_t *cg_outlineWorld;
-extern cvar_t *cg_outlinePlayers;
-
-extern cvar_t *cg_drawEntityBoxes;
-extern cvar_t *cg_fov;
-extern cvar_t *cg_zoomfov;
-extern cvar_t *cg_movementStyle;
-extern cvar_t *cg_noAutohop;
-extern cvar_t *cg_particles;
-extern cvar_t *cg_showhelp;
-extern cvar_t *cg_predictLaserBeam;
-extern cvar_t *cg_showSelfShadow;
-extern cvar_t *cg_laserBeamSubdivisions;
-extern cvar_t *cg_projectileAntilagOffset;
-extern cvar_t *cg_raceGhosts;
-extern cvar_t *cg_raceGhostsAlpha;
-extern cvar_t *cg_chatBeep;
-extern cvar_t *cg_chatFilter;
-extern cvar_t *cg_chatShowIgnored;
 
 //force models
 extern cvar_t *cg_teamPLAYERSmodel;
@@ -861,17 +776,54 @@ extern cvar_t *cg_teamPLAYERScolorForce;
 extern cvar_t *cg_teamALPHAcolor;
 extern cvar_t *cg_teamBETAcolor;
 
-extern cvar_t *cg_forceMyTeamAlpha;
 
-extern cvar_t *cg_teamColoredBeams;
-extern cvar_t *cg_teamColoredInstaBeams;
+class BoolConfigVar;
+class IntConfigVar;
+class FloatConfigVar;
 
-extern cvar_t *cg_playList;
-extern cvar_t *cg_playListShuffle;
+extern IntConfigVar v_hand;
+extern BoolConfigVar v_gun, v_gunBob;
+extern FloatConfigVar v_gunFov;
+extern FloatConfigVar v_gunX, v_gunY, v_gunZ;
+extern FloatConfigVar v_gunAlpha;
+extern IntConfigVar v_weaponFlashes;
+extern FloatConfigVar v_handOffset;
 
-extern cvar_t *cg_flashWindowCount;
+extern BoolConfigVar v_predict, v_predictOptimize;
+extern BoolConfigVar v_thirdPerson;
+extern FloatConfigVar v_thirdPersonAngle, v_thirdPersonRange;
+extern FloatConfigVar v_fov, v_zoomfov;
+extern BoolConfigVar v_viewBob;
+extern BoolConfigVar v_colorCorrection;
+extern BoolConfigVar v_outlineWorld;
 
-extern cvar_t *cg_autoRespectMenu;
+extern IntConfigVar v_showTeamInfo;
+extern IntConfigVar v_showPlayerNames, v_showPointedPlayer;
+extern FloatConfigVar v_showPlayerNames_alpha, v_showPlayerNames_zfar, v_showPlayerNames_barWidth;
+
+extern BoolConfigVar v_showViewBlends, v_showZoomEffect;
+extern BoolConfigVar v_draw2D, v_showHud;
+extern FloatConfigVar v_viewSize;
+
+extern IntConfigVar v_damageIndicator, v_damageIndicatorTime;
+
+extern BoolConfigVar v_showClamp;
+
+extern IntConfigVar v_flashWindowCount;
+
+extern BoolConfigVar v_outlinePlayers, v_outlineModels;
+extern BoolConfigVar v_raceGhosts;
+extern FloatConfigVar v_raceGhostsAlpha;
+
+extern BoolConfigVar v_particles;
+extern BoolConfigVar v_heavyRocketExplosions, v_heavyGrenadeExplosions, v_heavyShockwaveExplosions;
+extern BoolConfigVar v_explosionWave, v_explosionSmoke, v_explosionClusters;
+extern IntConfigVar v_bloodStyle, v_bloodTime, v_bloodPalette;
+extern FloatConfigVar v_volumeEffects;
+extern FloatConfigVar v_ebBeamWidth, v_ebBeamTime;
+extern FloatConfigVar v_instaBeamWidth, v_instaBeamTime;
+extern BoolConfigVar v_teamColoredBeams, v_teamColoredInstaBeams;
+extern BoolConfigVar v_projectileFireTrail, v_projectileSmokeTrail, v_projectilePolyTrail, v_plasmaTrail;
 
 void CG_ValidateItemDef( int tag, const char *name );
 
@@ -927,15 +879,6 @@ typedef struct {
 
 extern cg_chasecam_t chaseCam;
 
-extern cvar_t *cg_thirdPerson;
-extern cvar_t *cg_thirdPersonAngle;
-extern cvar_t *cg_thirdPersonRange;
-
-extern cvar_t *cg_colorCorrection;
-
-// Viewport bobbing on fall/high jumps
-extern cvar_t *cg_viewBob;
-
 void CG_DemocamInit( void );
 void CG_DemocamShutdown( void );
 
@@ -956,19 +899,6 @@ void CG_ClearChaseCam();
 inline void CG_SmallPileOfGibs( const vec3_t origin, int damage, const vec3_t initialVelocity, int team ) {}
 
 //
-// cg_decals.c
-//
-extern cvar_t *cg_addDecals;
-
-//
-// cg_polys.c	-	wsw	: jal
-//
-extern cvar_t *cg_ebbeam_width;
-extern cvar_t *cg_ebbeam_time;
-extern cvar_t *cg_instabeam_width;
-extern cvar_t *cg_instabeam_time;
-
-//
 // cg_effects.c
 //
 inline void CG_ClearLightStyles( void ) {}
@@ -987,15 +917,6 @@ void CG_CalcViewWeapon( cg_viewweapon_t *viewweapon );
 void CG_ViewWeapon_StartAnimationEvent( int newAnim );
 void CG_ViewWeapon_RefreshAnimation( cg_viewweapon_t *viewweapon );
 
-//
-// cg_events.c
-//
-//extern cvar_t *cg_footSteps;
-extern cvar_t *cg_damage_indicator;
-extern cvar_t *cg_damage_indicator_time;
-extern cvar_t *cg_pickup_flash;
-extern cvar_t *cg_weaponAutoSwitch;
-
 void CG_FireEvents( bool early );
 void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted );
 void CG_AddAnnouncerEvent( struct sfx_s *sound, bool queued );
@@ -1010,7 +931,6 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest );
 //
 // cg_input.cpp
 //
-void CG_InitInputVars();
 void CG_InitInput( void );
 void CG_ShutdownInput( void );
 

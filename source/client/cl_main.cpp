@@ -56,18 +56,6 @@ static cvar_t *cl_extrapolate;
 
 static cvar_t *cl_timedemo;
 
-cvar_t *sensitivity;
-cvar_t *zoomsens;
-cvar_t *m_accel;
-cvar_t *m_accelStyle;
-cvar_t *m_accelOffset;
-cvar_t *m_accelPow;
-cvar_t *m_filter;
-cvar_t *m_sensCap;
-
-cvar_t *m_pitch;
-cvar_t *m_yaw;
-
 static cvar_t *info_password;
 static cvar_t *cl_infoservers;
 

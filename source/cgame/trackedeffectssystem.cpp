@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "trackedeffectssystem.h"
 #include "../common/links.h"
 #include "../cgame/cg_local.h"
+#include "../common/configvars.h"
 
 struct StraightPolyTrailProps {
 	unsigned lingeringLimit { 200 };
@@ -403,7 +404,7 @@ static const CurvedPolyTrailProps kRocketStandaloneCurvedPolyTrailProps {
 void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, int64_t currTime, bool useCurvedTrail ) {
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 
-	if( cg_projectileSmokeTrail->integer ) {
+	if( v_projectileSmokeTrail.get() ) {
 		if( !effects->particleTrails[0] ) [[unlikely]] {
 			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin,
 															 &::g_rocketSmokeParticlesFlockParams, {
@@ -420,7 +421,7 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 		}
 	}
 
-	if( cg_projectileFireTrail->integer ) {
+	if( v_projectileFireTrail.get() ) {
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin,
 															 &::g_rocketFireParticlesFlockParams, {
@@ -436,11 +437,11 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 		}
 	}
 
-	if( cg_projectilePolyTrail->integer ) {
+	if( v_projectilePolyTrail.get() ) {
 		[[maybe_unused]] shader_s *material;
 		[[maybe_unused]] const StraightPolyTrailProps *straightPolyTrailProps;
 		[[maybe_unused]] const CurvedPolyTrailProps *CurvedPolyTrailProps;
-		if( cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer ) {
+		if( v_projectileFireTrail.get() || v_projectileSmokeTrail.get() ) {
 			material               = cgs.media.shaderRocketPolyTrailCombined;
 			straightPolyTrailProps = &kRocketCombinedStraightPolyTrailProps;
 			CurvedPolyTrailProps   = &kRocketCombinedCurvedPolyTrailProps;
@@ -523,7 +524,7 @@ static const CurvedPolyTrailProps kGrenadeStandalonePolyTrailProps {
 void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 
-	if( cg_projectileSmokeTrail->integer ) {
+	if( v_projectileSmokeTrail.get() ) {
 		if( !effects->particleTrails[0] ) [[unlikely]] {
 			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin,
 															 &::g_grenadeSmokeParticlesFlockParams, {
@@ -540,7 +541,7 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 		}
 	}
 
-	if( cg_projectileFireTrail->integer ) {
+	if( v_projectileFireTrail.get() ) {
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin,
 															 &::g_grenadeFuseParticlesFlockParams, {
@@ -557,10 +558,10 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 		}
 	}
 
-	if( cg_projectilePolyTrail->integer ) {
+	if( v_projectilePolyTrail.get() ) {
 		[[maybe_unused]] shader_s *material;
 		[[maybe_unused]] const CurvedPolyTrailProps *props;
-		if( cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer ) {
+		if( v_projectileFireTrail.get() || v_projectileSmokeTrail.get() ) {
 			material = cgs.media.shaderGrenadePolyTrailCombined;
 			props    = &kGrenadeCombinedPolyTrailProps;
 		} else {
@@ -636,7 +637,7 @@ static const StraightPolyTrailProps kBlastStandaloneTrailProps {
 void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 
-	if( cg_projectileSmokeTrail->integer ) {
+	if( v_projectileSmokeTrail.get() ) {
 		if( !effects->particleTrails[0] ) [[unlikely]] {
 			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin,
 															 &::g_blastSmokeParticlesFlockParams, {
@@ -653,7 +654,7 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 		}
 	}
 
-	if( cg_projectileFireTrail->integer ) {
+	if( v_projectileFireTrail.get() ) {
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin,
 															 &::g_blastIonsParticlesFlockParams, {
@@ -669,10 +670,10 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 		}
 	}
 
-	if( cg_projectilePolyTrail->integer ) {
+	if( v_projectilePolyTrail.get() ) {
 		[[maybe_unused]] shader_s *material;
 		[[maybe_unused]] const StraightPolyTrailProps *props;
-		if( cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer ) {
+		if( v_projectileFireTrail.get() || v_projectileSmokeTrail.get() ) {
 			material = cgs.media.shaderBlastPolyTrailCombined;
 			props    = &kBlastCombinedTrailProps;
 		} else {
@@ -741,7 +742,7 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 	[[maybe_unused]] vec4_t teamColor;
 	[[maybe_unused]] int team = TEAM_PLAYERS;
 	// The trail is not a beam, but should conform to the strong beam color as well
-	if( cg_teamColoredBeams->integer ) {
+	if( v_teamColoredBeams.get() ) {
 		team = getTeamForOwner( ownerNum );
 		if( team == TEAM_ALPHA || team == TEAM_BETA ) {
 			CG_TeamColor( team, teamColor );
@@ -817,7 +818,7 @@ static const CurvedPolyTrailProps kPlasmaCurvedPolyTrailProps {
 
 void TrackedEffectsSystem::touchStrongPlasmaTrail( int entNum, const float *origin, int64_t currTime ) {
 	assert( entNum > 0 && entNum < MAX_EDICTS );
-	if( cg_plasmaTrail->integer && cg_projectilePolyTrail->integer ) {
+	if( v_plasmaTrail.get() && v_projectilePolyTrail.get() ) {
 		AttachedEntityEffects *effects = &m_attachedEntityEffects[entNum];
 		if( !effects->straightPolyTrail ) {
 			effects->straightPolyTrail = allocStraightPolyTrail( entNum, cgs.media.shaderPlasmaPolyTrail,
@@ -831,7 +832,7 @@ void TrackedEffectsSystem::touchStrongPlasmaTrail( int entNum, const float *orig
 
 void TrackedEffectsSystem::touchWeakPlasmaTrail( int entNum, const float *origin, int64_t currTime ) {
 	assert( entNum > 0 && entNum < MAX_EDICTS );
-	if( cg_plasmaTrail->integer && cg_projectilePolyTrail->integer ) {
+	if( v_plasmaTrail.get() && v_projectilePolyTrail.get() ) {
 		AttachedEntityEffects *effects = &m_attachedEntityEffects[entNum];
 		if( !effects->curvedPolyTrail ) {
 			effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, cgs.media.shaderPlasmaPolyTrail,
@@ -1043,7 +1044,7 @@ void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
 }
 
 static void getLaserColorOverlayForOwner( int ownerNum, vec4_t color ) {
-	if( cg_teamColoredBeams->integer ) {
+	if( v_teamColoredBeams.get() ) {
 		if( int team = getTeamForOwner( ownerNum ); team == TEAM_ALPHA || team == TEAM_BETA ) {
 			CG_TeamColor( team, color );
 			return;

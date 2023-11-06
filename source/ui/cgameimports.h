@@ -47,6 +47,7 @@ wsw::StringView CG_PlayerName( unsigned playerNum );
 wsw::StringView CG_PlayerClan( unsigned playerClan );
 wsw::StringView CG_LocationName( unsigned location );
 
-extern struct cvar_s *cg_showChasers;
+class BoolConfigVar;
+extern BoolConfigVar v_showChasers;
 
 #endif

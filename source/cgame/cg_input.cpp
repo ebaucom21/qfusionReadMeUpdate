@@ -28,7 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/keys.h"
 #include "../client/client.h"
 #include "../common/cmdargs.h"
-#include "../common/cmdcompat.h"
+#include "../common/configvars.h"
 
 using wsw::operator""_asView;
 
@@ -75,12 +75,23 @@ static kbutton_t in_up, in_down;
 static kbutton_t in_special;
 static kbutton_t in_zoom;
 
-static cvar_t *cl_yawspeed;
-static cvar_t *cl_pitchspeed;
 
-static cvar_t *cl_run;
+static FloatConfigVar v_yawSpeed( "cl_yawSpeed"_asView, { .byDefault = 140.0f } );
+static FloatConfigVar v_pitchSpeed( "cl_pitchSpeed"_asView, { .byDefault = 150.0f } );
+static FloatConfigVar v_angleSpeedKey( "cl_angleSpeedKey"_asView, { .byDefault = 1.5f } );
 
-static cvar_t *cl_anglespeedkey;
+static BoolConfigVar v_run( "cl_run"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+static FloatConfigVar v_sensitivity( "sensitivity"_asView, { .byDefault = 3.0f, .flags = CVAR_ARCHIVE } );
+static FloatConfigVar v_zoomsens( "zoomsens"_asView, { .byDefault = 0.0f, .flags = CVAR_ARCHIVE } );
+static FloatConfigVar v_accel( "m_accel"_asView, { .byDefault = 0.0f, .flags = CVAR_ARCHIVE } );
+static IntConfigVar v_accelStyle( "m_accelStyle"_asView, { .byDefault = 0, .flags = CVAR_ARCHIVE } );
+static FloatConfigVar v_accelOffset( "m_accelOffset"_asView, { .byDefault = 0.0f, .flags = CVAR_ARCHIVE } );
+static FloatConfigVar v_accelPow( "m_accelPow"_asView, { .byDefault = 2.0f, .flags = CVAR_ARCHIVE } );
+static BoolConfigVar v_filter( "m_filter"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
+static FloatConfigVar v_pitch( "m_pitch"_asView, { .byDefault = 0.022f, .flags = CVAR_ARCHIVE } );
+static FloatConfigVar v_yaw( "m_yaw"_asView, { .byDefault = 0.022f, .flags = CVAR_ARCHIVE } );
+static FloatConfigVar v_sensCap( "m_sensCap"_asView, { .byDefault = 0.0f, .flags = CVAR_ARCHIVE } );
 
 /*
 * CG_KeyDown
@@ -237,22 +248,22 @@ static void CG_AddKeysViewAngles( vec3_t viewAngles ) {
 	float speed;
 
 	if( in_speed.state & 1 ) {
-		speed = ( (float)cg_inputFrameTime * 0.001f ) * cl_anglespeedkey->value;
+		speed = ( (float)cg_inputFrameTime * 0.001f ) * v_angleSpeedKey.get();
 	} else {
 		speed = (float)cg_inputFrameTime * 0.001f;
 	}
 
 	if( !( in_strafe.state & 1 ) ) {
-		viewAngles[YAW] -= speed * cl_yawspeed->value * CG_KeyState( &in_right );
-		viewAngles[YAW] += speed * cl_yawspeed->value * CG_KeyState( &in_left );
+		viewAngles[YAW] -= speed * v_yawSpeed.get() * CG_KeyState( &in_right );
+		viewAngles[YAW] += speed * v_yawSpeed.get() * CG_KeyState( &in_left );
 	}
 	if( in_klook.state & 1 ) {
-		viewAngles[PITCH] -= speed * cl_pitchspeed->value * CG_KeyState( &in_forward );
-		viewAngles[PITCH] += speed * cl_pitchspeed->value * CG_KeyState( &in_back );
+		viewAngles[PITCH] -= speed * v_pitchSpeed.get() * CG_KeyState( &in_forward );
+		viewAngles[PITCH] += speed * v_pitchSpeed.get() * CG_KeyState( &in_back );
 	}
 
-	viewAngles[PITCH] -= speed * cl_pitchspeed->value * CG_KeyState( &in_lookup );
-	viewAngles[PITCH] += speed * cl_pitchspeed->value * CG_KeyState( &in_lookdown );
+	viewAngles[PITCH] -= speed * v_pitchSpeed.get() * CG_KeyState( &in_lookup );
+	viewAngles[PITCH] += speed * v_pitchSpeed.get() * CG_KeyState( &in_lookdown );
 }
 
 /*
@@ -304,7 +315,7 @@ unsigned int CG_GetButtonBitsFromKeys( void ) {
 	}
 	in_use.state &= ~2;
 
-	if( ( in_speed.state & 1 ) ^ !cl_run->integer ) {
+	if( ( in_speed.state & 1 ) ^ !v_run.get() ) {
 		buttons |= BUTTON_WALK;
 	}
 
@@ -324,18 +335,6 @@ MOUSE
 ===============================================================================
 */
 
-static cvar_t *sensitivity;
-static cvar_t *zoomsens;
-static cvar_t *m_accel;
-static cvar_t *m_accelStyle;
-static cvar_t *m_accelOffset;
-static cvar_t *m_accelPow;
-static cvar_t *m_filter;
-static cvar_t *m_sensCap;
-
-static cvar_t *m_pitch;
-static cvar_t *m_yaw;
-
 static float mouse_x = 0, mouse_y = 0;
 
 /*
@@ -346,31 +345,25 @@ void CG_MouseMove( int mx, int my ) {
 	float accelSensitivity;
 
 	// mouse filtering
-	switch( m_filter->integer ) {
-	case 1:
-	{
+	if( v_filter.get() ) {
 		mouse_x = ( mx + old_mouse_x ) * 0.5;
 		mouse_y = ( my + old_mouse_y ) * 0.5;
-	}
-	break;
-
-	default: // no filtering
+	} else {
 		mouse_x = mx;
 		mouse_y = my;
-		break;
 	}
 
 	old_mouse_x = mx;
 	old_mouse_y = my;
 
-	accelSensitivity = sensitivity->value;
+	accelSensitivity = v_sensitivity.get();
 
-	if( m_accel->value != 0.0f && cg_inputFrameTime != 0 ) {
+	if( v_accel.get() != 0.0f && cg_inputFrameTime != 0 ) {
 		float rate;
 
 		// QuakeLive-style mouse acceleration, ported from ioquake3
 		// original patch by Gabriel Schnoering and TTimo
-		if( m_accelStyle->integer == 1 ) {
+		if( v_accelStyle.get() == 1 ) {
 			float base[2];
 			float power[2];
 
@@ -381,19 +374,19 @@ void CG_MouseMove( int mx, int my ) {
 
 			base[0] = (float) ( abs( mx ) ) / (float) cg_inputFrameTime;
 			base[1] = (float) ( abs( my ) ) / (float) cg_inputFrameTime;
-			power[0] = powf( base[0] / m_accelOffset->value, m_accel->value );
-			power[1] = powf( base[1] / m_accelOffset->value, m_accel->value );
+			power[0] = powf( base[0] / v_accelOffset.get(), v_accel.get() );
+			power[1] = powf( base[1] / v_accelOffset.get(), v_accel.get() );
 
-			mouse_x = ( mouse_x + ( ( mouse_x < 0 ) ? -power[0] : power[0] ) * m_accelOffset->value );
-			mouse_y = ( mouse_y + ( ( mouse_y < 0 ) ? -power[1] : power[1] ) * m_accelOffset->value );
-		} else if( m_accelStyle->integer == 2 ) {
+			mouse_x = ( mouse_x + ( ( mouse_x < 0 ) ? -power[0] : power[0] ) * v_accelOffset.get() );
+			mouse_y = ( mouse_y + ( ( mouse_y < 0 ) ? -power[1] : power[1] ) * v_accelOffset.get() );
+		} else if( v_accelStyle.get() == 2 ) {
 			float accelOffset, accelPow;
 
 			// ch : similar to normal acceleration with offset and variable pow mechanisms
 
 			// sanitize values
-			accelPow = m_accelPow->value > 1.0 ? m_accelPow->value : 2.0;
-			accelOffset = m_accelOffset->value >= 0.0 ? m_accelOffset->value : 0.0;
+			accelPow = v_accelPow.get() > 1.0 ? v_accelPow.get() : 2.0;
+			accelOffset = v_accelOffset.get() >= 0.0 ? v_accelOffset.get() : 0.0;
 
 			rate = sqrt( mouse_x * mouse_x + mouse_y * mouse_y ) / (float)cg_inputFrameTime;
 			rate -= accelOffset;
@@ -401,19 +394,19 @@ void CG_MouseMove( int mx, int my ) {
 				rate = 0.0;
 			}
 			// ch : TODO sens += pow( rate * m_accel->value, m_accelPow->value - 1.0 )
-			accelSensitivity += pow( rate * m_accel->value, accelPow - 1.0 );
+			accelSensitivity += pow( rate * v_accel.get(), accelPow - 1.0 );
 
 			// TODO : move this outside of this branch?
-			if( m_sensCap->value > 0 && accelSensitivity > m_sensCap->value ) {
-				accelSensitivity = m_sensCap->value;
+			if( v_sensCap.get() > 0 && accelSensitivity > v_sensCap.get() ) {
+				accelSensitivity = v_sensCap.get();
 			}
 		} else {
 			rate = sqrt( mouse_x * mouse_x + mouse_y * mouse_y ) / (float)cg_inputFrameTime;
-			accelSensitivity += rate * m_accel->value;
+			accelSensitivity += rate * v_accel.get();
 		}
 	}
 
-	accelSensitivity *= CG_GetSensitivityScale( sensitivity->value, zoomsens->value );
+	accelSensitivity *= CG_GetSensitivityScale( v_sensitivity.get(), v_zoomsens.get() );
 
 	mouse_x *= accelSensitivity;
 	mouse_y *= accelSensitivity;
@@ -430,8 +423,8 @@ static void CG_AddMouseViewAngles( vec3_t viewAngles ) {
 	}
 
 	// add mouse X/Y movement to cmd
-	viewAngles[YAW] -= m_yaw->value * mouse_x;
-	viewAngles[PITCH] += m_pitch->value * mouse_y;
+	viewAngles[YAW] -= v_yaw.get() * mouse_x;
+	viewAngles[PITCH] += v_pitch.get() * mouse_y;
 }
 
 /*
@@ -490,25 +483,6 @@ void CG_InitInput( void ) {
 	CL_Cmd_Register( "-zoom"_asView, IN_ZoomUp );
 
 	CL_Cmd_Register( "centerview"_asView, CG_CenterView );
-}
-
-void CG_InitInputVars() {
-	cl_yawspeed =  Cvar_Get( "cl_yawspeed", "140", 0 );
-	cl_pitchspeed = Cvar_Get( "cl_pitchspeed", "150", 0 );
-	cl_anglespeedkey = Cvar_Get( "cl_anglespeedkey", "1.5", 0 );
-
-	cl_run = Cvar_Get( "cl_run", "1", CVAR_ARCHIVE );
-
-	sensitivity = Cvar_Get( "sensitivity", "3", CVAR_ARCHIVE );
-	zoomsens = Cvar_Get( "zoomsens", "0", CVAR_ARCHIVE );
-	m_accel = Cvar_Get( "m_accel", "0", CVAR_ARCHIVE );
-	m_accelStyle = Cvar_Get( "m_accelStyle", "0", CVAR_ARCHIVE );
-	m_accelOffset = Cvar_Get( "m_accelOffset", "0", CVAR_ARCHIVE );
-	m_accelPow = Cvar_Get( "m_accelPow", "2", CVAR_ARCHIVE );
-	m_filter = Cvar_Get( "m_filter", "0", CVAR_ARCHIVE );
-	m_pitch = Cvar_Get( "m_pitch", "0.022", CVAR_ARCHIVE );
-	m_yaw = Cvar_Get( "m_yaw", "0.022", CVAR_ARCHIVE );
-	m_sensCap = Cvar_Get( "m_sensCap", "0", CVAR_ARCHIVE );
 }
 
 /*

@@ -294,7 +294,7 @@ auto FloatConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::S
 auto FloatConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
 	if( const auto maybeNum = wsw::toNum<float>( newValue ); maybeNum && std::isfinite( *maybeNum ) ) {
 		float correctedValue;
-		const float minAllowedValue = m_params.minInclusive.value_or( std::numeric_limits<float>::min() );
+		const float minAllowedValue = m_params.minInclusive.value_or( std::numeric_limits<float>::lowest() );
 		if( *maybeNum < minAllowedValue ) {
 			correctedValue = minAllowedValue;
 		} else {

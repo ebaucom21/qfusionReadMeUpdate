@@ -28,25 +28,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/cmdargs.h"
 #include "../common/cmdcompat.h"
 #include "../common/wswfs.h"
+#include "../common/configvars.h"
 
 using wsw::operator""_asView;
-
-extern cvar_t *cg_showHUD;
-extern cvar_t *cg_showTeamInfo;
-extern cvar_t *cg_showTimer;
-extern cvar_t *cg_showPlayerNames;
-extern cvar_t *cg_showPlayerNames_alpha;
-extern cvar_t *cg_showPlayerNames_barWidth;
-extern cvar_t *cg_showPlayerNames_zfar;
-extern cvar_t *cg_showPointedPlayer;
-
-extern cvar_t *cg_viewSize;
-extern cvar_t *cg_showFPS;
-extern cvar_t *cg_draw2D;
-
-extern cvar_t *cg_showZoomEffect;
-
-extern cvar_t *cg_showViewBlends;
 
 static vrect_t scr_vrect;
 
@@ -112,7 +96,7 @@ float CG_DemoCam_GetOrientation( vec3_t origin, vec3_t angles, vec3_t velocity )
 	VectorCopy( cam_velocity, velocity );
 
 	if( !currentcam || !currentcam->fov ) {
-		return bound( MIN_FOV, cg_fov->value, MAX_FOV );
+		return v_fov.get();
 	}
 
 	return cam_fov;
@@ -423,7 +407,7 @@ static void CG_FlashGameWindow( void ) {
 	}
 
 	if( flash ) {
-		VID_FlashWindow( cg_flashWindowCount->integer );
+		VID_FlashWindow( v_flashWindowCount.get() );
 	}
 }
 
@@ -439,7 +423,7 @@ float CG_GetSensitivityScale( float sens, float zoomSens ) {
 			return zoomSens / sens;
 		}
 
-		return cg_zoomfov->value / cg_fov->value;
+		return v_zoomfov.get() / v_fov.get();
 	}
 
 	return sensScale;
@@ -477,8 +461,8 @@ static float CG_CalcViewFov( void ) {
 	float frac;
 	float fov, zoomfov;
 
-	fov = cg_fov->value;
-	zoomfov = cg_zoomfov->value;
+	fov = v_fov.get();
+	zoomfov = v_zoomfov.get();
 
 	if( !cg.predictedPlayerState.pmove.stats[PM_STAT_ZOOMTIME] ) {
 		return fov;
@@ -501,7 +485,7 @@ static void CG_CalcViewBob( void ) {
 	bobScale = 0;
 	if( cg.xyspeed < 5 ) {
 		cg.oldBobTime = 0;  // start at beginning of cycle again
-	} else if( cg_gunbob->integer ) {
+	} else if( v_gunBob.get() ) {
 		if( !ISVIEWERENTITY( cg.view.POVent ) ) {
 			bobScale = 0.0f;
 		} else if( CG_PointContents( cg.view.origin ) & MASK_WATER ) {
@@ -627,7 +611,7 @@ void CG_StartKickAnglesEffect( vec3_t source, float knockback, float radius, int
 }
 
 void CG_StartFallKickEffect( int bounceTime ) {
-	if( !cg_viewBob->integer ) {
+	if( v_viewBob.get() ) {
 		cg.fallEffectTime = 0;
 		cg.fallEffectRebounceTime = 0;
 		return;
@@ -707,7 +691,7 @@ void CG_DamageIndicatorAdd( int damage, const vec3_t dir ) {
 	float blends[4];
 	float forward, side;
 
-	if( !cg_damage_indicator->integer ) {
+	if( !v_damageIndicator.get() ) {
 		return;
 	}
 
@@ -717,15 +701,11 @@ void CG_DamageIndicatorAdd( int damage, const vec3_t dir ) {
 
 	Matrix3_FromAngles( playerAngles, playerAxis );
 
-	if( cg_damage_indicator_time->value < 0 ) {
-		Cvar_SetValue( "cg_damage_indicator_time", 0 );
-	}
-
 	Vector4Set( blends, 0, 0, 0, 0 );
-	damageTime = damage * cg_damage_indicator_time->value;
+	damageTime = damage * v_damageIndicatorTime.get();
 
 	// up and down go distributed equally to all blends and assumed when no dir is given
-	if( !dir || VectorCompare( dir, vec3_origin ) || cg_damage_indicator->integer == 2 || GS_Instagib() ||
+	if( !dir || VectorCompare( dir, vec3_origin ) || v_damageIndicator.get() == 2 || GS_Instagib() ||
 		( fabs( DotProduct( dir, &playerAxis[AXIS_UP] ) ) > INDICATOR_EPSILON_UP ) ) {
 		blends[RIGHT_BLEND] += damageTime;
 		blends[LEFT_BLEND] += damageTime;
@@ -837,7 +817,7 @@ static int CG_RenderFlags( void ) {
 		rdflags |= RDF_PORTALINVIEW;
 	}
 
-	if( cg_outlineWorld->integer ) {
+	if( v_outlineWorld.get() ) {
 		rdflags |= RDF_WORLDOUTLINES;
 	}
 
@@ -888,18 +868,13 @@ static void CG_ThirdPersonOffsetView( cg_viewdef_t *view ) {
 	vec3_t mins = { -4, -4, -4 };
 	vec3_t maxs = { 4, 4, 4 };
 
-	if( !cg_thirdPersonAngle || !cg_thirdPersonRange ) {
-		cg_thirdPersonAngle = Cvar_Get( "cg_thirdPersonAngle", "0", CVAR_ARCHIVE );
-		cg_thirdPersonRange = Cvar_Get( "cg_thirdPersonRange", "70", CVAR_ARCHIVE );
-	}
-
 	// calc exact destination
 	VectorCopy( view->origin, chase_dest );
-	r = DEG2RAD( cg_thirdPersonAngle->value );
+	r = DEG2RAD( v_thirdPersonAngle.get() );
 	f = -cos( r );
 	r = -sin( r );
-	VectorMA( chase_dest, cg_thirdPersonRange->value * f, &view->axis[AXIS_FORWARD], chase_dest );
-	VectorMA( chase_dest, cg_thirdPersonRange->value * r, &view->axis[AXIS_RIGHT], chase_dest );
+	VectorMA( chase_dest, v_thirdPersonRange.get() * f, &view->axis[AXIS_FORWARD], chase_dest );
+	VectorMA( chase_dest, v_thirdPersonRange.get() * r, &view->axis[AXIS_RIGHT], chase_dest );
 	chase_dest[2] += 8;
 
 	// find the spot the player is looking at
@@ -913,7 +888,7 @@ static void CG_ThirdPersonOffsetView( cg_viewdef_t *view ) {
 		dist = 1;
 	}
 	view->angles[PITCH] = RAD2DEG( -atan2( stop[2], dist ) );
-	view->angles[YAW] -= cg_thirdPersonAngle->value;
+	view->angles[YAW] -= v_thirdPersonAngle.get();
 	Matrix3_FromAngles( view->angles, view->axis );
 
 	// move towards destination
@@ -1039,7 +1014,7 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 		} else if( chaseCam.mode == CAM_THIRDPERSON ) {
 			view->thirdperson = true;
 		} else {
-			view->thirdperson = ( cg_thirdPerson->integer != 0 );
+			view->thirdperson = v_thirdPerson.get();
 		}
 
 		if( cg_entities[view->POVent].serverFrame != cg.frame.serverFrame ) {
@@ -1050,14 +1025,14 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 		if( !view->thirdperson && view->POVent > 0 && view->POVent <= gs.maxclients ) {
 			if( ( cg_entities[view->POVent].serverFrame == cg.frame.serverFrame ) &&
 				( cg_entities[view->POVent].current.weapon != 0 ) ) {
-				view->drawWeapon = ( cg_gun->integer != 0 ) && ( cg_gun_alpha->value > 0 );
+				view->drawWeapon = v_gun.get() && v_gunAlpha.get() > 0.0f;
 			}
 		}
 
 		// check for chase cams
 		if( !( cg.frame.playerState.pmove.pm_flags & PMF_NO_PREDICTION ) ) {
 			if( (unsigned)view->POVent == cgs.playerNum + 1 ) {
-				if( cg_predict->integer && !cgs.demoPlaying ) {
+				if( v_predict.get() && !cgs.demoPlaying ) {
 					view->playerPrediction = true;
 				}
 			}
@@ -1089,7 +1064,7 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 
 			CG_ViewSmoothPredictedSteps( view->origin ); // smooth out stair climbing
 
-			if( cg_viewBob->integer && !cg_thirdPerson->integer ) {
+			if( v_viewBob.get() && !v_thirdPerson.get() ) {
 				view->origin[2] += CG_ViewSmoothFallKick() * 6.5f;
 			}
 		} else {
@@ -1149,7 +1124,7 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 	VectorInverse( &view->refdef.viewaxis[AXIS_RIGHT] );
 
 	view->refdef.colorCorrection = NULL;
-	if( cg_colorCorrection->integer ) {
+	if( v_colorCorrection.get() ) {
 		int colorCorrection = GS_ColorCorrection();
 		if( ( colorCorrection > 0 ) && ( colorCorrection < MAX_IMAGES ) ) {
 			view->refdef.colorCorrection = cgs.imagePrecache[colorCorrection];
@@ -1213,7 +1188,7 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 		}
 	}
 
-	if( cg_showClamp->integer ) {
+	if( v_showClamp.get() ) {
 		if( cg.lerpfrac > 1.0f ) {
 			Com_Printf( "high clamp %f\n", cg.lerpfrac );
 		} else if( cg.lerpfrac < 0.0f ) {
@@ -1245,24 +1220,6 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 	if( !cg.viewFrameCount ) {
 		cg.firstViewRealTime = cg.realTime;
-	}
-
-	if( cg_fov->modified ) {
-		if( cg_fov->value < MIN_FOV ) {
-			Cvar_ForceSet( cg_fov->name, STR_TOSTR( MIN_FOV ) );
-		} else if( cg_fov->value > MAX_FOV ) {
-			Cvar_ForceSet( cg_fov->name, STR_TOSTR( MAX_FOV ) );
-		}
-		cg_fov->modified = false;
-	}
-
-	if( cg_zoomfov->modified ) {
-		if( cg_zoomfov->value < MIN_ZOOMFOV ) {
-			Cvar_ForceSet( cg_zoomfov->name, STR_TOSTR( MIN_ZOOMFOV ) );
-		} else if( cg_zoomfov->value > MAX_ZOOMFOV ) {
-			Cvar_ForceSet( cg_zoomfov->name, STR_TOSTR( MAX_ZOOMFOV ) );
-		}
-		cg_zoomfov->modified = false;
 	}
 
 	CG_FlashGameWindow(); // notify player of important game events
@@ -1330,13 +1287,7 @@ void CG_CalcVrect( void ) {
 	int size;
 
 	// bound viewsize
-	if( cg_viewSize->integer < 40 ) {
-		Cvar_Set( cg_viewSize->name, "40" );
-	} else if( cg_viewSize->integer > 100 ) {
-		Cvar_Set( cg_viewSize->name, "100" );
-	}
-
-	size = cg_viewSize->integer;
+	size = std::round( v_viewSize.get() );
 
 	if( size == 100 ) {
 		scr_vrect.width = cgs.vidWidth;
@@ -1467,7 +1418,7 @@ static void CG_CalcColorBlend( float *color ) {
 static void CG_SCRDrawViewBlend( void ) {
 	vec4_t colorblend;
 
-	if( !cg_showViewBlends->integer ) {
+	if( !v_showViewBlends.get() ) {
 		return;
 	}
 
@@ -1488,7 +1439,7 @@ void CG_ClearPointedNum( void ) {
 
 static void CG_UpdatePointedNum( void ) {
 	// disable cases
-	if( CG_IsScoreboardShown() || cg.view.thirdperson || cg.view.type != VIEWDEF_PLAYERVIEW || !cg_showPointedPlayer->integer ) {
+	if( CG_IsScoreboardShown() || cg.view.thirdperson || cg.view.type != VIEWDEF_PLAYERVIEW || !v_showPointedPlayer.get() ) {
 		CG_ClearPointedNum();
 		return;
 	}
@@ -1514,7 +1465,7 @@ static void CG_UpdatePointedNum( void ) {
 		CG_ClearPointedNum();
 	}
 
-	if( cg.pointedNum && cg_showPointedPlayer->integer == 2 ) {
+	if( cg.pointedNum && v_showPointedPlayer.get() == 2 ) {
 		if( cg_entities[cg.pointedNum].current.team != cg.predictedPlayerState.stats[STAT_TEAM] ) {
 			CG_ClearPointedNum();
 		}
@@ -1611,7 +1562,7 @@ static void CG_DrawTeamMates() {
 	int i;
 	int pic_size = 18 * cgs.vidHeight / 600;
 
-	if( !cg_showTeamInfo->integer ) {
+	if( !v_showTeamInfo.get() ) {
 		return;
 	}
 
@@ -1655,7 +1606,7 @@ static void CG_DrawTeamMates() {
 		}
 
 		CG_Trace( &trace, cg.view.origin, vec3_origin, vec3_origin, cent->ent.origin, cg.predictedPlayerState.POVnum, MASK_OPAQUE );
-		if( cg_showTeamInfo->integer == 1 && trace.fraction == 1.0f ) {
+		if( v_showTeamInfo.get() == 1 && trace.fraction == 1.0f ) {
 			continue;
 		}
 
@@ -1689,7 +1640,7 @@ static void CG_DrawPlayerNames() {
 	trace_t trace;
 	int i;
 
-	if( !cg_showPlayerNames->integer && !cg_showPointedPlayer->integer ) {
+	if( !v_showPlayerNames.get() && !v_showPointedPlayer.get() ) {
 		return;
 	}
 
@@ -1712,11 +1663,11 @@ static void CG_DrawPlayerNames() {
 		}
 
 		// only show the pointed player
-		if( !cg_showPlayerNames->integer && ( cent->current.number != cg.pointedNum ) ) {
+		if( !v_showPlayerNames.get() && ( cent->current.number != cg.pointedNum ) ) {
 			continue;
 		}
 
-		if( ( cg_showPlayerNames->integer == 2 ) && ( cent->current.team != cg.predictedPlayerState.stats[STAT_TEAM] ) ) {
+		if(( v_showPlayerNames.get() == 2 ) && ( cent->current.team != cg.predictedPlayerState.stats[STAT_TEAM] ) ) {
 			continue;
 		}
 
@@ -1736,14 +1687,14 @@ static void CG_DrawPlayerNames() {
 		Vector4Copy( color, tmpcolor );
 
 		if( cent->current.number != cg.pointedNum ) {
-			if( dist > cg_showPlayerNames_zfar->value ) {
+			if( dist > v_showPlayerNames_zfar.get() ) {
 				continue;
 			}
 
-			fadeFrac = ( cg_showPlayerNames_zfar->value - dist ) / ( cg_showPlayerNames_zfar->value * 0.25f );
+			fadeFrac = ( v_showPlayerNames_zfar.get() - dist ) / ( v_showPlayerNames_zfar.get() * 0.25f );
 			Q_clamp( fadeFrac, 0.0f, 1.0f );
 
-			tmpcolor[3] = cg_showPlayerNames_alpha->value * color[3] * fadeFrac;
+			tmpcolor[3] = v_showPlayerNames_alpha.get() * color[3] * fadeFrac;
 		} else {
 			fadeFrac = (float)( cg.pointRemoveTime - cg.time ) / 150.0f;
 			Q_clamp( fadeFrac, 0.0f, 1.0f );
@@ -1779,9 +1730,9 @@ static void CG_DrawPlayerNames() {
 		pointed_armor = cg.pointedArmor;
 
 		// pointed player hasn't a health value to be drawn, so skip adding the bars
-		if( pointed_health && cg_showPlayerNames_barWidth->integer > 0 ) {
+		if( pointed_health && v_showPlayerNames_barWidth.get() > 0 ) {
 			int x, y;
-			int barwidth = SCR_strWidth( "_", font, 0 ) * cg_showPlayerNames_barWidth->integer; // size of 8 characters
+			int barwidth = SCR_strWidth( "_", font, 0 ) * v_showPlayerNames_barWidth.get(); // size of 8 characters
 			int barheight = SCR_FontHeight( font ) * 0.25; // quarter of a character height
 			int barseparator = barheight * 0.333;
 
@@ -2045,8 +1996,7 @@ void CG_Draw2DView( void ) {
 		cg.motd = NULL;
 	}
 
-
-	if( cg_showHUD->integer ) {
+	if( v_showHud.get() ) {
 		if( !CG_IsScoreboardShown() ) {
 			CG_DrawTeamMates();
 			CG_DrawPlayerNames();
@@ -2066,7 +2016,7 @@ void CG_Draw2DView( void ) {
 
 void CG_Draw2D() {
 	// TODO: We still have to update some states even if these conditions do not hold
-	if( cg_draw2D->integer && cg.view.draw2D ) {
+	if( v_draw2D.get() && cg.view.draw2D ) {
 		CG_Draw2DView();
 	}
 }

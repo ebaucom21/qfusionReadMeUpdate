@@ -20,9 +20,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "cg_local.h"
+#include "../common/configvars.h"
+
+using wsw::operator""_asView;
+
+static BoolConfigVar v_forceMyTeamAlpha( "cg_forceMyTeamAlpha"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
 
 int CG_TeamToForcedTeam( int team ) {
-	if( cg_forceMyTeamAlpha->integer ) {
+	if( v_forceMyTeamAlpha.get() ) {
 		if( const int myTeam = cg.predictedPlayerState.stats[STAT_TEAM]; myTeam == TEAM_BETA ) {
 			if( team == TEAM_ALPHA ) {
 				return TEAM_BETA;

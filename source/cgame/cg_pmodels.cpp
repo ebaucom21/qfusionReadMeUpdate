@@ -32,6 +32,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 #include "../common/common.h"
+#include "../common/configvars.h"
+
+using wsw::operator""_asView;
+
+static BoolConfigVar v_debugPlayerModels( "cg_debugPlayerModels"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE | CVAR_CHEAT } );
 
 pmodel_t cg_entPModels[MAX_EDICTS];
 pmodelinfo_t *cg_PModelInfos;
@@ -104,14 +109,14 @@ static void CG_ParseRotationBone( pmodelinfo_t *pmodelinfo, char *token, int pmp
 
 	boneNumber = CG_FindBoneNum( CG_SkeletonForModel( pmodelinfo->model ), token );
 	if( boneNumber < 0 ) {
-		if( cg_debugPlayerModels->integer ) {
+		if( v_debugPlayerModels.get() ) {
 			Com_Printf( "CG_ParseRotationBone: No such bone name %s\n", token );
 		}
 		return;
 	}
 
 	//register it into pmodelinfo
-	if( cg_debugPlayerModels->integer ) {
+	if( v_debugPlayerModels.get() ) {
 		Com_Printf( "Script: CG_ParseRotationBone: %s is %i\n", token, boneNumber );
 	}
 	pmodelinfo->rotator[pmpart][pmodelinfo->numRotators[pmpart]] = boneNumber;
@@ -150,7 +155,7 @@ static void CG_ParseTagMask( struct model_s *model, int bonenum, char *name, flo
 	tagmask->next = skel->tagmasks;
 	skel->tagmasks = tagmask;
 
-	if( cg_debugPlayerModels->integer ) {
+	if( v_debugPlayerModels.get() ) {
 		Com_Printf( "Added Tagmask: %s -> %s\n", tagmask->tagname, tagmask->bonename );
 	}
 }
@@ -185,7 +190,7 @@ static bool CG_ParseAnimationScript( pmodelinfo_t *pmodelinfo, char *filename ) 
 	rounder = 0;
 	counter = 1; //reseve 0 for 'no animation'
 
-	if( !cg_debugPlayerModels->integer ) {
+	if( !v_debugPlayerModels.get() ) {
 		debug = false;
 	}
 
@@ -608,9 +613,8 @@ bool CG_PModel_GetProjectionSource( int entnum, orientation_t *tag_result ) {
 */
 static void CG_AddRaceGhostShell( entity_t *ent, DrawSceneRequest *drawSceneRequest ) {
 	entity_t shell;
-	float alpha = cg_raceGhostsAlpha->value;
-
-	Q_clamp( alpha, 0, 1.0 );
+	const float alpha = v_raceGhostsAlpha.get();
+	assert( alpha >= 0.0f && alpha <= 1.0f );
 
 	shell = *ent;
 	shell.customSkin = NULL;
@@ -727,7 +731,7 @@ void CG_AddColoredOutLineEffect( entity_t *ent, int effects, uint8_t r, uint8_t 
 		scale = CG_OutlineScaleForDist( ent, 2048, 3.5f );
 		pulse = fabs( sin( cg.time * 0.005f ) );
 		scale += 1.25f * scale * pulse * pulse;
-	} else if( !cg_outlineModels->integer || !( effects & EF_OUTLINE ) ) {
+	} else if( !v_outlineModels.get() || !( effects & EF_OUTLINE ) ) {
 		scale = 0;
 	} else {
 		scale = CG_OutlineScaleForDist( ent, 1024, 1.0f );
@@ -1012,11 +1016,11 @@ void CG_UpdatePlayerModelEnt( centity_t *cent ) {
 	// outline color
 	CG_SetOutlineColor( cent->outlineColor, cent->ent.shaderRGBA );
 
-	if( cg_raceGhosts->integer && !ISVIEWERENTITY( cent->current.number ) && GS_RaceGametype() ) {
+	if( v_raceGhosts.get() && !ISVIEWERENTITY( cent->current.number ) && GS_RaceGametype() ) {
 		cent->effects &= ~EF_OUTLINE;
 		cent->effects |= EF_RACEGHOST;
 	} else {
-		if( cg_outlinePlayers->integer ) {
+		if( v_outlinePlayers.get() ) {
 			cent->effects |= EF_OUTLINE; // add EF_OUTLINE to players
 		} else {
 			cent->effects &= ~EF_OUTLINE;
@@ -1285,8 +1289,10 @@ void CG_AddPModel( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 			VectorSet( color, 0.1f, 0.1f, 0.1f );
 		} else {
 			VectorSet( color, 0.5f, 0.5f, 0.5f );
-			if( cg_raceGhosts->integer && GS_RaceGametype() ) {
-				VectorScale( color, cg_raceGhostsAlpha->value, color );
+			if( v_raceGhosts.get() && GS_RaceGametype() ) {
+				const float scale = v_raceGhostsAlpha.get();
+				assert( scale >= 0.0f && scale <= 1.0f );
+				VectorScale( color, scale, color );
 			}
 		}
 		TeleEffectParams params {

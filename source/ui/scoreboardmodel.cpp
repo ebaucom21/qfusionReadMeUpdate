@@ -9,7 +9,6 @@
 
 #include <array>
 
-
 using wsw::operator""_asView;
 
 namespace wsw::ui {
@@ -284,7 +283,7 @@ void ScoreboardModelProxy::checkVars() {
 	}
 
 	const auto oldHasChasers = m_hasChasers;
-	m_hasChasers = cg_showChasers->integer && CG_ActiveChasePov() != std::nullopt;
+	m_hasChasers = v_showChasers.get() && CG_ActiveChasePov() != std::nullopt;
 	if( m_hasChasers != oldHasChasers ) {
 		Q_EMIT hasChasersChanged( m_hasChasers );
 	}

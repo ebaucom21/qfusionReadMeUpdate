@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 
 #include "cg_local.h"
-
+#include "../common/configvars.h"
 
 /*
 * CG_ViewWeapon_UpdateProjectionSource
@@ -71,7 +71,7 @@ static void CG_ViewWeapon_AddAngleEffects( vec3_t angles ) {
 		return;
 	}
 
-	if( cg_gun->integer && cg_gunbob->integer ) {
+	if( v_gun.get() && v_gunBob.get() ) {
 		// gun angles from bobbing
 		if( cg.bobCycle & 1 ) {
 			angles[ROLL] -= cg.xyspeed * cg.bobFracSin * 0.012;
@@ -133,7 +133,7 @@ static int CG_ViewWeapon_baseanimFromWeaponState( int weaponState ) {
 		/* fall through. Not used */
 		default:
 		case WEAPON_STATE_READY:
-			if( cg_gunbob->integer ) {
+			if( v_gunBob.get() ) {
 				anim = WEAPMODEL_STANDBY;
 			} else {
 				anim = WEAPMODEL_NOANIM;
@@ -272,9 +272,9 @@ void CG_CalcViewWeapon( cg_viewweapon_t *viewweapon ) {
 	viewweapon->ent.rtype = RT_MODEL;
 	Vector4Set( viewweapon->ent.shaderRGBA, 255, 255, 255, 255 );
 
-	if( cg_gun_alpha->value < 1.0f ) {
+	if( const float alpha = v_gunAlpha.get(); alpha < 1.0f ) {
 		viewweapon->ent.renderfx |= RF_ALPHAHACK;
-		viewweapon->ent.shaderRGBA[3] = bound( 0, cg_gun_alpha->value, 1 ) * 255.0f;
+		viewweapon->ent.shaderRGBA[3] = alpha * 255.0f;
 	}
 
 	// calculate the entity position
@@ -287,9 +287,9 @@ void CG_CalcViewWeapon( cg_viewweapon_t *viewweapon ) {
 
 	// weapon config offsets
 	VectorAdd( weaponInfo->handpositionAngles, cg.predictedPlayerState.viewangles, gunAngles );
-	gunOffset[FORWARD] = cg_gunz->value + weaponInfo->handpositionOrigin[FORWARD];
-	gunOffset[RIGHT] = cg_gunx->value + weaponInfo->handpositionOrigin[RIGHT];
-	gunOffset[UP] = cg_guny->value + weaponInfo->handpositionOrigin[UP];
+	gunOffset[FORWARD] = v_gunZ.get() + weaponInfo->handpositionOrigin[FORWARD];
+	gunOffset[RIGHT] = v_gunX.get() + weaponInfo->handpositionOrigin[RIGHT];
+	gunOffset[UP] = v_gunY.get() + weaponInfo->handpositionOrigin[UP];
 
 	// scale forward gun offset depending on fov and aspect ratio
 	gunOffset[FORWARD] = gunOffset[FORWARD] * cgs.vidWidth / ( cgs.vidHeight * cg.view.fracDistFOV ) ;
@@ -297,21 +297,21 @@ void CG_CalcViewWeapon( cg_viewweapon_t *viewweapon ) {
 	// hand cvar offset
 	handOffset = 0.0f;
 	if( cgs.demoPlaying ) {
-		if( cg_hand->integer == 0 ) {
-			handOffset = cg_handOffset->value;
-		} else if( cg_hand->integer == 1 ) {
-			handOffset = -cg_handOffset->value;
+		if( v_hand.get() == 0 ) {
+			handOffset = +v_handOffset.get();
+		} else if( v_hand.get() == 1 ) {
+			handOffset = -v_handOffset.get();
 		}
 	} else {
 		if( cgs.clientInfo[cg.view.POVent - 1].hand == 0 ) {
-			handOffset = cg_handOffset->value;
+			handOffset = +v_handOffset.get();
 		} else if( cgs.clientInfo[cg.view.POVent - 1].hand == 1 ) {
-			handOffset = -cg_handOffset->value;
+			handOffset = -v_handOffset.get();
 		}
 	}
 
 	gunOffset[RIGHT] += handOffset;
-	if( cg_gun->integer && cg_gunbob->integer ) {
+	if( v_gun.get() && v_gunBob.get() ) {
 		gunOffset[UP] += CG_ViewSmoothFallKick();
 	}
 
@@ -333,9 +333,9 @@ void CG_CalcViewWeapon( cg_viewweapon_t *viewweapon ) {
 	// finish
 	AnglesToAxis( gunAngles, viewweapon->ent.axis );
 
-	if( cg_gun_fov->integer && !cg.predictedPlayerState.pmove.stats[PM_STAT_ZOOMTIME] ) {
+	if( v_gunFov.get() > 0.0f && !cg.predictedPlayerState.pmove.stats[PM_STAT_ZOOMTIME] ) {
 		float fracWeapFOV;
-		float gun_fov_x = bound( 20, cg_gun_fov->value, 160 );
+		float gun_fov_x = bound( 20, v_gunFov.get(), 160 );
 		float gun_fov_y = CalcFov( gun_fov_x, cg.view.refdef.width, cg.view.refdef.height );
 
 		AdjustFov( &gun_fov_x, &gun_fov_y, cgs.vidWidth, cgs.vidHeight, false );
@@ -371,7 +371,7 @@ void CG_AddViewWeapon( cg_viewweapon_t *viewweapon, DrawSceneRequest *drawSceneR
 	CG_AddEntityToScene( &viewweapon->ent, drawSceneRequest );
 	CG_AddShellEffects( &viewweapon->ent, cg.effects, drawSceneRequest );
 
-	if( cg_weaponFlashes->integer == 2 ) {
+	if( v_weaponFlashes.get() == 2 ) {
 		flash_time = cg_entPModels[viewweapon->POVnum].flash_time;
 	}
 

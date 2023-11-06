@@ -24,24 +24,25 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../common/common.h"
 #include "../client/snd_public.h"
+#include "../common/configvars.h"
 
 void EffectsSystemFacade::startSound( sfx_s *sfx, const float *origin, float attenuation ) {
-	SoundSystem::instance()->startFixedSound( sfx, origin, CHAN_AUTO, cg_volume_effects->value, attenuation );
+	SoundSystem::instance()->startFixedSound( sfx, origin, CHAN_AUTO, v_volumeEffects.get(), attenuation );
 }
 
 void EffectsSystemFacade::startRelativeSound( sfx_s *sfx, int entNum, float attenuation ) {
-	SoundSystem::instance()->startRelativeSound( sfx, entNum, CHAN_AUTO, cg_volume_effects->value, attenuation );
+	SoundSystem::instance()->startRelativeSound( sfx, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
 }
 
 void EffectsSystemFacade::spawnRocketExplosionEffect( const float *origin, const float *dir, int mode ) {
 	sfx_s *sfx = mode == FIRE_MODE_STRONG ? cgs.media.sfxRocketLauncherStrongHit : cgs.media.sfxRocketLauncherWeakHit;
-	const bool addSoundLfe = cg_heavyRocketExplosions->integer != 0;
+	const bool addSoundLfe = v_heavyRocketExplosions.get();
 	spawnExplosionEffect( origin, dir, sfx, 64.0f, addSoundLfe );
 }
 
 void EffectsSystemFacade::spawnGrenadeExplosionEffect( const float *origin, const float *dir, int mode ) {
 	sfx_s *sfx = mode == FIRE_MODE_STRONG ? cgs.media.sfxGrenadeStrongExplosion : cgs.media.sfxGrenadeWeakExplosion;
-	const bool addSoundLfe = cg_heavyGrenadeExplosions->integer != 0;
+	const bool addSoundLfe = v_heavyGrenadeExplosions.get();
 	spawnExplosionEffect( origin, dir, sfx, 64.0f, addSoundLfe );
 }
 
@@ -325,7 +326,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 	}
 
 	std::optional<int> liquidContentsAtFireOrigin;
-	if( cg_explosionsSmoke->integer || cg_particles->integer ) {
+	if( v_explosionSmoke.get() || v_particles.get() ) {
 		if( const int contents = CG_PointContents( fireOrigin ); contents & MASK_WATER ) {
 			liquidContentsAtFireOrigin = contents;
 		}
@@ -333,7 +334,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 	vec3_t tmpSmokeOrigin;
 	const float *smokeOrigin = nullptr;
-	if( cg_explosionsSmoke->integer || cg_particles->integer ) {
+	if( v_explosionSmoke.get() || v_particles.get() ) {
 		if( liquidContentsAtFireOrigin ) {
 			VectorCopy( fireOrigin, tmpSmokeOrigin );
 			tmpSmokeOrigin[2] += radius;
@@ -342,7 +343,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 				vec3_t waterHitPoint;
 				if( findWaterHitPointBetweenTwoPoints( tmpSmokeOrigin, fireOrigin, waterHitPoint ) ) {
 					if( waterHitPoint[2] - fireOrigin[2] > 1.0f ) {
-						if( cg_explosionsSmoke->integer ) {
+						if( v_explosionSmoke.get() ) {
 							VectorCopy( waterHitPoint, tmpSmokeOrigin );
 							tmpSmokeOrigin[2] += 1.0f;
 							smokeOrigin = tmpSmokeOrigin;
@@ -362,7 +363,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 						const vec3_t shiftedFireOrigin { fireOrigin[0], fireOrigin[1], fireOrigin[2] + 0.75f * radius };
 						makeRegularExplosionImpacts( shiftedFireOrigin, radius, &m_rng, &solidImpacts, &waterImpacts );
 
-						if( cg_explosionsSmoke->integer ) {
+						if( v_explosionSmoke.get() ) {
 							VectorCopy( shiftedFireOrigin, tmpSmokeOrigin );
 							smokeOrigin = tmpSmokeOrigin;
 						}
@@ -374,7 +375,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 				}
 			}
 		} else {
-			if( cg_explosionsSmoke->integer ) {
+			if( v_explosionSmoke.get() ) {
 				smokeOrigin = fireOrigin;
 			}
 
@@ -388,7 +389,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		startSound( cgs.media.sfxExplosionLfe, almostExactOrigin, ATTN_NORM );
 	}
 
-	if( cg_particles->integer && !liquidContentsAtFireOrigin ) {
+	if( v_particles.get() && !liquidContentsAtFireOrigin ) {
 		Particle::AppearanceRules appearanceRules {
 			.materials     = cgs.media.shaderExplosionSpriteParticle.getAddressOfHandle(),
 			.colors        = kExplosionSparksColors,
@@ -433,7 +434,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 
-		if( cg_explosionsSmoke->integer ) {
+		if( v_explosionSmoke.get() ) {
 			flockParams.speed = { .min = 125.0f, .max = 175.0f };
 		} else {
 			flockParams.speed = { .min = 150.0f, .max = 225.0f };
@@ -488,7 +489,7 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 	sfx_s *sfx = ( mode == FIRE_MODE_STRONG ) ? cgs.media.sfxPlasmaStrongHit : cgs.media.sfxPlasmaWeakHit;
 	startSound( sfx, soundOrigin, ATTN_IDLE );
 
-	if( cg_particles->integer ) {
+	if( v_particles.get() ) {
 		EllipsoidalFlockParams flockParams {
 			.origin     = { origin[0], origin[1], origin[2] },
 			.offset     = { impactNormal[0], impactNormal[1], impactNormal[2] },
@@ -545,9 +546,9 @@ static const vec4_t kBloodColors[] {
 };
 
 void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage ) {
-	if( const int bloodStyle = cg_bloodStyle->integer ) {
-		const int indexForPalette = wsw::clamp<int>( cg_bloodPalette->integer, 0, std::size( kBloodColors ) - 1 );
-		const int baseTime        = wsw::clamp<int>( cg_bloodTime->integer, 200, 400 );
+	if( const int bloodStyle = v_bloodStyle.get() ) {
+		const int indexForPalette = wsw::clamp<int>( v_bloodPalette.get(), 0, std::size( kBloodColors ) - 1 );
+		const int baseTime        = wsw::clamp<int>( v_bloodTime.get(), 200, 400 );
 		const float *effectColor  = kBloodColors[indexForPalette];
 
 		if( bloodStyle < 0 ) {
@@ -663,7 +664,7 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 		Vector4Set( energyColor, 0.3f, 0.6f, 1.0f, 1.0f );
 	}
 
-	if( cg_particles->integer ) {
+	if( v_particles.get() ) {
 		vec3_t invImpactDir, coneDir;
 		VectorNegate( impactDir, invImpactDir );
 		VectorReflect( invImpactDir, impactNormal, 0.0f, coneDir );
@@ -732,7 +733,7 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 		Vector4Set( energyColor, 1.0f, 0.0f, 0.4f, 1.0f );
 	}
 
-	if( cg_particles->integer ) {
+	if( v_particles.get() ) {
 		vec3_t invImpactDir, coneDir;
 		VectorNegate( impactDir, invImpactDir );
 		VectorReflect( invImpactDir, impactNormal, 0.0f, coneDir );
@@ -813,7 +814,7 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 			// TODO: Check sound origin
 			startSound( cgs.media.sfxBladeWallHit[m_rng.nextBounded( 2 )], pos, ATTN_NORM );
 
-			if( cg_particles->integer ) {
+			if( v_particles.get() ) {
 				ConicalFlockParams flockParams {
 					.origin = { pos[0], pos[1], pos[2] },
 					.offset = { dir[0], dir[1], dir[2] },
@@ -866,7 +867,7 @@ static const LightLifespan kGunbladeBlastFlareProps[1] {
 void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, const float *dir ) {
 	startSound( cgs.media.sfxGunbladeStrongHit[m_rng.nextBounded( 2 )], origin, ATTN_IDLE );
 
-	if( cg_particles->integer ) {
+	if( v_particles.get() ) {
 		EllipsoidalFlockParams flockParams {
 			.origin     = { origin[0], origin[1], origin[2] },
 			.offset     = { dir[0], dir[1], dir[2] },
@@ -1619,7 +1620,7 @@ void EffectsSystemFacade::spawnBulletImpactEffect( unsigned delay, const SolidIm
 
 	sfx_s *sfx         = nullptr;
 	uintptr_t groupTag = 0;
-	if( cg_particles->integer ) {
+	if( v_particles.get() ) {
 		const SurfImpactMaterial impactMaterial = decodeSurfImpactMaterial( impact.surfFlags );
 		const unsigned materialParam            = decodeSurfImpactMaterialParam( impact.surfFlags );
 		spawnBulletImpactParticleEffectForMaterial( delay, flockOrientation, impactMaterial, materialParam );
@@ -2124,7 +2125,7 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 		.startDroppingAtTimeDiff = 250,
 	};
 
-	if( cg_particles->integer ) {
+	if( v_particles.get() ) {
 		using IM = SurfImpactMaterial;
 		assert( impacts.size() <= 64 );
 
@@ -2435,9 +2436,9 @@ static auto adjustTracerOriginForOwner( int owner, const float *givenOrigin, flo
 
 	VectorCopy( givenOrigin, adjustedOrigin );
 	if( owner == (int)cg.predictedPlayerState.POVnum ) {
-		const int handValue     = cgs.demoPlaying ? cg_hand->integer : cgs.clientInfo[owner - 1].hand;
+		const int handValue     = cgs.demoPlaying ? v_hand.get() : cgs.clientInfo[owner - 1].hand;
 		const float handScale   = ( handValue >= 0 && handValue <= 1 ) ? ( handValue ? -1.0f : +1.0f ) : 0.0f;
-		const float rightOffset = wsw::clamp( handScale * cg_handOffset->value + cg_gunx->value, -16.0f, +16.0f );
+		const float rightOffset = wsw::clamp( handScale * v_handOffset.get() + v_gunX.get(), -16.0f, +16.0f );
 		const float zOffset     = -playerbox_stand_viewheight;
 
 		vec3_t right;
@@ -2529,7 +2530,7 @@ void EffectsSystemFacade::spawnDashEffect( const float *oldOrigin, const float *
 }
 
 bool getElectroboltTeamColor( int team, float *color ) {
-	if( cg_teamColoredBeams->integer && ( ( team == TEAM_ALPHA || team == TEAM_BETA ) ) ) {
+	if( v_teamColoredBeams.get() && ( ( team == TEAM_ALPHA || team == TEAM_BETA ) ) ) {
 		CG_TeamColor( team, color );
 		return true;
 	}
@@ -2537,7 +2538,7 @@ bool getElectroboltTeamColor( int team, float *color ) {
 }
 
 void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t end, int team ) {
-	if( cg_ebbeam_time->value <= 0.0f || cg_ebbeam_width->integer <= 0 ) {
+	if( v_ebBeamTime.get() <= 0.0f || v_ebBeamWidth.get() <= 0.0f ) {
 		return;
 	}
 
@@ -2547,7 +2548,7 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 	}
 
 	struct shader_s *material = cgs.media.shaderElectroBeam;
-	if( cg_teamColoredBeams->integer && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
+	if( v_teamColoredBeams.get() && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
 		if( team == TEAM_ALPHA ) {
 			material = cgs.media.shaderElectroBeamAlpha;
 		} else {
@@ -2555,7 +2556,7 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 		}
 	}
 
-	const auto timeoutSeconds = wsw::clamp( cg_ebbeam_time->value, 0.1f, 1.0f );
+	const auto timeoutSeconds = wsw::clamp( v_ebBeamTime.get(), 0.1f, 1.0f );
 	const auto timeoutMillis  = (unsigned)( 1.00f * 1000 * timeoutSeconds );
 	const auto lightTimeout   = (unsigned)( 0.25f * 1000 * timeoutSeconds );
 
@@ -2582,14 +2583,14 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 				},
 			}
 		},
-		.width      = wsw::clamp( cg_ebbeam_width->value, 0.0f, 128.0f ),
+		.width      = wsw::clamp( v_ebBeamWidth.get(), 0.0f, 128.0f ),
 		.tileLength = 128.0f,
 		.timeout    = timeoutMillis,
 	});
 }
 
 bool getInstagunTeamColor( int team, float *color ) {
-	if( cg_teamColoredInstaBeams->integer && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
+	if( v_teamColoredInstaBeams.get() && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
 		CG_TeamColor( team, color );
 		return true;
 	}
@@ -2597,7 +2598,7 @@ bool getInstagunTeamColor( int team, float *color ) {
 }
 
 void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t end, int team ) {
-	if( cg_instabeam_time->value <= 0.0f || cg_instabeam_width->integer <= 0 ) {
+	if( v_instaBeamTime.get() <= 0.0f || v_instaBeamWidth.get() <= 0.0f ) {
 		return;
 	}
 
@@ -2606,7 +2607,7 @@ void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t en
 		Vector4Set( color, 1.0f, 0.0f, 0.4f, 0.35f );
 	}
 
-	const auto timeoutSeconds = wsw::clamp( cg_instabeam_time->value, 0.1f, 1.0f );
+	const auto timeoutSeconds = wsw::clamp( v_instaBeamTime.get(), 0.1f, 1.0f );
 	const auto timeoutMillis  = (unsigned)( 1.00f * 1000 * timeoutSeconds );
 	const auto lightTimeout   = (unsigned)( 0.25f * 1000 * timeoutSeconds );
 
@@ -2633,7 +2634,7 @@ void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t en
 				},
 			}
 		},
-		.width      = wsw::clamp( cg_instabeam_width->value, 0.0f, 128.0f ),
+		.width      = wsw::clamp( v_instaBeamWidth.get(), 0.0f, 128.0f ),
 		.tileLength = 128.0f,
 		.timeout    = timeoutMillis,
 	});

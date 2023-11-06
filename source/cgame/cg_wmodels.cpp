@@ -31,8 +31,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 #include "../common/common.h"
+#include "../common/configvars.h"
 #include "../client/snd_public.h"
 
+using wsw::operator""_asView;
+
+static BoolConfigVar v_debugWeaponModels( "cg_debugWeaponModels"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE | CVAR_CHEAT } );
 
 //======================================================================
 //						weaponinfo Registering
@@ -78,7 +82,7 @@ static bool CG_vWeap_ParseAnimationScript( weaponinfo_t *weaponinfo, const char 
 	weaponinfo->barrelSpeed = 0;
 	weaponinfo->flashFade = true;
 
-	if( !cg_debugWeaponModels->integer ) {
+	if( !v_debugWeaponModels.get() ) {
 		debug = false;
 	}
 
@@ -414,7 +418,7 @@ static bool CG_WeaponModelUpdateRegistration( weaponinfo_t *weaponinfo, char *fi
 	CG_BuildProjectionOrigin( weaponinfo );
 	Vector4Set( weaponinfo->outlineColor, 0, 0, 0, 255 );
 
-	if( cg_debugWeaponModels->integer ) {
+	if( v_debugWeaponModels.get() ) {
 		Com_Printf( "%sWEAPmodel: Loaded successful%s\n", S_COLOR_BLUE, S_COLOR_WHITE );
 	}
 
@@ -435,7 +439,7 @@ static struct weaponinfo_s *CG_FindWeaponModelSpot( char *filename ) {
 	for( i = 0; i < WEAP_TOTAL; i++ ) {
 		if( cg_pWeaponModelInfos[i].inuse == true ) {
 			if( !Q_stricmp( cg_pWeaponModelInfos[i].name, filename ) ) { //found it
-				if( cg_debugWeaponModels->integer ) {
+				if( v_debugWeaponModels.get() ) {
 					Com_Printf( "WEAPModel: found at spot %i: %s\n", i, filename );
 				}
 
@@ -452,7 +456,7 @@ static struct weaponinfo_s *CG_FindWeaponModelSpot( char *filename ) {
 	}
 
 	//we have a free spot
-	if( cg_debugWeaponModels->integer ) {
+	if( v_debugWeaponModels.get() ) {
 		Com_Printf( "WEAPmodel: assigned free spot %i for weaponinfo %s\n", freespot, filename );
 	}
 
@@ -479,7 +483,7 @@ struct weaponinfo_s *CG_RegisterWeaponModel( char *cgs_name, int weaponTag ) {
 
 	weaponinfo->inuse = CG_WeaponModelUpdateRegistration( weaponinfo, filename );
 	if( !weaponinfo->inuse ) {
-		if( cg_debugWeaponModels->integer ) {
+		if( v_debugWeaponModels.get() ) {
 			Com_Printf( "%sWEAPmodel: Failed:%s%s\n", S_COLOR_YELLOW, filename, S_COLOR_WHITE );
 		}
 
@@ -525,7 +529,7 @@ struct weaponinfo_s *CG_CreateWeaponZeroModel( char *filename ) {
 		return weaponinfo;
 	}
 
-	if( cg_debugWeaponModels->integer ) {
+	if( v_debugWeaponModels.get() ) {
 		Com_Printf( "%sWEAPmodel: Failed to load generic weapon. Creating a fake one%s\n", S_COLOR_YELLOW, S_COLOR_WHITE );
 	}
 

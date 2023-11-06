@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/wswstaticstring.h"
 #include "../common/cmdargs.h"
 #include "../client/client.h"
+#include "../common/configvars.h"
 #include "../ui/uisystem.h"
 #include "../common/wswtonum.h"
 #include "../common/cmdargssplitter.h"
@@ -37,102 +38,144 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 using wsw::operator""_asView;
 
+BoolConfigVar v_predict( "cg_predict"_asView, { .byDefault = true } );
+BoolConfigVar v_predictOptimize( "cg_predictOptimize"_asView, { .byDefault = true } );
+static BoolConfigVar v_showMiss( "cg_showMiss"_asView, { .byDefault = false } );
+
+// These vars are unused on client side, but are important as a part of userinfo
+[[maybe_unused]] static StringConfigVar v_model( "model"_asView, { .byDefault = wsw::StringView( DEFAULT_PLAYERMODEL ), .flags = CVAR_USERINFO | CVAR_ARCHIVE });
+[[maybe_unused]] static StringConfigVar v_skin( "skin"_asView, { .byDefault = wsw::StringView( DEFAULT_PLAYERSKIN ), .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
+[[maybe_unused]] static IntConfigVar v_handicap( "handicap"_asView, { .byDefault = 0, .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
+[[maybe_unused]] static StringConfigVar v_clan( "clan"_asView, { .byDefault = wsw::StringView(), .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
+[[maybe_unused]] static IntConfigVar v_movementStyle( "cg_movementStyle"_asView, { .byDefault = 1, .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
+[[maybe_unused]] static BoolConfigVar v_noAutohop( "cg_noAutohop"_asView, { .byDefault = false, .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
+
+IntConfigVar v_hand( "hand"_asView, { .byDefault = 0, .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
+
+FloatConfigVar v_fov( "fov"_asView, { .byDefault = 100.0f, .minInclusive = MIN_FOV, .maxInclusive = MAX_FOV, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_zoomfov( "zoomfov"_asView, { .byDefault = 30.0f, .minInclusive = MIN_ZOOMFOV, .maxInclusive = MAX_ZOOMFOV, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_thirdPerson( "cg_thirdPerson"_asView, { .byDefault = false, .flags = CVAR_CHEAT } );
+FloatConfigVar v_thirdPersonAngle( "cg_thirdPersonAngle"_asView, { .byDefault = 0.0f } );
+FloatConfigVar v_thirdPersonRange( "cg_thirdPersonRange"_asView, { .byDefault = 90.0f } );
+
+BoolConfigVar v_gun( "cg_gun"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_gunX( "cg_gunx"_asView, { .byDefault = 0.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_gunY( "cg_guny"_asView, { .byDefault = 0.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_gunZ( "cg_gunz"_asView, { .byDefault = 0.0f, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_gunBob( "cg_gunBob"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_gunFov( "cg_gunFov"_asView, { .byDefault = 75.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_gunAlpha( "cg_gunAlpha"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_viewBob( "cg_viewBob"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_colorCorrection( "cg_colorCorrection"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+FloatConfigVar v_handOffset( "cg_handOffset"_asView, { .byDefault = 5.0f, .flags = CVAR_ARCHIVE } );
+IntConfigVar v_weaponFlashes( "cg_weaponFlashes"_asView, { .byDefault = 2, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_projectileFireTrail( "cg_projectileFireTrail"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_projectileSmokeTrail( "cg_projectileSmokeTrail"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_projectilePolyTrail( "cg_projectilePolyTrail"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_plasmaTrail( "cg_plasmaTrail"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_playerTrail( "cg_playerTrail"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+IntConfigVar v_bloodTime( "cg_bloodTime"_asView, { .byDefault = 300, .flags = CVAR_ARCHIVE } );
+IntConfigVar v_bloodStyle( "cg_bloodStyle"_asView, { .byDefault = 1, .flags = CVAR_ARCHIVE } );
+IntConfigVar v_bloodPalette( "cg_bloodPalette"_asView, { .byDefault = 0, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showPovBlood( "cg_showPovBlood"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_heavyRocketExplosions( "cg_heavyRocketExplosions"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_heavyGrenadeExplosions( "cg_heavyGrenadeExplosions"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_heavyShockwaveExplosions( "cg_heavyShockwaveExplosions"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_particles( "cg_particles"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_outlineModels( "cg_outlineModels"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_outlinePlayers( "cg_outlinePlayers"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_outlineWorld( "cg_outlineWorld"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_explosionWave( "cg_explosionWave"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_explosionSmoke( "cg_explosionSmoke"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_explosionClusters( "cg_explosionClusters"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+FloatConfigVar v_volumePlayers( "cg_volume_players"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_volumeEffects( "cg_volume_effects"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_volumeHitsound( "cg_volume_hitsound"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_volumeAnnouncer( "cg_volume_announcer"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+
+IntConfigVar v_showPointedPlayer( "cg_showPointedPlayer"_asView, { .byDefault = 1, .flags = CVAR_ARCHIVE } );
+IntConfigVar v_showPlayerNames( "cg_showPlayerNames"_asView, { .byDefault = 1, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_showPlayerNames_alpha( "cg_showPlayerNames_alpha"_asView, { .byDefault = 0.4f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_showPlayerNames_zfar( "cg_showPlayerNames_zfar"_asView, { .byDefault = 1024.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_showPlayerNames_barWidth( "cg_showPlayerNames_barWidth"_asView, { .byDefault = 8.0f, .flags = CVAR_ARCHIVE } );
+
+static BoolConfigVar v_autoactionDemo( "cg_autoactionDemo"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
+static BoolConfigVar v_autoactionSpectator( "cg_autoactionSpectator"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
+static BoolConfigVar v_autoactionScreenshot( "cg_autoactionScreenshot"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
+
+FloatConfigVar v_viewSize( "cg_viewSize"_asView, { .byDefault = 100, .minInclusive = 40, .maxInclusive = 100, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_draw2D( "cg_draw2D"_asView, { .byDefault = true } );
+BoolConfigVar v_showHud( "cg_showHud"_asView, { .byDefault = true } );
+BoolConfigVar v_showViewBlends( "cg_showViewBlends"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+IntConfigVar v_showTeamInfo( "cg_showTeamInfo"_asView, { .byDefault = 1, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showFps( "cg_showFps"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showZoomEffect( "cg_showZoomEffect"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showPressedKeys( "cg_showPressedKeys"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showSpeed( "cg_showSpeed"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showPickup( "cg_showPickup"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+IntConfigVar v_showTimer( "cg_showTimer"_asView, { .byDefault = 1, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showAwards( "cg_showAwards"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showFragsFeed( "cg_showFragsFeed"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showMessageFeed( "cg_showMessageFeed"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showCaptureAreas( "cg_showCaptureAreas"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_showChasers( "cg_showChasers"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+// TODO: Default width values are way too large (even if they don't visually look like that), clip the image
+FloatConfigVar v_ebBeamWidth( "cg_ebBeamWidth"_asView, { .byDefault = 48.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_ebBeamTime( "cg_ebBeamTime"_asView, { .byDefault = 0.4f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_instaBeamWidth( "cg_instaBeamWidth"_asView, { .byDefault = 48.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_instaBeamTime( "cg_instaBeamTime"_asView, { .byDefault = 0.4f, .flags = CVAR_ARCHIVE } );
+
+static IntConfigVar v_weaponAutoSwitch( "cg_weaponAutoSwitch"_asView, { .byDefault = 2, .flags = CVAR_ARCHIVE } );
+
+IntConfigVar v_flashWindowCount( "cg_flashWindowCount"_asView, { .byDefault = 4, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_showClamp( "cg_showClamp"_asView, { .byDefault = false, .flags = CVAR_DEVELOPER } );
+
+static BoolConfigVar v_predictLaserBeam( "cg_predictLaserBeam"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+static FloatConfigVar v_projectileAntilagOffset( "cg_projectileAntilagOffset"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_raceGhosts( "cg_raceGhosts"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_raceGhostsAlpha( "cg_raceGhostsAlpha"_asView, { .byDefault = 0.25f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+
+static BoolConfigVar v_chatBeep( "cg_chatBeep"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+static BoolConfigVar v_chatShowIgnored( "cg_chatShowIgnored"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+static IntConfigVar v_chatFilter( "cg_chatFilter"_asView, { .byDefault = 0, .flags = CVAR_ARCHIVE | CVAR_USERINFO } );
+
+static IntConfigVar v_simpleItems( "cg_simpleItems"_asView, { .byDefault = 0, .flags = CVAR_ARCHIVE } );
+static FloatConfigVar v_simpleItemsSize( "cg_simpleItemsSize"_asView, { .byDefault = 16.0f, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_cartoonHitEffect( "cg_cartoonHitEffect"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+static BoolConfigVar v_showHelp( "cg_showHelp"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+static BoolConfigVar v_drawEntityBoxes( "cg_drawEntityBoxes"_asView, { .byDefault = false, .flags = CVAR_DEVELOPER } );
+static IntConfigVar v_laserBeamSubdivisions( "cg_laserBeamSubdivisions"_asView, { .byDefault = 24, .flags = CVAR_ARCHIVE } );
+
+static StringConfigVar v_playList( "cg_playList"_asView, { .byDefault = wsw::StringView( S_PLAYLIST_MATCH ), .flags = CVAR_ARCHIVE } );
+static BoolConfigVar v_playListShuffle( "cg_playListShuffle"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+BoolConfigVar v_teamColoredBeams( "cg_teamColoredBeams"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
+BoolConfigVar v_teamColoredInstaBeams( "cg_teamColoredInstaBeams"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
+
+static BoolConfigVar v_pickupFlash( "cg_pickupFlash"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
+
+IntConfigVar v_damageIndicator( "cg_damageIndicator"_asView, { .byDefault = 1, .flags = CVAR_ARCHIVE } );
+IntConfigVar v_damageIndicatorTime( "cg_damageIndicatorTime"_asView, { .byDefault = 25, .minInclusive = 0, .flags = CVAR_ARCHIVE } );
+
 cg_static_t cgs;
 cg_state_t cg;
 
 centity_t cg_entities[MAX_EDICTS];
-
-cvar_t *cg_predict;
-cvar_t *cg_predict_optimize;
-cvar_t *cg_showMiss;
-
-cvar_t *cg_model;
-cvar_t *cg_skin;
-cvar_t *cg_hand;
-cvar_t *cg_clan;
-cvar_t *cg_handicap;
-
-cvar_t *cg_addDecals;
-
-//cvar_t *cg_footSteps;
-
-cvar_t *cg_gun;
-
-cvar_t *cg_thirdPerson;
-cvar_t *cg_thirdPersonAngle;
-cvar_t *cg_thirdPersonRange;
-
-cvar_t *cg_colorCorrection;
-
-cvar_t *cg_weaponFlashes;
-cvar_t *cg_gunx;
-cvar_t *cg_guny;
-cvar_t *cg_gunz;
-cvar_t *cg_debugPlayerModels;
-cvar_t *cg_debugWeaponModels;
-cvar_t *cg_gunbob;
-
-cvar_t *cg_handOffset;
-cvar_t *cg_gun_fov;
-cvar_t *cg_gun_alpha;
-cvar_t *cg_volume_players;
-cvar_t *cg_volume_effects;
-cvar_t *cg_volume_announcer;
-cvar_t *cg_volume_hitsound;
-cvar_t *cg_projectileSmokeTrail;
-cvar_t *cg_projectileFireTrail;
-cvar_t *cg_projectilePolyTrail;
-cvar_t *cg_plasmaTrail;
-cvar_t *cg_playerTrail;
-cvar_t *cg_bloodPalette;
-cvar_t *cg_bloodTime;
-cvar_t *cg_bloodStyle;
-cvar_t *cg_showPOVBlood;
-cvar_t *cg_projectileFireTrailAlpha;
-cvar_t *cg_heavyRocketExplosions;
-cvar_t *cg_heavyGrenadeExplosions;
-cvar_t *cg_heavyShockwaveExplosions;
-cvar_t *cg_explosionsWave;
-cvar_t *cg_explosionsSmoke;
-cvar_t *cg_explosionsClusters;
-cvar_t *cg_gibs;
-cvar_t *cg_outlineModels;
-cvar_t *cg_outlineWorld;
-cvar_t *cg_outlinePlayers;
-cvar_t *cg_drawEntityBoxes;
-cvar_t *cg_fov;
-cvar_t *cg_zoomfov;
-cvar_t *cg_movementStyle;
-cvar_t *cg_noAutohop;
-cvar_t *cg_predictLaserBeam;
-cvar_t *cg_voiceChats;
-cvar_t *cg_showSelfShadow;
-cvar_t *cg_laserBeamSubdivisions;
-cvar_t *cg_projectileAntilagOffset;
-cvar_t *cg_raceGhosts;
-cvar_t *cg_raceGhostsAlpha;
-cvar_t *cg_chatBeep;
-cvar_t *cg_chatFilter;
-cvar_t *cg_chatShowIgnored;
-
-cvar_t *cg_cartoonEffects;
-cvar_t *cg_cartoonHitEffect;
-
-cvar_t *cg_autoaction_demo;
-cvar_t *cg_autoaction_screenshot;
-cvar_t *cg_autoaction_stats;
-cvar_t *cg_autoaction_spectator;
-cvar_t *cg_simpleItems;
-cvar_t *cg_simpleItemsSize;
-cvar_t *cg_particles;
-cvar_t *cg_showhelp;
-cvar_t *cg_showClamp;
-
-cvar_t *cg_damage_indicator;
-cvar_t *cg_damage_indicator_time;
-cvar_t *cg_pickup_flash;
-
-cvar_t *cg_weaponAutoSwitch;
 
 // force models
 cvar_t *cg_teamPLAYERSmodel;
@@ -150,59 +193,6 @@ cvar_t *cg_teamPLAYERScolor;
 cvar_t *cg_teamPLAYERScolorForce;
 cvar_t *cg_teamALPHAcolor;
 cvar_t *cg_teamBETAcolor;
-
-cvar_t *cg_forceMyTeamAlpha;
-cvar_t *cg_teamColoredBeams;
-cvar_t *cg_teamColoredInstaBeams;
-
-//cvar_t *cg_teamColorBeamMinimum;
-
-cvar_t *cg_ebbeam_width;
-cvar_t *cg_ebbeam_time;
-cvar_t *cg_instabeam_width;
-cvar_t *cg_instabeam_time;
-
-cvar_t *cg_playList;
-cvar_t *cg_playListShuffle;
-
-cvar_t *cg_flashWindowCount;
-
-cvar_t *cg_viewBob;
-
-cvar_t *cg_viewSize;
-cvar_t *cg_showFPS;
-cvar_t *cg_draw2D;
-
-cvar_t *cg_showZoomEffect;
-
-cvar_t *cg_showViewBlends;
-
-cvar_t *cg_showHUD;
-
-static cvar_t *cg_showminimap;
-static cvar_t *cg_showitemtimers;
-
-cvar_t *cg_showPlayerNames;
-cvar_t *cg_showPlayerNames_alpha;
-cvar_t *cg_showPlayerNames_zfar;
-cvar_t *cg_showPlayerNames_barWidth;
-cvar_t *cg_showTeamInfo;
-
-static cvar_t *cg_showPressedKeys;
-cvar_t *cg_showChasers;
-
-static cvar_t *cg_showMessageFeed;
-
-static cvar_t *cg_centerTime;
-
-cvar_t *cg_showPointedPlayer;
-
-cvar_t *cg_showSpeed;
-cvar_t *cg_showPickup;
-cvar_t *cg_showAwards;
-cvar_t *cg_showCaptureAreas;
-cvar_t *cg_showFragsFeed;
-cvar_t *cg_showTimer;
 
 static int cg_numSolids;
 static entity_state_t *cg_solidList[MAX_PARSE_ENTITIES];
@@ -274,7 +264,7 @@ static void CG_SC_ChatPrint( const CmdArgs &cmdArgs ) {
 		wsw::ui::UISystem::instance()->addToChat( {nameView, textView, sendCommandNum } );
 	}
 
-	if( cg_chatBeep->integer ) {
+	if( v_chatBeep.get() ) {
 		SoundSystem::instance()->startLocalSound( cgs.media.sfxChat, 1.0f );
 	}
 }
@@ -284,11 +274,11 @@ static void CG_SC_IgnoreCommand( const CmdArgs &cmdArgs ) {
 	// TODO: Is there a more generic method of setting client vars?
 	// In fact this is actually a safer alternative so it should be kept
 	if( !Q_stricmp( "setVar", firstArg ) ) {
-		Cvar_ForceSet( cg_chatFilter->name, Cmd_Argv( 2 ) );
+		v_chatFilter.setImmediately( atoi(Cmd_Argv( 2 ) ) );
 		return;
 	}
 
-	if( !cg_chatShowIgnored->integer ) {
+	if( !v_chatShowIgnored.get() ) {
 		return;
 	}
 
@@ -471,14 +461,14 @@ void CG_SC_AutoRecordAction( const char *action ) {
 	name = CG_SC_AutoRecordName();
 
 	if( !Q_stricmp( action, "start" ) ) {
-		if( cg_autoaction_demo->integer && ( !spectator || cg_autoaction_spectator->integer ) ) {
+		if( v_autoactionDemo.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
 			CL_Cmd_ExecuteNow( "stop silent" );
 			CL_Cmd_ExecuteNow( va( "record autorecord/%s/%s silent",
 								   gs.gametypeName, name ) );
 			autorecording = true;
 		}
 	} else if( !Q_stricmp( action, "altstart" ) ) {
-		if( cg_autoaction_demo->integer && ( !spectator || cg_autoaction_spectator->integer ) ) {
+		if( v_autoactionDemo.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
 			CL_Cmd_ExecuteNow( va( "record autorecord/%s/%s silent",
 								   gs.gametypeName, name ) );
 			autorecording = true;
@@ -489,7 +479,7 @@ void CG_SC_AutoRecordAction( const char *action ) {
 			autorecording = false;
 		}
 
-		if( cg_autoaction_screenshot->integer && ( !spectator || cg_autoaction_spectator->integer ) ) {
+		if( v_autoactionScreenshot.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
 			CL_Cmd_ExecuteNow( va( "screenshot autorecord/%s/%s silent",
 								   gs.gametypeName, name ) );
 		}
@@ -1084,7 +1074,7 @@ void CG_WeaponBeamEffect( centity_t *cent ) {
 
 static vec_t *_LaserColor( vec4_t color ) {
 	Vector4Set( color, 1, 1, 1, 1 );
-	if( cg_teamColoredBeams->integer && ( laserOwner != NULL ) && ( laserOwner->current.team == TEAM_ALPHA || laserOwner->current.team == TEAM_BETA ) ) {
+	if( v_teamColoredBeams.get() && ( laserOwner != NULL ) && ( laserOwner->current.team == TEAM_ALPHA || laserOwner->current.team == TEAM_BETA ) ) {
 		CG_TeamColor( laserOwner->current.team, color );
 		AdjustTeamColorValue( color );
 	}
@@ -1131,9 +1121,9 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 		if( laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] + 32 <= cg.time ) {
 			laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] = cg.time;
 
-			if( cg_particles->integer ) {
+			if( v_particles.get() ) {
 				bool useTeamColors = false;
-				if( cg_teamColoredBeams->integer ) {
+				if( v_teamColoredBeams.get() ) {
 					if( const int team = laserOwner->current.team; team == TEAM_ALPHA || team == TEAM_BETA ) {
 						useTeamColors = true;
 					}
@@ -1172,7 +1162,7 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 			}
 
 			SoundSystem::instance()->startFixedSound( cgs.media.sfxLasergunHit[rand() % 3], trace->endpos, CHAN_AUTO,
-													  cg_volume_effects->value, ATTN_STATIC );
+													  v_volumeEffects.get(), ATTN_STATIC );
 		}
 #undef TRAILTIME
 	}
@@ -1204,9 +1194,9 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) 
 		if( owner->localEffects[LOCALEFFECT_LASERBEAM] ) {
 			sfx_s *sound = isCurved ? cgs.media.sfxLasergunWeakStop : cgs.media.sfxLasergunStrongStop;
 			if( isOwnerThePov ) {
-				soundSystem->startGlobalSound( sound, CHAN_AUTO, cg_volume_effects->value );
+				soundSystem->startGlobalSound( sound, CHAN_AUTO, v_volumeEffects.get() );
 			} else {
-				soundSystem->startRelativeSound( sound, ownerEntNum, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
+				soundSystem->startRelativeSound( sound, ownerEntNum, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 			}
 		}
 		owner->localEffects[LOCALEFFECT_LASERBEAM] = 0;
@@ -1261,7 +1251,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) 
 		const auto range            = (float)GS_GetWeaponDef( WEAP_LASERGUN )->firedef_weak.timeout;
 		const int minSubdivisions   = CURVELASERBEAM_SUBDIVISIONS;
 		const int maxSubdivisions   = MAX_CURVELASERBEAM_SUBDIVISIONS;
-		const int subdivisions      = wsw::clamp( cg_laserBeamSubdivisions->integer, minSubdivisions, maxSubdivisions );
+		const int subdivisions      = wsw::clamp( v_laserBeamSubdivisions.get(), minSubdivisions, maxSubdivisions );
 		const float rcpSubdivisions = Q_Rcp( (float)subdivisions );
 		for( int segmentNum = 0; segmentNum < subdivisions; segmentNum++ ) {
 			const auto frac = (float)( segmentNum + 1 ) * rcpSubdivisions;
@@ -1303,7 +1293,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) 
 	}
 
 	// enable continuous flash on the weapon owner
-	if( cg_weaponFlashes->integer ) {
+	if( v_weaponFlashes.get() != 0 ) {
 		cg_entPModels[ownerEntNum].flash_time = cg.time + CG_GetWeaponInfo( WEAP_LASERGUN )->flashTime;
 	}
 
@@ -1318,7 +1308,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) 
 		const float attenuation = isOwnerThePov ? ATTN_NONE : ATTN_STATIC;
 		// Tokens in range [1, MAX_EDICTS] are reserved for generic server-sent attachments
 		const uintptr_t loopIdentifyingToken = ownerEntNum + MAX_EDICTS;
-		soundSystem->addLoopSound( sound, ownerEntNum, loopIdentifyingToken, cg_volume_effects->value, attenuation );
+		soundSystem->addLoopSound( sound, ownerEntNum, loopIdentifyingToken, v_volumeEffects.get(), attenuation );
 	}
 
 	laserOwner = nullptr;
@@ -1330,7 +1320,7 @@ void CG_Event_LaserBeam( int entNum, int weapon, int fireMode ) {
 	unsigned int timeout;
 	vec3_t dir;
 
-	if( !cg_predictLaserBeam->integer ) {
+	if( !v_predictLaserBeam.get() ) {
 		return;
 	}
 
@@ -1398,17 +1388,17 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 
 	if( sound ) {
 		if( ISVIEWERENTITY( entNum ) ) {
-			SoundSystem::instance()->startGlobalSound( sound, CHAN_AUTO, cg_volume_effects->value );
+			SoundSystem::instance()->startGlobalSound( sound, CHAN_AUTO, v_volumeEffects.get() );
 		} else {
-			SoundSystem::instance()->startRelativeSound( sound, entNum, CHAN_AUTO, cg_volume_effects->value, attenuation );
+			SoundSystem::instance()->startRelativeSound( sound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
 		}
 
 		if( ( cg_entities[entNum].current.effects & EF_QUAD ) && ( weapon != WEAP_LASERGUN ) ) {
 			struct sfx_s *quadSfx = cgs.media.sfxQuadFireSound;
 			if( ISVIEWERENTITY( entNum ) ) {
-				SoundSystem::instance()->startGlobalSound( quadSfx, CHAN_AUTO, cg_volume_effects->value );
+				SoundSystem::instance()->startGlobalSound( quadSfx, CHAN_AUTO, v_volumeEffects.get() );
 			} else {
-				SoundSystem::instance()->startRelativeSound( quadSfx, entNum, CHAN_AUTO, cg_volume_effects->value, attenuation );
+				SoundSystem::instance()->startRelativeSound( quadSfx, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
 			}
 		}
 	}
@@ -1418,7 +1408,7 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 	if( weapon == WEAP_GUNBLADE ) { // gunblade is special
 		if( fireMode == FIRE_MODE_STRONG ) {
 			// light flash
-			if( cg_weaponFlashes->integer && weaponInfo->flashTime ) {
+			if( v_weaponFlashes.get() != 0 && weaponInfo->flashTime ) {
 				cg_entPModels[entNum].flash_time = cg.time + weaponInfo->flashTime;
 			}
 		} else {
@@ -1429,7 +1419,7 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 		}
 	} else {
 		// light flash
-		if( cg_weaponFlashes->integer && weaponInfo->flashTime ) {
+		if( v_weaponFlashes.get() != 0 && weaponInfo->flashTime ) {
 			cg_entPModels[entNum].flash_time = cg.time + weaponInfo->flashTime;
 		}
 
@@ -1693,7 +1683,7 @@ void CG_AddAnnouncerEvent( struct sfx_s *sound, bool queued ) {
 	}
 
 	if( !queued ) {
-		SoundSystem::instance()->startLocalSound( sound, cg_volume_announcer->value );
+		SoundSystem::instance()->startLocalSound( sound, v_volumeAnnouncer.get() );
 		cg_announcerEventsDelay = CG_ANNOUNCER_EVENTS_FRAMETIME; // wait
 		return;
 	}
@@ -1720,7 +1710,7 @@ void CG_ReleaseAnnouncerEvents( void ) {
 		// play the event
 		sound = cg_announcerEvents[cg_announcerEventsCurrent & CG_MAX_ANNOUNCER_EVENTS_MASK].sound;
 		if( sound ) {
-			SoundSystem::instance()->startLocalSound( sound, cg_volume_announcer->value );
+			SoundSystem::instance()->startLocalSound( sound, v_volumeAnnouncer.get() );
 			cg_announcerEventsDelay = CG_ANNOUNCER_EVENTS_FRAMETIME; // wait
 		}
 		cg_announcerEventsCurrent++;
@@ -1732,7 +1722,7 @@ void CG_ReleaseAnnouncerEvents( void ) {
 void CG_Event_Fall( entity_state_t *state, int parm ) {
 	if( ISVIEWERENTITY( state->number ) ) {
 		if( cg.frame.playerState.pmove.pm_type != PM_NORMAL ) {
-			CG_SexedSound( state->number, CHAN_AUTO, "*fall_0", cg_volume_players->value, state->attenuation );
+			CG_SexedSound( state->number, CHAN_AUTO, "*fall_0", v_volumePlayers.get(), state->attenuation );
 			return;
 		}
 
@@ -1744,7 +1734,7 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 	}
 
 	if( parm > 10 ) {
-		CG_SexedSound( state->number, CHAN_PAIN, "*fall_2", cg_volume_players->value, state->attenuation );
+		CG_SexedSound( state->number, CHAN_PAIN, "*fall_2", v_volumePlayers.get(), state->attenuation );
 		switch( (int)brandom( 0, 3 ) ) {
 			case 0:
 				CG_PModel_AddAnimation( state->number, 0, TORSO_PAIN1, 0, EVENT_CHANNEL );
@@ -1758,13 +1748,13 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 				break;
 		}
 	} else if( parm > 0 ) {
-		CG_SexedSound( state->number, CHAN_PAIN, "*fall_1", cg_volume_players->value, state->attenuation );
+		CG_SexedSound( state->number, CHAN_PAIN, "*fall_1", v_volumePlayers.get(), state->attenuation );
 	} else {
-		CG_SexedSound( state->number, CHAN_PAIN, "*fall_0", cg_volume_players->value, state->attenuation );
+		CG_SexedSound( state->number, CHAN_PAIN, "*fall_0", v_volumePlayers.get(), state->attenuation );
 	}
 
 	// smoke effect
-	if( parm > 0 && ( cg_cartoonEffects->integer & 2 ) ) {
+	if( parm > 0 ) {
 		vec3_t start, end;
 		trace_t trace;
 
@@ -1792,14 +1782,14 @@ void CG_Event_Pain( entity_state_t *state, int parm ) {
 	if( parm == PAIN_WARSHELL ) {
 		if( ISVIEWERENTITY( state->number ) ) {
 			SoundSystem::instance()->startGlobalSound( cgs.media.sfxShellHit, CHAN_PAIN,
-													   cg_volume_players->value );
+													   v_volumePlayers.get() );
 		} else {
 			SoundSystem::instance()->startRelativeSound( cgs.media.sfxShellHit, state->number, CHAN_PAIN,
-														 cg_volume_players->value, state->attenuation );
+														 v_volumePlayers.get(), state->attenuation );
 		}
 	} else {
 		CG_SexedSound( state->number, CHAN_PAIN, va( S_PLAYER_PAINS, 25 * parm ),
-					   cg_volume_players->value, state->attenuation );
+					   v_volumePlayers.get(), state->attenuation );
 	}
 
 	switch( (int)brandom( 0, 3 ) ) {
@@ -1817,7 +1807,7 @@ void CG_Event_Pain( entity_state_t *state, int parm ) {
 }
 
 void CG_Event_Die( entity_state_t *state, int parm ) {
-	CG_SexedSound( state->number, CHAN_PAIN, S_PLAYER_DEATH, cg_volume_players->value, state->attenuation );
+	CG_SexedSound( state->number, CHAN_PAIN, S_PLAYER_DEATH, v_volumePlayers.get(), state->attenuation );
 
 	switch( parm ) {
 		case 0:
@@ -1840,22 +1830,22 @@ void CG_Event_Dash( entity_state_t *state, int parm ) {
 		case 0: // dash front
 			CG_PModel_AddAnimation( state->number, LEGS_DASH, 0, 0, EVENT_CHANNEL );
 			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
-						   cg_volume_players->value, state->attenuation );
+						   v_volumePlayers.get(), state->attenuation );
 			break;
 		case 1: // dash left
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_LEFT, 0, 0, EVENT_CHANNEL );
 			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
-						   cg_volume_players->value, state->attenuation );
+						   v_volumePlayers.get(), state->attenuation );
 			break;
 		case 2: // dash right
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_RIGHT, 0, 0, EVENT_CHANNEL );
 			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
-						   cg_volume_players->value, state->attenuation );
+						   v_volumePlayers.get(), state->attenuation );
 			break;
 		case 3: // dash back
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_BACK, 0, 0, EVENT_CHANNEL );
 			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
-						   cg_volume_players->value, state->attenuation );
+						   v_volumePlayers.get(), state->attenuation );
 			break;
 	}
 
@@ -1884,27 +1874,25 @@ void CG_Event_WallJump( entity_state_t *state, int parm, int ev ) {
 
 	if( ev == EV_WALLJUMP_FAILED ) {
 		if( ISVIEWERENTITY( state->number ) ) {
-			SoundSystem::instance()->startGlobalSound( cgs.media.sfxWalljumpFailed, CHAN_BODY, cg_volume_effects->value );
+			SoundSystem::instance()->startGlobalSound( cgs.media.sfxWalljumpFailed, CHAN_BODY, v_volumeEffects.get() );
 		} else {
-			SoundSystem::instance()->startRelativeSound( cgs.media.sfxWalljumpFailed, state->number, CHAN_BODY, cg_volume_effects->value, ATTN_NORM );
+			SoundSystem::instance()->startRelativeSound( cgs.media.sfxWalljumpFailed, state->number, CHAN_BODY, v_volumeEffects.get(), ATTN_NORM );
 		}
 	} else {
 		CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_WALLJUMP_1_to_2, ( rand() & 1 ) + 1 ),
-					   cg_volume_players->value, state->attenuation );
+					   v_volumePlayers.get(), state->attenuation );
 
 		// smoke effect
-		if( cg_cartoonEffects->integer & 1 ) {
-			vec3_t pos;
-			VectorCopy( state->origin, pos );
-			pos[2] += 15;
-			cg.effectsSystem.spawnWalljumpDustImpactEffect( pos, normal );
-		}
+		vec3_t pos;
+		VectorCopy( state->origin, pos );
+		pos[2] += 15;
+		cg.effectsSystem.spawnWalljumpDustImpactEffect( pos, normal );
 	}
 }
 
 void CG_Event_DoubleJump( entity_state_t *state, int parm ) {
 	CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-				   cg_volume_players->value, state->attenuation );
+				   v_volumePlayers.get(), state->attenuation );
 }
 
 void CG_Event_Jump( entity_state_t *state, int parm ) {
@@ -1923,7 +1911,7 @@ void CG_Event_Jump( entity_state_t *state, int parm ) {
 	if( xyspeedcheck < 100 ) { // the player is jumping on the same place, not running
 		CG_PModel_AddAnimation( state->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
 		CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-					   cg_volume_players->value, attenuation );
+					   v_volumePlayers.get(), attenuation );
 	} else {
 		vec3_t movedir;
 		mat3_t viewaxis;
@@ -1941,16 +1929,16 @@ void CG_Event_Jump( entity_state_t *state, int parm ) {
 			if( !cent->jumpedLeft ) {
 				CG_PModel_AddAnimation( state->number, LEGS_JUMP_LEG2, 0, 0, EVENT_CHANNEL );
 				CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-							   cg_volume_players->value, attenuation );
+							   v_volumePlayers.get(), attenuation );
 			} else {
 				CG_PModel_AddAnimation( state->number, LEGS_JUMP_LEG1, 0, 0, EVENT_CHANNEL );
 				CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-							   cg_volume_players->value, attenuation );
+							   v_volumePlayers.get(), attenuation );
 			}
 		} else {
 			CG_PModel_AddAnimation( state->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
 			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-						   cg_volume_players->value, attenuation );
+						   v_volumePlayers.get(), attenuation );
 		}
 	}
 }
@@ -1976,9 +1964,9 @@ static void handleWeaponActivateEvent( entity_state_t *ent, int parm, bool predi
 	}
 
 	if( viewer ) {
-		SoundSystem::instance()->startGlobalSound( cgs.media.sfxWeaponUp, CHAN_AUTO, cg_volume_effects->value );
+		SoundSystem::instance()->startGlobalSound( cgs.media.sfxWeaponUp, CHAN_AUTO, v_volumeEffects.get() );
 	} else {
-		SoundSystem::instance()->startFixedSound( cgs.media.sfxWeaponUp, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
+		SoundSystem::instance()->startFixedSound( cgs.media.sfxWeaponUp, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 	}
 }
 
@@ -2078,23 +2066,23 @@ static void handleFireBulletEvent( entity_state_t *ent, int parm, bool predicted
 
 static void handleNoAmmoClickEvent( entity_state_t *ent, int parm, bool predicted ) {
 	if( ISVIEWERENTITY( ent->number ) ) {
-		SoundSystem::instance()->startGlobalSound( cgs.media.sfxWeaponUpNoAmmo, CHAN_ITEM, cg_volume_effects->value );
+		SoundSystem::instance()->startGlobalSound( cgs.media.sfxWeaponUpNoAmmo, CHAN_ITEM, v_volumeEffects.get() );
 	} else {
-		SoundSystem::instance()->startFixedSound( cgs.media.sfxWeaponUpNoAmmo, ent->origin, CHAN_ITEM, cg_volume_effects->value, ATTN_IDLE );
+		SoundSystem::instance()->startFixedSound( cgs.media.sfxWeaponUpNoAmmo, ent->origin, CHAN_ITEM, v_volumeEffects.get(), ATTN_IDLE );
 	}
 }
 
 static void handleJumppadEvent( entity_state_t *ent, bool predicted ) {
 	CG_SexedSound( ent->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-				   cg_volume_players->value, ent->attenuation );
+				   v_volumePlayers.get(), ent->attenuation );
 	CG_PModel_AddAnimation( ent->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
 }
 
 static void handleSexedSoundEvent( entity_state_t *ent, int parm, bool predicted ) {
 	if( parm == 2 ) {
-		CG_SexedSound( ent->number, CHAN_AUTO, S_PLAYER_GASP, cg_volume_players->value, ent->attenuation );
+		CG_SexedSound( ent->number, CHAN_AUTO, S_PLAYER_GASP, v_volumePlayers.get(), ent->attenuation );
 	} else if( parm == 1 ) {
-		CG_SexedSound( ent->number, CHAN_AUTO, S_PLAYER_DROWN, cg_volume_players->value, ent->attenuation );
+		CG_SexedSound( ent->number, CHAN_AUTO, S_PLAYER_DROWN, v_volumePlayers.get(), ent->attenuation );
 	}
 }
 
@@ -2114,7 +2102,7 @@ static const RgbaLifespan kSparksColor {
 };
 
 static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
-	if( cg_particles->integer ) {
+	if( v_particles.get() ) {
 		vec3_t dir;
 		ByteToDir( parm, dir );
 
@@ -2151,7 +2139,7 @@ static void handleBulletSparksEvent( entity_state_t *ent, int parm, bool predict
 static void handleItemRespawnEvent( entity_state_t *ent, int parm, bool predicted ) {
 	cg_entities[ent->number].respawnTime = cg.time;
 	SoundSystem::instance()->startRelativeSound( cgs.media.sfxItemRespawn, ent->number, CHAN_AUTO,
-												 cg_volume_effects->value, ATTN_IDLE );
+												 v_volumeEffects.get(), ATTN_IDLE );
 }
 
 static void handlePlayerRespawnEvent( entity_state_t *ent, int parm, bool predicted ) {
@@ -2161,7 +2149,7 @@ static void handlePlayerRespawnEvent( entity_state_t *ent, int parm, bool predic
 		CG_ResetDamageIndicator();
 	}
 
-	SoundSystem::instance()->startFixedSound( cgs.media.sfxPlayerRespawn, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
+	SoundSystem::instance()->startFixedSound( cgs.media.sfxPlayerRespawn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 
 	if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
 		cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_IN] = cg.time;
@@ -2170,7 +2158,7 @@ static void handlePlayerRespawnEvent( entity_state_t *ent, int parm, bool predic
 }
 
 static void handlePlayerTeleportInEvent( entity_state_t *ent, int parm, bool predicted ) {
-	SoundSystem::instance()->startFixedSound( cgs.media.sfxTeleportIn, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
+	SoundSystem::instance()->startFixedSound( cgs.media.sfxTeleportIn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 
 	if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
 		cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_IN] = cg.time;
@@ -2179,7 +2167,7 @@ static void handlePlayerTeleportInEvent( entity_state_t *ent, int parm, bool pre
 }
 
 static void handlePlayerTeleportOutEvent( entity_state_t *ent, int parm, bool predicted ) {
-	SoundSystem::instance()->startFixedSound( cgs.media.sfxTeleportOut, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
+	SoundSystem::instance()->startFixedSound( cgs.media.sfxTeleportOut, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 
 	if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
 		cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_OUT] = cg.time;
@@ -2280,7 +2268,7 @@ static void handleGunbladeBlastImpactEvent( entity_state_t *ent, int parm, bool 
 }
 
 static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted ) {
-	if( cg_showPOVBlood->integer || !ISVIEWERENTITY( ent->ownerNum ) ) {
+	if( v_showPovBlood.get() || !ISVIEWERENTITY( ent->ownerNum ) ) {
 		vec3_t dir;
 		ByteToDir( parm, dir );
 		if( VectorCompare( dir, vec3_origin ) ) {
@@ -2293,7 +2281,7 @@ static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted ) {
 static void handleMoverEvent( entity_state_t *ent, int parm ) {
 	vec3_t so;
 	CG_GetEntitySpatilization( ent->number, so, NULL );
-	SoundSystem::instance()->startFixedSound( cgs.soundPrecache[parm], so, CHAN_AUTO, cg_volume_effects->value, ATTN_STATIC );
+	SoundSystem::instance()->startFixedSound( cgs.soundPrecache[parm], so, CHAN_AUTO, v_volumeEffects.get(), ATTN_STATIC );
 }
 
 void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
@@ -2334,7 +2322,7 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 		case EV_SPARKS: return handleSparksEvent( ent, parm, predicted );
 		case EV_BULLET_SPARKS: return handleBulletSparksEvent( ent, parm, predicted );
 		case EV_LASER_SPARKS: return;
-		case EV_GESTURE: return CG_SexedSound( ent->number, CHAN_BODY, "*taunt", cg_volume_players->value, ent->attenuation );
+		case EV_GESTURE: return CG_SexedSound( ent->number, CHAN_BODY, "*taunt", v_volumePlayers.get(), ent->attenuation );
 		case EV_DROP: return CG_PModel_AddAnimation( ent->number, 0, TORSO_DROP, 0, EVENT_CHANNEL );
 		case EV_SPOG: return CG_SmallPileOfGibs( ent->origin, parm, ent->origin2, ent->team );
 		case EV_ITEM_RESPAWN: return handleItemRespawnEvent( ent, parm, predicted );
@@ -2393,17 +2381,17 @@ static void CG_FireEntityEvents( bool early ) {
 static void handlePlayerStateHitSoundEvent( unsigned event, unsigned parm ) {
 	if( parm < 4 ) {
 		// hit of some caliber
-		SoundSystem::instance()->startLocalSound( cgs.media.sfxWeaponHit[parm], cg_volume_hitsound->value );
-		SoundSystem::instance()->startLocalSound( cgs.media.sfxWeaponHit2[parm], cg_volume_hitsound->value );
+		SoundSystem::instance()->startLocalSound( cgs.media.sfxWeaponHit[parm], v_volumeHitsound.get() );
+		SoundSystem::instance()->startLocalSound( cgs.media.sfxWeaponHit2[parm], v_volumeHitsound.get() );
 		CG_ScreenCrosshairDamageUpdate();
 	} else if( parm == 4 ) {
 		// killed an enemy
-		SoundSystem::instance()->startLocalSound( cgs.media.sfxWeaponKill, cg_volume_hitsound->value );
+		SoundSystem::instance()->startLocalSound( cgs.media.sfxWeaponKill, v_volumeHitsound.get() );
 		CG_ScreenCrosshairDamageUpdate();
 	} else if( parm <= 6 ) {
 		// hit a teammate
-		SoundSystem::instance()->startLocalSound( cgs.media.sfxWeaponHitTeam, cg_volume_hitsound->value );
-		if( cg_showhelp->integer ) {
+		SoundSystem::instance()->startLocalSound( cgs.media.sfxWeaponHitTeam, v_volumeHitsound.get() );
+		if( v_showHelp.get() ) {
 			if( random() <= 0.5f ) {
 				CG_CenterPrint( "Don't shoot at members of your team!" );
 			} else {
@@ -2414,12 +2402,12 @@ static void handlePlayerStateHitSoundEvent( unsigned event, unsigned parm ) {
 }
 
 static void handlePlayerStatePickupEvent( unsigned event, unsigned parm ) {
-	if( cg_pickup_flash->integer && !cg.view.thirdperson ) {
+	if( v_pickupFlash.get() && !cg.view.thirdperson ) {
 		CG_StartColorBlendEffect( 1.0f, 1.0f, 1.0f, 0.25f, 150 );
 	}
 
 	bool processAutoSwitch = false;
-	const int autoSwitchVarValue = cg_weaponAutoSwitch->integer;
+	const int autoSwitchVarValue = v_weaponAutoSwitch.get();
 	if( autoSwitchVarValue && !cgs.demoPlaying && ( parm > WEAP_NONE && parm < WEAP_TOTAL ) ) {
 		if( cg.predictedPlayerState.pmove.pm_type == PM_NORMAL && cg.predictedPlayerState.POVnum == cgs.playerNum + 1 ) {
 			if( !cg.oldFrame.playerState.inventory[parm] ) {
@@ -2502,7 +2490,7 @@ static void CG_FirePlayerStateEvents( void ) {
 
 			case PSEV_INDEXEDSOUND:
 				if( cgs.soundPrecache[parm] ) {
-					SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[parm], CHAN_AUTO, cg_volume_effects->value );
+					SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[parm], CHAN_AUTO, v_volumeEffects.get() );
 				}
 				break;
 
@@ -2537,36 +2525,6 @@ void CG_FireEvents( bool early ) {
 
 static void CG_UpdateEntities( void );
 
-static void CG_FixVolumeCvars( void ) {
-	if( developer->integer ) {
-		return;
-	}
-
-	if( cg_volume_players->value < 0.0f ) {
-		Cvar_SetValue( "cg_volume_players", 0.0f );
-	} else if( cg_volume_players->value > 2.0f ) {
-		Cvar_SetValue( "cg_volume_players", 2.0f );
-	}
-
-	if( cg_volume_effects->value < 0.0f ) {
-		Cvar_SetValue( "cg_volume_effects", 0.0f );
-	} else if( cg_volume_effects->value > 2.0f ) {
-		Cvar_SetValue( "cg_volume_effects", 2.0f );
-	}
-
-	if( cg_volume_announcer->value < 0.0f ) {
-		Cvar_SetValue( "cg_volume_announcer", 0.0f );
-	} else if( cg_volume_announcer->value > 2.0f ) {
-		Cvar_SetValue( "cg_volume_announcer", 2.0f );
-	}
-
-	if( cg_volume_hitsound->value < 0.0f ) {
-		Cvar_SetValue( "cg_volume_hitsound", 0.0f );
-	} else if( cg_volume_hitsound->value > 10.0f ) {
-		Cvar_SetValue( "cg_volume_hitsound", 10.0f );
-	}
-}
-
 static bool CG_UpdateLinearProjectilePosition( centity_t *cent ) {
 	vec3_t origin;
 	entity_state_t *state;
@@ -2589,9 +2547,9 @@ static bool CG_UpdateLinearProjectilePosition( centity_t *cent ) {
 
 	if( state->solid != SOLID_BMODEL ) {
 		// add a time offset to counter antilag visualization
-		if( !cgs.demoPlaying && cg_projectileAntilagOffset->value > 0.0f &&
+		if( !cgs.demoPlaying && v_projectileAntilagOffset.get() > 0.0f &&
 			!ISVIEWERENTITY( state->ownerNum ) && ( cgs.playerNum + 1 != cg.predictedPlayerState.POVnum ) ) {
-			serverTime += state->modelindex2 * cg_projectileAntilagOffset->value;
+			serverTime += state->modelindex2 * v_projectileAntilagOffset.get();
 		}
 	}
 
@@ -2839,10 +2797,6 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 
 	cg.portalInView = false;
 
-	if( cg_projectileAntilagOffset->value > 1.0f || cg_projectileAntilagOffset->value < 0.0f ) {
-		Cvar_ForceSet( "cg_projectileAntilagOffset", cg_projectileAntilagOffset->dvalue );
-	}
-
 	CG_UpdatePlayerState();
 
 	static_assert( AccuracyRows::Span::extent == kNumAccuracySlots );
@@ -2867,7 +2821,6 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 	cg.specStateChanged = SPECSTATECHANGED() || lerpframe == NULL || cg.firstFrame;
 
 	// a new server frame begins now
-	CG_FixVolumeCvars();
 
 	CG_BuildSolidList();
 	CG_UpdateEntities();
@@ -3427,7 +3380,7 @@ static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest
 
 	CG_AddPModel( cent, drawSceneRequest );
 
-	if( cg_playerTrail->integer ) {
+	if( v_playerTrail.get() ) {
 		if( cent->current.number != (int)cg.predictedPlayerState.POVnum ) {
 			const float timeDeltaSeconds  = 1e-3f * (float)cgs.snapFrameTime;
 			const float speedThreshold    = 0.5f * ( DEFAULT_PLAYERSPEED + DEFAULT_DASHSPEED );
@@ -3572,19 +3525,19 @@ static void CG_UpdateItemEnt( centity_t *cent ) {
 
 	cent->effects |= cent->item->effects;
 
-	if( cg_simpleItems->integer && cent->item->simpleitem ) {
+	if( v_simpleItems.get() && cent->item->simpleitem ) {
 		cent->ent.rtype = RT_SPRITE;
 		cent->ent.model = NULL;
 		cent->skel = NULL;
 		cent->ent.renderfx = RF_NOSHADOW | RF_FULLBRIGHT;
 		cent->ent.frame = cent->ent.oldframe = 0;
 
-		cent->ent.radius = cg_simpleItemsSize->value <= 32 ? cg_simpleItemsSize->value : 32;
+		cent->ent.radius = v_simpleItemsSize.get() <= 32.0f ? v_simpleItems.get() : 32.0f;
 		if( cent->ent.radius < 1.0f ) {
 			cent->ent.radius = 1.0f;
 		}
 
-		if( cg_simpleItems->integer == 2 ) {
+		if( v_simpleItems.get() == 2 ) {
 			cent->effects &= ~EF_ROTATE_AND_BOB;
 		}
 
@@ -3750,8 +3703,7 @@ static void CG_AddBeamEnt( centity_t *cent ) {
 static void CG_UpdateLaserbeamEnt( centity_t *cent ) {
 	centity_t *owner;
 
-	if( cg.view.playerPrediction && cg_predictLaserBeam->integer
-		&& ISVIEWERENTITY( cent->current.ownerNum ) ) {
+	if( cg.view.playerPrediction && v_predictLaserBeam.get() && ISVIEWERENTITY( cent->current.ownerNum ) ) {
 		return;
 	}
 
@@ -3776,8 +3728,7 @@ static void CG_UpdateLaserbeamEnt( centity_t *cent ) {
 static void CG_LerpLaserbeamEnt( centity_t *cent ) {
 	centity_t *owner = &cg_entities[cent->current.ownerNum];
 
-	if( cg.view.playerPrediction && cg_predictLaserBeam->integer
-		&& ISVIEWERENTITY( cent->current.ownerNum ) ) {
+	if( cg.view.playerPrediction && v_predictLaserBeam.get() && ISVIEWERENTITY( cent->current.ownerNum ) ) {
 		return;
 	}
 
@@ -3894,7 +3845,7 @@ void CG_EntityLoopSound( entity_state_t *state, float attenuation ) {
 	const int entNum                     = state->number;
 	const uintptr_t loopIdentifyingToken = state->number;
 
-	SoundSystem::instance()->addLoopSound( sfx, entNum, loopIdentifyingToken, cg_volume_effects->value, attenuation );
+	SoundSystem::instance()->addLoopSound( sfx, entNum, loopIdentifyingToken, v_volumeEffects.get(), attenuation );
 }
 
 void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
@@ -3923,7 +3874,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 		switch( cent->type ) {
 			case ET_GENERIC:
 				CG_AddGenericEnt( cent, drawSceneRequest );
-				if( cg_drawEntityBoxes->integer ) {
+				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
 				CG_EntityLoopSound( state, ATTN_STATIC );
@@ -3998,7 +3949,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 
 			case ET_ITEM:
 				CG_AddItemEnt( cent, drawSceneRequest );
-				if( cg_drawEntityBoxes->integer ) {
+				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
 				CG_EntityLoopSound( state, ATTN_IDLE );
@@ -4007,7 +3958,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 
 			case ET_PLAYER:
 				CG_AddPlayerEnt( cent, drawSceneRequest );
-				if( cg_drawEntityBoxes->integer ) {
+				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
 				CG_EntityLoopSound( state, ATTN_IDLE );
@@ -4018,7 +3969,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 
 			case ET_CORPSE:
 				CG_AddPlayerEnt( cent, drawSceneRequest );
-				if( cg_drawEntityBoxes->integer ) {
+				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
 				CG_EntityLoopSound( state, ATTN_IDLE );
@@ -4057,7 +4008,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				break;
 
 			case ET_PUSH_TRIGGER:
-				if( cg_drawEntityBoxes->integer ) {
+				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
 				CG_EntityLoopSound( state, ATTN_STATIC );
@@ -4443,12 +4394,12 @@ void CG_CheckPredictionError( void ) {
 
 	// save the prediction error for interpolation
 	if( abs( delta[0] ) > 128 || abs( delta[1] ) > 128 || abs( delta[2] ) > 128 ) {
-		if( cg_showMiss->integer ) {
+		if( v_showMiss.get() ) {
 			Com_Printf( "prediction miss on %" PRIi64 ": %i\n", cg.frame.serverFrame, abs( delta[0] ) + abs( delta[1] ) + abs( delta[2] ) );
 		}
 		VectorClear( cg.predictionError );          // a teleport or something
 	} else {
-		if( cg_showMiss->integer && ( delta[0] || delta[1] || delta[2] ) ) {
+		if( v_showMiss.get() && ( delta[0] || delta[1] || delta[2] ) ) {
 			Com_Printf( "prediction miss on %" PRIi64" : %i\n", cg.frame.serverFrame, abs( delta[0] ) + abs( delta[1] ) + abs( delta[2] ) );
 		}
 		VectorCopy( cg.frame.playerState.pmove.origin, cg.predictedOrigins[frame] );
@@ -4732,7 +4683,7 @@ void CG_PredictMovement( void ) {
 	NET_GetCurrentState( NULL, &ucmdHead, NULL );
 	ucmdExecuted = cg.frame.ucmdExecuted;
 
-	if( !cg_predict_optimize->integer || ( ucmdHead - cg.predictFrom >= CMD_BACKUP ) ) {
+	if( !v_predictOptimize.get() || ( ucmdHead - cg.predictFrom >= CMD_BACKUP ) ) {
 		cg.predictFrom = 0;
 	}
 
@@ -4748,7 +4699,7 @@ void CG_PredictMovement( void ) {
 
 	// if we are too far out of date, just freeze
 	if( ucmdHead - ucmdExecuted >= CMD_BACKUP ) {
-		if( cg_showMiss->integer ) {
+		if( v_showMiss.get() ) {
 			Com_Printf( "exceeded CMD_BACKUP\n" );
 		}
 
@@ -4790,7 +4741,7 @@ void CG_PredictMovement( void ) {
 		VectorCopy( cg.predictedPlayerState.pmove.origin, cg.predictedOrigins[frame] ); // store for prediction error checks
 
 		// backup the last predicted ucmd which has a timestamp (it's closed)
-		if( cg_predict_optimize->integer && ucmdExecuted == ucmdHead - 1 ) {
+		if( v_predictOptimize.get() && ucmdExecuted == ucmdHead - 1 ) {
 			if( ucmdExecuted != cg.predictFrom ) {
 				cg.predictFrom = ucmdExecuted;
 				cg.predictFromPlayerState = cg.predictedPlayerState;
@@ -4979,11 +4930,7 @@ auto CG_GetMatchClockTime() -> std::pair<int, int> {
 	double seconds;
 	int minutes;
 
-	if( !cg_showTimer ) {
-		return { 0, 0 };
-	}
-
-	if( !cg_showTimer->integer ) {
+	if( !v_showTimer.get() ) {
 		return { 0, 0 };
 	}
 
@@ -5005,7 +4952,7 @@ auto CG_GetMatchClockTime() -> std::pair<int, int> {
 		startTime = GS_MatchStartTime();
 
 		// count downwards when having a duration
-		if( duration && ( cg_showTimer->integer != 3 ) ) {
+		if( duration && ( v_showTimer.get() != 3 ) ) {
 			if( duration + startTime < curtime ) {
 				duration = curtime - startTime; // avoid negative results
 
@@ -5368,115 +5315,6 @@ static void CG_RegisterLightStyles( void ) {
 	}
 }
 
-static void CG_RegisterVariables( void ) {
-	cg_predict =        Cvar_Get( "cg_predict", "1", 0 );
-	cg_predict_optimize = Cvar_Get( "cg_predict_optimize", "1", 0 );
-	cg_showMiss =       Cvar_Get( "cg_showMiss", "0", 0 );
-
-	cg_debugPlayerModels =  Cvar_Get( "cg_debugPlayerModels", "0", CVAR_CHEAT | CVAR_ARCHIVE );
-	cg_debugWeaponModels =  Cvar_Get( "cg_debugWeaponModels", "0", CVAR_CHEAT | CVAR_ARCHIVE );
-
-	cg_model =          Cvar_Get( "model", DEFAULT_PLAYERMODEL, CVAR_USERINFO | CVAR_ARCHIVE );
-	cg_skin =           Cvar_Get( "skin", DEFAULT_PLAYERSKIN, CVAR_USERINFO | CVAR_ARCHIVE );
-	cg_hand =           Cvar_Get( "hand", "0", CVAR_USERINFO | CVAR_ARCHIVE );
-	cg_handicap =       Cvar_Get( "handicap", "0", CVAR_USERINFO | CVAR_ARCHIVE );
-	cg_clan =           Cvar_Get( "clan", "", CVAR_USERINFO | CVAR_ARCHIVE );
-	// Should be 1 by default so we don't have to explain every newcomer how to turn it on. They are a majority.
-	cg_movementStyle =  Cvar_Get( "cg_movementStyle", "1", CVAR_USERINFO | CVAR_ARCHIVE );
-	cg_noAutohop =  Cvar_Get( "cg_noAutohop", "0", CVAR_USERINFO | CVAR_ARCHIVE );
-	cg_fov =        Cvar_Get( "fov", "100", CVAR_ARCHIVE );
-	cg_zoomfov =    Cvar_Get( "zoomfov", "30", CVAR_ARCHIVE );
-
-	cg_addDecals =      Cvar_Get( "cg_decals", "1", CVAR_ARCHIVE );
-
-	//cg_footSteps =	    Cvar_Get( "cg_footSteps", "1", 0 );
-
-	cg_thirdPerson =    Cvar_Get( "cg_thirdPerson", "0", CVAR_CHEAT );
-	cg_thirdPersonAngle =   Cvar_Get( "cg_thirdPersonAngle", "0", 0 );
-	cg_thirdPersonRange =   Cvar_Get( "cg_thirdPersonRange", "90", 0 );
-
-	cg_colorCorrection = Cvar_Get( "cg_colorCorrection", "1", CVAR_ARCHIVE );
-
-	cg_gun =        Cvar_Get( "cg_gun", "1", CVAR_ARCHIVE );
-	cg_gunx =       Cvar_Get( "cg_gunx", "0", CVAR_ARCHIVE );
-	cg_guny =       Cvar_Get( "cg_guny", "0", CVAR_ARCHIVE );
-	cg_gunz =       Cvar_Get( "cg_gunz", "0", CVAR_ARCHIVE );
-	cg_gunbob =     Cvar_Get( "cg_gunbob", "1", CVAR_ARCHIVE );
-
-	cg_gun_fov =        Cvar_Get( "cg_gun_fov", "75", CVAR_ARCHIVE );
-	cg_gun_alpha =      Cvar_Get( "cg_gun_alpha", "1", CVAR_ARCHIVE );
-	cg_weaponFlashes =  Cvar_Get( "cg_weaponFlashes", "2", CVAR_ARCHIVE );
-
-	// wsw
-	cg_handOffset =     Cvar_Get( "cg_handOffset", "5", CVAR_ARCHIVE );
-	cg_projectileSmokeTrail =    Cvar_Get( "cg_projectileSmokeTrail", "1", CVAR_ARCHIVE );
-	cg_projectileFireTrail = Cvar_Get( "cg_projectileFireTrail", "1", CVAR_ARCHIVE );
-	cg_projectilePolyTrail = Cvar_Get( "cg_projectilePolyTrail", "1", CVAR_ARCHIVE );
-	cg_plasmaTrail = Cvar_Get( "cg_plasmaTrail", "1", CVAR_ARCHIVE );
-	cg_playerTrail = Cvar_Get( "cg_playerTrail", "1", CVAR_ARCHIVE );
-	cg_bloodTime    = Cvar_Get( "cg_bloodTime", "300", CVAR_ARCHIVE );
-	cg_bloodStyle   = Cvar_Get( "cg_bloodStyle", "1", CVAR_ARCHIVE );
-	cg_bloodPalette = Cvar_Get( "cg_bloodPalette", "0", CVAR_ARCHIVE );
-	cg_showPOVBlood = Cvar_Get( "cg_showPOVBlood", "1", CVAR_ARCHIVE );
-	cg_projectileFireTrailAlpha =   Cvar_Get( "cg_projectileFireTrailAlpha", "0.45", CVAR_ARCHIVE );
-	cg_gibs =       Cvar_Get( "cg_gibs", "0", CVAR_DEVELOPER );
-	cg_outlineModels =  Cvar_Get( "cg_outlineModels", "0", CVAR_ARCHIVE );
-	cg_outlineWorld =   Cvar_Get( "cg_outlineWorld", "0", CVAR_ARCHIVE );
-	cg_outlinePlayers = Cvar_Get( "cg_outlinePlayers", "0", CVAR_ARCHIVE );
-	cg_drawEntityBoxes =    Cvar_Get( "cg_drawEntityBoxes", "0", CVAR_DEVELOPER );
-	cg_autoaction_demo =    Cvar_Get( "cg_autoaction_demo", "0", CVAR_ARCHIVE );
-	cg_autoaction_screenshot =  Cvar_Get( "cg_autoaction_screenshot", "0", CVAR_ARCHIVE );
-	cg_autoaction_stats =   Cvar_Get( "cg_autoaction_stats", "0", CVAR_ARCHIVE );
-	cg_autoaction_spectator = Cvar_Get( "cg_autoaction_spectator", "0", CVAR_ARCHIVE );
-	cg_simpleItems =    Cvar_Get( "cg_simpleItems", "0", CVAR_ARCHIVE );
-	cg_simpleItemsSize =    Cvar_Get( "cg_simpleItemsSize", "16", CVAR_ARCHIVE );
-	cg_particles =      Cvar_Get( "cg_particles", "1", CVAR_ARCHIVE );
-	cg_showhelp =       Cvar_Get( "cg_showhelp", "1", CVAR_ARCHIVE );
-	cg_predictLaserBeam =   Cvar_Get( "cg_predictLaserBeam", "1", CVAR_ARCHIVE );
-	cg_showSelfShadow = Cvar_Get( "cg_showSelfShadow", "0", CVAR_ARCHIVE );
-
-	cg_cartoonEffects =     Cvar_Get( "cg_cartoonEffects", "7", CVAR_ARCHIVE );
-	cg_cartoonHitEffect =   Cvar_Get( "cg_cartoonHitEffect", "1", CVAR_ARCHIVE );
-
-	cg_damage_indicator =   Cvar_Get( "cg_damage_indicator", "1", CVAR_ARCHIVE );
-	cg_damage_indicator_time =  Cvar_Get( "cg_damage_indicator_time", "25", CVAR_ARCHIVE );
-	cg_pickup_flash =   Cvar_Get( "cg_pickup_flash", "0", CVAR_ARCHIVE );
-
-	cg_weaponAutoSwitch =   Cvar_Get( "cg_weaponAutoSwitch", "2", CVAR_ARCHIVE );
-
-	cg_voiceChats =     Cvar_Get( "cg_voiceChats", "1", CVAR_ARCHIVE );
-
-	cg_laserBeamSubdivisions = Cvar_Get( "cg_laserBeamSubdivisions", "24", CVAR_ARCHIVE );
-	cg_projectileAntilagOffset = Cvar_Get( "cg_projectileAntilagOffset", "1.0", CVAR_ARCHIVE );
-
-	cg_raceGhosts =     Cvar_Get( "cg_raceGhosts", "0", CVAR_ARCHIVE );
-	cg_raceGhostsAlpha =    Cvar_Get( "cg_raceGhostsAlpha", "0.25", CVAR_ARCHIVE );
-
-	cg_chatBeep =       Cvar_Get( "cg_chatBeep", "1", CVAR_ARCHIVE );
-	cg_chatFilter =     Cvar_Get( "cg_chatFilter", "0", CVAR_ARCHIVE | CVAR_USERINFO );
-	cg_chatShowIgnored =   Cvar_Get( "cg_chatShowIgnored", "1", CVAR_ARCHIVE );
-
-	// developer cvars
-	cg_showClamp =      Cvar_Get( "cg_showClamp", "0", CVAR_DEVELOPER );
-
-	// dmh - learn0more's team colored beams
-	cg_teamColoredBeams = Cvar_Get( "cg_teamColoredBeams", "0", CVAR_ARCHIVE );
-	cg_teamColoredInstaBeams = Cvar_Get( "cg_teamColoredInstaBeams", "1", CVAR_ARCHIVE );
-
-	cg_ebbeam_width = Cvar_Get( "cg_ebbeam_width", "64", CVAR_ARCHIVE );
-	cg_ebbeam_time = Cvar_Get( "cg_ebbeam_time", "0.4", CVAR_ARCHIVE );
-
-	cg_instabeam_width = Cvar_Get( "cg_instabeam_width", "7", CVAR_ARCHIVE );
-	cg_instabeam_time = Cvar_Get( "cg_instabeam_time", "0.4", CVAR_ARCHIVE );
-
-	cg_playList = Cvar_Get( "cg_playList", S_PLAYLIST_MATCH, CVAR_ARCHIVE );
-	cg_playListShuffle = Cvar_Get( "cg_playListShuffle", "1", CVAR_ARCHIVE );
-
-	cg_flashWindowCount = Cvar_Get( "cg_flashWindowCount", "4", CVAR_ARCHIVE );
-
-	cg_viewBob = Cvar_Get( "cg_viewBob", "1", CVAR_ARCHIVE );
-}
-
 void CG_ValidateItemDef( int tag, const char *name ) {
 	gsitem_t *item;
 
@@ -5629,8 +5467,9 @@ void CG_StartBackgroundTrack( void ) {
 		}
 	}
 
-	if( cg_playList->string[0] ) {
-		SoundSystem::instance()->startBackgroundTrack( cg_playList->string, NULL, cg_playListShuffle->integer ? 1 : 0 );
+	if( const wsw::StringView playList = v_playList.get(); !playList.empty() ) {
+		assert( playList.isZeroTerminated() );
+		SoundSystem::instance()->startBackgroundTrack( playList.data(), NULL, v_playListShuffle.get() ? 1 : 0 );
 	}
 }
 
@@ -5677,14 +5516,13 @@ void CG_Reset( void ) {
 }
 
 void CG_InitPersistentState() {
-	CG_InitInputVars();
-
 	//team models
 	cg_teamPLAYERSmodel = Cvar_Get( "cg_teamPLAYERSmodel", DEFAULT_TEAMPLAYERS_MODEL, CVAR_ARCHIVE );
 	cg_teamPLAYERSmodelForce = Cvar_Get( "cg_teamPLAYERSmodelForce", "0", CVAR_ARCHIVE );
 	cg_teamPLAYERSskin = Cvar_Get( "cg_teamPLAYERSskin", DEFAULT_PLAYERSKIN, CVAR_ARCHIVE );
 	cg_teamPLAYERScolor = Cvar_Get( "cg_teamPLAYERScolor", DEFAULT_TEAMBETA_COLOR, CVAR_ARCHIVE );
 	cg_teamPLAYERScolorForce = Cvar_Get( "cg_teamPLAYERScolorForce", "0", CVAR_ARCHIVE );
+
 	cg_teamPLAYERSmodel->modified = true;
 	cg_teamPLAYERSmodelForce->modified = true;
 	cg_teamPLAYERSskin->modified = true;
@@ -5695,6 +5533,7 @@ void CG_InitPersistentState() {
 	cg_teamALPHAmodelForce = Cvar_Get( "cg_teamALPHAmodelForce", "1", CVAR_ARCHIVE );
 	cg_teamALPHAskin = Cvar_Get( "cg_teamALPHAskin", DEFAULT_PLAYERSKIN, CVAR_ARCHIVE );
 	cg_teamALPHAcolor = Cvar_Get( "cg_teamALPHAcolor", DEFAULT_TEAMALPHA_COLOR, CVAR_ARCHIVE );
+
 	cg_teamALPHAmodel->modified = true;
 	cg_teamALPHAmodelForce->modified = true;
 	cg_teamALPHAskin->modified = true;
@@ -5704,63 +5543,11 @@ void CG_InitPersistentState() {
 	cg_teamBETAmodelForce = Cvar_Get( "cg_teamBETAmodelForce", "1", CVAR_ARCHIVE );
 	cg_teamBETAskin = Cvar_Get( "cg_teamBETAskin", DEFAULT_PLAYERSKIN, CVAR_ARCHIVE );
 	cg_teamBETAcolor = Cvar_Get( "cg_teamBETAcolor", DEFAULT_TEAMBETA_COLOR, CVAR_ARCHIVE );
+
 	cg_teamBETAmodel->modified = true;
 	cg_teamBETAmodelForce->modified = true;
 	cg_teamBETAskin->modified = true;
 	cg_teamBETAcolor->modified = true;
-
-	cg_forceMyTeamAlpha = Cvar_Get( "cg_forceMyTeamAlpha", "0", CVAR_ARCHIVE );
-
-	cg_viewSize =       Cvar_Get( "cg_viewSize", "100", CVAR_ARCHIVE );
-	cg_showFPS =        Cvar_Get( "cg_showFPS", "0", CVAR_ARCHIVE );
-	cg_draw2D =     Cvar_Get( "cg_draw2D", "1", 0 );
-
-	cg_showViewBlends = Cvar_Get( "cg_showViewBlends", "1", CVAR_ARCHIVE );
-	cg_showZoomEffect = Cvar_Get( "cg_showZoomEffect", "1", CVAR_ARCHIVE );
-
-	cg_showHUD =        Cvar_Get( "cg_showHUD", "1", CVAR_ARCHIVE );
-
-	cg_centerTime =     Cvar_Get( "cg_centerTime", "2.5", 0 );
-
-	cg_showPointedPlayer =  Cvar_Get( "cg_showPointedPlayer", "1", CVAR_ARCHIVE );
-
-	cg_showPlayerNames =        Cvar_Get( "cg_showPlayerNames", "1", CVAR_ARCHIVE );
-	cg_showPlayerNames_alpha =  Cvar_Get( "cg_showPlayerNames_alpha", "0.4", CVAR_ARCHIVE );
-	cg_showPlayerNames_zfar =   Cvar_Get( "cg_showPlayerNames_zfar", "1024", CVAR_ARCHIVE );
-	cg_showPlayerNames_barWidth =   Cvar_Get( "cg_showPlayerNames_barWidth", "8", CVAR_ARCHIVE );
-	cg_showTeamInfo =      Cvar_Get( "cg_showTeamInfo", "1", CVAR_ARCHIVE );
-
-	cg_showPressedKeys = Cvar_Get( "cg_showPressedKeys", "0", CVAR_ARCHIVE );
-
-	cg_showSpeed =      Cvar_Get( "cg_showSpeed", "1", CVAR_ARCHIVE );
-	cg_showPickup =     Cvar_Get( "cg_showPickup", "1", CVAR_ARCHIVE );
-
-	cg_showTimer =      Cvar_Get( "cg_showTimer", "1", CVAR_ARCHIVE );
-	cg_showAwards =     Cvar_Get( "cg_showAwards", "1", CVAR_ARCHIVE );
-
-	cg_showFragsFeed = Cvar_Get( "cg_showFragsFeed", "1", CVAR_ARCHIVE );
-
-	cg_showMessageFeed = Cvar_Get( "cg_showMessageFeed", "1", CVAR_ARCHIVE );
-
-	cg_showminimap = Cvar_Get( "cg_showMiniMap", "0", CVAR_ARCHIVE );
-	cg_showitemtimers = Cvar_Get( "cg_showItemTimers", "3", CVAR_ARCHIVE );
-
-	cg_showCaptureAreas = Cvar_Get( "cg_showCaptureAreas", "1", CVAR_ARCHIVE );
-
-	cg_showChasers = Cvar_Get( "cg_showChasers", "1", CVAR_ARCHIVE );
-
-	cg_volume_players = Cvar_Get( "cg_volume_players", "1.0", CVAR_ARCHIVE );
-	cg_volume_effects = Cvar_Get( "cg_volume_effects", "1.0", CVAR_ARCHIVE );
-	cg_volume_announcer =   Cvar_Get( "cg_volume_announcer", "1.0", CVAR_ARCHIVE );
-	cg_volume_hitsound =    Cvar_Get( "cg_volume_hitsound", "1.0", CVAR_ARCHIVE );
-
-	cg_heavyRocketExplosions = Cvar_Get( "cg_heavyRocketExplosions", "1", CVAR_ARCHIVE );
-	cg_heavyGrenadeExplosions = Cvar_Get( "cg_heavyGrenadeExplosions", "1", CVAR_ARCHIVE );
-	cg_heavyShockwaveExplosions = Cvar_Get( "cg_heavyShockwaveExplosions", "1", CVAR_ARCHIVE );
-
-	cg_explosionsWave = Cvar_Get( "cg_explosionsWave", "1", CVAR_ARCHIVE );
-	cg_explosionsSmoke = Cvar_Get( "cg_explosionsSmoke", "1", CVAR_ARCHIVE );
-	cg_explosionsClusters = Cvar_Get( "cg_explosionsClusters", "1", CVAR_ARCHIVE );
 
 	CrosshairState::initPersistentState();
 
@@ -5818,7 +5605,6 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 
 	CG_InitInput();
 
-	CG_RegisterVariables();
 	CG_PModelsInit();
 	CG_WModelsInit();
 
