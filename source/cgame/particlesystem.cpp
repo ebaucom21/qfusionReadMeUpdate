@@ -948,6 +948,7 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 }
 
 void ParticleSystem::submitFlock( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest ) {
+	assert( flock->numActivatedParticles > 0 );
 	drawSceneRequest->addParticles( flock->mins, flock->maxs, flock->appearanceRules, flock->particles, flock->numActivatedParticles );
 	const Particle::AppearanceRules &rules = flock->appearanceRules;
 	if( !rules.lightProps.empty() ) [[unlikely]] {
@@ -1138,6 +1139,7 @@ void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float d
 		}
 	}
 
+	// TODO: Store 4 components directly
 	boundsBuilder.storeToWithAddedEpsilon( resultBounds[0], resultBounds[1] );
 }
 
@@ -1160,129 +1162,104 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 	}
 
 	// Skip the further simulation if we do not have activated particles and did not manage to activate some.
-	if( !flock->numActivatedParticles ) {
-		// This also schedules disposal in case if all delayed particles
-		// got timed out prior to activation during the activation attempt.
-		flock->timeoutAt = timeoutOfParticlesLeft;
-		return;
-	}
+	if( flock->numActivatedParticles ) [[likely]] {
+		vec3_t possibleBounds[2];
+		runStepKinematics( flock, deltaSeconds, possibleBounds );
 
-	vec3_t possibleBounds[2];
-	runStepKinematics( flock, deltaSeconds, possibleBounds );
+		// TODO: Add a fused call
+		CM_BuildShapeList( cl.cms, m_tmpShapeList, possibleBounds[0], possibleBounds[1], MASK_SOLID );
+		CM_ClipShapeList( cl.cms, m_tmpShapeList, m_tmpShapeList, possibleBounds[0], possibleBounds[1] );
 
-	// TODO: Add a fused call
-	CM_BuildShapeList( cl.cms, m_tmpShapeList, possibleBounds[0], possibleBounds[1], MASK_SOLID );
-	CM_ClipShapeList( cl.cms, m_tmpShapeList, m_tmpShapeList, possibleBounds[0], possibleBounds[1] );
+		// TODO: Let the BoundsBuilder store 4-component vectors
+		VectorCopy( possibleBounds[0], flock->mins );
+		VectorCopy( possibleBounds[1], flock->maxs );
+		flock->mins[3] = 0.0f, flock->maxs[3] = 1.0f;
 
-	// TODO: Let the BoundsBuilder store 4-component vectors
-	VectorCopy( possibleBounds[0], flock->mins );
-	VectorCopy( possibleBounds[1], flock->maxs );
-	flock->mins[3] = 0.0f, flock->maxs[3] = 1.0f;
+		// Skip collision calls if the built shape list is empty
+		if( CM_GetNumShapesInShapeList( m_tmpShapeList ) == 0 ) {
+			const int64_t timeoutOfActiveParticles = updateLifetimeOfActiveParticlesWithoutClipping( flock, currTime );
+			timeoutOfParticlesLeft                 = std::max( timeoutOfParticlesLeft, timeoutOfActiveParticles );
+		} else {
+			assert( flock->restitution > 0.0f && flock->restitution <= 1.0f );
 
-	assert( flock->restitution >= 0.0f && flock->restitution <= 1.0f );
+			trace_t trace;
+			unsigned particleIndex = 0;
+			do {
+				Particle *const __restrict p = flock->particles + particleIndex;
+				assert( p->spawnTime + p->activationDelay <= currTime );
+				const int64_t particleTimeoutAt = p->spawnTime + p->lifetime;
 
-	// Skip collision calls if the built shape list is empty
-	if( CM_GetNumShapesInShapeList( m_tmpShapeList ) == 0 ) {
-		unsigned particleIndex = 0;
-		do {
-			Particle *const __restrict p = flock->particles + particleIndex;
-			assert( p->spawnTime + p->activationDelay <= currTime );
-			const int64_t particleTimeoutAt = p->spawnTime + p->lifetime;
+				bool keepTheParticleInGeneral = false;
+				if( particleTimeoutAt > currTime ) [[likely]] {
+					CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, p->oldOrigin, p->origin, vec3_origin, vec3_origin, MASK_SOLID );
 
-			if( particleTimeoutAt > currTime ) [[likely]] {
-				// Save the current origin as the old origin
-				VectorCopy( p->origin, p->oldOrigin );
-				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p );
-				timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
-				++particleIndex;
-			} else {
-				// Replace by the last particle
-				flock->particles[particleIndex] = flock->particles[--flock->numActivatedParticles];
-			}
-		} while( particleIndex < flock->numActivatedParticles );
-	} else {
-		trace_t trace;
+					if( trace.fraction == 1.0f ) [[likely]] {
+						// Save the current origin as the old origin
+						VectorCopy( p->origin, p->oldOrigin );
+						// Keeping the particle in general, no impact to process
+						keepTheParticleInGeneral = true;
+					} else {
+						bool keepTheParticleByImpactRules = false;
+						if( !( trace.allsolid | trace.startsolid ) && !( trace.contents & CONTENTS_WATER ) ) [[likely]] {
+							keepTheParticleByImpactRules = true;
+							// Skip checking/updating the bounce counter during startBounceCounterDelay from spawn.
+							// This helps with particles that should not normally bounce but happen to touch surfaces at start.
+							// This condition always holds for a zero skipBounceCounterDelay.
+							if ( p->spawnTime + flock->startBounceCounterDelay <= currTime ) [[likely]] {
+								p->bounceCount++;
+								if ( p->bounceCount > flock->maxBounceCount ) {
+									keepTheParticleByImpactRules = false;
+								} else if ( flock->keepOnImpactProbability != 1.0f && p->bounceCount > flock->minBounceCount ) {
+									keepTheParticleByImpactRules = rng->tryWithChance( flock->keepOnImpactProbability );
+								}
+							}
+						}
 
-		unsigned particleIndex = 0;
-		do {
-			Particle *const __restrict p = flock->particles + particleIndex;
-			assert( p->spawnTime + p->activationDelay <= currTime );
-			const int64_t particleTimeoutAt = p->spawnTime + p->lifetime;
+						if( keepTheParticleByImpactRules ) {
+							// Reflect the velocity
+							const float oldSquareSpeed    = VectorLengthSquared( p->velocity );
+							const float oldSpeedThreshold = 1.0f;
+							const float newSpeedThreshold = oldSpeedThreshold * Q_Rcp( flock->restitution );
+							if( oldSquareSpeed >= wsw::square( newSpeedThreshold ) ) [[likely]] {
+								const float rcpOldSpeed = Q_RSqrt( oldSquareSpeed );
+								vec3_t oldVelocityDir { p->velocity[0], p->velocity[1], p->velocity[2] };
+								VectorScale( oldVelocityDir, rcpOldSpeed, oldVelocityDir );
 
-			if( particleTimeoutAt <= currTime ) [[unlikely]] {
-				// Replace by the last particle
-				flock->particles[particleIndex] = flock->particles[--flock->numActivatedParticles];
-				continue;
-			}
+								vec3_t reflectedVelocityDir;
+								VectorReflect( oldVelocityDir, trace.plane.normal, 0, reflectedVelocityDir );
 
-			CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, p->oldOrigin, p->origin, vec3_origin, vec3_origin, MASK_SOLID );
+								if( p->lifetime > 32 ) [[likely]] {
+									addRandomRotationToDir( reflectedVelocityDir, rng, 0.70f, 0.97f );
+								}
 
-			if( trace.fraction == 1.0f ) [[likely]] {
-				// Save the current origin as the old origin
-				VectorCopy( p->origin, p->oldOrigin );
-				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p );
-				timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
-				++particleIndex;
-				continue;
-			}
+								const float newSpeed = flock->restitution * ( oldSquareSpeed * rcpOldSpeed );
+								// Save the reflected velocity
+								VectorScale( reflectedVelocityDir, newSpeed, p->velocity );
 
-			bool keepTheParticleByImpactRules = false;
-			if( !( trace.allsolid | trace.startsolid ) && !( trace.contents & CONTENTS_WATER ) ) [[likely]] {
-				keepTheParticleByImpactRules = true;
-				// Skip checking/updating the bounce counter during startBounceCounterDelay from spawn.
-				// This helps with particles that should not normally bounce but happen to touch surfaces at start.
-				// This condition always holds for a zero skipBounceCounterDelay.
-				if ( p->spawnTime + flock->startBounceCounterDelay <= currTime ) [[likely]] {
-					p->bounceCount++;
-					if ( p->bounceCount > flock->maxBounceCount ) {
-						keepTheParticleByImpactRules = false;
-					} else if ( flock->keepOnImpactProbability != 1.0f && p->bounceCount > flock->minBounceCount ) {
-						keepTheParticleByImpactRules = rng->tryWithChance( flock->keepOnImpactProbability );
+								// Save the trace endpos with a slight offset as an origin for the next step.
+								// This is not really correct but is OK.
+								VectorAdd( trace.endpos, reflectedVelocityDir, p->oldOrigin );
+
+								keepTheParticleInGeneral = true;
+							}
+						}
 					}
 				}
-			}
 
-			if( !keepTheParticleByImpactRules ) [[unlikely]] {
-				// Replace by the last particle
-				flock->particles[particleIndex] = flock->particles[--flock->numActivatedParticles];
-				continue;
-			}
-
-			// Reflect the velocity
-			const float oldSquareSpeed    = VectorLengthSquared( p->velocity );
-			const float oldSpeedThreshold = 1.0f;
-			const float newSpeedThreshold = oldSpeedThreshold * Q_Rcp( flock->restitution );
-			if( oldSquareSpeed < wsw::square( newSpeedThreshold ) ) [[unlikely]] {
-				// Replace by the last particle
-				flock->particles[particleIndex] = flock->particles[--flock->numActivatedParticles];
-				continue;
-			}
-
-			const float rcpOldSpeed = Q_RSqrt( oldSquareSpeed );
-			vec3_t oldVelocityDir { p->velocity[0], p->velocity[1], p->velocity[2] };
-			VectorScale( oldVelocityDir, rcpOldSpeed, oldVelocityDir );
-
-			vec3_t reflectedVelocityDir;
-			VectorReflect( oldVelocityDir, trace.plane.normal, 0, reflectedVelocityDir );
-
-			if( p->lifetime > 32 ) {
-				addRandomRotationToDir( reflectedVelocityDir, rng, 0.70f, 0.97f );
-			}
-
-			const float newSpeed = flock->restitution * ( oldSquareSpeed * rcpOldSpeed );
-			// Save the reflected velocity
-			VectorScale( reflectedVelocityDir, newSpeed, p->velocity );
-
-			// Save the trace endpos with a slight offset as an origin for the next step.
-			// This is not really correct but is OK.
-			VectorAdd( trace.endpos, reflectedVelocityDir, p->oldOrigin );
-
-			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p );
-			timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
-			++particleIndex;
-		} while( particleIndex < flock->numActivatedParticles );
+				if( keepTheParticleInGeneral ) [[likely]] {
+					p->lifetimeFrac        = computeParticleLifetimeFrac( currTime, *p );
+					timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
+					++particleIndex;
+				} else {
+					// Replace by the last particle
+					flock->particles[particleIndex] = flock->particles[--flock->numActivatedParticles];
+				}
+			} while( particleIndex < flock->numActivatedParticles );
+		}
 	}
 
+	// This also schedules disposal in case if all delayed particles
+	// got timed out prior to activation during the activation attempt.
 	flock->timeoutAt = timeoutOfParticlesLeft;
 }
 
@@ -1294,50 +1271,48 @@ void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, i
 		timeoutOfParticlesLeft = *maybeTimeoutOfDelayedParticles;
 	}
 
-	BoundsBuilder boundsBuilder;
-	for( unsigned i = 0; i < flock->numActivatedParticles; ) {
-		Particle *const __restrict p = flock->particles + i;
-		assert( p->spawnTime + p->activationDelay <= currTime );
-		if( const int64_t particleTimeoutAt = p->spawnTime + p->lifetime; particleTimeoutAt > currTime ) [[likely]] {
-			// TODO: Two origins are redundant for non-clipped particles
-			// TODO: Simulate drag
-			VectorMA( p->velocity, deltaSeconds, p->accel, p->velocity );
+	// Skip the further simulation if we do not have activated particles and did not manage to activate some.
+	if( flock->numActivatedParticles ) [[likely]] {
+		vec3_t resultingBounds[2];
+		runStepKinematics( flock, deltaSeconds, resultingBounds );
 
-			VectorMA( p->oldOrigin, deltaSeconds, p->velocity, p->origin );
-			VectorCopy( p->origin, p->oldOrigin );
+		const int64_t timeoutOfActiveParticles = updateLifetimeOfActiveParticlesWithoutClipping( flock, currTime );
+		timeoutOfParticlesLeft                 = std::max( timeoutOfParticlesLeft, timeoutOfActiveParticles );
 
-			boundsBuilder.addPoint( p->origin );
-
-			timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
-			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p );
-
-			if( flock->hasRotatingParticles ) {
-				p->rotationAngle += p->angularVelocity * deltaSeconds;
-				p->rotationAngle = wsw::clamp( p->rotationAngle, 0.0f, 360.0f );
-			}
-
-			++i;
-		} else {
-			flock->numActivatedParticles--;
-			flock->particles[i] = flock->particles[flock->numActivatedParticles];
+		if( flock->numActivatedParticles ) [[likely]] {
+			VectorCopy( resultingBounds[0], flock->mins );
+			VectorCopy( resultingBounds[1], flock->maxs );
+			flock->mins[3] = 0.0f, flock->maxs[3] = 1.0f;
 		}
 	}
 
-	// We still have to compute and store bounds as they're used by the renderer culling systems
-	if( flock->numActivatedParticles ) {
-		vec3_t possibleMins, possibleMaxs;
-		boundsBuilder.storeToWithAddedEpsilon( possibleMins, possibleMaxs );
-		// TODO: Let the BoundsBuilder store 4-component vectors
-		VectorCopy( possibleMins, flock->mins );
-		VectorCopy( possibleMaxs, flock->maxs );
-		flock->mins[3] = 0.0f, flock->maxs[3] = 1.0f;
-	} else {
-		constexpr float minVal = std::numeric_limits<float>::max(), maxVal = std::numeric_limits<float>::lowest();
-		Vector4Set( flock->mins, minVal, minVal, minVal, minVal );
-		Vector4Set( flock->maxs, maxVal, maxVal, maxVal, maxVal );
-	}
-
+	// This also schedules disposal in case if all delayed particles
+	// got timed out prior to activation during the activation attempt.
 	flock->timeoutAt = timeoutOfParticlesLeft;
+}
+
+auto ParticleSystem::updateLifetimeOfActiveParticlesWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime ) -> int64_t {
+	int64_t timeoutOfActiveParticles = std::numeric_limits<int64_t>::min();
+
+	unsigned particleIndex = 0;
+	do {
+		Particle *const __restrict p = flock->particles + particleIndex;
+		assert( p->spawnTime + p->activationDelay <= currTime );
+		const int64_t particleTimeoutAt = p->spawnTime + p->lifetime;
+
+		if( particleTimeoutAt > currTime ) [[likely]] {
+			// Save the current origin as the old origin
+			VectorCopy( p->origin, p->oldOrigin );
+			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p );
+			timeoutOfActiveParticles = wsw::max( particleTimeoutAt, timeoutOfActiveParticles );
+			++particleIndex;
+		} else {
+			// Replace by the last particle
+			flock->particles[particleIndex] = flock->particles[--flock->numActivatedParticles];
+		}
+	} while( particleIndex < flock->numActivatedParticles );
+
+	return timeoutOfActiveParticles;
 }
 
 auto ParticleSystem::activateDelayedParticles( ParticleFlock *flock, int64_t currTime ) -> std::optional<int64_t> {

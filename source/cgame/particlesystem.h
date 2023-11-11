@@ -112,7 +112,6 @@ struct PolyTrailOfParticles;
 
 struct alignas( 16 ) ParticleFlock {
 	Particle::AppearanceRules appearanceRules;
-	// Caution: No drag simulation is currently performed for non-clipped flocks
 	float drag { 0.0f };
 	float restitution { 0.75f };
 	Particle *particles;
@@ -257,6 +256,9 @@ private:
 
 	void simulate( ParticleFlock *flock, wsw::RandomGenerator *rng, int64_t currTime, float deltaSeconds );
 	void simulateWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds );
+
+	[[nodiscard]]
+	auto updateLifetimeOfActiveParticlesWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime ) -> int64_t;
 
 	void simulateParticleTrailOfParticles( ParticleFlock *baseFlock, wsw::RandomGenerator *rng, int64_t currTime, float deltaSeconds );
 	void simulatePolyTrailOfParticles( ParticleFlock *baseFlock, PolyTrailOfParticles *trail, int64_t currTime );
