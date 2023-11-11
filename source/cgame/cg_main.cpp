@@ -52,8 +52,8 @@ static BoolConfigVar v_showMiss( "cg_showMiss"_asView, { .byDefault = false } );
 
 IntConfigVar v_hand( "hand"_asView, { .byDefault = 0, .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
 
-FloatConfigVar v_fov( "fov"_asView, { .byDefault = 100.0f, .minInclusive = MIN_FOV, .maxInclusive = MAX_FOV, .flags = CVAR_ARCHIVE } );
-FloatConfigVar v_zoomfov( "zoomfov"_asView, { .byDefault = 30.0f, .minInclusive = MIN_ZOOMFOV, .maxInclusive = MAX_ZOOMFOV, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_fov( "fov"_asView, { .byDefault = DEFAULT_FOV, .min = inclusive( MIN_FOV ), .max = inclusive( MAX_FOV ), .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_zoomfov( "zoomfov"_asView, { .byDefault = DEFAULT_ZOOMFOV, .min = inclusive( MIN_ZOOMFOV ), .max = inclusive( MAX_ZOOMFOV ), .flags = CVAR_ARCHIVE } );
 BoolConfigVar v_thirdPerson( "cg_thirdPerson"_asView, { .byDefault = false, .flags = CVAR_CHEAT } );
 FloatConfigVar v_thirdPersonAngle( "cg_thirdPersonAngle"_asView, { .byDefault = 0.0f } );
 FloatConfigVar v_thirdPersonRange( "cg_thirdPersonRange"_asView, { .byDefault = 90.0f } );
@@ -64,7 +64,7 @@ FloatConfigVar v_gunY( "cg_guny"_asView, { .byDefault = 0.0f, .flags = CVAR_ARCH
 FloatConfigVar v_gunZ( "cg_gunz"_asView, { .byDefault = 0.0f, .flags = CVAR_ARCHIVE } );
 BoolConfigVar v_gunBob( "cg_gunBob"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
 FloatConfigVar v_gunFov( "cg_gunFov"_asView, { .byDefault = 75.0f, .flags = CVAR_ARCHIVE } );
-FloatConfigVar v_gunAlpha( "cg_gunAlpha"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_gunAlpha( "cg_gunAlpha"_asView, { .byDefault = 1.0f, .min = inclusive( 0.0f ), .max = inclusive( 1.0f ), .flags = CVAR_ARCHIVE } );
 
 BoolConfigVar v_viewBob( "cg_viewBob"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
 
@@ -98,10 +98,10 @@ BoolConfigVar v_explosionWave( "cg_explosionWave"_asView, { .byDefault = true, .
 BoolConfigVar v_explosionSmoke( "cg_explosionSmoke"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
 BoolConfigVar v_explosionClusters( "cg_explosionClusters"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
 
-FloatConfigVar v_volumePlayers( "cg_volume_players"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
-FloatConfigVar v_volumeEffects( "cg_volume_effects"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
-FloatConfigVar v_volumeHitsound( "cg_volume_hitsound"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
-FloatConfigVar v_volumeAnnouncer( "cg_volume_announcer"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_volumePlayers( "cg_volume_players"_asView, { .byDefault = 1.0f, .min = inclusive( 0.0f ), .max = inclusive( 1.0f ), .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_volumeEffects( "cg_volume_effects"_asView, { .byDefault = 1.0f, .min = inclusive( 0.0f ), .max = inclusive( 1.0f ), .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_volumeHitsound( "cg_volume_hitsound"_asView, { .byDefault = 1.0f, .min = inclusive( 0.0f ), .max = inclusive( 1.0f ), .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_volumeAnnouncer( "cg_volume_announcer"_asView, { .byDefault = 1.0f, .min = inclusive( 0.0f ), .max = inclusive( 1.0f ), .flags = CVAR_ARCHIVE } );
 
 IntConfigVar v_showPointedPlayer( "cg_showPointedPlayer"_asView, { .byDefault = 1, .flags = CVAR_ARCHIVE } );
 IntConfigVar v_showPlayerNames( "cg_showPlayerNames"_asView, { .byDefault = 1, .flags = CVAR_ARCHIVE } );
@@ -113,7 +113,7 @@ static BoolConfigVar v_autoactionDemo( "cg_autoactionDemo"_asView, { .byDefault 
 static BoolConfigVar v_autoactionSpectator( "cg_autoactionSpectator"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
 static BoolConfigVar v_autoactionScreenshot( "cg_autoactionScreenshot"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
 
-FloatConfigVar v_viewSize( "cg_viewSize"_asView, { .byDefault = 100, .minInclusive = 40, .maxInclusive = 100, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_viewSize( "cg_viewSize"_asView, { .byDefault = 100.0f, .min = inclusive( 40.0f ), .max = inclusive( 100.0f ), .flags = CVAR_ARCHIVE } );
 BoolConfigVar v_draw2D( "cg_draw2D"_asView, { .byDefault = true } );
 BoolConfigVar v_showHud( "cg_showHud"_asView, { .byDefault = true } );
 BoolConfigVar v_showViewBlends( "cg_showViewBlends"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
@@ -143,10 +143,10 @@ IntConfigVar v_flashWindowCount( "cg_flashWindowCount"_asView, { .byDefault = 4,
 BoolConfigVar v_showClamp( "cg_showClamp"_asView, { .byDefault = false, .flags = CVAR_DEVELOPER } );
 
 static BoolConfigVar v_predictLaserBeam( "cg_predictLaserBeam"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
-static FloatConfigVar v_projectileAntilagOffset( "cg_projectileAntilagOffset"_asView, { .byDefault = 1.0f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+static FloatConfigVar v_projectileAntilagOffset( "cg_projectileAntilagOffset"_asView, { .byDefault = 1.0f, .min = inclusive( 0.0f ), .max = inclusive( 1.0f ), .flags = CVAR_ARCHIVE } );
 
 BoolConfigVar v_raceGhosts( "cg_raceGhosts"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
-FloatConfigVar v_raceGhostsAlpha( "cg_raceGhostsAlpha"_asView, { .byDefault = 0.25f, .minInclusive = 0.0f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE } );
+FloatConfigVar v_raceGhostsAlpha( "cg_raceGhostsAlpha"_asView, { .byDefault = 0.25f, .min = inclusive( 0.0f ), .max = inclusive( 1.0f ), .flags = CVAR_ARCHIVE } );
 
 static BoolConfigVar v_chatBeep( "cg_chatBeep"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
 static BoolConfigVar v_chatShowIgnored( "cg_chatShowIgnored"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
@@ -170,7 +170,7 @@ BoolConfigVar v_teamColoredInstaBeams( "cg_teamColoredInstaBeams"_asView, { .byD
 static BoolConfigVar v_pickupFlash( "cg_pickupFlash"_asView, { .byDefault = false, .flags = CVAR_ARCHIVE } );
 
 IntConfigVar v_damageIndicator( "cg_damageIndicator"_asView, { .byDefault = 1, .flags = CVAR_ARCHIVE } );
-IntConfigVar v_damageIndicatorTime( "cg_damageIndicatorTime"_asView, { .byDefault = 25, .minInclusive = 0, .flags = CVAR_ARCHIVE } );
+IntConfigVar v_damageIndicatorTime( "cg_damageIndicatorTime"_asView, { .byDefault = 25, .min = inclusive( 0 ), .flags = CVAR_ARCHIVE } );
 
 cg_static_t cgs;
 cg_state_t cg;

@@ -59,17 +59,58 @@ void DeclaredConfigVar::unregisterAllVars( DeclaredConfigVar *head ) {
 	}
 }
 
-template <typename T, typename Params>
+template <typename T>
 [[nodiscard]]
-static auto clampValue( T givenValue, const Params &params ) -> T {
-	T value = givenValue;
-	if( params.minInclusive != std::nullopt ) {
-		value = std::max( value, *params.minInclusive );
+static auto getMinAllowedValue( const std::variant<std::monostate, Inclusive<T>, Exclusive<T>> &minBound ) -> T {
+	T minAllowedValue = std::numeric_limits<T>::lowest();
+	if( const Inclusive<T> *inclusiveLowerBound = std::get_if<Inclusive<T>>( &minBound ) ) {
+		minAllowedValue = inclusiveLowerBound->value;
+	} else if( const Exclusive<T> *exclusiveLowerBound = std::get_if<Exclusive<T>>( &minBound ) ) {
+		assert( exclusiveLowerBound->value < std::numeric_limits<T>::max() );
+		if constexpr( std::is_floating_point_v<T> ) {
+			minAllowedValue = std::nextafter( exclusiveLowerBound->value, +std::numeric_limits<T>::infinity() );
+			assert( std::isfinite( minAllowedValue ) );
+		} else {
+			minAllowedValue = exclusiveLowerBound->value + 1;
+		}
+		assert( minAllowedValue > exclusiveLowerBound->value );
 	}
-	if( params.maxInclusive != std::nullopt ) {
-		value = std::min( value, *params.maxInclusive );
+	return minAllowedValue;
+}
+
+template <typename T>
+[[nodiscard]]
+static auto getMaxAllowedValue( const std::variant<std::monostate, Inclusive<T>, Exclusive<T>> &maxBound ) -> T {
+	T maxAllowedValue = std::numeric_limits<T>::max();
+	if( const Inclusive<T> *inclusiveLowerBound = std::get_if<Inclusive<T>>( &maxBound ) ) {
+		maxAllowedValue = inclusiveLowerBound->value;
+	} else if( const Exclusive<T> *exclusiveUpperBound = std::get_if<Exclusive<T>>( &maxBound ) ) {
+		assert( exclusiveUpperBound->value > std::numeric_limits<T>::lowest() );
+		if constexpr( std::is_floating_point_v<T> ) {
+			maxAllowedValue = std::nextafter( exclusiveUpperBound->value, -std::numeric_limits<T>::infinity() );
+			assert( std::isfinite( maxAllowedValue ) );
+		} else {
+			maxAllowedValue = exclusiveUpperBound->value - 1;
+		}
+		assert( maxAllowedValue < exclusiveUpperBound->value );
 	}
-	return value;
+	return maxAllowedValue;
+}
+
+template <typename VarType, typename GivenType>
+[[nodiscard]]
+static auto convertValueUsingBounds( GivenType givenValue,
+									 const std::variant<std::monostate, Inclusive<VarType>, Exclusive<VarType>> &minBound,
+									 const std::variant<std::monostate, Inclusive<VarType>, Exclusive<VarType>> &maxBound )
+	-> VarType {
+	assert( !std::is_floating_point_v<GivenType> || ( std::isfinite( givenValue ) && std::isfinite( (VarType)givenValue ) ) );
+	if( const VarType minValue = getMinAllowedValue( minBound ); givenValue < (GivenType)minValue ) {
+		return minValue;
+	}
+	if( const VarType maxValue = getMaxAllowedValue( maxBound ); givenValue > (GivenType)maxValue ) {
+		return maxValue;
+	}
+	return (VarType)givenValue;
 }
 
 BoolConfigVar::BoolConfigVar( const wsw::StringView &name, Params &&params )
@@ -142,7 +183,10 @@ void BoolConfigVar::helperOfSet( bool value, bool force ) {
 }
 
 IntConfigVar::IntConfigVar( const wsw::StringView &name, Params &&params )
-	: DeclaredConfigVar( name, params.flags ), m_params( params ) {}
+	: DeclaredConfigVar( name, params.flags ), m_params( params ) {
+	assert( getMinAllowedValue( m_params.min ) <= getMaxAllowedValue( m_params.max ) );
+	assert( convertValueUsingBounds( m_params.byDefault, m_params.min, m_params.max ) == m_params.byDefault );
+}
 
 void IntConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
@@ -163,20 +207,9 @@ auto IntConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::Str
 }
 
 auto IntConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
-	if( const auto maybeNum = wsw::toNum<int64_t>( newValue ) ) {
-		int correctedValue;
-		const int minAllowedValue = m_params.minInclusive.value_or( std::numeric_limits<int>::min() );
-		if( *maybeNum < (int64_t)minAllowedValue ) {
-			correctedValue = minAllowedValue;
-		} else {
-			const int maxAllowedValue = m_params.minInclusive.value_or( std::numeric_limits<int>::max() );
-			if( *maybeNum > (int64_t)maxAllowedValue ) {
-				correctedValue = maxAllowedValue;
-			} else {
-				correctedValue = (int)*maybeNum;
-			}
-		}
-		if( correctedValue != *maybeNum ) {
+	if( const std::optional<int64_t> maybeNum = wsw::toNum<int64_t>( newValue ) ) {
+		const int correctedValue = convertValueUsingBounds( *maybeNum, m_params.min, m_params.max );
+		if( (int64_t)correctedValue != *maybeNum ) {
 			assert( tmpBuffer->empty() );
 			tmpBuffer->append( std::to_string( correctedValue ) );
 			return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
@@ -199,7 +232,7 @@ auto IntConfigVar::get() const -> int {
 
 void IntConfigVar::helperOfSet( int value, bool force ) {
 	if( m_underlying ) {
-		value = clampValue( value, m_params );
+		value = convertValueUsingBounds( value, m_params.min, m_params.max );
 		m_cachedValue = value;
 		Cvar_Set2( m_name.data(), std::to_string( value ).data(), force );
 	} else {
@@ -208,7 +241,10 @@ void IntConfigVar::helperOfSet( int value, bool force ) {
 }
 
 UnsignedConfigVar::UnsignedConfigVar( const wsw::StringView &name, Params &&params )
-	: DeclaredConfigVar( name, params.flags ), m_params( params ) {}
+	: DeclaredConfigVar( name, params.flags ), m_params( params ) {
+	assert( getMinAllowedValue( m_params.min ) <= getMaxAllowedValue( m_params.max ) );
+	assert( convertValueUsingBounds( m_params.byDefault, m_params.min, m_params.max ) == m_params.byDefault );
+}
 
 void UnsignedConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
@@ -228,19 +264,8 @@ auto UnsignedConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw
 }
 
 auto UnsignedConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
-	if( const auto maybeNum = wsw::toNum<uint64_t>( newValue ) ) {
-		unsigned correctedValue;
-		const unsigned minAllowedValue = m_params.minInclusive.value_or( 0u );
-		if( *maybeNum < (uint64_t)minAllowedValue ) {
-			correctedValue = minAllowedValue;
-		} else {
-			const unsigned maxAllowedValue = m_params.maxInclusive.value_or( std::numeric_limits<unsigned>::max() );
-			if( *maybeNum > (uint64_t)maxAllowedValue ) {
-				correctedValue = maxAllowedValue;
-			} else {
-				correctedValue = (unsigned)*maybeNum;
-			}
-		}
+	if( const std::optional<uint64_t> maybeNum = wsw::toNum<uint64_t>( newValue ) ) {
+		const unsigned correctedValue = convertValueUsingBounds( *maybeNum, m_params.min, m_params.max );
 		if( correctedValue != *maybeNum ) {
 			assert( tmpBuffer->empty() );
 			tmpBuffer->append( std::to_string( correctedValue ) );
@@ -264,7 +289,7 @@ auto UnsignedConfigVar::get() const -> unsigned {
 
 void UnsignedConfigVar::helperOfSet( unsigned value, bool force ) {
 	if( m_underlying ) {
-		value = clampValue( value, m_params );
+		value = convertValueUsingBounds( value, m_params.min, m_params.max );
 		m_cachedValue = value;
 		Cvar_Set2( m_name.data(), std::to_string( value ).data(), force );
 	} else {
@@ -273,7 +298,10 @@ void UnsignedConfigVar::helperOfSet( unsigned value, bool force ) {
 }
 
 FloatConfigVar::FloatConfigVar( const wsw::StringView &name, Params &&params )
-	: DeclaredConfigVar( name, params.flags ), m_params( params ) {}
+	: DeclaredConfigVar( name, params.flags ), m_params( params ) {
+	assert( getMinAllowedValue( m_params.min ) <= getMaxAllowedValue( m_params.max ) );
+	assert( convertValueUsingBounds( m_params.byDefault, m_params.min, m_params.max ) == m_params.byDefault );
+}
 
 void FloatConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
@@ -292,19 +320,8 @@ auto FloatConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::S
 }
 
 auto FloatConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
-	if( const auto maybeNum = wsw::toNum<float>( newValue ); maybeNum && std::isfinite( *maybeNum ) ) {
-		float correctedValue;
-		const float minAllowedValue = m_params.minInclusive.value_or( std::numeric_limits<float>::lowest() );
-		if( *maybeNum < minAllowedValue ) {
-			correctedValue = minAllowedValue;
-		} else {
-			const float maxAllowedValue = m_params.maxInclusive.value_or( std::numeric_limits<float>::max() );
-			if( *maybeNum > maxAllowedValue ) {
-				correctedValue = maxAllowedValue;
-			} else {
-				correctedValue = *maybeNum;
-			}
-		}
+	if( const std::optional<float> maybeNum = wsw::toNum<float>( newValue ); maybeNum && std::isfinite( *maybeNum ) ) {
+		const float correctedValue = convertValueUsingBounds( *maybeNum, m_params.min, m_params.max );
 		if( correctedValue != *maybeNum ) {
 			assert( tmpBuffer->empty() );
 			tmpBuffer->append( std::to_string( correctedValue ) );
@@ -328,7 +345,7 @@ auto FloatConfigVar::get() const -> float {
 
 void FloatConfigVar::helperOfSet( float value, bool force ) {
 	if( m_underlying ) {
-		value = clampValue( value, m_params );
+		value = convertValueUsingBounds( value, m_params.min, m_params.max );
 		m_cachedValue = value;
 		Cvar_Set2( m_name.data(), std::to_string( value ).data(), force );
 	} else {

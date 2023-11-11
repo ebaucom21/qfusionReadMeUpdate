@@ -7,8 +7,23 @@
 #include "q_cvar.h"
 
 #include <atomic>
+#include <variant>
 
 struct cvar_s;
+
+template <typename T>
+struct Inclusive { T value; };
+
+template <typename T>
+struct Exclusive { T value; };
+
+template <typename T>
+[[nodiscard]]
+inline constexpr auto inclusive( T value ) -> Inclusive<T> { return Inclusive<T> { value }; }
+
+template <typename T>
+[[nodiscard]]
+inline constexpr auto exclusive( T value ) -> Exclusive<T> { return Exclusive<T> { value }; }
 
 class DeclaredConfigVar {
 public:
@@ -105,8 +120,8 @@ class IntConfigVar final : public DeclaredConfigVar {
 public:
 	struct Params {
 		const int byDefault { 0 };
-		const std::optional<int> minInclusive;
-		const std::optional<int> maxInclusive;
+		const std::variant<std::monostate, Inclusive<int>, Exclusive<int>> min;
+		const std::variant<std::monostate, Inclusive<int>, Exclusive<int>> max;
 		const int flags { 0 };
 		const char *desc;
 	};
@@ -132,8 +147,8 @@ class UnsignedConfigVar final : public DeclaredConfigVar {
 public:
 	struct Params {
 		const unsigned byDefault { 0 };
-		const std::optional<unsigned> minInclusive;
-		const std::optional<unsigned> maxInclusive;
+		const std::variant<std::monostate, Inclusive<unsigned>, Exclusive<unsigned>> min;
+		const std::variant<std::monostate, Inclusive<unsigned>, Exclusive<unsigned>> max;
 		const int flags { 0 };
 		const char *desc;
 	};
@@ -159,8 +174,8 @@ class FloatConfigVar final : public DeclaredConfigVar {
 public:
 	struct Params {
 		const float byDefault { 0.0 };
-		std::optional<float> minInclusive;
-		std::optional<float> maxInclusive;
+		std::variant<std::monostate, Inclusive<float>, Exclusive<float>> min;
+		std::variant<std::monostate, Inclusive<float>, Exclusive<float>> max;
 		const int flags { 0 };
 		const char *desc;
 	};

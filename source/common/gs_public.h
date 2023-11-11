@@ -74,13 +74,13 @@ constexpr const vec3_t item_box_maxs = { 16.0f, 16.0f, 40.0f };
 #define PROJECTILE_PRESTEP 72
 #define ELECTROBOLT_RANGE 9001
 
-#define MIN_FOV             60
-#define MAX_FOV             140
-#define DEFAULT_FOV         100
+#define MIN_FOV             60.0f
+#define MAX_FOV             140.0f
+#define DEFAULT_FOV         100.0f
 
-#define MIN_ZOOMFOV         3
-#define MAX_ZOOMFOV         60
-#define DEFAULT_ZOOMFOV     30
+#define MIN_ZOOMFOV         3.0f
+#define MAX_ZOOMFOV         60.0f
+#define DEFAULT_ZOOMFOV     30.0f
 
 //==================================================================
 

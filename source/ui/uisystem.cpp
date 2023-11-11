@@ -72,21 +72,15 @@ QVariant VID_GetMainContextHandle();
 bool GLimp_BeginUIRenderingHacks();
 bool GLimp_EndUIRenderingHacks();
 
-
-
 static FloatConfigVar v_mouseSensitivity { "ui_mouseSensitivity"_asView, {
-	.byDefault = 1.0f, .minInclusive = 0.1f, .maxInclusive = 5.0f, .flags = CVAR_ARCHIVE, }
+	.byDefault = 1.0f, .min = inclusive( 0.5f ), .max = inclusive( 5.0f ), .flags = CVAR_ARCHIVE, }
 };
 static FloatConfigVar v_mouseAccel { "ui_mouseAccel"_asView, {
-	.byDefault = 0.2f, .minInclusive = 0.01f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE, }
+	.byDefault = 0.2f, .min = exclusive( 0.0f ), .max = inclusive( 1.0f ), .flags = CVAR_ARCHIVE, }
 };
 static BoolConfigVar v_debugNativelyDrawnItems { "ui_debugNativelyDrawnItems"_asView, {
 	.byDefault = false, .flags = CVAR_DEVELOPER, }
 };
-
-static ColorConfigVar v_testColor { "ui_testColor"_asView, {
-	.byDefault = COLOR_RGBA( 192, 120, 192, 32 ), .flags = CVAR_ARCHIVE,
-}};
 
 namespace wsw::ui {
 
