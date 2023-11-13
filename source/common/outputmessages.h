@@ -2,6 +2,7 @@
 #define WSW_8d319689_66d9_4c8c_bd74_ca751aedeea3_H
 
 #include "textstreamwriter.h"
+#include <cassert>
 
 class MessageStreamsAllocator;
 
@@ -63,10 +64,10 @@ public:
 	~PendingOutputMessage() { submitMessageStream( m_stream ); }
 
 	[[nodiscard]]
-	auto getWriter() -> TextStreamWriter<OutputMessageStream> & { return m_writer; }
+	auto getWriter() -> TextStreamWriter & { return m_writer; }
 private:
 	wsw::OutputMessageStream *const m_stream;
-	wsw::TextStreamWriter<OutputMessageStream> m_writer;
+	wsw::TextStreamWriter m_writer;
 };
 
 }

@@ -66,41 +66,11 @@ auto rasterizeSvg( const QByteArray &data, const ImageOptions &options ) -> QIma
 #define uiWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::UI, wsw::MessageCategory::Warning ) ).getWriter()
 #define uiError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::UI, wsw::MessageCategory::Error ) ).getWriter()
 
-template <typename Stream>
 [[maybe_unused]]
-inline auto operator<<( wsw::TextStreamWriter<Stream> &writer, const QString &string ) -> wsw::TextStreamWriter<Stream> & {
-	writer << string.toUtf8();
-	return writer;
-}
-
-template <typename Stream>
+auto operator<<( wsw::TextStreamWriter &writer, const QString &string ) -> wsw::TextStreamWriter &;
 [[maybe_unused]]
-inline auto operator<<( wsw::TextStreamWriter<Stream> &writer, const QSize &size ) -> wsw::TextStreamWriter<Stream> & {
-	writer << size.width();
-	writer.hasPendingSeparator = false;
-	writer << 'x';
-	writer.hasPendingSeparator = false;
-	writer << size.height();
-	return writer;
-}
-
-
-template <typename Stream>
+auto operator<<( wsw::TextStreamWriter &writer, const QSize &size ) -> wsw::TextStreamWriter &;
 [[maybe_unused]]
-inline auto operator<<( wsw::TextStreamWriter<Stream> &streamWriter, const QObject *object ) -> wsw::TextStreamWriter<Stream> & {
-	const char *objectName    = "QObject";
-	const void *objectAddress = object;
-	if( object ) {
-		objectName = object->metaObject()->className();
-	}
-	streamWriter.writeChars( objectName, std::strlen( objectName ) );
-	streamWriter.hasPendingSeparator = false;
-	streamWriter.writeChar( '(' );
-	streamWriter.hasPendingSeparator = false;
-	streamWriter.writePtr( objectAddress );
-	streamWriter.hasPendingSeparator = false;
-	streamWriter.writeChar( ')' );
-	return streamWriter;
-}
+auto operator<<( wsw::TextStreamWriter &writer, const QObject *object ) -> wsw::TextStreamWriter &;
 
 #endif

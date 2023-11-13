@@ -9,6 +9,7 @@ file(GLOB WSWCOMMON_SOURCES
     "md5.cpp"
     "q_math.cpp"
     "q_shared.cpp"
+    "textstreamwriter.cpp"
     "wswexceptions.cpp"
     "wswfs.cpp"
     "wswsortbyfield.cpp"

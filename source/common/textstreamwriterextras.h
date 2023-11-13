@@ -63,40 +63,37 @@ constexpr auto Xfmt( T value ) -> FormattedHexadecimal<T, Digits, true> {
 	return FormattedHexadecimal<T, Digits, true>( value );
 }
 
-template <typename Stream, typename Chars>
+template <typename Chars>
 [[maybe_unused]]
-wsw_forceinline auto operator<<( TextStreamWriter<Stream> &streamWriter, unquoted<Chars> &&unquotedChars )
-	-> TextStreamWriter<Stream> & {
-	streamWriter.writeChars( unquotedChars.chars.data(), unquotedChars.chars.size() );
-	return streamWriter;
+wsw_forceinline auto operator<<( TextStreamWriter &writer, unquoted<Chars> &&unquotedChars ) -> TextStreamWriter & {
+	writer.writeChars( unquotedChars.chars.data(), unquotedChars.chars.size() );
+	return writer;
 }
 
-template <typename Stream, typename T>
+template <typename T>
 [[maybe_unused]]
-wsw_noinline auto operator<<( TextStreamWriter<Stream> &streamWriter, named<T> &&namedValue )
-	-> TextStreamWriter<Stream> & {
-	streamWriter.writeChars( namedValue.name, namedValue.nameLen );
-	streamWriter.hasPendingSeparator = false;
-	streamWriter << '=';
-	streamWriter.hasPendingSeparator = false;
-	streamWriter << namedValue.value;
-	return streamWriter;
+wsw_noinline auto operator<<( TextStreamWriter &writer, named<T> &&namedValue ) -> TextStreamWriter & {
+	writer.writeChars( namedValue.name, namedValue.nameLen );
+	writer.hasPendingSeparator = false;
+	writer << '=';
+	writer.hasPendingSeparator = false;
+	writer << namedValue.value;
+	return writer;
 }
 
-template <typename Stream, typename T>
+template <typename T>
 [[maybe_unused]]
-wsw_forceinline auto operator<<( TextStreamWriter<Stream> &streamWriter, noSep<T> &&noSeparatorsAroundTheValue )
-	-> TextStreamWriter<Stream> & {
+wsw_forceinline auto operator<<( TextStreamWriter &writer, noSep<T> &&noSeparatorsAroundTheValue ) -> TextStreamWriter & {
 	// Dropping both separators (if any) is least confusing for users
-	streamWriter.hasPendingSeparator = false;
-	streamWriter << noSeparatorsAroundTheValue.value;
-	streamWriter.hasPendingSeparator = false;
-	return streamWriter;
+	writer.hasPendingSeparator = false;
+	writer << noSeparatorsAroundTheValue.value;
+	writer.hasPendingSeparator = false;
+	return writer;
 }
 
-template <typename Stream, unsigned Digits, std::integral T>
-wsw_forceinline auto operator<<( TextStreamWriter<Stream> &streamWriter, FormattedDecimal<T, Digits> &&value )
-	-> TextStreamWriter<Stream> & {
+template <unsigned Digits, std::integral T>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter &writer, FormattedDecimal<T, Digits> &&value ) -> TextStreamWriter & {
 	static_assert( Digits < 100 );
 	char format[16], buffer[192];
 	char *pformat = format;
@@ -130,13 +127,12 @@ wsw_forceinline auto operator<<( TextStreamWriter<Stream> &streamWriter, Formatt
 	*pformat = '\0';
 	const int res = snprintf( buffer, sizeof( buffer ), format, value );
 	assert( res > 0 && res < (int)sizeof( buffer ) );
-	streamWriter.writeChars( buffer, (size_t)res );
-	return streamWriter;
+	writer.writeChars( buffer, (size_t)res );
+	return writer;
 }
 
-template <typename Stream, unsigned Digits, bool Caps, std::integral T>
-wsw_forceinline auto operator<<( TextStreamWriter<Stream> &streamWriter, FormattedHexadecimal<T, Digits, Caps> &&value )
-	-> TextStreamWriter<Stream> & {
+template <unsigned Digits, bool Caps, std::integral T>
+wsw_forceinline auto operator<<( TextStreamWriter &writer, FormattedHexadecimal<T, Digits, Caps> &&value ) -> TextStreamWriter & {
 	static_assert( Digits < 100 );
 	char format[16], buffer[192];
 	char *pformat = format;
@@ -170,8 +166,8 @@ wsw_forceinline auto operator<<( TextStreamWriter<Stream> &streamWriter, Formatt
 	*pformat = '\0';
 	const int res = snprintf( buffer, sizeof( buffer ), format, value );
 	assert( res > 0 && res < (int)sizeof( buffer ) );
-	streamWriter.writeChars( buffer, (size_t)res );
-	return streamWriter;
+	writer.writeChars( buffer, (size_t)res );
+	return writer;
 }
 
 }

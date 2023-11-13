@@ -186,6 +186,34 @@ auto formatPing( int ping ) -> QByteArray {
 	return result;
 }
 
+}
 
+auto operator<<( wsw::TextStreamWriter &writer, const QString &string ) -> wsw::TextStreamWriter & {
+	writer << string.toUtf8();
+	return writer;
+}
 
+auto operator<<( wsw::TextStreamWriter &writer, const QSize &size ) -> wsw::TextStreamWriter & {
+	writer << size.width();
+	writer.hasPendingSeparator = false;
+	writer << 'x';
+	writer.hasPendingSeparator = false;
+	writer << size.height();
+	return writer;
+}
+
+auto operator<<( wsw::TextStreamWriter &writer, const QObject *object ) -> wsw::TextStreamWriter & {
+	const char *objectName    = "QObject";
+	const void *objectAddress = object;
+	if( object ) {
+		objectName = object->metaObject()->className();
+	}
+	writer.writeChars( objectName, std::strlen( objectName ) );
+	writer.hasPendingSeparator = false;
+	writer.writeChar( '(' );
+	writer.hasPendingSeparator = false;
+	writer.writePtr( objectAddress );
+	writer.hasPendingSeparator = false;
+	writer.writeChar( ')' );
+	return writer;
 }
