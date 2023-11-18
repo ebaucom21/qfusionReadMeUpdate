@@ -1,5 +1,6 @@
 #include "efxpresetsregistry.h"
 #include "snd_local.h"
+#include "../common/wswbasicmath.h"
 
 // TODO: Switch to using OpenAL SOFT headers across the entire codebase?
 #include "../../third-party/openal-soft/include/AL/efx-presets.h"
@@ -175,55 +176,107 @@ DEFINE_PRESET( DUSTYROOM );
 DEFINE_PRESET( CHAPEL );
 DEFINE_PRESET( SMALLWATERROOM );
 
-static_assert( sizeof( EfxReverbProps ) % sizeof( float ) == 0 );
-// Don't compute it by expression, count manually so the check is more robust wrt changes.
-static constexpr unsigned kNumFloatFields = 19;
-// All fields are floats, with the single exception that is handled separately.
-static_assert( sizeof( EfxReverbProps ) / sizeof( float ) == kNumFloatFields + 1 );
+using EfxReverbField = float ( EfxReverbProps::* );
 
-void lerpReverbProps( const EfxReverbProps *from, float frac, const EfxReverbProps *to, EfxReverbProps *dest ) {
-	assert( frac >= 0.0f && frac <= 1.0f );
+static const EfxReverbField kEfxReverbLinearXerpFields[] {
+	// Looks like these values should use linear interpolation
+	&EfxReverbProps::diffusion, &EfxReverbProps::echoDepth, &EfxReverbProps::modulationDepth,
+	// Not sure of this one
+	&EfxReverbProps::density,
+};
 
-	auto *const destFieldData       = (float *)dest;
-	const auto *const fromFieldData = (const float *)from;
-	const auto *const toFieldData   = (const float *)to;
+static const std::pair<EfxReverbField, std::pair<float, float>> kEfxReverbLogExpXerpFields[] {
+	// Note: It seems that we have to convert these linear gain values to bels (logarithmic values) for interpolation
+	// as we should interpolate perception strength which is logarithmic
+	{ &EfxReverbProps::gain, { AL_EAXREVERB_MIN_GAIN, AL_EAXREVERB_MAX_GAIN } },
+	{ &EfxReverbProps::gainHf, { AL_EAXREVERB_MIN_GAINHF, AL_EAXREVERB_MAX_GAINHF } },
+	{ &EfxReverbProps::gainLf, { AL_EAXREVERB_MIN_GAINLF, AL_EAXREVERB_MAX_GAINLF } },
+	{ &EfxReverbProps::airAbsorptionGainHf, { AL_EAXREVERB_MIN_AIR_ABSORPTION_GAINHF, AL_EAXREVERB_MAX_AIR_ABSORPTION_GAINHF } },
+	{ &EfxReverbProps::reflectionsGain, { AL_EAXREVERB_MIN_REFLECTIONS_GAIN, AL_EAXREVERB_MAX_REFLECTIONS_GAIN } },
+	{ &EfxReverbProps::lateReverbGain, { AL_EAXREVERB_MIN_LATE_REVERB_GAIN, AL_EAXREVERB_MAX_LATE_REVERB_GAIN } },
 
-	const float complementFrac = 1.0f - frac;
+	// It could seem logical to interpolate duration-like values linearly,
+	// but there seem to be some corellation with gain, so it feels better this way
+	{ &EfxReverbProps::decayTime, { AL_EAXREVERB_MIN_DECAY_TIME, AL_EAXREVERB_MAX_DECAY_TIME } },
+	{ &EfxReverbProps::decayHfRatio, { AL_EAXREVERB_MIN_DECAY_HFRATIO, AL_EAXREVERB_MAX_DECAY_HFRATIO } },
+	{ &EfxReverbProps::decayLfRatio, { AL_EAXREVERB_MIN_DECAY_LFRATIO, AL_EAXREVERB_MAX_DECAY_LFRATIO } },
+	{ &EfxReverbProps::reflectionsDelay, { AL_EAXREVERB_MIN_REFLECTIONS_DELAY, AL_EAXREVERB_MAX_REFLECTIONS_DELAY } },
+	{ &EfxReverbProps::lateReverbDelay, { AL_EAXREVERB_MIN_LATE_REVERB_DELAY, AL_EAXREVERB_MAX_LATE_REVERB_DELAY } },
+	{ &EfxReverbProps::echoTime, { AL_EAXREVERB_MIN_ECHO_TIME, AL_EAXREVERB_MAX_ECHO_TIME } },
+	{ &EfxReverbProps::modulationTime, { AL_EAXREVERB_MIN_MODULATION_TIME, AL_EAXREVERB_MAX_MODULATION_TIME } },
 
-	unsigned fieldIndex = 0;
-	do {
-		destFieldData[fieldIndex] = complementFrac * fromFieldData[fieldIndex] + frac * toFieldData[fieldIndex];
-	} while( ++fieldIndex < kNumFloatFields );
+	// Not sure of these ones
+	{ &EfxReverbProps::hfReference, { AL_EAXREVERB_MIN_HFREFERENCE, AL_EAXREVERB_MAX_HFREFERENCE } },
+	{ &EfxReverbProps::lfReference, { AL_EAXREVERB_MIN_LFREFERENCE, AL_EAXREVERB_MAX_LFREFERENCE } },
+};
 
-	// Choose AL_FALSE over AL_TRUE for decayHfLimit
-	static_assert( AL_FALSE < AL_TRUE );
+static_assert( std::size( kEfxReverbLinearXerpFields ) + std::size( kEfxReverbLogExpXerpFields ) ==
+	( sizeof( EfxReverbProps ) - sizeof( EfxReverbProps::decayHfLimit ) ) / sizeof( float ) );
+
+// Choose AL_FALSE over AL_TRUE for decayHfLimit
+static_assert( AL_FALSE < AL_TRUE );
+
+void interpolateReverbProps( const EfxReverbProps *from, float frac, const EfxReverbProps *to, EfxReverbProps *dest ) {
+	for( const auto &fieldPtr : kEfxReverbLinearXerpFields ) {
+		( dest->*fieldPtr ) = std::lerp( ( from->*fieldPtr ), ( to->*fieldPtr ), frac );
+	}
+	for( const auto &[fieldPtr, bounds] : kEfxReverbLogExpXerpFields ) {
+		const auto &[minBound, maxBound] = bounds;
+		assert( minBound >= 0.0f && minBound < maxBound );
+		const float fromValue = from->*fieldPtr;
+		const float toValue   = to->*fieldPtr;
+		assert( fromValue >= minBound && fromValue <= maxBound );
+		assert( toValue >= minBound && toValue <= maxBound );
+		if( fromValue == toValue ) {
+			( dest->*fieldPtr ) = toValue;
+		} else {
+			// Note that we cannot just lerp tiny values under some threshold as it cannot be implemented for mixReverbProps()
+			const float safetyEpsilon   = minBound > 0.0f ? 0.0f : 1e-6f;
+			const float linearFromValue = std::log( fromValue + safetyEpsilon );
+			const float linearToValue   = std::log( toValue + safetyEpsilon );
+			const float xerpValue       = std::exp( std::lerp( linearFromValue, linearToValue, frac ) );
+			( dest->*fieldPtr )         = wsw::clamp( xerpValue, minBound, maxBound );
+		}
+	}
+
 	dest->decayHfLimit = wsw::min( from->decayHfLimit, to->decayHfLimit );
 }
 
 void mixReverbProps( const EfxReverbProps **begin, const EfxReverbProps **end, EfxReverbProps *dest ) {
-	assert( begin < end );
-	const float normalizer = Q_Rcp( (float)( end - begin ) );
+	assert( end > begin );
+	const float rcpCountOfProps = 1.0f / (float)( end - begin );
 
-	std::memset( (void *)dest, 0, sizeof( *dest ) );
+	// Clear field accumulators
+	for( const auto &fieldPtr : kEfxReverbLinearXerpFields ) {
+		( dest->*fieldPtr ) = 0.0f;
+	}
+	for( const auto &[fieldPtr, _] : kEfxReverbLogExpXerpFields ) {
+		( dest->*fieldPtr ) = 0.0f;
+	}
+	dest->decayHfLimit = AL_TRUE;
 
-	dest->decayHfLimit = ( *begin )->decayHfLimit;
-	const EfxReverbProps **ppPreset = begin;
-	do {
-		assert( *ppPreset != dest );
-		auto *const destFieldData      = (float *)dest;
-		const auto *const srcFieldData = (const float *)*ppPreset;
+	// Add (linear) values to field accumulators
+	for( const EfxReverbProps **ppProps = begin; ppProps != end; ++ppProps ) {
+		const EfxReverbProps *const props = *ppProps;
+		for( const auto &fieldPtr : kEfxReverbLinearXerpFields ) {
+			( dest->*fieldPtr ) += ( props->*fieldPtr );
+		}
+		for( const auto &[fieldPtr, bounds] : kEfxReverbLogExpXerpFields ) {
+			const auto &[minBound, maxBound] = bounds;
+			const float value = props->*fieldPtr;
+			assert( value >= minBound && value <= maxBound );
+			const float linearValue = std::log( value + ( minBound > 0.0f ? 0.0f : 1e-6f ) );
+			( dest->*fieldPtr ) += linearValue;
+		}
+		dest->decayHfLimit = wsw::min( dest->decayHfLimit, props->decayHfLimit );
+	}
 
-		unsigned fieldIndex = 0;
-		do {
-			destFieldData[fieldIndex] += srcFieldData[fieldIndex];
-		} while( ++fieldIndex < kNumFloatFields );
-
-		static_assert( AL_FALSE < AL_TRUE );
-		dest->decayHfLimit = wsw::min( dest->decayHfLimit, ( *ppPreset )->decayHfLimit );
-	} while( ++ppPreset < end );
-
-	unsigned fieldIndex = 0;
-	do {
-		( (float *)dest )[fieldIndex] *= normalizer;
-	} while( ++fieldIndex < kNumFloatFields );
+	// Apply weights/map back
+	for( const auto &fieldPtr : kEfxReverbLinearXerpFields ) {
+		( dest->*fieldPtr ) *= rcpCountOfProps;
+	}
+	for( const auto &[fieldPtr, bounds] : kEfxReverbLogExpXerpFields ) {
+		const float value   = std::exp( ( ( dest->*fieldPtr ) * rcpCountOfProps ) );
+		( dest->*fieldPtr ) = wsw::clamp( value, bounds.first, bounds.second );
+	}
 }

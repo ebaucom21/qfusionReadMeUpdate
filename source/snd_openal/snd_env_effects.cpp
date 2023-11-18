@@ -132,7 +132,7 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	// Keep the difference subtle.
 
 	// Attenuate nearby effects stronger for louder global volume
-	const float distanceDependentAttenuation   = 1.0f - ( ( 0.5f + 0.1f * globalVolumeFrac ) * distanceGainFrac );
+	const float distanceDependentAttenuation   = 1.0f - ( 0.075f * ( 1.0f + globalVolumeFrac ) * distanceGainFrac );
 	// Attenuate all effects stronger for louder global value
 	const float distanceIndependentAttenuation = 1.0f - 0.1f * globalVolumeFrac;
 
@@ -225,7 +225,7 @@ void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
 	directObstruction        = std::lerp( directObstruction, that->directObstruction, lerpFrac );
 	secondaryRaysObstruction = std::lerp( secondaryRaysObstruction, that->secondaryRaysObstruction, lerpFrac );
 
-	lerpReverbProps( &that->reverbProps, lerpFrac, &this->reverbProps, &this->reverbProps );
+	interpolateReverbProps( &that->reverbProps, lerpFrac, &this->reverbProps, &this->reverbProps );
 }
 
 void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {

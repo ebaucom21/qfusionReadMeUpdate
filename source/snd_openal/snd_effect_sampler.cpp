@@ -350,23 +350,23 @@ void ReverbEffectSampler::ComputeReverberation( const ListenerProps &listenerPro
 			const float smoothnessFrac = 2.0f * smoothnessFactor;
 			assert( smoothnessFrac >= 0.0f && smoothnessFrac <= 1.0f );
 
-			lerpReverbProps( g_tinyAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
-							 g_tinyNeutralRoomPreset.getPreset(), &tinyProps );
-			lerpReverbProps( g_largeAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
-							 g_largeNeutralRoomPreset.getPreset(), &largeProps );
+			interpolateReverbProps( g_tinyAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
+									g_tinyNeutralRoomPreset.getPreset(), &tinyProps );
+			interpolateReverbProps( g_largeAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
+									g_largeNeutralRoomPreset.getPreset(), &largeProps );
 		} else {
 			const float smoothnessFrac = 2.0f * ( smoothnessFactor - 0.5f );
 			assert( smoothnessFrac >= 0.0f && smoothnessFrac <= 1.0f );
 
-			lerpReverbProps( g_tinyNeutralRoomPreset.getPreset(), smoothnessFrac,
-							 g_tinyReflectiveRoomPreset.getPreset(), &tinyProps );
-			lerpReverbProps( g_largeNeutralRoomPreset.getPreset(), smoothnessFrac,
-							 g_largeReflectiveRoomPreset.getPreset(), &largeProps );
+			interpolateReverbProps( g_tinyNeutralRoomPreset.getPreset(), smoothnessFrac,
+									g_tinyReflectiveRoomPreset.getPreset(), &tinyProps );
+			interpolateReverbProps( g_largeNeutralRoomPreset.getPreset(), smoothnessFrac,
+									g_largeReflectiveRoomPreset.getPreset(), &largeProps );
 		}
 
-		lerpReverbProps( &tinyProps, sizeFrac, &largeProps, &closedNonMetallicProps );
-		lerpReverbProps( g_tinyOpenRoomPreset.getPreset(), sizeFrac, g_largeOpenRoomPreset.getPreset(), &openProps );
-		lerpReverbProps( g_tinyMetallicRoomPreset.getPreset(), sizeFrac,
+		interpolateReverbProps( &tinyProps, sizeFrac, &largeProps, &closedNonMetallicProps );
+		interpolateReverbProps( g_tinyOpenRoomPreset.getPreset(), sizeFrac, g_largeOpenRoomPreset.getPreset(), &openProps );
+		interpolateReverbProps( g_tinyMetallicRoomPreset.getPreset(), sizeFrac,
 						 g_largeMetallicRoomPreset.getPreset(), &closedMetallicProps );
 	} else {
 		const float sizeFrac = 2.0f * ( roomSizeFactor - 0.5f );
@@ -379,48 +379,30 @@ void ReverbEffectSampler::ComputeReverberation( const ListenerProps &listenerPro
 			const float smoothnessFrac = 2.0f * smoothnessFactor;
 			assert( smoothnessFrac >= 0.0f && smoothnessFrac <= 1.0f );
 
-			lerpReverbProps( g_largeAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
-							 g_largeNeutralRoomPreset.getPreset(), &largeProps );
-			lerpReverbProps( g_hugeAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
-							 g_hugeNeutralRoomPreset.getPreset(), &hugeProps );
+			interpolateReverbProps( g_largeAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
+									g_largeNeutralRoomPreset.getPreset(), &largeProps );
+			interpolateReverbProps( g_hugeAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
+									g_hugeNeutralRoomPreset.getPreset(), &hugeProps );
 		} else {
 			const float smoothnessFrac = 2.0f * ( smoothnessFactor - 0.5f );
 			assert( smoothnessFrac >= 0.0f && smoothnessFrac <= 1.0f );
 
-			lerpReverbProps( g_largeNeutralRoomPreset.getPreset(), smoothnessFrac,
-							 g_largeReflectiveRoomPreset.getPreset(), &largeProps );
-			lerpReverbProps( g_hugeNeutralRoomPreset.getPreset(), smoothnessFrac,
-							 g_hugeReflectiveRoomPreset.getPreset(), &hugeProps );
+			interpolateReverbProps( g_largeNeutralRoomPreset.getPreset(), smoothnessFrac,
+									g_largeReflectiveRoomPreset.getPreset(), &largeProps );
+			interpolateReverbProps( g_hugeNeutralRoomPreset.getPreset(), smoothnessFrac,
+									g_hugeReflectiveRoomPreset.getPreset(), &hugeProps );
 		}
 
-		lerpReverbProps( &largeProps, sizeFrac, &hugeProps, &closedNonMetallicProps );
-		lerpReverbProps( g_largeOpenRoomPreset.getPreset(), sizeFrac, g_hugeOpenRoomPreset.getPreset(), &openProps );
-		lerpReverbProps( g_largeMetallicRoomPreset.getPreset(), sizeFrac,
-						 g_hugeMetallicRoomPreset.getPreset(), &closedMetallicProps );
+		interpolateReverbProps( &largeProps, sizeFrac, &hugeProps, &closedNonMetallicProps );
+		interpolateReverbProps( g_largeOpenRoomPreset.getPreset(), sizeFrac, g_hugeOpenRoomPreset.getPreset(), &openProps );
+		interpolateReverbProps( g_largeMetallicRoomPreset.getPreset(), sizeFrac,
+								g_hugeMetallicRoomPreset.getPreset(), &closedMetallicProps );
 	}
 
 	EfxReverbProps closedProps { EfxReverbProps::NoInit };
-	lerpReverbProps( &closedNonMetallicProps, leafProps.getMetallnessFactor(), &closedMetallicProps, &closedProps );
+	interpolateReverbProps( &closedNonMetallicProps, leafProps.getMetallnessFactor(), &closedMetallicProps, &closedProps );
 
-	lerpReverbProps( &closedProps, leafProps.getSkyFactor(), &openProps, &effect->reverbProps );
-
-	// Tone it down, in general and especially for open and/or reflective environment and/or long decay time
-
-	const float decayTime                 = effect->reverbProps.decayTime;
-	const float decayTimeForMinGain       = 5.0f;
-	const float decayAttenuationFrac      = wsw::min( 1.0f, decayTime * ( 1.0f / decayTimeForMinGain ) );
-	const float skyAttenuationFrac        = leafProps.getSkyFactor();
-	const float reflectiveAttenuationFrac = 2.0f * wsw::max( 0.0f, leafProps.getSmoothnessFactor() - 0.5f );
-	const float metallnessAttenuationFrac = leafProps.getMetallnessFactor();
-	const float attenuationFrac           = wsw::max( wsw::max( decayAttenuationFrac, skyAttenuationFrac ),
-													  wsw::max( reflectiveAttenuationFrac, metallnessAttenuationFrac ) );
-
-	constexpr float minAttenuation = 1.0f;
-	constexpr float maxAttenuation = 0.5f;
-	static_assert( AL_EAXREVERB_MIN_GAIN == 0.0f );
-	effect->reverbProps.gain *= minAttenuation - ( minAttenuation - maxAttenuation ) * attenuationFrac;
-	static_assert( AL_EAXREVERB_MIN_DECAY_HFRATIO > 0.0f );
-	effect->reverbProps.decayHfRatio = wsw::max( AL_EAXREVERB_MIN_DECAY_HFRATIO, 0.6f * effect->reverbProps.decayHfRatio );
+	interpolateReverbProps( &closedProps, leafProps.getSkyFactor(), &openProps, &effect->reverbProps );
 
 	EmitSecondaryRays();
 }

@@ -74,7 +74,7 @@ private:
 	struct EfxPresetEntry *m_hashBins[kNumHashBins];
 };
 
-void lerpReverbProps( const EfxReverbProps *from, float frac, const EfxReverbProps *to, EfxReverbProps *dest );
+void interpolateReverbProps( const EfxReverbProps *from, float frac, const EfxReverbProps *to, EfxReverbProps *dest );
 void mixReverbProps( const EfxReverbProps **begin, const EfxReverbProps **end, EfxReverbProps *dest );
 
 #endif
