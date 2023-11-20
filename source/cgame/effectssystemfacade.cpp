@@ -271,42 +271,6 @@ static const LightLifespan kExplosionSparksFlareProps[1] {
 	}
 };
 
-static const RgbaLifespan kExplosionSmokeColors[3] {
-	{
-		.initial  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedIn  = { 0.5f, 0.5f, 0.5f, 0.2f },
-		.fadedOut = { 0.9f, 0.9f, 0.9f, 0.0f },
-		.finishFadingInAtLifetimeFrac = 0.67f, .startFadingOutAtLifetimeFrac = 0.76f,
-	},
-	{
-		.initial  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedIn  = { 0.6f, 0.6f, 0.6f, 0.2f },
-		.fadedOut = { 0.9f, 0.9f, 0.9f, 0.0f },
-		.finishFadingInAtLifetimeFrac = 0.67f, .startFadingOutAtLifetimeFrac = 0.76f,
-	},
-	{
-		.initial  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedIn  = { 0.7f, 0.7f, 0.7f, 0.2f },
-		.fadedOut = { 0.9f, 0.9f, 0.9f, 0.0f },
-		.finishFadingInAtLifetimeFrac = 0.67f, .startFadingOutAtLifetimeFrac = 0.76f,
-	},
-};
-
-static const Particle::AppearanceRules kExplosionSmokeAppearanceRules {
-	.colors        = kExplosionSmokeColors,
-	.geometryRules = Particle::SpriteRules { .radius = { .mean = 9.0f, .spread = 5.0f } },
-};
-
-static const EllipsoidalFlockParams kExplosionSmokeFlockParams {
-	.stretchScale = 1.25f,
-	.gravity      = -45.0f,
-	.restitution  = 0.33f,
-	.speed        = { .min = 35.0f, .max = 55.0f },
-	.shiftSpeed   = { .min = 60.0f, .max = 65.0f },
-	.percentage   = { .min = 0.7f, .max = 0.9f },
-	.timeout      = { .min = 1200, .max = 1750 },
-};
-
 void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float *dir, const SoundSet *sound,
 												float radius, bool addSoundLfe ) {
 	vec3_t fireOrigin, almostExactOrigin;
@@ -445,15 +409,6 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		flockParams.percentage      = { .min = 1.0f, .max = 1.0f };
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
-	}
-
-	if( smokeOrigin ) {
-		EllipsoidalFlockParams flockParams( kExplosionSmokeFlockParams );
-		VectorCopy( smokeOrigin, flockParams.origin );
-		Particle::AppearanceRules appearanceRules( kExplosionSmokeAppearanceRules );
-		appearanceRules.materials = cgs.media.shaderSmokeHullHardParticle.getAddressOfHandle();
-		m_transientEffectsSystem.addDelayedParticleEffect( 300, TransientEffectsSystem::ParticleFlockBin::Large,
-														   flockParams, appearanceRules );
 	}
 
 	m_transientEffectsSystem.spawnExplosionHulls( fireOrigin, smokeOrigin );

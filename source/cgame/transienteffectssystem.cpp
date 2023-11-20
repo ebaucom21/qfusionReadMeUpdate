@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/client.h"
 #include "../common/links.h"
 #include "../common/configvars.h"
+#include "../common/noise.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -251,6 +252,131 @@ struct FireHullLayerParamsHolder {
 
 static const FireHullLayerParamsHolder kFireHullParams;
 
+struct ToonSmokeOffsetKeyframeHolder {
+	static constexpr int kNumVertices           = 2562;
+	static constexpr int kNumKeyframes          = 20;
+	static constexpr unsigned kMinLifetime      = 850;
+	static constexpr unsigned kNumShadingLayers = 3;
+	// Looks like a variable and not a constant, even it's technicall is the latter thing
+	static constexpr float maxOffset            = 1.0f;
+
+	float vertexOffsetStorage[kNumKeyframes][kNumVertices];
+	float fireVertexMaskStorage[kNumKeyframes][kNumVertices];
+	float fadeVertexMaskStorage[kNumKeyframes][kNumVertices];
+	float vertexOffsetsFromLimitsStorage[kNumKeyframes][kNumVertices];
+
+	// ShadingLayer does not have a default constructor, here's the workaround
+	wsw::StaticVector<SimulatedHullsSystem::ShadingLayer, kNumKeyframes * kNumShadingLayers> shadingLayersStorage;
+	// This type needs careful initialization of fields, hence it's better to construct instances manually
+	wsw::StaticVector<SimulatedHullsSystem::OffsetKeyframe, kNumKeyframes> setOfKeyframes;
+
+	static constexpr byte_vec4_t kFireColors[3] {
+		{ 25, 25, 25, 255 },   // Gray
+		{ 255, 70, 30, 255 },  // Orange
+		{ 255, 160, 45, 255 }, // Yellow
+	};
+
+	static constexpr byte_vec4_t kFadeColors[2] {
+		{ 0, 0, 0, 255 },
+		{ 100, 100, 100, 0 },
+	};
+
+	static constexpr byte_vec4_t kHighlightColors[2] {
+		{ 55, 55, 55, 0 },
+		{ 0, 0, 0, 0 },
+	};
+
+	ToonSmokeOffsetKeyframeHolder() noexcept {
+		constexpr float scrollSpeed     = 1.43f;
+		constexpr float scrollDistance  = scrollSpeed * ( (float)kMinLifetime * 1e-3f );
+
+		constexpr float initialSize     = 0.1f;
+		constexpr float fadeRange       = 0.12f;
+		constexpr float fadeStartAtFrac = 0.1f;
+		constexpr float zFadeInfluence  = 0.3f;
+
+		const std::span<const vec4_t> verticesSpan = SimulatedHullsSystem::getUnitIcosphere( 4 );
+		assert( verticesSpan.size() == kNumVertices );
+
+		for( unsigned frameNum = 0; frameNum < kNumKeyframes; frameNum++ ) {
+			const float keyframeFrac     = (float)(frameNum) / (float)( kNumKeyframes - 1 ); // -1 so the final value is 1.0f
+			const float fireLifetime     = 0.54f; // 0.47
+			const float fireStartFrac    = 0.9f;
+			const float fireLifetimeFrac = wsw::min( 1.0f, keyframeFrac * ( 1.0f / fireLifetime ) );
+			const float fireFrac         = fireLifetimeFrac * fireStartFrac + ( 1.0f - fireStartFrac );
+
+			const float scrolledDistance = scrollDistance * keyframeFrac;
+
+			float *const frameVertexOffsets     = vertexOffsetStorage[frameNum];
+			float *const frameFireVertexMask    = fireVertexMaskStorage[frameNum];
+			float *const frameFadeVertexMask    = fadeVertexMaskStorage[frameNum];
+			float *const frameOffsetsFromLimits = vertexOffsetsFromLimitsStorage[frameNum];
+
+			//const float expansion = (1-initialSize) * ( 1.f - (x-1.f)*(x-1.f) ) + initialSize;
+			const float initialVelocity = 5.0f;
+			const float expansion       = ( 1.0f - initialSize ) * ( 1.0f - std::exp( -initialVelocity * keyframeFrac ) ) + initialSize;
+
+			const vec4_t *const vertices = verticesSpan.data();
+			for( unsigned vertexNum = 0; vertexNum < kNumVertices; vertexNum++ ) {
+				const float *const vertex = vertices[vertexNum];
+				const float voronoiNoise  = calcVoronoiNoiseSquared( vertex[0], vertex[1], vertex[2] + scrolledDistance );
+				const float offset        = expansion * ( 1.0f - 0.7f * voronoiNoise );
+
+				frameVertexOffsets[vertexNum]  = offset;
+				frameFireVertexMask[vertexNum] = voronoiNoise; // Values between 1 and 0 where 1 has the highest offset
+
+				const float simplexNoise       = calcSimplexNoise3D( vertex[0], vertex[1], vertex[2] - scrolledDistance);
+				const float fadeFrac           = ( keyframeFrac - fadeStartAtFrac ) / ( 1.0f - fadeStartAtFrac );
+				const float zFade              = 0.5f * ( vertex[2] + 1.0f ) * zFadeInfluence;
+				frameFadeVertexMask[vertexNum] = fadeFrac - simplexNoise * ( 1.0f - zFadeInfluence ) - zFade + fadeRange;
+			}
+
+			SimulatedHullsSystem::MaskedShadingLayer fireMaskedShadingLayer;
+			fireMaskedShadingLayer.vertexMaskValues = frameFireVertexMask;
+			fireMaskedShadingLayer.colors           = kFireColors;
+
+			fireMaskedShadingLayer.colorRanges[0] = fireFrac * fireFrac;
+			fireMaskedShadingLayer.colorRanges[1] = fireFrac;
+			fireMaskedShadingLayer.colorRanges[2] = std::sqrt( fireFrac );
+			fireMaskedShadingLayer.blendMode      = SimulatedHullsSystem::BlendMode::AlphaBlend;
+			fireMaskedShadingLayer.alphaMode      = SimulatedHullsSystem::AlphaMode::Override;
+
+			// 0.1f to 0.2f produced a neat outline along the hull
+			SimulatedHullsSystem::DotShadingLayer highlightDotShadingLayer;
+			highlightDotShadingLayer.colors         = kHighlightColors;
+			highlightDotShadingLayer.colorRanges[0] = 0.4f;
+			highlightDotShadingLayer.colorRanges[1] = 0.48f;
+			highlightDotShadingLayer.blendMode      = SimulatedHullsSystem::BlendMode::Add;
+			highlightDotShadingLayer.alphaMode      = SimulatedHullsSystem::AlphaMode::Add;
+
+			SimulatedHullsSystem::MaskedShadingLayer fadeMaskedShadingLayer;
+			fadeMaskedShadingLayer.vertexMaskValues = frameFadeVertexMask;
+			fadeMaskedShadingLayer.colors           = kFadeColors;
+			fadeMaskedShadingLayer.colorRanges[0]   = 0.0f;
+			fadeMaskedShadingLayer.colorRanges[1]   = fadeRange;
+			fadeMaskedShadingLayer.blendMode        = SimulatedHullsSystem::BlendMode::Add;
+			fadeMaskedShadingLayer.alphaMode        = SimulatedHullsSystem::AlphaMode::Override;
+
+			const auto *const frameLayersData = shadingLayersStorage.data() + shadingLayersStorage.size();
+			static_assert( kNumShadingLayers == 3 );
+			shadingLayersStorage.emplace_back( fireMaskedShadingLayer );
+			shadingLayersStorage.emplace_back( highlightDotShadingLayer );
+			shadingLayersStorage.emplace_back( fadeMaskedShadingLayer );
+
+			std::fill( frameOffsetsFromLimits, frameOffsetsFromLimits + kNumVertices, 0.0f );
+
+			setOfKeyframes.emplace_back( SimulatedHullsSystem::OffsetKeyframe {
+				.lifetimeFraction = keyframeFrac,
+				.offsets          = frameVertexOffsets,
+				.offsetsFromLimit = frameOffsetsFromLimits,
+				.shadingLayers    = { frameLayersData, kNumShadingLayers },
+			});
+		}
+	}
+};
+
+static const ToonSmokeOffsetKeyframeHolder toonSmokeKeyframes;
+
 static const byte_vec4_t kSmokeSoftLayerFadeInPalette[] {
 	asByteColor( 0.65f, 0.65f, 0.65f, 0.25f ),
 	asByteColor( 0.70f, 0.70f, 0.70f, 0.25f ),
@@ -361,16 +487,17 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 
 	SimulatedHullsSystem *const hullsSystem = &cg.simulatedHullsSystem;
 
+#if 0
 	float fireHullScale;
 	unsigned fireHullTimeout;
 	std::span<const SimulatedHullsSystem::HullLayerParams> fireHullLayerParams;
 	if( v_explosionSmoke.get() ) {
-		fireHullScale       = 1.40f;
-		fireHullTimeout     = 550;
+		fireHullScale       = 2.4f;
+		fireHullTimeout     = 150;
 		fireHullLayerParams = kFireHullParams.lightHullLayerParams;
 	} else {
-		fireHullScale       = 1.55f;
-		fireHullTimeout     = 500;
+		fireHullScale       = 2.0f;
+		fireHullTimeout     = 250;
 		fireHullLayerParams = kFireHullParams.darkHullLayerParams;
 	}
 
@@ -408,8 +535,22 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 			hullsSystem->setupHullVertices( hull, fireOrigin, waveColor, 500.0f, 50.0f );
 		}
 	}
+#endif
 
 	if( smokeOrigin ) {
+		const std::span<const SimulatedHullsSystem::OffsetKeyframe> toonSmokeKeyframeSet = toonSmokeKeyframes.setOfKeyframes;
+
+		const float randomFactor  = 0.4f;
+		const float randomScaling = 1.0f + randomFactor * m_rng.nextFloat();
+
+		const float toonSmokeScale   = 38.0f * randomScaling;
+		const auto toonSmokeLifetime = (unsigned)( (float)toonSmokeKeyframes.kMinLifetime * randomScaling );
+		if( auto *const hull = hullsSystem->allocToonSmokeHull( m_lastTime, toonSmokeLifetime ) ) {
+			hullsSystem->setupHullVertices( hull, smokeOrigin, toonSmokeScale,
+											&toonSmokeKeyframeSet, toonSmokeKeyframes.maxOffset );
+		}
+
+#if 0
 		g_smokeOuterLayerCloudMeshProps[0].material = cgs.media.shaderSmokeHullHardParticle;
 		g_smokeOuterLayerCloudMeshProps[1].material = cgs.media.shaderSmokeHullSoftParticle;
 
@@ -519,6 +660,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 			VectorScale( randomDir, randomSpeed, effect->velocity );
 			effect->simulation = DelayedEffect::SimulateMovement;
 		}
+#endif
 	}
 }
 
