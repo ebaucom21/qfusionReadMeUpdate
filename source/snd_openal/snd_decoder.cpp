@@ -74,20 +74,46 @@ void S_ShutdownDecoders( bool verbose ) {
 	SNDOGG_Shutdown( verbose );
 }
 
-void *S_LoadSound( const char *filename, snd_info_t *info ) {
+bool S_LoadSound( const char *filename, PodBufferHolder<uint8_t> *dataBuffer, snd_info_t *info ) {
 	snd_decoder_t *decoder;
 	char fn[MAX_QPATH];
 
 	decoder = findCodec( filename );
 	if( !decoder ) {
 		//Com_Printf( "No decoder found for file: %s\n", filename );
-		return NULL;
+		return false;
 	}
 
 	Q_strncpyz( fn, filename, sizeof( fn ) );
 	COM_DefaultExtension( fn, decoder->ext, sizeof( fn ) );
 
-	return decoder->load( fn, info );
+	void *rawData = decoder->load( fn, info );
+	const size_t sizeInBytes = info->numChannels * info->bytesPerSample * info->samplesPerChannel;
+	if( !rawData || !sizeInBytes ) {
+		sWarning() << "Failed to load raw file data from" << wsw::StringView( filename );
+		return false;
+	}
+
+	if( info->numChannels != 1 && info->numChannels != 2 ) {
+		sWarning() << "Weird number of file data channels" << info->numChannels << "for" << wsw::StringView( filename );
+		return false;
+	}
+
+	if( info->bytesPerSample != 1 && info->bytesPerSample != 2 ) {
+		sWarning() << "Weird number of bytes per sample" << info->bytesPerSample << "for" << wsw::StringView( filename );
+		return false;
+	}
+
+	// TODO: Make decoders use the data buffer directly
+	if( !dataBuffer->tryReserving( sizeInBytes ) ) {
+		sWarning() << "Failed to reserve the data buffer capacity";
+		return false;
+	}
+
+	void *saneData = dataBuffer->get( sizeInBytes );
+	std::memcpy( saneData, rawData, sizeInBytes );
+	Q_free( rawData );
+	return true;
 }
 
 snd_stream_t *S_OpenStream( const char *filename, bool *delay ) {

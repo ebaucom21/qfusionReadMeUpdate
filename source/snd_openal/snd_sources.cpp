@@ -54,19 +54,12 @@ static void S_AdjustGain( src_t *src ) {
 /*
 * source_setup
 */
-static void source_setup( src_t *src, sfx_t *sfx, bool forceStereo, int priority, int entNum, int channel, float fvol, float attenuation ) {
-	ALuint buffer = 0;
-
-	// Mark the SFX as used, and grab the raw AL buffer
-	if( sfx ) {
-		S_UseBuffer( sfx );
-		buffer = forceStereo && sfx->stereoBuffer ? sfx->stereoBuffer : sfx->buffer;
-	}
-
+static void source_setup( src_t *src, const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, int priority, int entNum, int channel, float fvol, float attenuation ) {
 	clamp_low( attenuation, 0.0f );
 
 	src->lastUse = Sys_Milliseconds();
 	src->sfx = sfx;
+	src->bufferIndex = bufferAndIndex.second;
 	src->priority = priority;
 	src->entNum = entNum;
 	src->channel = channel;
@@ -87,7 +80,7 @@ static void source_setup( src_t *src, sfx_t *sfx, bool forceStereo, int priority
 	alSourcef( src->source, AL_GAIN, clampSourceGain( fvol * s_volume->value ) );
 	alSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
 	alSourcei( src->source, AL_LOOPING, AL_FALSE );
-	alSourcei( src->source, AL_BUFFER, buffer );
+	alSourcei( src->source, AL_BUFFER, (ALint)bufferAndIndex.first );
 
 	alSourcef( src->source, AL_REFERENCE_DISTANCE, kSoundAttenuationRefDistance );
 	alSourcef( src->source, AL_MAX_DISTANCE, kSoundAttenuationMaxDistance );
@@ -173,7 +166,7 @@ static void source_spatialize( src_t *src ) {
 	alSourcefv( src->source, AL_VELOCITY, src->velocity );
 }
 
-static void source_loop( int priority, sfx_t *sfx, int entNum, uintptr_t identifyingToken, float fvol, float attenuation ) {
+static void source_loop( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, int entNum, uintptr_t identifyingToken, float fvol, float attenuation ) {
 	assert( identifyingToken );
 
 	if( !sfx ) {
@@ -196,11 +189,11 @@ static void source_loop( int priority, sfx_t *sfx, int entNum, uintptr_t identif
 
 	src_t *chosenSrc = existing;
 	if( !chosenSrc ) {
-		chosenSrc = S_AllocSource( priority, entNum, 0 );
+		chosenSrc = S_AllocSource( SRCPRI_LOOP, entNum, 0 );
 		if( !chosenSrc ) {
 			return;
 		}
-		source_setup( chosenSrc, sfx, false, priority, entNum, -1, fvol, attenuation );
+		source_setup( chosenSrc, sfx, bufferAndIndex, SRCPRI_LOOP, entNum, -1, fvol, attenuation );
 		alSourcei( chosenSrc->source, AL_LOOPING, AL_TRUE );
 		chosenSrc->loopIdentifyingToken = identifyingToken;
 		chosenSrc->isLooping = true;
@@ -549,7 +542,7 @@ static void S_ProcessZombieSources( src_t **zombieSources, int numZombieSources,
 	auto zombieSourceComparator = [=]( const src_t *lhs, const src_t *rhs ) {
 		// Let sounds that have a lower quality hint be evicted first from the max heap
 		// (The natural comparison order uses the opposite sign).
-		return lhs->sfx->qualityHint > rhs->sfx->qualityHint;
+		return lhs->sfx->props.processingQualityHint > rhs->sfx->props.processingQualityHint;
 	};
 
 	std::make_heap( zombieSources, zombieSources + numZombieSources, zombieSourceComparator );
@@ -574,7 +567,7 @@ static void S_ProcessZombieSources( src_t **zombieSources, int numZombieSources,
 		src_t *const src = zombieSources[numZombieSources - 1];
 		numZombieSources--;
 
-		if( src->envUpdateState.effect->ShouldKeepLingering( src->sfx->qualityHint, millisNow ) ) {
+		if( src->envUpdateState.effect->ShouldKeepLingering( src->sfx->props.processingQualityHint, millisNow ) ) {
 			keepEffectLingering[src - srcBegin] = true;
 			continue;
 		}
@@ -613,7 +606,7 @@ static void S_ProcessZombieSources( src_t **zombieSources, int numZombieSources,
 
 		disableEffectCandidates[numDisableEffectCandidates++] = src;
 		float evictionScore = sqrtf( squareDistance );
-		evictionScore *= 1.0f / ( 0.5f + src->sfx->qualityHint );
+		evictionScore *= 1.0f / ( 0.5f + src->sfx->props.processingQualityHint );
 		// Give looping sources higher priority, otherwise it might sound weird
 		// if most of sources become inactive but the looping sound does not have an effect.
 		evictionScore *= src->isLooping ? 0.5f : 1.0f;
@@ -701,21 +694,13 @@ ALuint S_GetALSource( const src_t *src ) {
 /*
 * S_StartLocalSound
 */
-void S_StartLocalSound( sfx_t *sfx, float fvol ) {
-	src_t *src;
-
-	if( !sfx ) {
-		return;
-	}
-
-	src = S_AllocSource( SRCPRI_LOCAL, -1, 0 );
+void S_StartLocalSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float fvol ) {
+	src_t *src = S_AllocSource( SRCPRI_LOCAL, -1, 0 );
 	if( !src ) {
 		return;
 	}
 
-	S_UseBuffer( sfx );
-
-	source_setup( src, sfx, true, SRCPRI_LOCAL, -1, 0, fvol, ATTN_NONE );
+	source_setup( src, sfx, bufferAndIndex, SRCPRI_LOCAL, -1, 0, fvol, ATTN_NONE );
 	alSourcei( src->source, AL_SOURCE_RELATIVE, AL_TRUE );
 
 	alSourcePlay( src->source );
@@ -724,19 +709,13 @@ void S_StartLocalSound( sfx_t *sfx, float fvol ) {
 /*
 * S_StartSound
 */
-static void S_StartSound( sfx_t *sfx, const vec3_t origin, int entNum, int channel, float fvol, float attenuation ) {
-	src_t *src;
-
-	if( !sfx ) {
-		return;
-	}
-
-	src = S_AllocSource( SRCPRI_ONESHOT, entNum, channel );
+static void S_StartSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, const vec3_t origin, int entNum, int channel, float fvol, float attenuation ) {
+	src_t *src = S_AllocSource( SRCPRI_ONESHOT, entNum, channel );
 	if( !src ) {
 		return;
 	}
 
-	source_setup( src, sfx, false, SRCPRI_ONESHOT, entNum, channel, fvol, attenuation );
+	source_setup( src, sfx, bufferAndIndex, SRCPRI_ONESHOT, entNum, channel, fvol, attenuation );
 
 	if( src->attenuation ) {
 		if( origin ) {
@@ -754,29 +733,29 @@ static void S_StartSound( sfx_t *sfx, const vec3_t origin, int entNum, int chann
 /*
 * S_StartFixedSound
 */
-void S_StartFixedSound( sfx_t *sfx, const vec3_t origin, int channel, float fvol, float attenuation ) {
-	S_StartSound( sfx, origin, 0, channel, fvol, attenuation );
+void S_StartFixedSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, const vec3_t origin, int channel, float fvol, float attenuation ) {
+	S_StartSound( sfx, bufferAndIndex, origin, 0, channel, fvol, attenuation );
 }
 
 /*
 * S_StartRelativeSound
 */
-void S_StartRelativeSound( sfx_t *sfx, int entnum, int channel, float fvol, float attenuation ) {
-	S_StartSound( sfx, NULL, entnum, channel, fvol, attenuation );
+void S_StartRelativeSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, int entnum, int channel, float fvol, float attenuation ) {
+	S_StartSound( sfx, bufferAndIndex, NULL, entnum, channel, fvol, attenuation );
 }
 
 /*
 * S_StartGlobalSound
 */
-void S_StartGlobalSound( sfx_t *sfx, int channel, float fvol ) {
-	S_StartSound( sfx, NULL, 0, channel, fvol, ATTN_NONE );
+void S_StartGlobalSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, int channel, float fvol ) {
+	S_StartSound( sfx, bufferAndIndex, NULL, 0, channel, fvol, ATTN_NONE );
 }
 
 /*
 * S_AddLoopSound
 */
-void S_AddLoopSound( sfx_t *sfx, int entnum, uintptr_t identifyingToken, float fvol, float attenuation ) {
-	source_loop( SRCPRI_LOOP, sfx, entnum, identifyingToken, fvol, attenuation );
+void S_AddLoopSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, int entnum, uintptr_t identifyingToken, float fvol, float attenuation ) {
+	source_loop( sfx, bufferAndIndex, entnum, identifyingToken, fvol, attenuation );
 }
 
 /*
@@ -794,7 +773,7 @@ src_t *S_AllocRawSource( int entNum, float fvol, float attenuation, cvar_t *volu
 		return NULL;
 	}
 
-	source_setup( src, NULL, false, SRCPRI_STREAM, entNum, 0, fvol, attenuation );
+	source_setup( src, NULL, { 0, 0 }, SRCPRI_STREAM, entNum, 0, fvol, attenuation );
 
 	if( src->attenuation && entNum > 0 ) {
 		src->isTracking = true;

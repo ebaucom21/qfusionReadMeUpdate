@@ -32,6 +32,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/q_trie.h"
 #include "../common/textstreamwriterextras.h"
 #include "../common/wswtonum.h"
+#include "../common/wswfs.h"
 #include "../ui/uisystem.h"
 #include "../server/server.h"
 
@@ -621,6 +622,82 @@ auto SoundSystem::getPathForName( const char *name, wsw::String *reuse ) -> cons
 
 	// if not found, we just pass it without the extension
 	return reuse->c_str();
+}
+
+auto SoundSystem::getPathForName( const wsw::StringView &name, wsw::String *reuse ) -> wsw::StringView {
+	if( name.isZeroTerminated() ) {
+		return wsw::StringView( getPathForName( name.data(), reuse ) );
+	}
+	wsw::StringView tmp( name.data(), name.size() );
+	return wsw::StringView( getPathForName( tmp.data(), reuse ) );
+}
+
+// TODO: We need generic FS facilities for things like this
+bool SoundSystem::getPathListForPattern( const wsw::StringView &pattern, wsw::StringSpanStorage<unsigned, unsigned> *pathListStorage ) {
+	pathListStorage->clear();
+
+	wsw::StringView dirName;
+	wsw::StringView extension;
+	wsw::StringView baseName = pattern;
+
+	const std::optional<unsigned> dotIndex   = pattern.indexOf( '.' );
+	const std::optional<unsigned> slashIndex = pattern.lastIndexOf( '/' );
+
+	if( dotIndex != std::nullopt ) {
+		if( slashIndex == std::nullopt || *slashIndex < *dotIndex ) {
+			extension = pattern.drop( *dotIndex + 1 );
+			baseName  = baseName.take( *dotIndex );
+		}
+	}
+	if( slashIndex != std::nullopt ) {
+		dirName  = pattern.take( *slashIndex );
+		baseName = baseName.drop( *slashIndex + 1 );
+	} else {
+		dirName = wsw::StringView( "/" );
+	}
+
+	// For now, we limit patterns to basename
+	const wsw::String ztPattern( baseName.data(), baseName.size() );
+	wsw::String ztBaseName;
+
+	wsw::fs::SearchResultHolder searchResultHolder;
+	if( const auto maybeSearchResult = searchResultHolder.findDirFiles( dirName, extension ) ) {
+		for( const wsw::StringView &fileName: *maybeSearchResult ) {
+			bool isAcceptedByPattern = false;
+			if( const std::optional<wsw::StringView> maybeBaseName = wsw::fs::stripExtension( fileName ) ) {
+				ztBaseName.assign( maybeBaseName->data(), maybeBaseName->size() );
+				if( Com_GlobMatch( ztPattern.data(), ztBaseName.data(), false ) ) {
+					isAcceptedByPattern = true;
+				}
+			}
+			if( isAcceptedByPattern ) {
+				wsw::StaticString<MAX_QPATH> fullNameBuffer;
+				fullNameBuffer << dirName << '/' << fileName;
+				if( extension.empty() ) {
+					if( const char *foundExtension = FS_FirstExtension( fullNameBuffer.data(), SOUND_EXTENSIONS, NUM_SOUND_EXTENSIONS ) ) {
+						if( const char *existingExtension = COM_FileExtension( fullNameBuffer.data() ) ) {
+							fullNameBuffer.erase( (unsigned)( existingExtension - fullNameBuffer.data() ) );
+							fullNameBuffer << wsw::StringView( foundExtension );
+						}
+						bool alreadyPresent = false;
+						for( const wsw::StringView &addedView : *pathListStorage ) {
+							if( addedView.equalsIgnoreCase( fullNameBuffer.asView() ) ) {
+								alreadyPresent = true;
+								break;
+							}
+						}
+						if( !alreadyPresent ) {
+							pathListStorage->add( fullNameBuffer.asView() );
+						}
+					}
+				} else {
+					pathListStorage->add( fullNameBuffer.asView() );
+				}
+			}
+		}
+	}
+
+	return !pathListStorage->empty();
 }
 
 void CL_SoundModule_Init( bool verbose ) {

@@ -276,7 +276,7 @@ static void ENV_ProcessUpdatesPriorityQueue() {
 
 	listenerProps.InvalidateCachedUpdateState();
 
-	const sfx_t *lastProcessedSfx = nullptr;
+	const SoundSet *lastProcessedSfx = nullptr;
 	const src_t *lastProcessedSrc = nullptr;
 	float lastProcessedPriority = std::numeric_limits<float>::max();
 	// Always do at least a single update
@@ -409,7 +409,7 @@ static void ENV_UpdateSourceEnvironment( src_t *src, int64_t millisNow, const sr
 	} else {
 		// Don't bother updating it after the initial update.
 		// This helps to prevent unpleasant effect property transitions, and also acts as a performance optimization.
-		if( src->sfx->durationMillis < 1000 ) {
+		if( src->sfx->bufferDurationMillis[src->bufferIndex] < 1000 ) {
 			updateState->nextEnvUpdateAt = std::numeric_limits<int64_t>::max();
 		} else {
 			updateState->nextEnvUpdateAt = (int64_t)( (double)millisNow + 400 + 100 * random() );

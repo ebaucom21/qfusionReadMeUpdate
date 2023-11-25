@@ -29,7 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/smallassocarray.h"
 
 class DrawSceneRequest;
-struct sfx_s;
+struct SoundSet;
 struct trace_s;
 
 struct SolidImpact {
@@ -171,10 +171,10 @@ public:
 
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 private:
-	void startSound( sfx_s *sfx, const float *origin, float attenuation = 1.0f );
-	void startRelativeSound( sfx_s *sfx, int entNum, float attenuation = 1.0f );
+	void startSound( const SoundSet *sound, const float *origin, float attenuation = 1.0f );
+	void startRelativeSound( const SoundSet *sound, int entNum, float attenuation = 1.0f );
 
-	void spawnExplosionEffect( const float *origin, const float *dir, sfx_s *sfx, float radius, bool addSoundLfe );
+	void spawnExplosionEffect( const float *origin, const float *dir, const SoundSet *sound, float radius, bool addSoundLfe );
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
@@ -255,7 +255,7 @@ private:
 	static auto getImpactSfxGroupForMaterial( SurfImpactMaterial impactMaterial ) -> unsigned;
 
 	[[nodiscard]]
-	auto getSfxForImpactGroup( unsigned group ) -> sfx_s *;
+	auto getSfxForImpactGroup( unsigned group ) -> const SoundSet *;
 
 	void spawnMultipleExplosionImpactEffects( std::span<const SolidImpact> impacts );
 
@@ -271,9 +271,9 @@ private:
 
 	void spawnBulletLikeImpactRingUsingLimiter( unsigned delay, const SolidImpact &impact );
 
-	void startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t groupTag, const SolidImpact &impact,
+	void startSoundForImpactUsingLimiter( const SoundSet *sound, uintptr_t groupTag, const SolidImpact &impact,
 										  const EventRateLimiterParams &params );
-	void startSoundForImpactUsingLimiter( sfx_s *sfx, const LiquidImpact &impact,
+	void startSoundForImpactUsingLimiter( const SoundSet *sound, const LiquidImpact &impact,
 										  const EventRateLimiterParams &params );
 
 	void spawnLiquidImpactParticleEffect( unsigned delay, const LiquidImpact &impact, float percentageScale,
@@ -283,7 +283,7 @@ private:
 	TransientEffectsSystem m_transientEffectsSystem;
 	wsw::RandomGenerator m_rng;
 
-	wsw::StaticVector<std::pair<sfx_s **, unsigned>, 5> m_impactSfxForGroups;
+	wsw::StaticVector<const SoundSet *, 5> m_impactSoundsForGroups;
 
 	class EventRateLimiter {
 	public:

@@ -392,9 +392,9 @@ static bool music_process( void ) {
 			continue;
 		}
 
-		S_RawSamples2( l / ( music_stream->info.width * music_stream->info.channels ),
-					   music_stream->info.rate, music_stream->info.width,
-					   music_stream->info.channels, decode_buffer, true,
+		S_RawSamples2( l / ( music_stream->info.bytesPerSample * music_stream->info.numChannels ),
+					   music_stream->info.sampleRate, music_stream->info.bytesPerSample,
+					   music_stream->info.numChannels, decode_buffer, true,
 					   s_bgTrackMuted ? 0 : 1 );
 	}
 

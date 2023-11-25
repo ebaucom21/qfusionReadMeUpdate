@@ -19,33 +19,23 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "cg_local.h"
-#include "../client/snd_public.h"
-#include "../common/common.h"
-#include "../common/wswstaticstring.h"
 #include "../common/wswfs.h"
 #include "../client/client.h"
 #include "mediacache.h"
 
-#include <algorithm>
-
-MediaCache::CachedSound::CachedSound( MediaCache *parent, const wsw::StringView &name )
-	: MediaCache::CachedHandle<sfx_s>( name ) {
+MediaCache::CachedSound::CachedSound( MediaCache *parent, const SoundSetProps &props )
+	: m_props( props ) {
 	parent->link( this, &parent->m_sounds );
 }
 
 MediaCache::CachedModel::CachedModel( MediaCache *parent, const wsw::StringView &name )
-	: MediaCache::CachedHandle<model_s>( name ) {
+	: m_name( name ) {
 	parent->link( this, &parent->m_models );
 }
 
 MediaCache::CachedMaterial::CachedMaterial( MediaCache *parent, const wsw::StringView &name )
-	: MediaCache::CachedHandle<shader_s>( name ) {
+	: m_name( name ) {
 	parent->link( this, &parent->m_materials );
-}
-
-MediaCache::CachedSoundsArray::CachedSoundsArray( MediaCache *parent, const char *format, unsigned indexShift )
-	: CachedHandlesArray<sfx_s>( parent, format, indexShift ) {
-	parent->link( this, &parent->m_soundsArrays );
 }
 
 // Make sure it's defined here so the inline setup of fields does not get replicated over inclusion places
@@ -54,9 +44,6 @@ MediaCache::MediaCache() {}
 void MediaCache::registerSounds() {
 	for( CachedSound *sound = m_sounds; sound; sound = (CachedSound *)sound->m_next ) {
 		registerSound( sound );
-	}
-	for( CachedSoundsArray *array = m_soundsArrays; array; array = (CachedSoundsArray *)array->m_next ) {
-		registerSoundsArray( array );
 	}
 }
 
@@ -74,38 +61,8 @@ void MediaCache::registerMaterials() {
 
 void MediaCache::registerSound( CachedSound *sound ) {
 	if( !sound->m_handle ) {
-		assert( sound->m_name.isZeroTerminated() );
-		sound->m_handle = SoundSystem::instance()->registerSound( sound->m_name.data() );
+		sound->m_handle = SoundSystem::instance()->registerSound( sound->m_props );
 	}
-}
-
-void MediaCache::registerSoundsArray( MediaCache::CachedSoundsArray *array ) {
-	const size_t oldStorageSize = m_handlesArraysDataStorage.size();
-
-	for( unsigned i = array->m_indexShift; i < 10; ++i ) {
-		char buffer[MAX_QPATH];
-		const char *name = va_r( buffer, sizeof( buffer ), array->m_format, i );
-		if( sfx_s *sfx = SoundSystem::instance()->registerSound( name ) ) {
-			m_handlesArraysDataStorage.push_back( sfx );
-		} else {
-			break;
-		}
-	}
-
-	const size_t newStorageSize = m_handlesArraysDataStorage.size();
-	if( newStorageSize <= oldStorageSize +1 ) {
-		wsw::StaticString<MAX_QPATH> buffer;
-		buffer << wsw::StringView( array->m_format ).take( MAX_QPATH );
-		std::replace( buffer.begin(), buffer.end(), '%', '$');
-		if( oldStorageSize == newStorageSize ) {
-			cgWarning() << "Failed to find any sound for pattern" << buffer << "($ for percent here)";
-		} else {
-			cgWarning() << "Too few sounds for pattern" << buffer << "($ for percent here)";
-		}
-	}
-
-	array->m_handlesOffset = (uint16_t)oldStorageSize;
-	array->m_numHandles    = (uint16_t)( newStorageSize - oldStorageSize );
 }
 
 void MediaCache::registerModel( CachedModel *model ) {

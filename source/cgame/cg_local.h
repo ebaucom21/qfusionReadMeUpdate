@@ -47,7 +47,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define GAMECHAT_STRING_SIZE    1024
 #define GAMECHAT_STACK_SIZE     20
 
-#define CG_MAX_TOUCHES 10
+struct SoundSet;
 
 enum {
 	LOCALEFFECT_EV_PLAYER_TELEPORT_IN
@@ -162,10 +162,10 @@ typedef struct weaponinfo_s {
 
 	// sfx
 	int num_fire_sounds;
-	struct sfx_s *sound_fire[WEAPONINFO_MAX_FIRE_SOUNDS];
+	const SoundSet *sound_fire[WEAPONINFO_MAX_FIRE_SOUNDS];
 	int num_strongfire_sounds;
-	struct sfx_s *sound_strongfire[WEAPONINFO_MAX_FIRE_SOUNDS];
-	struct sfx_s *sound_reload;
+	const SoundSet *sound_strongfire[WEAPONINFO_MAX_FIRE_SOUNDS];
+	const SoundSet *sound_reload;
 } weaponinfo_t;
 
 extern weaponinfo_t cg_pWeaponModelInfos[WEAP_TOTAL];
@@ -353,7 +353,7 @@ typedef struct cgs_skeleton_s {
 
 typedef struct cg_sexedSfx_s {
 	char *name;
-	struct sfx_s *sfx;
+	const SoundSet *sfx;
 	struct cg_sexedSfx_s *next;
 } cg_sexedSfx_t;
 
@@ -478,7 +478,7 @@ typedef struct {
 	struct Skin *teamCustomSkin[GS_MAX_TEAMS]; // user defined
 	int teamColor[GS_MAX_TEAMS];
 
-	struct sfx_s *soundPrecache[MAX_SOUNDS];
+	const SoundSet *soundPrecache[MAX_SOUNDS];
 	struct shader_s *imagePrecache[MAX_IMAGES];
 	struct Skin *skinPrecache[MAX_SKINFILES];
 
@@ -714,7 +714,7 @@ void CG_ResetClientInfos( void );
 void CG_LoadClientInfo( unsigned client, const wsw::StringView &configString );
 void CG_UpdateSexedSoundsRegistration( pmodelinfo_t *pmodelinfo );
 void CG_SexedSound( int entnum, int entchannel, const char *name, float fvol, float attn );
-struct sfx_s *CG_RegisterSexedSound( int entnum, const char *name );
+const SoundSet *CG_RegisterSexedSound( int entnum, const char *name );
 
 void CG_PredictedEvent( int entNum, int ev, int parm );
 void CG_Predict_ChangeWeapon( int new_weapon );
@@ -919,7 +919,7 @@ void CG_ViewWeapon_RefreshAnimation( cg_viewweapon_t *viewweapon );
 
 void CG_FireEvents( bool early );
 void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted );
-void CG_AddAnnouncerEvent( struct sfx_s *sound, bool queued );
+void CG_AddAnnouncerEvent( const SoundSet *sound, bool queued );
 void CG_ReleaseAnnouncerEvents( void );
 void CG_ClearAnnouncerEvents( void );
 

@@ -40,7 +40,7 @@ static const char *cg_defaultSexedSounds[] =
 /*
 * CG_RegisterPmodelSexedSound
 */
-static struct sfx_s *CG_RegisterPmodelSexedSound( pmodelinfo_t *pmodelinfo, const char *name ) {
+static const SoundSet *CG_RegisterPmodelSexedSound( pmodelinfo_t *pmodelinfo, const char *name ) {
 	char *p, *s, model[MAX_QPATH];
 	cg_sexedSfx_t *sexedSfx;
 	char oname[MAX_QPATH];
@@ -90,17 +90,18 @@ static struct sfx_s *CG_RegisterPmodelSexedSound( pmodelinfo_t *pmodelinfo, cons
 	// see if we already know of the model specific sound
 	Q_snprintfz( sexedFilename, sizeof( sexedFilename ), "sounds/players/%s/%s", model, oname + 1 );
 
+	SoundSystem *soundSystem = SoundSystem::instance();
 	if( ( !COM_FileExtension( sexedFilename ) &&
 		FS_FirstExtension( sexedFilename, SOUND_EXTENSIONS, NUM_SOUND_EXTENSIONS ) ) ||
 		FS_FOpenFile( sexedFilename, NULL, FS_READ ) != -1 ) {
-		sexedSfx->sfx = SoundSystem::instance()->registerSound( sexedFilename );
+		sexedSfx->sfx = soundSystem->registerSound( { .name = SoundSetProps::Exact { wsw::StringView( sexedFilename ) } } );
 	} else {   // no, revert to default player sounds folders
 		if( pmodelinfo->sex == GENDER_FEMALE ) {
 			Q_snprintfz( sexedFilename, sizeof( sexedFilename ), "sounds/players/%s/%s", "female", oname + 1 );
-			sexedSfx->sfx = SoundSystem::instance()->registerSound( sexedFilename );
+			sexedSfx->sfx = soundSystem->registerSound( { .name = SoundSetProps::Exact { wsw::StringView( sexedFilename ) } } );
 		} else {
 			Q_snprintfz( sexedFilename, sizeof( sexedFilename ), "sounds/players/%s/%s", "male", oname + 1 );
-			sexedSfx->sfx = SoundSystem::instance()->registerSound( sexedFilename );
+			sexedSfx->sfx = soundSystem->registerSound( { .name = SoundSetProps::Exact { wsw::StringView( sexedFilename ) } } );
 		}
 	}
 
@@ -150,7 +151,7 @@ void CG_UpdateSexedSoundsRegistration( pmodelinfo_t *pmodelinfo ) {
 /*
 * CG_RegisterSexedSound
 */
-struct sfx_s *CG_RegisterSexedSound( int entnum, const char *name ) {
+const SoundSet *CG_RegisterSexedSound( int entnum, const char *name ) {
 	if( entnum < 0 || entnum >= MAX_EDICTS ) {
 		return NULL;
 	}

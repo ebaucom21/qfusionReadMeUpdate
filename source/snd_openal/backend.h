@@ -5,6 +5,9 @@
 #include "../game/ai/vec3.h"
 #include "../common/wswstring.h"
 #include "../common/wswstaticvector.h"
+#include "../common/freelistallocator.h"
+#include "../common/randomgenerator.h"
+#include "snd_local.h"
 #include <array>
 
 namespace wsw::snd {
@@ -20,8 +23,12 @@ public:
 
 	void processFrameUpdates();
 
-	void freeSound( int id );
-	void loadSound( int id );
+	//void freeSound( int id );
+	void loadSound( const SoundSetProps &props );
+	[[nodiscard]]
+	auto findSoundSet( const SoundSetProps &props ) -> const SoundSet *;
+
+	void endRegistration();
 
 	struct EntitySpatialParamsBatch {
 		int entNums[8];
@@ -34,11 +41,11 @@ public:
 
 	void setListener( const Vec3 &origin, const Vec3 &velocity, const std::array<Vec3, 3> &axis );
 
-	void startLocalSound( int id, float volume );
-	void startFixedSound( int id, const Vec3 &origin, int channel, float volume, float attenuation );
-	void startGlobalSound( int id, int channel, float volume );
-	void startRelativeSound( int id, int entNum, int channel, float volume, float attenuation );
-	void addLoopSound( int id, int entNum, uintptr_t identifyingToken, float volume, float attenuation );
+	void startLocalSound( const SoundSet *sound, float volume );
+	void startFixedSound( const SoundSet *sound, const Vec3 &origin, int channel, float volume, float attenuation );
+	void startGlobalSound( const SoundSet *sound, int channel, float volume );
+	void startRelativeSound( const SoundSet *sound, int entNum, int channel, float volume, float attenuation );
+	void addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float volume, float attenuation );
 
 	void startBackgroundTrack( const wsw::String &intro, const wsw::String &loop, int mode );
 	void stopBackgroundTrack();
@@ -47,6 +54,29 @@ public:
 	void activate( bool active );
 
 private:
+	void unlinkAndFree( SoundSet *soundSet );
+	void forceLoading( SoundSet *soundSet );
+	[[nodiscard]]
+	bool loadBuffersFromFile( const wsw::StringView &filePath, ALuint *buffer, ALuint *stereoBuffer, unsigned *durationMillis );
+	[[nodiscard]]
+	auto uploadBufferData( const wsw::StringView &logFilePath, const snd_info_t &info, const void *data ) -> ALuint;
+
+	[[nodiscard]]
+	auto getBufferForPlayback( const SoundSet *soundSet, bool forceStereo = false ) -> std::optional<std::pair<ALuint, unsigned>>;
+
+	static constexpr unsigned kMaxSoundSets = 256;
+
+	SoundSet *m_registeredSoundSetsHead { nullptr };
+	wsw::MemberBasedFreelistAllocator<sizeof( SoundSet ) + MAX_QPATH + 1, kMaxSoundSets> m_soundSetsAllocator;
+
+	PodBufferHolder<uint8_t> m_fileDataBuffer;
+	PodBufferHolder<uint8_t> m_resamplingBuffer;
+
+	wsw::StringSpanStorage<unsigned, unsigned> m_tmpPathListStorage;
+	wsw::String m_tmpPath, m_tmpPath2;
+
+	wsw::RandomGenerator m_rng;
+
 	bool m_initialized { false };
 };
 

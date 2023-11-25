@@ -40,15 +40,15 @@ public:
 	void setEntitySpatialParams( int entNum, const float *origin, const float *velocity ) override;
 
 	[[nodiscard]]
-	auto registerSound( const char *name ) -> sfx_s * override;
+	auto registerSound( const SoundSetProps &props ) -> const SoundSet * override;
 
-	void startFixedSound( sfx_s *sfx, const float *origin, int channel, float volume, float attenuation ) override;
-	void startRelativeSound( sfx_s *sfx, int entNum, int channel, float volume, float attenuation ) override;
-	void startGlobalSound( sfx_s *sfx, int channel, float volume ) override;
+	void startFixedSound( const SoundSet *sfx, const float *origin, int channel, float volume, float attenuation ) override;
+	void startRelativeSound( const SoundSet *sfx, int entNum, int channel, float volume, float attenuation ) override;
+	void startGlobalSound( const SoundSet *sfx, int channel, float volume ) override;
 	void startLocalSound( const char *name, float volume ) override;
-	void startLocalSound( sfx_s *sfx, float volume ) override;
+	void startLocalSound( const SoundSet *sfx, float volume ) override;
 
-	void addLoopSound( sfx_s *sfx, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) override;
+	void addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) override;
 
 	void startBackgroundTrack( const char *intro, const char *loop, int mode ) override;
 	void stopBackgroundTrack() override;

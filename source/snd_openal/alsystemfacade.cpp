@@ -8,7 +8,7 @@
 
 static SingletonHolder<wsw::snd::ALSoundSystem> alSoundSystemHolder;
 static bool s_registering;
-static int s_registration_sequence = 1;
+int s_registration_sequence = 1;
 
 extern cvar_s *s_globalfocus;
 
@@ -50,8 +50,6 @@ wsw::snd::ALSoundSystem *wsw::snd::ALSoundSystem::tryCreate( client_state_s *cli
 		return nullptr;
 	}
 
-	S_InitBuffers();
-
 	return instance;
 }
 
@@ -77,7 +75,6 @@ ALSoundSystem::~ALSoundSystem() {
 	// wait for the queue to be processed
 	QBufPipe_Finish( m_pipe );
 
-	S_ShutdownBuffers();
 	ENV_Shutdown();
 
 	// shutdown backend
@@ -114,20 +111,10 @@ void ALSoundSystem::endRegistration() {
 	// wait for the queue to be processed
 	QBufPipe_Finish( m_pipe );
 
-	S_ForEachBuffer( [this]( sfx_t *sfx ) {
-		if( sfx->filename[0] && sfx->registration_sequence != s_registration_sequence ) {
-			callMethodOverPipe( m_pipe, &m_backend, &Backend::freeSound, sfx->id );
-		}
-	});
+	callMethodOverPipe( m_pipe, &m_backend, &Backend::endRegistration );
 
 	// wait for the queue to be processed
 	QBufPipe_Finish( m_pipe );
-
-	S_ForEachBuffer( []( sfx_t *sfx ) {
-		if( sfx->registration_sequence && sfx->registration_sequence != s_registration_sequence ) {
-			S_MarkBufferFree( sfx );
-		}
-	});
 
 	s_registering = false;
 
@@ -142,20 +129,10 @@ void ALSoundSystem::clear() {
 	callMethodOverPipe( m_pipe, &m_backend, &Backend::clear );
 }
 
-sfx_t *ALSoundSystem::registerSound( const char *name ) {
-	// TODO: All of that should just be sync...
-	sfx_t *sfx = S_FindBuffer( getPathForName( name, &m_tmpPathBuffer1 ) );
-
-	callMethodOverPipe( m_pipe, &m_backend, &Backend::loadSound, sfx->id );
+auto ALSoundSystem::registerSound( const SoundSetProps &props ) -> const SoundSet * {
+	callMethodOverPipe( m_pipe, &m_backend, &Backend::loadSound, props );
 	QBufPipe_Finish( m_pipe );
-
-	if( sfx->buffer ) {
-		sfx->used = Sys_Milliseconds();
-		sfx->registration_sequence = s_registration_sequence;
-		return sfx;
-	}
-	S_MarkBufferFree( sfx );
-	return nullptr;
+	return m_backend.findSoundSet( props );
 }
 
 void ALSoundSystem::activate( bool active ) {
@@ -168,37 +145,38 @@ void ALSoundSystem::activate( bool active ) {
 	callMethodOverPipe( m_pipe, &m_backend, &Backend::activate, active );
 }
 
-void ALSoundSystem::startFixedSound( sfx_s *sfx, const float *origin, int channel, float volume, float attenuation ) {
-	if( sfx ) {
-		callMethodOverPipe( m_pipe, &m_backend, &Backend::startFixedSound, sfx->id, Vec3( origin ), channel, volume, attenuation );
+void ALSoundSystem::startFixedSound( const SoundSet *sound, const float *origin, int channel, float volume, float attenuation ) {
+	if( sound ) {
+		callMethodOverPipe( m_pipe, &m_backend, &Backend::startFixedSound, sound, Vec3( origin ), channel, volume, attenuation );
 	}
 }
 
-void ALSoundSystem::startRelativeSound( sfx_s *sfx, int entNum, int channel, float volume, float attenuation ) {
-	if( sfx ) {
-		callMethodOverPipe( m_pipe, &m_backend, &Backend::startRelativeSound, sfx->id, entNum, channel, volume, attenuation );
+void ALSoundSystem::startRelativeSound( const SoundSet *sound, int entNum, int channel, float volume, float attenuation ) {
+	if( sound ) {
+		callMethodOverPipe( m_pipe, &m_backend, &Backend::startRelativeSound, sound, entNum, channel, volume, attenuation );
 	}
 }
 
-void ALSoundSystem::startGlobalSound( sfx_s *sfx, int channel, float volume ) {
-	if( sfx ) {
-		callMethodOverPipe( m_pipe, &m_backend, &Backend::startGlobalSound, sfx->id, channel, volume );
+void ALSoundSystem::startGlobalSound( const SoundSet *sound, int channel, float volume ) {
+	if( sound ) {
+		callMethodOverPipe( m_pipe, &m_backend, &Backend::startGlobalSound, sound, channel, volume );
 	}
 }
 
 void ALSoundSystem::startLocalSound( const char *name, float volume ) {
-	startLocalSound( registerSound( name ), volume );
+	// TODO: Implement, send the name to backend
+	//startLocalSound( registerSound( name ), volume );
 }
 
-void ALSoundSystem::startLocalSound( sfx_s *sfx, float volume ) {
-	if( sfx ) {
-		callMethodOverPipe( m_pipe, &m_backend, &Backend::startLocalSound, sfx->id, volume );
+void ALSoundSystem::startLocalSound( const SoundSet *sound, float volume ) {
+	if( sound ) {
+		callMethodOverPipe( m_pipe, &m_backend, &Backend::startLocalSound, sound, volume );
 	}
 }
 
-void ALSoundSystem::addLoopSound( sfx_s *sfx, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) {
-	if( sfx ) {
-		callMethodOverPipe( m_pipe, &m_backend, &Backend::addLoopSound, sfx->id, entNum, identifyingToken, volume, attenuation );
+void ALSoundSystem::addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) {
+	if( sound ) {
+		callMethodOverPipe( m_pipe, &m_backend, &Backend::addLoopSound, sound, entNum, identifyingToken, volume, attenuation );
 	}
 }
 

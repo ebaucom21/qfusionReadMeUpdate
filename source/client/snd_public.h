@@ -28,8 +28,34 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //===============================================================
 
 #include "../common/wswstring.h"
+#include "../common/wswstringview.h"
+#include "../common/stringspanstorage.h"
+#include <variant>
 
-struct sfx_s;
+struct SoundSet;
+
+struct SoundSetProps {
+	struct Exact {
+		wsw::StringView value;
+		explicit Exact( const wsw::StringView &value_ ) : value( value_ ) {}
+		explicit Exact( const char *value_ ) : value( value_ ) {}
+	};
+	// Note: For now, patterns are only allowed in the basename part, not in extension or directory part.
+	struct Pattern {
+		wsw::StringView pattern;
+		explicit Pattern( const wsw::StringView &pattern_ ) : pattern( pattern_ ) {}
+		explicit Pattern( const char *pattern_ ) : pattern( pattern_ ) {}
+	};
+	std::variant<Exact, Pattern> name;
+	// Assumed to be in [0, 1] range for majority of sounds (but values exceeding this range are allowed).
+	// Spammy sounds like ricochets, plasma explosions, laser impact sounds should have it close to zero.
+	// It should not be treated as generic gameplay importance of the sound,
+	// but as a hint allowing lowering quality of sound processing for saving performance
+	// (the sound stays playing but in a lower quality, without effects, etc).
+	float processingQualityHint { 1.0f };
+	bool lazyLoading { false };
+};
+
 struct client_state_s;
 
 class SoundSystem {
@@ -50,9 +76,6 @@ class SoundSystem {
 	static SoundSystem *instanceOrNull() { return s_instance; }
 #endif
 protected:
-	[[nodiscard]]
-	static auto getPathForName( const char *name, wsw::String *reuse ) -> const char *;
-
 	explicit SoundSystem( client_state_s *client ) : m_client( client ) {}
 public:
 	struct InitOptions {
@@ -97,21 +120,28 @@ public:
 	virtual void setEntitySpatialParams( int entNum, const float *origin, const float *velocity ) = 0;
 
 	[[nodiscard]]
-	virtual auto registerSound( const char *name ) -> sfx_s * = 0;
+	virtual auto registerSound( const SoundSetProps &props ) -> const SoundSet * = 0;
 
-	virtual void startFixedSound( sfx_s *sfx, const float *origin, int channel, float fvol, float attenuation ) = 0;
-	virtual void startRelativeSound( sfx_s *sfx, int entNum, int channel, float fvol, float attenuation ) = 0;
-	virtual void startGlobalSound( sfx_s *sfx, int channel, float fvol ) = 0;
+	virtual void startFixedSound( const SoundSet *sound, const float *origin, int channel, float fvol, float attenuation ) = 0;
+	virtual void startRelativeSound( const SoundSet *sound, int entNum, int channel, float fvol, float attenuation ) = 0;
+	virtual void startGlobalSound( const SoundSet *sound, int channel, float fvol ) = 0;
 
 	virtual void startLocalSound( const char *name, float fvol ) = 0;
-	virtual void startLocalSound( sfx_s *sfx, float fvol ) = 0;
-	virtual void addLoopSound( sfx_s *sfx, int entNum, uintptr_t identifyingToken, float fvol, float attenuation ) = 0;
+	virtual void startLocalSound( const SoundSet *sound, float fvol ) = 0;
+	virtual void addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float fvol, float attenuation ) = 0;
 
 	virtual void startBackgroundTrack( const char *intro, const char *loop, int mode ) = 0;
 	virtual void stopBackgroundTrack() = 0;
 	virtual void nextBackgroundTrack() = 0;
 	virtual void prevBackgroundTrack() = 0;
 	virtual void pauseBackgroundTrack() = 0;
+
+	[[nodiscard]]
+	static auto getPathForName( const char *name, wsw::String *reuse ) -> const char *;
+	[[nodiscard]]
+	static auto getPathForName( const wsw::StringView &name, wsw::String *reuse ) -> wsw::StringView;
+	[[nodiscard]]
+	static bool getPathListForPattern( const wsw::StringView &pattern, wsw::StringSpanStorage<unsigned, unsigned> *pathListStorage );
 };
 
 #endif

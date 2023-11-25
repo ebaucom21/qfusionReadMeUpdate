@@ -332,7 +332,10 @@ static void CG_AddLocalSounds( void ) {
 
 			if( remainingSeconds != lastSecond ) {
 				if( 1 + remainingSeconds < 4 ) {
-					struct sfx_s *sound = SoundSystem::instance()->registerSound( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 1 + remainingSeconds, 1 ) );
+					const wsw::StringView exactName( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 1 + remainingSeconds, 1 ) );
+					const SoundSet *sound = SoundSystem::instance()->registerSound( SoundSetProps {
+						.name = SoundSetProps::Exact { exactName },
+					});
 					CG_AddAnnouncerEvent( sound, false );
 				}
 

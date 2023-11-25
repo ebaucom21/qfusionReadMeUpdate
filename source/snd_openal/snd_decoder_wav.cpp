@@ -142,11 +142,11 @@ static bool read_wav_header( int filenum, snd_info_t *info ) {
 
 	// Save the parameters
 	FGetLittleShort( filenum );
-	info->channels = FGetLittleShort( filenum );
-	info->rate = FGetLittleLong( filenum );
+	info->numChannels = FGetLittleShort( filenum );
+	info->sampleRate = FGetLittleLong( filenum );
 	FGetLittleLong( filenum );
 	FGetLittleShort( filenum );
-	info->width = FGetLittleShort( filenum ) / 8;
+	info->bytesPerSample = FGetLittleShort( filenum ) / 8;
 
 	// Skip the rest of the format chunk if required
 	if( fmtlen > 16 ) {
@@ -155,11 +155,11 @@ static bool read_wav_header( int filenum, snd_info_t *info ) {
 	}
 
 	// Scan for the data chunk
-	if( !( info->size = findWavChunk( filenum, "data" ) ) ) {
+	if( !( info->sizeInBytes = findWavChunk( filenum, "data" ) ) ) {
 		Com_Printf( "Error reading wav header: No data chunk\n" );
 		return false;
 	}
-	info->samples = ( info->size / info->width ) / info->channels;
+	info->samplesPerChannel = ( info->sizeInBytes / info->bytesPerSample ) / info->numChannels;
 
 	return true;
 }
@@ -203,16 +203,16 @@ void *decoder_wav_load( const char *filename, snd_info_t *info ) {
 		return NULL;
 	}
 
-	buffer = Q_malloc( info->size );
-	read = FS_Read( buffer, info->size, filenum );
-	if( read != info->size ) {
+	buffer = Q_malloc( info->sizeInBytes );
+	read = FS_Read( buffer, info->sizeInBytes, filenum );
+	if( read != info->sizeInBytes ) {
 		Q_free( buffer );
 		FS_FCloseFile( filenum );
 		Com_Printf( "Error reading .wav file: %s\n", filename );
 		return NULL;
 	}
 
-	byteSwapRawSamples( info->samples, info->width, info->channels, (uint8_t *)buffer );
+	byteSwapRawSamples( info->samplesPerChannel, info->bytesPerSample, info->numChannels, (uint8_t *)buffer );
 
 	FS_FCloseFile( filenum );
 
@@ -268,7 +268,7 @@ bool decoder_wav_cont_open( snd_stream_t *stream ) {
 
 int decoder_wav_read( snd_stream_t *stream, int bytes, void *buffer ) {
 	snd_wav_stream_t *wav_stream = (snd_wav_stream_t *)stream->ptr;
-	int remaining = stream->info.size - wav_stream->position;
+	int remaining = stream->info.sizeInBytes - wav_stream->position;
 	int samples, bytes_read;
 
 	if( remaining <= 0 ) {
@@ -282,10 +282,10 @@ int decoder_wav_read( snd_stream_t *stream, int bytes, void *buffer ) {
 	}
 
 	wav_stream->position += bytes_read;
-	samples = ( bytes_read / stream->info.width ) / stream->info.channels;
+	samples = ( bytes_read / stream->info.bytesPerSample ) / stream->info.numChannels;
 
 	FS_Read( buffer, bytes_read, wav_stream->filenum );
-	byteSwapRawSamples( samples, stream->info.width, stream->info.channels, (const uint8_t *)buffer );
+	byteSwapRawSamples( samples, stream->info.bytesPerSample, stream->info.numChannels, (const uint8_t *)buffer );
 
 	return bytes_read;
 }

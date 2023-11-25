@@ -203,7 +203,9 @@ static bool CG_vWeap_ParseAnimationScript( weaponinfo_t *weaponinfo, const char 
 
 				token = COM_ParseExt( &ptr, false );
 				if( Q_stricmp( token, "NULL" ) ) {
-					weaponinfo->sound_fire[weaponinfo->num_fire_sounds] = SoundSystem::instance()->registerSound( token );
+					weaponinfo->sound_fire[weaponinfo->num_fire_sounds] = SoundSystem::instance()->registerSound( SoundSetProps {
+						.name = SoundSetProps::Exact { wsw::StringView( token ) },
+					});
 					if( weaponinfo->sound_fire[weaponinfo->num_fire_sounds] != NULL ) {
 						weaponinfo->num_fire_sounds++;
 					}
@@ -224,7 +226,9 @@ static bool CG_vWeap_ParseAnimationScript( weaponinfo_t *weaponinfo, const char 
 
 				token = COM_ParseExt( &ptr, false );
 				if( Q_stricmp( token, "NULL" ) ) {
-					weaponinfo->sound_strongfire[weaponinfo->num_strongfire_sounds] = SoundSystem::instance()->registerSound( token );
+					weaponinfo->sound_strongfire[weaponinfo->num_strongfire_sounds] = SoundSystem::instance()->registerSound( SoundSetProps {
+						.name = SoundSetProps::Exact { wsw::StringView( token ) },
+					});
 					if( weaponinfo->sound_strongfire[weaponinfo->num_strongfire_sounds] != NULL ) {
 						weaponinfo->num_strongfire_sounds++;
 					}

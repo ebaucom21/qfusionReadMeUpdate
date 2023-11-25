@@ -1,5 +1,6 @@
 /*
-Copyright (C) 1997-2001 Id Software, Inc.
+Copyright (C) 1999-2005 Id Software, Inc.
+Copyright (C) 2005 Stuart Dalton (badcdev@gmail.com)
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -21,6 +22,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "snd_local.h"
 #include "snd_env_sampler.h"
 #include "alsystemfacade.h"
+#include "../common/links.h"
+
+extern int s_registration_sequence;
 
 typedef struct qbufPipe_s sndCmdPipe_t;
 
@@ -29,6 +33,32 @@ static ALCcontext *alContext;
 
 #define UPDATE_MSEC 10
 static int64_t s_last_update_time;
+
+struct ALBufferHolder {
+	ALuint buffer { 0 };
+	ALBufferHolder() = default;
+	explicit ALBufferHolder( ALuint buffer_ ): buffer( buffer_ ) {}
+	~ALBufferHolder() {
+		if( buffer ) {
+			alDeleteBuffers( 1, &buffer );
+		}
+	}
+	[[nodiscard]]
+	auto releaseOwnership() -> ALuint {
+		ALuint result = buffer;
+		buffer = 0;
+		return result;
+	}
+	operator bool() const {
+		return buffer != 0;
+	}
+	ALBufferHolder( const ALBufferHolder &that ) = delete;
+	ALBufferHolder &operator=( const ALBufferHolder &that ) = delete;
+	ALBufferHolder( ALBufferHolder &&that ) = delete;
+	ALBufferHolder &operator=( ALBufferHolder &&that ) = delete;
+};
+
+namespace std { void swap( ALBufferHolder &a, ALBufferHolder &b ) { std::swap( a.buffer, b.buffer ); } }
 
 static bool S_Init( void *hwnd, int maxEntities, bool verbose ) {
 	int numDevices;
@@ -172,26 +202,6 @@ static bool S_Init( void *hwnd, int maxEntities, bool verbose ) {
 	return true;
 }
 
-static void S_Shutdown( bool verbose ) {
-	S_StopStreams();
-	S_LockBackgroundTrack( false );
-	S_StopBackgroundTrack();
-
-	S_ShutdownSources();
-	S_ShutdownDecoders( verbose );
-
-	if( alContext ) {
-		alcMakeContextCurrent( NULL );
-		alcDestroyContext( alContext );
-		alContext = NULL;
-	}
-
-	if( alDevice ) {
-		alcCloseDevice( alDevice );
-		alDevice = NULL;
-	}
-}
-
 static void S_SetListener( const vec3_t origin, const vec3_t velocity, const mat3_t axis ) {
 	float orientation[6];
 
@@ -218,7 +228,27 @@ void Backend::init( bool verbose ) {
 }
 
 void Backend::shutdown( bool verbose ) {
-	S_Shutdown( verbose );
+	S_StopStreams();
+	S_LockBackgroundTrack( false );
+	S_StopBackgroundTrack();
+
+	for( SoundSet *soundSet = m_registeredSoundSetsHead, *next; soundSet; soundSet = next ) { next = soundSet->next;
+		unlinkAndFree( soundSet );
+	}
+
+	S_ShutdownSources();
+	S_ShutdownDecoders( verbose );
+
+	if( alContext ) {
+		alcMakeContextCurrent( NULL );
+		alcDestroyContext( alContext );
+		alContext = NULL;
+	}
+
+	if( alDevice ) {
+		alcCloseDevice( alDevice );
+		alDevice = NULL;
+	}
 
 	// Note: this is followed by a separate "terminate pipe" call
 }
@@ -242,12 +272,295 @@ void Backend::processFrameUpdates() {
 	S_UpdateSources();
 }
 
-void Backend::freeSound( int id ) {
-	S_UnloadBuffer( S_GetBufferById( id ) );
+[[nodiscard]]
+static bool matchesByName( const SoundSetProps &lhs, const SoundSetProps &rhs ) {
+	if( lhs.name.index() == rhs.name.index() ) {
+		if( const auto *leftExact = std::get_if<SoundSetProps::Exact>( &lhs.name ) ) {
+			const auto *rightExact = std::get_if<SoundSetProps::Exact>( &rhs.name );
+			return leftExact->value.equalsIgnoreCase( rightExact->value );
+		}
+		if( const auto *leftPattern = std::get_if<SoundSetProps::Pattern>( &lhs.name ) ) {
+			const auto *rightPattern = std::get_if<SoundSetProps::Pattern>( &rhs.name );
+			return leftPattern->pattern.equalsIgnoreCase( rightPattern->pattern );
+		}
+		wsw::failWithLogicError( "Unreachable" );
+	}
+	return false;
 }
 
-void Backend::loadSound( int id ) {
-	S_LoadBuffer( S_GetBufferById( id ) );
+void Backend::loadSound( const SoundSetProps &props ) {
+	for( const SoundSet *soundSet = m_registeredSoundSetsHead; soundSet; soundSet = soundSet->next ) {
+		if( matchesByName( props, soundSet->props ) ) {
+			soundSet->registrationSequence = s_registration_sequence;
+			return;
+		}
+	}
+
+	uint8_t *const mem = m_soundSetsAllocator.allocOrNull();
+	if( !mem ) {
+		if( const auto *exactName = std::get_if<SoundSetProps::Exact>( &props.name ) ) {
+			sError() << "Failed to load SoundSet for exact name" << exactName->value << "Too many sound sets";
+		} else if( const auto *namePattern = std::get_if<SoundSetProps::Pattern>( &props.name ) ) {
+			sError() << "Failed to load SoundSet for name pattern" << namePattern->pattern << "Too many sound sets";
+		} else {
+			wsw::failWithLogicError( "Unreachable" );
+		}
+		return;
+	}
+
+	auto *const newSoundSet = new( mem )SoundSet { .props = props, .registrationSequence = s_registration_sequence };
+
+	// Save a deep copy of the name
+	auto *const nameMem = (char *)( mem + sizeof( SoundSet ) );
+	if( const auto *exactName = std::get_if<SoundSetProps::Exact>( &props.name ) ) {
+		exactName->value.copyTo( nameMem, MAX_QPATH + 1 );
+		newSoundSet->props.name = SoundSetProps::Exact { wsw::StringView( nameMem, exactName->value.size() ) };
+	} else if( const auto *namePattern = std::get_if<SoundSetProps::Pattern>( &props.name ) ) {
+		namePattern->pattern.copyTo( nameMem, MAX_QPATH + 1 );
+		newSoundSet->props.name = SoundSetProps::Pattern { wsw::StringView( nameMem, namePattern->pattern.size() ) };
+	} else {
+		wsw::failWithLogicError( "Unreachable" );
+	}
+
+	wsw::link( newSoundSet, &m_registeredSoundSetsHead );
+
+	if( !props.lazyLoading ) {
+		forceLoading( newSoundSet );
+	}
+}
+
+auto Backend::findSoundSet( const SoundSetProps &props ) -> const SoundSet * {
+	for( SoundSet *soundSet = m_registeredSoundSetsHead; soundSet; soundSet = soundSet->next ) {
+		if( matchesByName( props, soundSet->props ) ) {
+			return soundSet;
+		}
+	}
+	return nullptr;
+}
+
+void Backend::forceLoading( SoundSet *soundSet ) {
+	assert( !soundSet->isLoaded && !soundSet->hasFailedLoading && soundSet->numBuffers == 0 );
+
+	bool succeeded = false;
+	if( const auto *exactName = std::get_if<SoundSetProps::Exact>( &soundSet->props.name ) ) {
+		const wsw::StringView &filePath = SoundSystem::getPathForName( exactName->value, &m_tmpPath );
+		if( !filePath.empty() ) {
+			ALuint buffer = 0, stereoBuffer = 0;
+			unsigned durationMillis = 0;
+			if( loadBuffersFromFile( filePath, &buffer, &stereoBuffer, &durationMillis ) ) {
+				soundSet->buffers[0]              = buffer;
+				soundSet->stereoBuffers[0]        = stereoBuffer;
+				soundSet->bufferDurationMillis[0] = durationMillis;
+				soundSet->numBuffers              = 1;
+				succeeded                         = true;
+			} else {
+				sError() << "Failed to load AL buffers for" << filePath;
+			}
+		} else {
+			sError() << "Failed to find a path for exact name" << exactName->value;
+		}
+	} else if( const auto *namePattern = std::get_if<SoundSetProps::Pattern>( &soundSet->props.name ) ) {
+		if( SoundSystem::getPathListForPattern( namePattern->pattern, &m_tmpPathListStorage ) ) {
+			assert( std::size( soundSet->buffers ) == std::size( soundSet->stereoBuffers ) );
+			const size_t maxBuffers = std::size( soundSet->buffers );
+			for( const wsw::StringView &filePath: m_tmpPathListStorage ) {
+				if( soundSet->numBuffers < maxBuffers ) {
+					ALuint buffer = 0, stereoBuffer = 0;
+					unsigned durationMillis = 0;
+					if( loadBuffersFromFile( filePath, &buffer, &stereoBuffer, &durationMillis ) ) {
+						soundSet->buffers[soundSet->numBuffers]              = buffer;
+						soundSet->stereoBuffers[soundSet->numBuffers]        = stereoBuffer;
+						soundSet->bufferDurationMillis[soundSet->numBuffers] = durationMillis;
+						soundSet->numBuffers++;
+					} else {
+						sError() << "Failed to load AL buffers for" << filePath;
+						if( soundSet->numBuffers ) {
+							alDeleteBuffers( (ALsizei)soundSet->numBuffers, soundSet->buffers );
+							alDeleteBuffers( (ALsizei)soundSet->numBuffers, soundSet->stereoBuffers );
+							soundSet->numBuffers = 0;
+						}
+					}
+				} else {
+					sWarning() << "Too many files matching" << namePattern->pattern;
+					break;
+				}
+			}
+			// TODO: Allow specifying "all-or-nothing" success policy?
+			succeeded = soundSet->numBuffers > 0;
+		} else {
+			sError() << "Failed to get path list for pattern" << namePattern->pattern;
+		}
+	} else {
+		wsw::failWithLogicError( "Unreachable" );
+	}
+
+	soundSet->isLoaded         = succeeded;
+	soundSet->hasFailedLoading = !succeeded;
+}
+
+// TODO: Do we really need bias?
+template <typename T>
+static void runResamplingLoop( const T *__restrict in, T *__restrict out, size_t numSteps, int bias ) {
+	size_t stepNum = 0;
+	if( bias == 0 ) {
+		// Mix channels
+		do {
+			*out = (short)( ( in[0] + in[1] ) / 2 );
+			out++;
+			in += 2;
+		} while( ++stepNum < numSteps );
+	} else {
+		const int channelIndex = bias < 0 ? 0 : 1;
+		// Copy the channel
+		do {
+			*out = in[channelIndex];
+			out++;
+			in += 2;
+		} while( ++stepNum < numSteps );
+	}
+}
+
+bool Backend::loadBuffersFromFile( const wsw::StringView &filePath, ALuint *buffer, ALuint *stereoBuffer, unsigned *durationMillis ) {
+	sDebug() << "Loading buffers for" << filePath;
+
+	m_tmpPath2.assign( filePath.data(), filePath.size() );
+	snd_info_t fileInfo;
+	if( !S_LoadSound( m_tmpPath2.data(), &m_fileDataBuffer, &fileInfo ) ) {
+		// It produces verbose output on its own
+		return false;
+	}
+
+	const void *monoData;
+	snd_info_t monoInfo;
+	ALBufferHolder stereoBufferHolder;
+	if( fileInfo.numChannels == 1 ) {
+		monoData = m_fileDataBuffer.get( 0 );
+		monoInfo = fileInfo;
+	} else {
+		const void *stereoData      = m_fileDataBuffer.get( 0 );
+		const snd_info_t stereoInfo = fileInfo;
+
+		ALBufferHolder tmpBufferHolder( uploadBufferData( filePath, stereoInfo, stereoData ) );
+		if( !tmpBufferHolder ) {
+			sError() << "Failed to upload stereo buffer data";
+			return false;
+		}
+
+		// TODO: Check whether info parameters are really handled prpoperly
+
+		const size_t monoSizeInBytes = stereoInfo.samplesPerChannel * stereoInfo.bytesPerSample;
+		if( !m_resamplingBuffer.tryReserving( monoSizeInBytes ) ) {
+			sError() << "Failed to reserve resampling buffer data";
+			return false;
+		}
+
+		monoData = m_resamplingBuffer.get( monoSizeInBytes );
+		if( stereoInfo.bytesPerSample == 2 ) {
+			runResamplingLoop<int16_t>( (int16_t *)stereoData, (int16_t *)monoData, stereoInfo.samplesPerChannel, s_stereo2mono->integer );
+		} else {
+			runResamplingLoop<int8_t>( (int8_t *)stereoData, (int8_t *)monoData, stereoInfo.samplesPerChannel, s_stereo2mono->integer );
+		}
+
+		monoInfo             = stereoInfo;
+		monoInfo.numChannels = 1;
+		monoInfo.sizeInBytes = (int)monoSizeInBytes;
+
+		std::swap( tmpBufferHolder, stereoBufferHolder );
+	}
+
+	ALBufferHolder monoBufferHolder( uploadBufferData( filePath, monoInfo, monoData ) );
+	if( !monoBufferHolder ) {
+		if( fileInfo.numChannels == 1 ) {
+			sError() << "Failed to upload the buffer data";
+		} else {
+			sError() << "Failed to upload the mono buffer data";
+		}
+		return false;
+	}
+
+	*buffer = monoBufferHolder.releaseOwnership();
+	assert( alIsBuffer( *buffer ) );
+	*stereoBuffer = stereoBufferHolder.releaseOwnership();
+	assert( !*stereoBuffer || alIsBuffer( *stereoBuffer ) );
+	*durationMillis = (unsigned)( ( 1000 * (int64_t)fileInfo.samplesPerChannel ) / fileInfo.sampleRate );
+	return true;
+}
+
+auto Backend::uploadBufferData( const wsw::StringView &logFilePath, const snd_info_t &info, const void *data ) -> ALuint {
+	ALenum error = alGetError();
+	if( error != AL_NO_ERROR ) {
+		sWarning() << "Had an error" << error << "prior to loading of data for" << logFilePath;
+	}
+
+	ALuint rawBuffer = 0;
+	alGenBuffers( 1, &rawBuffer );
+	if( ( error = alGetError() ) != AL_NO_ERROR ) {
+		sWarning() << "Failed to create buffer:" << wsw::StringView( S_ErrorMessage( error ) ) << "while loading data for" << logFilePath;
+		return 0;
+	}
+
+	ALBufferHolder bufferHolder( rawBuffer );
+	rawBuffer = 0;
+
+	const ALenum format = S_SoundFormat( info.bytesPerSample, info.numChannels );
+	alBufferData( bufferHolder.buffer, format, data, info.sizeInBytes, info.sampleRate );
+	if( ( error = alGetError() ) != AL_NO_ERROR ) {
+		sWarning() << "Failed to set buffer data" << wsw::StringView( S_ErrorMessage( error ) ) << "while loading data for" << logFilePath;
+		return 0;
+	}
+
+	// Note: We have decided to drop forceful unloading of other buffers in case of AL_OUT_OF_MEMORY as its utility is questionable
+
+	return bufferHolder.releaseOwnership();
+}
+
+void Backend::unlinkAndFree( SoundSet *soundSet ) {
+	if( soundSet->numBuffers ) {
+		assert( soundSet->isLoaded && !soundSet->hasFailedLoading );
+		alDeleteBuffers( (ALsizei)soundSet->numBuffers, soundSet->buffers );
+		// "Deleting buffer name 0 is a legal NOP"
+		alDeleteBuffers( (ALsizei)soundSet->numBuffers, soundSet->stereoBuffers );
+	}
+
+	wsw::unlink( soundSet, &m_registeredSoundSetsHead );
+	soundSet->~SoundSet();
+	m_soundSetsAllocator.free( soundSet );
+}
+
+auto Backend::getBufferForPlayback( const SoundSet *soundSet, bool forceStereo ) -> std::optional<std::pair<ALuint, unsigned>> {
+	if( soundSet ) {
+		if( !soundSet->isLoaded ) {
+			if( soundSet->hasFailedLoading ) {
+				return std::nullopt;
+			}
+			// TODO? forceLoading( const SoundSet *) looks awkward as well
+			forceLoading( const_cast<SoundSet *>( soundSet ) );
+			if( soundSet->hasFailedLoading ) {
+				return std::nullopt;
+			}
+			assert( soundSet->isLoaded );
+		}
+		assert( soundSet->numBuffers > 0 );
+		const auto index      = ( soundSet->numBuffers < 2 ) ? 0 : m_rng.nextBounded( soundSet->numBuffers );
+		const ALuint *buffers = soundSet->buffers;
+		if( forceStereo ) {
+			buffers = soundSet->stereoBuffers;
+			if( !buffers[index] ) {
+				return std::nullopt;
+			}
+		}
+		assert( alIsBuffer( buffers[index] ) );
+		return std::make_pair( buffers[index], index );
+	}
+	return std::nullopt;
+}
+
+void Backend::endRegistration() {
+	for( SoundSet *soundSet = m_registeredSoundSetsHead, *next; soundSet; soundSet = next ) { next = soundSet->next;
+		if( soundSet->registrationSequence != s_registration_sequence ) {
+			unlinkAndFree( soundSet );
+		}
+	}
 }
 
 void Backend::setEntitySpatialParams( const EntitySpatialParamsBatch &batch ) {
@@ -260,24 +573,34 @@ void Backend::setListener( const Vec3 &origin, const Vec3 &velocity, const std::
 	S_SetListener( origin.Data(), velocity.Data(), (const float *)axis.data() );
 }
 
-void Backend::startLocalSound( int id, float volume ) {
-	S_StartLocalSound( S_GetBufferById( id ), volume );
+void Backend::startLocalSound( const SoundSet *sound, float volume ) {
+	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound, true ) ) {
+		S_StartLocalSound( sound, *bufferAndIndex, volume );
+	}
 }
 
-void Backend::startFixedSound( int id, const Vec3 &origin, int channel, float volume, float attenuation ) {
-	S_StartFixedSound( S_GetBufferById( id ), origin.Data(), channel, volume, attenuation );
+void Backend::startFixedSound( const SoundSet *sound, const Vec3 &origin, int channel, float volume, float attenuation ) {
+	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
+		S_StartFixedSound( sound, *bufferAndIndex, origin.Data(), channel, volume, attenuation );
+	}
 }
 
-void Backend::startGlobalSound( int id, int channel, float volume ) {
-	S_StartGlobalSound( S_GetBufferById( id ), channel, volume );
+void Backend::startGlobalSound( const SoundSet *sound, int channel, float volume ) {
+	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
+		S_StartGlobalSound( sound, *bufferAndIndex, channel, volume );
+	}
 }
 
-void Backend::startRelativeSound( int id, int entNum, int channel, float volume, float attenuation ) {
-	S_StartRelativeSound( S_GetBufferById( id ), entNum, channel, volume, attenuation );
+void Backend::startRelativeSound( const SoundSet *sound, int entNum, int channel, float volume, float attenuation ) {
+	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
+		S_StartRelativeSound( sound, *bufferAndIndex, entNum, channel, volume, attenuation );
+	}
 }
 
-void Backend::addLoopSound( int id, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) {
-	S_AddLoopSound( S_GetBufferById( id ), entNum, identifyingToken, volume, attenuation );
+void Backend::addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) {
+	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
+		S_AddLoopSound( sound, *bufferAndIndex, entNum, identifyingToken, volume, attenuation );
+	}
 }
 
 void Backend::startBackgroundTrack( const wsw::String &intro, const wsw::String &loop, int mode ) {
@@ -315,6 +638,9 @@ void Backend::activate( bool active ) {
 	}
 }
 
+}
+
+void S_Clear() {
 }
 
 static void S_Update( void ) {

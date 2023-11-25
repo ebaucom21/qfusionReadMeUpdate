@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/q_cvar.h"
 #include "../common/common.h"
 #include "../common/outputmessages.h"
+#include "../common/podbufferholder.h"
 #include "../client/snd_public.h"
 
 #define AL_ALEXT_PROTOTYPES
@@ -40,28 +41,22 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <AL/alext.h>
 #include <AL/efx.h>
 
-#include <functional>
-
 #define MAX_SRC 128
 
-typedef struct sfx_s {
-	char filename[MAX_QPATH];
-	int64_t used;           // Time last used
-	int id;
-	int registration_sequence;
-	ALuint buffer;      // OpenAL buffer
-	ALuint stereoBuffer;
-	unsigned durationMillis;
-	float qualityHint;  // Assumed to be in [0, 1] range for majority of sounds
-						// (but values exceeding this range are allowed),
-						// spammy sounds like ricochets, plasma explosions,
-						// laser impact sounds should have importance close to zero.
-						// Should not be treated as generic gameplay importance of the sound,
-						// but as a hint allowing lowering quality of sound processing for saving performance
-						// (the sound will remain playing but in low quality, without effects, etc).
-	bool inMemory;
-	bool isLocked;
-} sfx_t;
+struct SoundSet {
+	SoundSet *prev { nullptr }, *next { nullptr };
+	SoundSetProps props;
+
+	mutable int registrationSequence { 0 };
+
+	ALuint buffers[16] {};
+	ALuint stereoBuffers[16] {};
+	unsigned bufferDurationMillis[16] {};
+	unsigned numBuffers { 0 };
+
+	bool hasFailedLoading { false };
+	bool isLoaded { false };
+};
 
 extern cvar_t *s_volume;
 extern cvar_t *s_musicvolume;
@@ -90,13 +85,13 @@ static inline auto clampSourceGain( float givenVolume ) -> float {
 
 // playing
 
-void S_StartFixedSound( struct sfx_s *sfx, const vec3_t origin, int channel, float fvol, float attenuation );
-void S_StartRelativeSound( struct sfx_s *sfx, int entnum, int channel, float fvol, float attenuation );
-void S_StartGlobalSound( struct sfx_s *sfx, int channel, float fvol );
+void S_StartFixedSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, const vec3_t origin, int channel, float fvol, float attenuation );
+void S_StartRelativeSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, int entnum, int channel, float fvol, float attenuation );
+void S_StartGlobalSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, int channel, float fvol );
 
-void S_StartLocalSound( sfx_t *sfx, float fvol );
+void S_StartLocalSound( const SoundSet *sound, std::pair<ALuint, unsigned> bufferAndIndex, float fvol );
 
-void S_AddLoopSound( struct sfx_s *sfx, int entnum, uintptr_t identifyingToken, float fvol, float attenuation );
+void S_AddLoopSound( const SoundSet *sound, std::pair<ALuint, unsigned> bufferAndIndex, int entnum, uintptr_t identifyingToken, float fvol, float attenuation );
 
 void S_RawSamples2( unsigned int samples, unsigned int rate,
 					unsigned short width, unsigned short channels, const uint8_t *data, bool music, float fvol );
@@ -112,27 +107,10 @@ void S_LockBackgroundTrack( bool lock );
 /*
 * Util (snd_al.c)
 */
-ALuint S_SoundFormat( int width, int channels );
+ALenum S_SoundFormat( int width, int channels );
 const char *S_ErrorMessage( ALenum error );
 ALuint S_GetBufferLength( ALuint buffer );
 void *S_BackgroundUpdateProc( void *param );
-
-/*
-* Buffer management
-*/
-void S_InitBuffers( void );
-void S_ShutdownBuffers( void );
-void S_SoundList_f( void );
-void S_UseBuffer( sfx_t *sfx );
-sfx_t *S_FindBuffer( const char *filename );
-void S_MarkBufferFree( sfx_t *sfx );
-
-// TODO: Should provide iterators instead
-void S_ForEachBuffer( const std::function<void( sfx_t *)> &callback );
-
-sfx_t *S_GetBufferById( int id );
-bool S_LoadBuffer( sfx_t *sfx );
-bool S_UnloadBuffer( sfx_t *sfx );
 
 typedef struct {
 	float quality;
@@ -150,7 +128,7 @@ struct PanningUpdateState {
 class Effect;
 
 typedef struct envUpdateState_s {
-	sfx_t *parent;
+	const SoundSet *parent;
 
 	int64_t nextEnvUpdateAt;
 	int64_t lastEnvUpdateAt;
@@ -184,7 +162,8 @@ typedef struct src_s {
 	ALuint effect;
 	ALuint effectSlot;
 
-	sfx_t *sfx;
+	const SoundSet *sfx;
+	unsigned bufferIndex;
 
 	cvar_t *volumeVar;
 
@@ -247,11 +226,13 @@ void S_StopRawSamples( void );
 * Decoder
 */
 typedef struct snd_info_s {
-	int rate;
-	int width;
-	int channels;
-	int samples;
-	int size;
+	// TODO: Some fields are redundant
+	int sampleRate;
+	int bytesPerSample;
+	int numChannels;
+	// Length of the data in samples per channel (i.e. stereo data contains 2x samplesPerChannel samples)
+	int samplesPerChannel;
+	int sizeInBytes;
 } snd_info_t;
 
 typedef struct snd_decoder_s snd_decoder_t;
@@ -276,7 +257,7 @@ typedef struct bgTrack_s {
 
 bool S_InitDecoders( bool verbose );
 void S_ShutdownDecoders( bool verbose );
-void *S_LoadSound( const char *filename, snd_info_t *info );
+bool S_LoadSound( const char *filename, PodBufferHolder<uint8_t> *dataBuffer, snd_info_t *info );
 snd_stream_t *S_OpenStream( const char *filename, bool *delay );
 bool S_ContOpenStream( snd_stream_t *stream );
 int S_ReadStream( snd_stream_t *stream, int bytes, void *buffer );

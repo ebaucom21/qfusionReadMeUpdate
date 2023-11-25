@@ -26,29 +26,29 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/snd_public.h"
 #include "../common/configvars.h"
 
-void EffectsSystemFacade::startSound( sfx_s *sfx, const float *origin, float attenuation ) {
-	SoundSystem::instance()->startFixedSound( sfx, origin, CHAN_AUTO, v_volumeEffects.get(), attenuation );
+void EffectsSystemFacade::startSound( const SoundSet *sound, const float *origin, float attenuation ) {
+	SoundSystem::instance()->startFixedSound( sound, origin, CHAN_AUTO, v_volumeEffects.get(), attenuation );
 }
 
-void EffectsSystemFacade::startRelativeSound( sfx_s *sfx, int entNum, float attenuation ) {
-	SoundSystem::instance()->startRelativeSound( sfx, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
+void EffectsSystemFacade::startRelativeSound( const SoundSet *sound, int entNum, float attenuation ) {
+	SoundSystem::instance()->startRelativeSound( sound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
 }
 
 void EffectsSystemFacade::spawnRocketExplosionEffect( const float *origin, const float *dir, int mode ) {
-	sfx_s *sfx = mode == FIRE_MODE_STRONG ? cgs.media.sfxRocketLauncherStrongHit : cgs.media.sfxRocketLauncherWeakHit;
+	const SoundSet *sound = mode == FIRE_MODE_STRONG ? cgs.media.sndRocketLauncherStrongHit : cgs.media.sndRocketLauncherWeakHit;
 	const bool addSoundLfe = v_heavyRocketExplosions.get();
-	spawnExplosionEffect( origin, dir, sfx, 64.0f, addSoundLfe );
+	spawnExplosionEffect( origin, dir, sound, 64.0f, addSoundLfe );
 }
 
 void EffectsSystemFacade::spawnGrenadeExplosionEffect( const float *origin, const float *dir, int mode ) {
-	sfx_s *sfx = mode == FIRE_MODE_STRONG ? cgs.media.sfxGrenadeStrongExplosion : cgs.media.sfxGrenadeWeakExplosion;
+	const SoundSet *sound = mode == FIRE_MODE_STRONG ? cgs.media.sndGrenadeStrongExplosion : cgs.media.sndGrenadeWeakExplosion;
 	const bool addSoundLfe = v_heavyGrenadeExplosions.get();
-	spawnExplosionEffect( origin, dir, sfx, 64.0f, addSoundLfe );
+	spawnExplosionEffect( origin, dir, sound, 64.0f, addSoundLfe );
 }
 
 void EffectsSystemFacade::spawnGenericExplosionEffect( const float *origin, int mode, float radius ) {
 	const vec3_t dir { 0.0f, 0.0f, 1.0f };
-	spawnExplosionEffect( origin, dir, cgs.media.sfxRocketLauncherStrongHit, radius, true );
+	spawnExplosionEffect( origin, dir, cgs.media.sndRocketLauncherStrongHit, radius, true );
 }
 
 // TODO: std::optional<std::pair<Vec3, Vec3>>
@@ -307,7 +307,7 @@ static const EllipsoidalFlockParams kExplosionSmokeFlockParams {
 	.timeout      = { .min = 1200, .max = 1750 },
 };
 
-void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float *dir, sfx_s *sfx,
+void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float *dir, const SoundSet *sound,
 												float radius, bool addSoundLfe ) {
 	vec3_t fireOrigin, almostExactOrigin;
 	VectorMA( origin, 8.0f, dir, fireOrigin );
@@ -383,10 +383,10 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		}
 	}
 
-	startSound( sfx, almostExactOrigin, ATTN_DISTANT );
+	startSound( sound, almostExactOrigin, ATTN_DISTANT );
 
 	if( addSoundLfe ) {
-		startSound( cgs.media.sfxExplosionLfe, almostExactOrigin, ATTN_NORM );
+		startSound( cgs.media.sndExplosionLfe, almostExactOrigin, ATTN_NORM );
 	}
 
 	if( v_particles.get() && !liquidContentsAtFireOrigin ) {
@@ -486,8 +486,8 @@ static const LightLifespan kPlasmaParticlesFlareProps[1] {
 
 void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const float *impactNormal, int mode ) {
 	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
-	sfx_s *sfx = ( mode == FIRE_MODE_STRONG ) ? cgs.media.sfxPlasmaStrongHit : cgs.media.sfxPlasmaWeakHit;
-	startSound( sfx, soundOrigin, ATTN_IDLE );
+	const SoundSet *sound = ( mode == FIRE_MODE_STRONG ) ? cgs.media.sndPlasmaStrongHit : cgs.media.sndPlasmaWeakHit;
+	startSound( sound, soundOrigin, ATTN_IDLE );
 
 	if( v_particles.get() ) {
 		EllipsoidalFlockParams flockParams {
@@ -528,11 +528,11 @@ void EffectsSystemFacade::simulateFrameAndSubmit( int64_t currTime, DrawSceneReq
 
 void EffectsSystemFacade::spawnGrenadeBounceEffect( int entNum, int mode ) {
 	assert( mode == FIRE_MODE_STRONG || mode == FIRE_MODE_WEAK );
-	sfx_s *sound = nullptr;
+	const SoundSet *sound = nullptr;
 	if( mode == FIRE_MODE_STRONG ) {
-		sound = cgs.media.sfxGrenadeStrongBounce[m_rng.nextBounded( 2 )];
+		sound = cgs.media.sndGrenadeStrongBounce;
 	} else {
-		sound = cgs.media.sfxGrenadeWeakBounce[m_rng.nextBounded( 2 )];
+		sound = cgs.media.sndGrenadeWeakBounce;
 	}
 	startRelativeSound( sound, entNum, ATTN_IDLE );
 }
@@ -701,7 +701,7 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 	}
 
 	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
-	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
+	startSound( cgs.media.sndElectroboltHit, soundOrigin, ATTN_STATIC );
 
 	m_transientEffectsSystem.spawnElectroboltHitEffect( origin, impactNormal, decalColor, energyColor, spawnDecal );
 }
@@ -771,7 +771,7 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 
 	// TODO: Don't we need an IG-specific sound
 	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
-	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
+	startSound( cgs.media.sndElectroboltHit, soundOrigin, ATTN_STATIC );
 
 	m_transientEffectsSystem.spawnInstagunHitEffect( origin, impactNormal, decalColor, energyColor, spawnDecal );
 }
@@ -807,12 +807,12 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 
 		if( isHittingFlesh ) {
 			// TODO: Check sound origin
-			startSound( cgs.media.sfxBladeFleshHit[m_rng.nextBounded( 3 )], pos, ATTN_NORM );
+			startSound( cgs.media.sndBladeFleshHit, pos, ATTN_NORM );
 		} else {
 			m_transientEffectsSystem.spawnGunbladeBladeImpactEffect( trace.endpos, trace.plane.normal );
 
 			// TODO: Check sound origin
-			startSound( cgs.media.sfxBladeWallHit[m_rng.nextBounded( 2 )], pos, ATTN_NORM );
+			startSound( cgs.media.sndBladeWallHit, pos, ATTN_NORM );
 
 			if( v_particles.get() ) {
 				ConicalFlockParams flockParams {
@@ -865,7 +865,7 @@ static const LightLifespan kGunbladeBlastFlareProps[1] {
 };
 
 void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, const float *dir ) {
-	startSound( cgs.media.sfxGunbladeStrongHit[m_rng.nextBounded( 2 )], origin, ATTN_IDLE );
+	startSound( cgs.media.sndGunbladeStrongHit, origin, ATTN_IDLE );
 
 	if( v_particles.get() ) {
 		EllipsoidalFlockParams flockParams {
@@ -1618,7 +1618,7 @@ void EffectsSystemFacade::spawnGlassImpactParticles( unsigned delay, const Flock
 void EffectsSystemFacade::spawnBulletImpactEffect( unsigned delay, const SolidImpact &impact ) {
 	const FlockOrientation flockOrientation = makeRicochetFlockOrientation( impact, &m_rng );
 
-	sfx_s *sfx         = nullptr;
+	const SoundSet *sound = nullptr;
 	uintptr_t groupTag = 0;
 	if( v_particles.get() ) {
 		const SurfImpactMaterial impactMaterial = decodeSurfImpactMaterial( impact.surfFlags );
@@ -1643,20 +1643,18 @@ void EffectsSystemFacade::spawnBulletImpactEffect( unsigned delay, const SolidIm
 			spawnBulletLikeImpactRingUsingLimiter( delay, impact );
 		}
 		const unsigned group = getImpactSfxGroupForMaterial( impactMaterial );
-		sfx      = getSfxForImpactGroup( group );
+		sound    = getSfxForImpactGroup( group );
 		groupTag = group;
 	} else {
 		spawnBulletGenericImpactRosette( delay, flockOrientation, 0.5f, 1.0f );
 		// TODO: Postpone if needed
 		m_transientEffectsSystem.spawnBulletImpactModel( impact.origin, impact.normal );
-		if( const unsigned numSfx = cgs.media.sfxImpactSolid.length() ) {
-			sfx      = cgs.media.sfxImpactSolid[m_rng.nextBounded( numSfx )];
-			groupTag = 0;
-		}
+		sound    = cgs.media.sndImpactSolid;
+		groupTag = 0;
 	}
 
-	if( sfx ) {
-		startSoundForImpactUsingLimiter( sfx, groupTag, impact, EventRateLimiterParams {
+	if( sound ) {
+		startSoundForImpactUsingLimiter( sound, groupTag, impact, EventRateLimiterParams {
 			.dropChanceAtZeroDistance = 0.5f,
 			.startDroppingAtDistance  = 144.0f,
 			.dropChanceAtZeroTimeDiff = 1.0f,
@@ -1768,23 +1766,18 @@ auto EffectsSystemFacade::getImpactSfxGroupForMaterial( SurfImpactMaterial impac
 	return 0;
 }
 
-auto EffectsSystemFacade::getSfxForImpactGroup( unsigned group ) -> sfx_s * {
+auto EffectsSystemFacade::getSfxForImpactGroup( unsigned group ) -> const SoundSet * {
 	// Build in a lazy fashion, so we don't have to care of lifetimes
-	if( !m_impactSfxForGroups.full() ) [[unlikely]] {
-		auto &ma = cgs.media;
-		m_impactSfxForGroups.push_back( { ma.sfxImpactSolid.getAddressOfHandles(), ma.sfxImpactSolid.length() } );
-		m_impactSfxForGroups.push_back( { ma.sfxImpactMetal.getAddressOfHandles(), ma.sfxImpactMetal.length() } );
-		m_impactSfxForGroups.push_back( { ma.sfxImpactSoft.getAddressOfHandles(), ma.sfxImpactSoft.length() } );
-		m_impactSfxForGroups.push_back( { ma.sfxImpactWood.getAddressOfHandles(), ma.sfxImpactWood.length() } );
-		m_impactSfxForGroups.push_back( { ma.sfxImpactGlass.getAddressOfHandles(), ma.sfxImpactGlass.length() } );
+	if( !m_impactSoundsForGroups.full() ) [[unlikely]] {
+		m_impactSoundsForGroups.push_back( cgs.media.sndImpactSolid );
+		m_impactSoundsForGroups.push_back( cgs.media.sndImpactMetal );
+		m_impactSoundsForGroups.push_back( cgs.media.sndImpactSoft );
+		m_impactSoundsForGroups.push_back( cgs.media.sndImpactWood );
+		m_impactSoundsForGroups.push_back( cgs.media.sndImpactGlass );
 	}
 
-	assert( m_impactSfxForGroups.full() && group < m_impactSfxForGroups.size() );
-	auto [sfxData, dataLen] = m_impactSfxForGroups[group];
-	if( dataLen ) {
-		return sfxData[m_rng.nextBounded( dataLen )];
-	}
-	return nullptr;
+	assert( m_impactSoundsForGroups.full() && group < m_impactSoundsForGroups.size() );
+	return m_impactSoundsForGroups[group];
 }
 
 void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( unsigned delay,
@@ -2110,10 +2103,7 @@ void EffectsSystemFacade::spawnBulletLiquidImpactEffect( unsigned delay, const L
 
 	spawnWaterImpactRing( delay, impact.origin );
 
-	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
-		sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
-		startSoundForImpactUsingLimiter( sfx, impact, kLiquidImpactSoundLimiterParams );
-	}
+	startSoundForImpactUsingLimiter( cgs.media.sndImpactWater, impact, kLiquidImpactSoundLimiterParams );
 }
 
 void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const SolidImpact> impacts,
@@ -2183,8 +2173,8 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 		for( const SolidImpact &impact: impacts ) {
 			const unsigned group     = getImpactSfxGroupForMaterial( decodeSurfImpactMaterial( impact.surfFlags ) );
 			const uintptr_t groupTag = group;
-			sfx_s *sfx               = getSfxForImpactGroup( group );
-			startSoundForImpactUsingLimiter( sfx, groupTag, impact, limiterParams );
+			const SoundSet *sound       = getSfxForImpactGroup( group );
+			startSoundForImpactUsingLimiter( sound, groupTag, impact, limiterParams );
 		}
 	} else {
 		for( unsigned i = 0; i < impacts.size(); ++i ) {
@@ -2195,12 +2185,9 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 			// TODO: Postpone if needed
 			m_transientEffectsSystem.spawnPelletImpactModel( impact.origin, impact.normal );
 		}
-		if( const unsigned numSfx = cgs.media.sfxImpactSolid.length() ) {
-			const auto groupTag   = (uintptr_t)cgs.media.sfxImpactSolid.getAddressOfHandles();
-			for( const SolidImpact &impact: impacts ) {
-				sfx_s *sfx = cgs.media.sfxImpactSolid[m_rng.nextBounded( numSfx )];
-				startSoundForImpactUsingLimiter( sfx, groupTag, impact, limiterParams );
-			}
+		const auto groupTag = (uintptr_t)cgs.media.sndImpactSolid.getAddressOfHandle();
+		for( const SolidImpact &impact: impacts ) {
+			startSoundForImpactUsingLimiter( cgs.media.sndImpactSolid, groupTag, impact, limiterParams );
 		}
 	}
 }
@@ -2231,8 +2218,8 @@ void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const S
 	for( const SolidImpact &impact: impacts ) {
 		const unsigned group     = getImpactSfxGroupForMaterial( decodeSurfImpactMaterial( impact.surfFlags ) );
 		const uintptr_t groupTag = group;
-		sfx_s *sfx               = getSfxForImpactGroup( group );
-		startSoundForImpactUsingLimiter( sfx, groupTag, impact, limiterParams );
+		const SoundSet *sound       = getSfxForImpactGroup( group );
+		startSoundForImpactUsingLimiter( sound, groupTag, impact, limiterParams );
 	}
 }
 
@@ -2276,11 +2263,8 @@ void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const Liqu
 	}
 
 	// TODO: Add delays to sounds?
-	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
-		for( const LiquidImpact &impact: impacts ) {
-			sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
-			startSoundForImpactUsingLimiter( sfx, impact, kLiquidImpactSoundLimiterParams );
-		}
+	for( const LiquidImpact &impact: impacts ) {
+		startSoundForImpactUsingLimiter( cgs.media.sndImpactWater, impact, kLiquidImpactSoundLimiterParams );
 	}
 }
 
@@ -2313,27 +2297,27 @@ void EffectsSystemFacade::spawnWaterImpactRing( unsigned delay, const float *ori
 	}
 }
 
-void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t group, const SolidImpact &impact,
+void EffectsSystemFacade::startSoundForImpactUsingLimiter( const SoundSet *sound, uintptr_t group, const SolidImpact &impact,
 														   const EventRateLimiterParams &params ) {
 	assert( std::fabs( VectorLengthFast( impact.normal ) - 1.0f ) < 1e-2f );
-	if( sfx ) {
+	if( sound ) {
 		vec3_t soundOrigin;
 		VectorAdd( impact.origin, impact.normal, soundOrigin );
 		assert( !( CG_PointContents( soundOrigin ) & MASK_SOLID ) );
 		if( m_solidImpactSoundsRateLimiter.acquirePermission( cg.time, soundOrigin, group, params ) ) {
-			startSound( sfx, soundOrigin );
+			startSound( sound, soundOrigin );
 		}
 	}
 }
 
-void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, const LiquidImpact &impact,
+void EffectsSystemFacade::startSoundForImpactUsingLimiter( const SoundSet *sound, const LiquidImpact &impact,
 														   const EventRateLimiterParams &params ) {
-	if( sfx ) {
+	if( sound ) {
 		vec3_t soundOrigin;
 		VectorAdd( impact.origin, impact.burstDir, soundOrigin );
 		assert( !( CG_PointContents( soundOrigin ) & MASK_SOLID ) );
 		if( m_liquidImpactSoundsRateLimiter.acquirePermission( cg.time, soundOrigin, params ) ) {
-			startSound( sfx, soundOrigin );
+			startSound( sound, soundOrigin );
 		}
 	}
 }

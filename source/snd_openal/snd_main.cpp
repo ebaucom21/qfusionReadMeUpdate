@@ -50,14 +50,14 @@ public:
 	void setEntitySpatialParams( int, const float *, const float * ) override {};
 
 	[[nodiscard]]
-	auto registerSound( const char * ) -> sfx_s * override { return nullptr; }
+	auto registerSound( const SoundSetProps & ) -> const SoundSet * override { return nullptr; }
 
-	void startFixedSound( sfx_s *, const float *, int, float, float ) override {}
-	void startRelativeSound( sfx_s *, int, int, float, float ) override {}
-	void startGlobalSound( sfx_s *, int, float ) override {}
+	void startFixedSound( const SoundSet *, const float *, int, float, float ) override {}
+	void startRelativeSound( const SoundSet *, int, int, float, float ) override {}
+	void startGlobalSound( const SoundSet *, int, float ) override {}
 	void startLocalSound( const char *, float ) override {}
-	void startLocalSound( sfx_s *, float ) override {}
-	void addLoopSound( sfx_s *, int, uintptr_t, float, float ) override {}
+	void startLocalSound( const SoundSet *, float ) override {}
+	void addLoopSound( const SoundSet *, int, uintptr_t, float, float ) override {}
 
 	void startBackgroundTrack( const char *, const char *, int ) override {}
 	void stopBackgroundTrack() override {}
@@ -157,7 +157,7 @@ void SoundSystem::shutdown( bool verbose ) {
 	}
 }
 
-ALuint S_SoundFormat( int width, int channels ) {
+ALenum S_SoundFormat( int width, int channels ) {
 	if( width == 1 ) {
 		if( channels == 1 ) {
 			return AL_FORMAT_MONO8;

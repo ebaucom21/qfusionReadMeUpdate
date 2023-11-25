@@ -115,11 +115,11 @@ static bool read_ogg_header( OggVorbis_File *vorbisfile, snd_info_t *info ) {
 		return false;
 	}
 
-	info->rate = vorbisinfo->rate;
-	info->width = 2;
-	info->channels = vorbisinfo->channels;
-	info->samples = (int)qov_pcm_total( vorbisfile, -1 );
-	info->size = info->samples * info->channels * info->width;
+	info->sampleRate = vorbisinfo->rate;
+	info->bytesPerSample = 2;
+	info->numChannels = vorbisinfo->channels;
+	info->samplesPerChannel = (int)qov_pcm_total( vorbisfile, -1 );
+	info->sizeInBytes = info->samplesPerChannel * info->numChannels * info->bytesPerSample;
 
 	return true;
 }
@@ -233,19 +233,19 @@ void *decoder_ogg_load( const char *filename, snd_info_t *info ) {
 		return NULL;
 	}
 
-	buffer = (char *)Q_malloc( info->size );
+	buffer = (char *)Q_malloc( info->sizeInBytes );
 
 	bytes_read_total = 0;
 	do {
 #ifdef ENDIAN_BIG
-		bytes_read = qov_read( &vorbisfile, buffer + bytes_read_total, info->size - bytes_read_total, 1, 2, 1, &bitstream );
+		bytes_read = qov_read( &vorbisfile, buffer + bytes_read_total, info->sizeInBytes - bytes_read_total, 1, 2, 1, &bitstream );
 #elif defined ( ENDIAN_LITTLE )
-		bytes_read = qov_read( &vorbisfile, buffer + bytes_read_total, info->size - bytes_read_total, 0, 2, 1, &bitstream );
+		bytes_read = qov_read( &vorbisfile, buffer + bytes_read_total, info->sizeInBytes - bytes_read_total, 0, 2, 1, &bitstream );
 #else
 #error "runtime endianess detection support missing"
 #endif
 		bytes_read_total += bytes_read;
-	} while( bytes_read > 0 && bytes_read_total < info->size );
+	} while( bytes_read > 0 && bytes_read_total < info->sizeInBytes );
 
 	qov_clear( &vorbisfile ); // Does FS_FCloseFile
 	if( !bytes_read_total ) {
