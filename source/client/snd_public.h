@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/wswstring.h"
 #include "../common/wswstringview.h"
 #include "../common/stringspanstorage.h"
+#include <initializer_list>
 #include <variant>
 
 struct SoundSet;
@@ -41,12 +42,16 @@ struct SoundSetProps {
 		explicit Exact( const char *value_ ) : value( value_ ) {}
 	};
 	// Note: For now, patterns are only allowed in the basename part, not in extension or directory part.
+	// Up to 16 files can be loaded by specifying Pattern, excessive files are ingored.
 	struct Pattern {
 		wsw::StringView pattern;
 		explicit Pattern( const wsw::StringView &pattern_ ) : pattern( pattern_ ) {}
 		explicit Pattern( const char *pattern_ ) : pattern( pattern_ ) {}
 	};
 	std::variant<Exact, Pattern> name;
+	// Up to 16 values, there may be duplicates. An empty span means using default pitch.
+	// Valid values are positive (1.0 for no pitch shift at all), invalid values are excluded.
+	std::initializer_list<float> pitchVariations;
 	// Assumed to be in [0, 1] range for majority of sounds (but values exceeding this range are allowed).
 	// Spammy sounds like ricochets, plasma explosions, laser impact sounds should have it close to zero.
 	// It should not be treated as generic gameplay importance of the sound,

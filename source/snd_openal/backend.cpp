@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "snd_env_sampler.h"
 #include "alsystemfacade.h"
 #include "../common/links.h"
+#include <span>
 
 extern int s_registration_sequence;
 
@@ -273,6 +274,17 @@ void Backend::processFrameUpdates() {
 }
 
 [[nodiscard]]
+static auto getSoundSetName( const SoundSetProps &props ) -> wsw::StringView {
+	if( const auto *exact = std::get_if<SoundSetProps::Exact>( &props.name ) ) {
+		return exact->value;
+	}
+	if( const auto *pattern = std::get_if<SoundSetProps::Pattern>( &props.name ) ) {
+		return pattern->pattern;
+	}
+	wsw::failWithLogicError( "Unreachable" );
+}
+
+[[nodiscard]]
 static bool matchesByName( const SoundSetProps &lhs, const SoundSetProps &rhs ) {
 	if( lhs.name.index() == rhs.name.index() ) {
 		if( const auto *leftExact = std::get_if<SoundSetProps::Exact>( &lhs.name ) ) {
@@ -288,23 +300,82 @@ static bool matchesByName( const SoundSetProps &lhs, const SoundSetProps &rhs ) 
 	return false;
 }
 
+[[nodiscard]]
+static bool assignPitchVariations( const wsw::StringView &soundSetName, SoundSet *soundSet, std::span<const float> values ) {
+	float sanitizedValues[16];
+	assert( std::size( sanitizedValues ) == std::size( soundSet->pitchVariations ) );
+	unsigned numSantizedValues = 0;
+
+	bool hasIllegalValues = false;
+	bool hasTooManyValues = false;
+	for( const float &value: values ) {
+		if( value <= 0.0f ) {
+			hasIllegalValues = true;
+		} else {
+			if( numSantizedValues == std::size( sanitizedValues ) ) {
+				hasTooManyValues = true;
+				break;
+			} else {
+				sanitizedValues[numSantizedValues++] = value;
+			}
+		}
+	}
+
+	if( hasIllegalValues ) {
+		sWarning() << "Pitch variations for sound set" << soundSetName << "have illegal values";
+	}
+	if( hasTooManyValues ) {
+		sWarning() << "Too many pitch variations for sound set" << soundSetName;
+	}
+
+	bool hasUpdates = false;
+	if( soundSet->numPitchVariations != numSantizedValues ) {
+		soundSet->numPitchVariations = numSantizedValues;
+		hasUpdates = true;
+	} else if( !std::equal( sanitizedValues, sanitizedValues + numSantizedValues, soundSet->pitchVariations ) ) {
+		hasUpdates = true;
+	}
+
+	if( hasUpdates ) {
+		std::copy( sanitizedValues, sanitizedValues + numSantizedValues, soundSet->pitchVariations );
+	}
+	return hasUpdates;
+}
+
 void Backend::loadSound( const SoundSetProps &props ) {
-	for( const SoundSet *soundSet = m_registeredSoundSetsHead; soundSet; soundSet = soundSet->next ) {
+	[[maybe_unused]] const wsw::StringView name( getSoundSetName( props ) );
+
+	for( SoundSet *soundSet = m_registeredSoundSetsHead; soundSet; soundSet = soundSet->next ) {
 		if( matchesByName( props, soundSet->props ) ) {
+			bool hasUpdates = false;
+			bool hasToLoad  = false;
+			// Note: We can't just assign values if we load different buffers for different variations
+			if( assignPitchVariations( name, soundSet, props.pitchVariations ) ) {
+				hasUpdates = true;
+			}
+			if( soundSet->props.processingQualityHint != props.processingQualityHint ) {
+				soundSet->props.processingQualityHint = props.processingQualityHint;
+				hasUpdates = true;
+			}
+			if( soundSet->props.lazyLoading != props.lazyLoading ) {
+				soundSet->props.lazyLoading = props.lazyLoading;
+				hasUpdates = true;
+				hasToLoad  = !props.lazyLoading && ( !soundSet->isLoaded && !soundSet->hasFailedLoading );
+			}
+			if( hasUpdates ) {
+				sWarning() << "Overwriting properties for already registered sound" << name;
+			}
 			soundSet->registrationSequence = s_registration_sequence;
+			if( hasToLoad ) {
+				forceLoading( soundSet );
+			}
 			return;
 		}
 	}
 
 	uint8_t *const mem = m_soundSetsAllocator.allocOrNull();
 	if( !mem ) {
-		if( const auto *exactName = std::get_if<SoundSetProps::Exact>( &props.name ) ) {
-			sError() << "Failed to load SoundSet for exact name" << exactName->value << "Too many sound sets";
-		} else if( const auto *namePattern = std::get_if<SoundSetProps::Pattern>( &props.name ) ) {
-			sError() << "Failed to load SoundSet for name pattern" << namePattern->pattern << "Too many sound sets";
-		} else {
-			wsw::failWithLogicError( "Unreachable" );
-		}
+		sError() << "Failed to allocate a sound set for" << name << "(too many sound sets)";
 		return;
 	}
 
@@ -321,6 +392,8 @@ void Backend::loadSound( const SoundSetProps &props ) {
 	} else {
 		wsw::failWithLogicError( "Unreachable" );
 	}
+
+	(void)assignPitchVariations( name, newSoundSet, props.pitchVariations );
 
 	wsw::link( newSoundSet, &m_registeredSoundSetsHead );
 
@@ -540,8 +613,9 @@ auto Backend::getBufferForPlayback( const SoundSet *soundSet, bool forceStereo )
 			}
 			assert( soundSet->isLoaded );
 		}
-		assert( soundSet->numBuffers > 0 );
-		const auto index      = ( soundSet->numBuffers < 2 ) ? 0 : m_rng.nextBounded( soundSet->numBuffers );
+		const auto numBuffers = soundSet->numBuffers;
+		assert( numBuffers > 0 );
+		const auto index      = ( numBuffers < 2 ) ? 0 : m_rng.nextBounded( numBuffers );
 		const ALuint *buffers = soundSet->buffers;
 		if( forceStereo ) {
 			buffers = soundSet->stereoBuffers;
@@ -553,6 +627,18 @@ auto Backend::getBufferForPlayback( const SoundSet *soundSet, bool forceStereo )
 		return std::make_pair( buffers[index], index );
 	}
 	return std::nullopt;
+}
+
+auto Backend::getPitchForPlayback( const SoundSet *soundSet ) -> float {
+	if( soundSet ) {
+		if( const auto numPitchVariations = soundSet->numPitchVariations; numPitchVariations > 0 ) {
+			const auto index = ( numPitchVariations < 2 ) ? 0 : m_rng.nextBounded( numPitchVariations );
+			const float pitch = soundSet->pitchVariations[index];
+			assert( pitch > 0.0f );
+			return pitch;
+		}
+	}
+	return 1.0f;
 }
 
 void Backend::endRegistration() {
@@ -575,31 +661,31 @@ void Backend::setListener( const Vec3 &origin, const Vec3 &velocity, const std::
 
 void Backend::startLocalSound( const SoundSet *sound, float volume ) {
 	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound, true ) ) {
-		S_StartLocalSound( sound, *bufferAndIndex, volume );
+		S_StartLocalSound( sound, *bufferAndIndex, getPitchForPlayback( sound ), volume );
 	}
 }
 
 void Backend::startFixedSound( const SoundSet *sound, const Vec3 &origin, int channel, float volume, float attenuation ) {
 	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
-		S_StartFixedSound( sound, *bufferAndIndex, origin.Data(), channel, volume, attenuation );
+		S_StartFixedSound( sound, *bufferAndIndex, getPitchForPlayback( sound ), origin.Data(), channel, volume, attenuation );
 	}
 }
 
 void Backend::startGlobalSound( const SoundSet *sound, int channel, float volume ) {
 	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
-		S_StartGlobalSound( sound, *bufferAndIndex, channel, volume );
+		S_StartGlobalSound( sound, *bufferAndIndex, getPitchForPlayback( sound ), channel, volume );
 	}
 }
 
 void Backend::startRelativeSound( const SoundSet *sound, int entNum, int channel, float volume, float attenuation ) {
 	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
-		S_StartRelativeSound( sound, *bufferAndIndex, entNum, channel, volume, attenuation );
+		S_StartRelativeSound( sound, *bufferAndIndex, getPitchForPlayback( sound ), entNum, channel, volume, attenuation );
 	}
 }
 
 void Backend::addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) {
 	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
-		S_AddLoopSound( sound, *bufferAndIndex, entNum, identifyingToken, volume, attenuation );
+		S_AddLoopSound( sound, *bufferAndIndex, getPitchForPlayback( sound ), entNum, identifyingToken, volume, attenuation );
 	}
 }
 

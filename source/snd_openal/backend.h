@@ -63,6 +63,8 @@ private:
 
 	[[nodiscard]]
 	auto getBufferForPlayback( const SoundSet *soundSet, bool forceStereo = false ) -> std::optional<std::pair<ALuint, unsigned>>;
+	[[nodiscard]]
+	auto getPitchForPlayback( const SoundSet *soundSet ) -> float;
 
 	static constexpr unsigned kMaxSoundSets = 256;
 

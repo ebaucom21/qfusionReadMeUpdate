@@ -52,7 +52,9 @@ struct SoundSet {
 	ALuint buffers[16] {};
 	ALuint stereoBuffers[16] {};
 	unsigned bufferDurationMillis[16] {};
+	float pitchVariations[16] {};
 	unsigned numBuffers { 0 };
+	unsigned numPitchVariations { 0 };
 
 	bool hasFailedLoading { false };
 	bool isLoaded { false };
@@ -85,13 +87,13 @@ static inline auto clampSourceGain( float givenVolume ) -> float {
 
 // playing
 
-void S_StartFixedSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, const vec3_t origin, int channel, float fvol, float attenuation );
-void S_StartRelativeSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, int entnum, int channel, float fvol, float attenuation );
-void S_StartGlobalSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, int channel, float fvol );
+void S_StartFixedSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, const vec3_t origin, int channel, float fvol, float attenuation );
+void S_StartRelativeSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entnum, int channel, float fvol, float attenuation );
+void S_StartGlobalSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int channel, float fvol );
 
-void S_StartLocalSound( const SoundSet *sound, std::pair<ALuint, unsigned> bufferAndIndex, float fvol );
+void S_StartLocalSound( const SoundSet *sound, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, float fvol );
 
-void S_AddLoopSound( const SoundSet *sound, std::pair<ALuint, unsigned> bufferAndIndex, int entnum, uintptr_t identifyingToken, float fvol, float attenuation );
+void S_AddLoopSound( const SoundSet *sound, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entnum, uintptr_t identifyingToken, float fvol, float attenuation );
 
 void S_RawSamples2( unsigned int samples, unsigned int rate,
 					unsigned short width, unsigned short channels, const uint8_t *data, bool music, float fvol );
