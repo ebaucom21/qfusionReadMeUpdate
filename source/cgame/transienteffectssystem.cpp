@@ -487,25 +487,30 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 
 	SimulatedHullsSystem *const hullsSystem = &cg.simulatedHullsSystem;
 
-#if 0
 	float fireHullScale;
 	unsigned fireHullTimeout;
 	std::span<const SimulatedHullsSystem::HullLayerParams> fireHullLayerParams;
 	if( v_explosionSmoke.get() ) {
-		fireHullScale       = 2.4f;
-		fireHullTimeout     = 150;
+		fireHullScale       = 1.6f;
+		fireHullTimeout     = 450;
 		fireHullLayerParams = kFireHullParams.lightHullLayerParams;
 	} else {
-		fireHullScale       = 2.0f;
-		fireHullTimeout     = 250;
+		fireHullScale       = 1.5f;
+		fireHullTimeout     = 550;
 		fireHullLayerParams = kFireHullParams.darkHullLayerParams;
 	}
 
+	m_explosionCompoundMeshCounter++;
+	if( !m_explosionCompoundMeshCounter ) [[unlikely]] {
+		m_explosionCompoundMeshCounter++;
+	}
+	const unsigned compoundMeshKey = m_explosionCompoundMeshCounter;
+
 	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, fireHullTimeout ) ) {
 		hullsSystem->setupHullVertices( hull, fireOrigin, fireHullScale, fireHullLayerParams );
-		assert( !hull->layers[0].useDrawOnTopHack );
+		hull->compoundMeshKey = compoundMeshKey;
+
 		hull->vertexViewDotFade          = SimulatedHullsSystem::ViewDotFade::FadeOutContour;
-		hull->layers[0].useDrawOnTopHack = true;
 		hull->layers[0].overrideHullFade = SimulatedHullsSystem::ViewDotFade::NoFade;
 		hull->layers[1].overrideHullFade = SimulatedHullsSystem::ViewDotFade::NoFade;
 
@@ -535,7 +540,6 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 			hullsSystem->setupHullVertices( hull, fireOrigin, waveColor, 500.0f, 50.0f );
 		}
 	}
-#endif
 
 	if( smokeOrigin ) {
 		const std::span<const SimulatedHullsSystem::OffsetKeyframe> toonSmokeKeyframeSet = toonSmokeKeyframes.setOfKeyframes;
@@ -548,6 +552,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		if( auto *const hull = hullsSystem->allocToonSmokeHull( m_lastTime, toonSmokeLifetime ) ) {
 			hullsSystem->setupHullVertices( hull, smokeOrigin, toonSmokeScale,
 											&toonSmokeKeyframeSet, toonSmokeKeyframes.maxOffset );
+			hull->compoundMeshKey = compoundMeshKey;
 		}
 
 #if 0
@@ -615,26 +620,14 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		for( const SmokeHullParams &hullSpawnParams: spawnSmokeHullParams ) {
 			spawnSmokeHull( m_lastTime, smokeOrigin, spikeSpeedMask, hullSpawnParams );
 		}
+#endif
 	}
 
-	if( v_explosionClusters.get() ) {
-		std::span<const SimulatedHullsSystem::HullLayerParams> clusterHullLayerParams;
-		float minSpawnerSpeed, maxSpawnerSpeed;
-		unsigned maxSpawnedClusters;
-		if( v_explosionSmoke.get() ) {
-			clusterHullLayerParams = ::kFireHullParams.lightClusterHullLayerParams;
-			minSpawnerSpeed = 105.0f, maxSpawnerSpeed = 125.0f;
-			maxSpawnedClusters = 7;
-		} else {
-			clusterHullLayerParams = ::kFireHullParams.darkClusterHullLayerParams;
-			minSpawnerSpeed = 115.0f, maxSpawnerSpeed = 135.0f;
-			maxSpawnedClusters = 10;
-		}
-
+	// Disallow clusters if smoke is enabled (they are barely noticeable and make the combined effect worse)
+	if( v_explosionClusters.get() && !v_explosionSmoke.get() ) {
 		unsigned numSpawnedClusters = 0;
 		unsigned oldDirNum          = 0;
-
-		while( numSpawnedClusters < maxSpawnedClusters ) {
+		while( numSpawnedClusters < 12 ) {
 			const unsigned dirNum  = m_rng.nextBoundedFast( std::size( kPredefinedDirs ) );
 			const float *randomDir = kPredefinedDirs[dirNum];
 			// Just check against the last directory so this converges faster
@@ -647,20 +640,18 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 
 			const auto spawnDelay = ( fireHullTimeout / 4 ) + m_rng.nextBoundedFast( fireHullTimeout / 4 );
 			auto *const effect = allocDelayedEffect( m_lastTime, fireOrigin, spawnDelay, ConcentricHullSpawnRecord {
-				.layerParams = clusterHullLayerParams,
+				.layerParams = ::kFireHullParams.darkClusterHullLayerParams,
 				.scale       = m_rng.nextFloat( 0.25f, 0.37f ) * fireHullScale,
 				.timeout     = fireHullTimeout / 3,
 				.allocMethod = (ConcentricHullSpawnRecord::AllocMethod)&SimulatedHullsSystem::allocFireClusterHull,
 				.vertexViewDotFade         = SimulatedHullsSystem::ViewDotFade::FadeOutContour,
-				.useLayer0DrawOnTopHack    = true,
 				.overrideLayer0ViewDotFade = SimulatedHullsSystem::ViewDotFade::NoFade,
 			});
 
-			const float randomSpeed = m_rng.nextFloat( minSpawnerSpeed, maxSpawnerSpeed );
+			const float randomSpeed = m_rng.nextFloat( 160.0f, 175.0f );
 			VectorScale( randomDir, randomSpeed, effect->velocity );
 			effect->simulation = DelayedEffect::SimulateMovement;
 		}
-#endif
 	}
 }
 
@@ -947,9 +938,7 @@ void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin
 
 	if( auto *hull = cg.simulatedHullsSystem.allocBlastHull( m_lastTime, 450 ) ) {
 		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, 1.25f, kBlastHullLayerParams );
-		assert( !hull->layers[0].useDrawOnTopHack );
 		hull->vertexViewDotFade          = SimulatedHullsSystem::ViewDotFade::FadeOutContour;
-		hull->layers[0].useDrawOnTopHack = true;
 		hull->layers[0].overrideHullFade = SimulatedHullsSystem::ViewDotFade::NoFade;
 
 		g_blastHullCloudMeshProps.material = cgs.media.shaderBlastHullParticle;
@@ -1461,9 +1450,7 @@ void TransientEffectsSystem::spawnDelayedEffect( DelayedEffect *effect ) {
 			if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, record.timeout ) ) {
 				cg.simulatedHullsSystem.setupHullVertices( hull, m_effect->origin, record.scale,
 														   record.layerParams );
-				assert( !hull->layers[0].useDrawOnTopHack );
 				hull->vertexViewDotFade          = record.vertexViewDotFade;
-				hull->layers[0].useDrawOnTopHack = record.useLayer0DrawOnTopHack;
 				hull->layers[0].overrideHullFade = record.overrideLayer0ViewDotFade;
 			}
 		}
