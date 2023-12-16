@@ -93,6 +93,7 @@ ParticleSystem::ParticleSystem() {
 
 	for( unsigned i = 0; i < 5; ++i ) {
 		const auto [flockSize, maxFlocks] = regularBinProps[i];
+		assert( flockSize <= std::numeric_limits<uint8_t>::max() );
 		auto *const bin      = new( m_regularFlockBins.unsafe_grow_back() )RegularFlocksBin( flockSize, maxFlocks );
 		bin->indexOfTrailBin = i < 3 ? i : ~0u;
 		bin->needsClipping   = i < 4;
@@ -104,6 +105,7 @@ ParticleSystem::ParticleSystem() {
 	};
 
 	for( const auto &[flockSize, maxFlocks] : trailsOfParticlesProps ) {
+		assert( flockSize <= std::numeric_limits<uint8_t>::max() );
 		// Allocate few extra slots for lingering trails
 		new( m_trailsOfParticlesBins.unsafe_grow_back() )ParticleTrailBin( flockSize, maxFlocks + 8 );
 		new( m_polyTrailBins.unsafe_grow_back() )PolyTrailBin( flockSize, maxFlocks + 8 );

@@ -1186,7 +1186,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		float startFromOrder;
 		const DynamicMesh **submittedMeshesBuffer;
 		float *submittedOrderDesignators;
-		if( const std::optional<uint8_t> pairIndex = pairIndicesForKeyframedHulls[concentricHullIndex] ) {
+		if( const std::optional<uint8_t> pairIndex = pairIndicesForConcentricHulls[concentricHullIndex] ) {
 			const unsigned meshDataOffset     = meshDataOffsetsForPairs[*pairIndex];
 			const unsigned numAddedToonMeshes = numAddedMeshesForPairs[*pairIndex];
 			submittedMeshesBuffer             = m_storageOfSubmittedMeshPtrs.get( 0 ) + meshDataOffset + numAddedToonMeshes;
@@ -1329,6 +1329,8 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 				assert( actualNumMeshesToSubmit <= kMaxMeshesPerHull );
 				drawSceneRequest->addCompoundDynamicMesh( combinedMins, combinedMaxs, submittedMeshesBuffer,
 														  actualNumMeshesToSubmit, submittedOrderDesignators );
+				// We add meshes to the space reserved by the toon hull, offsetOfMultilayerMeshData is kept the same
+				assert( actualNumMeshesToSubmit <= kMaxMeshesPerHull );
 			}
 		} else {
 			// Just submit meshes of this concentric hull, if any
@@ -1336,6 +1338,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 				assert( numMeshesToSubmit <= kMaxMeshesPerHull );
 				drawSceneRequest->addCompoundDynamicMesh( hull->mins, hull->maxs, submittedMeshesBuffer,
 														  numMeshesToSubmit, submittedOrderDesignators );
+				offsetOfMultilayerMeshData += numMeshesToSubmit;
 			}
 		}
 
@@ -1769,7 +1772,7 @@ auto SimulatedHullsSystem::computeCurrTimelineNodeIndex( unsigned startFromIndex
 	-> unsigned {
 	// Sanity checks
 	assert( effectDuration && effectDuration < std::numeric_limits<uint16_t>::max() );
-	assert( currTime - spawnTime > 0 && currTime - spawnTime < std::numeric_limits<uint16_t>::max() );
+	assert( currTime - spawnTime >= 0 && currTime - spawnTime < std::numeric_limits<uint16_t>::max() );
 
 	assert( startFromIndex < timeline.size() );
 
