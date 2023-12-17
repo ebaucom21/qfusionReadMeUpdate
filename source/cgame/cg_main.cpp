@@ -1245,41 +1245,35 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) 
 		VectorSubtract( blendPoint, projectsource.origin, dir );
 		VecToAngles( dir, blendAngles );
 
-		vec3_t points[MAX_CURVELASERBEAM_SUBDIVISIONS + 1];
-		VectorCopy( from, points[0] );
-		size_t numAddedPoints = 1;
-
 		int passthrough             = ownerEntNum;
 		const auto range            = (float)GS_GetWeaponDef( WEAP_LASERGUN )->firedef_weak.timeout;
 		const int minSubdivisions   = CURVELASERBEAM_SUBDIVISIONS;
 		const int maxSubdivisions   = MAX_CURVELASERBEAM_SUBDIVISIONS;
 		const int subdivisions      = wsw::clamp( v_laserBeamSubdivisions.get(), minSubdivisions, maxSubdivisions );
 		const float rcpSubdivisions = Q_Rcp( (float)subdivisions );
+
+		unsigned numAddedPoints = 1;
+		vec3_t points[MAX_CURVELASERBEAM_SUBDIVISIONS + 1];
+		GS_GetCurvedLaserBeamSegments( points, subdivisions, projectsource.origin, laserAngles, range, blendPoint );
+
 		for( int segmentNum = 0; segmentNum < subdivisions; segmentNum++ ) {
-			const auto frac = (float)( segmentNum + 1 ) * rcpSubdivisions;
+			float *stepFrom = points[segmentNum + 0];
+			float *stepTo   = points[segmentNum + 1];
 
-			vec3_t tmpangles;
-			for( int j = 0; j < 3; j++ ) {
-				tmpangles[j] = LerpAngle( laserAngles[j], blendAngles[j], frac );
-			}
-
-			vec3_t end;
-			AngleVectors( tmpangles, dir, nullptr, nullptr );
-			VectorMA( projectsource.origin, range * frac, dir, end );
-
-			float *const addedPoint = points[numAddedPoints++];
+			// TODO: GS_TraceLaserBeam() should not require angles
+			vec3_t stepDir, tmpangles;
+			VectorSubtract( stepTo, stepFrom, stepDir );
+			VecToAngles( stepDir, tmpangles );
 
 			trace_t trace;
-			GS_TraceLaserBeam( &trace, from, tmpangles, DistanceFast( from, end ), passthrough, 0, _LaserImpact );
-			VectorCopy( trace.endpos, addedPoint );
-
+			GS_TraceLaserBeam( &trace, stepFrom, tmpangles, DistanceFast( stepFrom, stepTo ), passthrough, 0, _LaserImpact );
+			numAddedPoints++;
 			if( trace.fraction != 1.0f ) {
-				VectorCopy( trace.endpos, addedPoint );
+				VectorCopy( trace.endpos, stepTo );
 				break;
 			}
 
 			passthrough = trace.ent;
-			VectorCopy( trace.endpos, from );
 		}
 
 		std::span<const vec3_t> pointsSpan( points, numAddedPoints );
