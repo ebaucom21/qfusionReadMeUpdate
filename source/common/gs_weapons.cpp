@@ -197,9 +197,7 @@ void GS_GetCurvedLaserBeamSegments( vec3_t dest[MAX_CURVELASERBEAM_SUBDIVISIONS 
 		assert( frac >= 0.0f && frac <= 1.0f );
 
 		vec3_t segmentDir;
-		VectorLerp( laserDir, frac, blendDir, segmentDir );
-		// TODO: Slerp
-		VectorNormalize( segmentDir );
+		VectorSlerp( laserDir, frac, blendDir, segmentDir );
 
 		vec3_t end;
 		VectorMA( origin, segmentLength * ( segmentNum + 1 ), segmentDir, end );
