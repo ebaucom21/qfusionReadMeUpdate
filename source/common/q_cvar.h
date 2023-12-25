@@ -22,7 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define GAME_QCVAR_H
 
 #include "q_arch.h"
-#include <atomic>
 
 //==========================================================
 //
@@ -49,7 +48,8 @@ class DeclaredConfigVar;
 
 // nothing outside the Cvar_*() functions should access these fields!!!
 typedef struct cvar_s {
-	std::atomic<uint64_t> modificationId;
+	// Must be read/written using atomic ops
+	volatile uint64_t modificationId;
 
 	DeclaredConfigVar *controller;
 

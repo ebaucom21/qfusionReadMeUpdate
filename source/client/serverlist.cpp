@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/singletonholder.h"
 #include "client.h"
 
+#include <atomic>
 #include <cinttypes>
 #include <cstdlib>
 #include <limits>

@@ -27,6 +27,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "local.h"
 #include "textstreamwriterextras.h"
 
+#include <atomic>
+
 static bool cvar_initialized = false;
 static bool cvar_preinitialized = false;
 
@@ -157,6 +159,12 @@ static void setValueString( cvar_t *var, const char *string ) {
 	} else {
 		var->string = Q_strdup( string );
 	}
+}
+
+static void Cvar_SetModified( cvar_t *var ) {
+	// TODO: This field should be gone
+	var->modified = true;
+	( (std::atomic<uint64_t> *)&var->modificationId )->fetch_add( 1 );
 }
 
 /*

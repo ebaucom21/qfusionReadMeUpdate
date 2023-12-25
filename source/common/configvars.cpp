@@ -7,6 +7,29 @@
 #include "outputmessages.h"
 #include "q_shared.h"
 
+#include <atomic>
+
+template <typename T>
+[[nodiscard]]
+static auto loadFromOpaqueStorage( volatile T *storage ) -> T {
+	using TypeOfAtomic = std::atomic<std::remove_cvref_t<T>>;
+	static_assert( sizeof( TypeOfAtomic ) == sizeof( T ) && alignof( TypeOfAtomic ) == alignof( T ) );
+	assert( !( ( (uintptr_t)storage ) % alignof( TypeOfAtomic ) ) );
+	auto *atomic = reinterpret_cast<TypeOfAtomic *>( (void *)storage );
+	assert( atomic->is_lock_free() );
+	return atomic->load( std::memory_order::relaxed );
+}
+
+template <typename T>
+static void storeToOpaqueStorage( volatile T *storage, T value ) {
+	using TypeOfAtomic = std::atomic<std::remove_cvref_t<T>>;
+	static_assert( sizeof( TypeOfAtomic ) == sizeof( T ) && alignof( TypeOfAtomic ) == alignof( T ) );
+	assert( !( ( (uintptr_t)storage ) % alignof( TypeOfAtomic ) ) );
+	auto *atomic = reinterpret_cast<TypeOfAtomic *>( (void *)storage );
+	assert( atomic->is_lock_free() );
+	atomic->store( value, std::memory_order::relaxed );
+}
+
 cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force );
 
 using wsw::operator""_asView;
@@ -25,6 +48,10 @@ DeclaredConfigVar::~DeclaredConfigVar() {
 		// TODO: This must be an atomic write, or even lock
 		m_underlying->controller = nullptr;
 	}
+}
+
+auto DeclaredConfigVar::modificationId() const -> uint64_t {
+	return loadFromOpaqueStorage( &m_underlying->modificationId );
 }
 
 void DeclaredConfigVar::failOnOp( const char *op ) const {
@@ -124,22 +151,22 @@ void BoolConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const
 auto BoolConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
 	if( const auto maybeNum = wsw::toNum<int64_t>( newValue ) ) {
 		if( maybeNum == 0 ) {
-			m_cachedValue = false;
+			storeToOpaqueStorage( &m_cachedValue, false );
 		} else if( maybeNum == 1 ) {
-			m_cachedValue = true;
+			storeToOpaqueStorage( &m_cachedValue, true );
 		} else {
-			m_cachedValue = true;
+			storeToOpaqueStorage( &m_cachedValue, true );
 			assert( tmpBuffer->empty() );
 			tmpBuffer->push_back( '1' );
 			return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
 		}
 	} else {
 		if( newValue.equalsIgnoreCase( "true"_asView ) ) {
-			m_cachedValue = true;
+			storeToOpaqueStorage( &m_cachedValue, true );
 		} else if( newValue.equalsIgnoreCase( "false"_asView ) ) {
-			m_cachedValue = false;
+			storeToOpaqueStorage( &m_cachedValue, false );
 		} else {
-			m_cachedValue = m_params.byDefault;
+			storeToOpaqueStorage( &m_cachedValue, m_params.byDefault );
 			assert( tmpBuffer->empty() );
 			tmpBuffer->push_back( m_cachedValue ? '1' : '0' );
 			return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
@@ -167,7 +194,7 @@ auto BoolConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *
 
 bool BoolConfigVar::get() const {
 	if( m_underlying ) [[likely]] {
-		return m_cachedValue;
+		return loadFromOpaqueStorage( &m_cachedValue );
 	} else {
 		wsw::failWithRuntimeError( "Attempt to get uninitialized config variable" );
 	}
@@ -175,7 +202,7 @@ bool BoolConfigVar::get() const {
 
 void BoolConfigVar::helperOfSet( bool value, bool force ) {
 	if( m_underlying ) [[likely]] {
-		m_cachedValue = value;
+		storeToOpaqueStorage( &m_cachedValue, value );
 		Cvar_Set2( m_name.data(), value ? "1" : "0", force );
 	} else {
 		failOnSet();
@@ -198,10 +225,10 @@ auto IntConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::Str
 	// Note: the double parsing kind of sucks, but it reduces implementation complexity
 	// and strings are still the primary serialization/exchange form of config vars data.
 	if( const std::optional<wsw::StringView> &correctedValueView = correctValue( newValue, tmpBuffer ) ) {
-		m_cachedValue = wsw::toNum<int>( *correctedValueView ).value();
+		storeToOpaqueStorage( &m_cachedValue, wsw::toNum<int>( *correctedValueView ).value() );
 		return correctedValueView;
 	} else {
-		m_cachedValue = wsw::toNum<int>( newValue ).value();
+		storeToOpaqueStorage( &m_cachedValue, wsw::toNum<int>( newValue ).value() );
 		return std::nullopt;
 	}
 }
@@ -224,7 +251,7 @@ auto IntConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *t
 
 auto IntConfigVar::get() const -> int {
 	if( m_underlying ) {
-		return m_cachedValue;
+		return loadFromOpaqueStorage( &m_cachedValue );
 	} else {
 		failOnGet();
 	}
@@ -233,7 +260,7 @@ auto IntConfigVar::get() const -> int {
 void IntConfigVar::helperOfSet( int value, bool force ) {
 	if( m_underlying ) {
 		value = convertValueUsingBounds( value, m_params.min, m_params.max );
-		m_cachedValue = value;
+		storeToOpaqueStorage( &m_cachedValue, value );
 		Cvar_Set2( m_name.data(), std::to_string( value ).data(), force );
 	} else {
 		failOnSet();
@@ -255,10 +282,10 @@ void UnsignedConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) c
 auto UnsignedConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
 	// See IntConfigVar remarks
 	if( const std::optional<wsw::StringView> &correctedValueView = correctValue( newValue, tmpBuffer ) ) {
-		m_cachedValue = wsw::toNum<unsigned>( *correctedValueView ).value();
+		storeToOpaqueStorage( &m_cachedValue, wsw::toNum<unsigned>( *correctedValueView ).value() );
 		return correctedValueView;
 	} else {
-		m_cachedValue = wsw::toNum<unsigned>( newValue ).value();
+		storeToOpaqueStorage( &m_cachedValue, wsw::toNum<unsigned>( newValue ).value() );
 		return std::nullopt;
 	}
 }
@@ -281,7 +308,7 @@ auto UnsignedConfigVar::correctValue( const wsw::StringView &newValue, wsw::Stri
 
 auto UnsignedConfigVar::get() const -> unsigned {
 	if( m_underlying ) {
-		return m_cachedValue;
+		return loadFromOpaqueStorage( &m_cachedValue );
 	} else {
 		failOnGet();
 	}
@@ -290,7 +317,7 @@ auto UnsignedConfigVar::get() const -> unsigned {
 void UnsignedConfigVar::helperOfSet( unsigned value, bool force ) {
 	if( m_underlying ) {
 		value = convertValueUsingBounds( value, m_params.min, m_params.max );
-		m_cachedValue = value;
+		storeToOpaqueStorage( &m_cachedValue, value );
 		Cvar_Set2( m_name.data(), std::to_string( value ).data(), force );
 	} else {
 		failOnSet();
@@ -311,10 +338,10 @@ void FloatConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) cons
 auto FloatConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
 	// See IntConfigVar remarks
 	if( const std::optional<wsw::StringView> &correctedValueView = correctValue( newValue, tmpBuffer ) ) {
-		m_cachedValue = wsw::toNum<float>( *correctedValueView ).value();
+		storeToOpaqueStorage( &m_cachedValue, wsw::toNum<float>( *correctedValueView ).value() );
 		return correctedValueView;
 	} else {
-		m_cachedValue = wsw::toNum<float>( newValue ).value();
+		storeToOpaqueStorage( &m_cachedValue, wsw::toNum<float>( newValue ).value() );
 		return std::nullopt;
 	}
 }
@@ -337,7 +364,7 @@ auto FloatConfigVar::correctValue( const wsw::StringView &newValue, wsw::String 
 
 auto FloatConfigVar::get() const -> float {
 	if( m_underlying ) {
-		return m_cachedValue;
+		return loadFromOpaqueStorage( &m_cachedValue );
 	} else {
 		failOnGet();
 	}
@@ -346,7 +373,7 @@ auto FloatConfigVar::get() const -> float {
 void FloatConfigVar::helperOfSet( float value, bool force ) {
 	if( m_underlying ) {
 		value = convertValueUsingBounds( value, m_params.min, m_params.max );
-		m_cachedValue = value;
+		storeToOpaqueStorage( &m_cachedValue, value );
 		Cvar_Set2( m_name.data(), std::to_string( value ).data(), force );
 	} else {
 		failOnSet();
@@ -372,8 +399,8 @@ auto StringConfigVar::correctValue( const wsw::StringView &newValue, wsw::String
 }
 
 auto StringConfigVar::get() const -> wsw::StringView {
+	// Note: see the remark to the declaration
 	if( m_underlying ) {
-		// Not thread-safe... Should we make copies? Should the underlying value be a shared pointer?
 		return wsw::StringView( m_underlying->string );
 	} else {
 		failOnGet();
@@ -442,11 +469,11 @@ void ColorConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) cons
 
 auto ColorConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
 	if( const std::optional<int> maybeColor = parseColor( newValue ) ) {
-		m_cachedValue = *maybeColor;
+		storeToOpaqueStorage( &m_cachedValue, *maybeColor );
 		return std::nullopt;
 	} else {
 		assert( tmpBuffer->empty() );
-		m_cachedValue = m_params.byDefault & kRgbMask;
+		storeToOpaqueStorage( &m_cachedValue, m_params.byDefault & kRgbMask );
 		colorToString( m_params.byDefault & kRgbMask, tmpBuffer );
 		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
 	}
@@ -464,7 +491,7 @@ auto ColorConfigVar::correctValue( const wsw::StringView &newValue, wsw::String 
 auto ColorConfigVar::get() const -> int {
 	if( m_underlying ) {
 		assert( !( m_cachedValue & ~kRgbMask ) );
-		return m_cachedValue;
+		return loadFromOpaqueStorage( &m_cachedValue );
 	} else {
 		failOnGet();
 	}
@@ -475,7 +502,7 @@ void ColorConfigVar::helperOfSet( int value, bool force ) {
 		// We clamp out-of-range values silently
 		value = value & kRgbMask;
 		wsw::StaticString<16> buffer;
-		m_cachedValue = value;
+		storeToOpaqueStorage( &m_cachedValue, value );
 		colorToString( value, &buffer );
 		Cvar_Set2( m_name.data(), buffer.data(), force );
 	} else {
@@ -499,7 +526,7 @@ UntypedEnumValueConfigVar::UntypedEnumValueConfigVar( const wsw::StringView &nam
 
 auto UntypedEnumValueConfigVar::helperOfGet() const -> int {
 	if( m_underlying ) [[likely]] {
-		return m_cachedValue;
+		return loadFromOpaqueStorage( &m_cachedValue );
 	} else {
 		failOnGet();
 	}
@@ -510,7 +537,7 @@ void UntypedEnumValueConfigVar::helperOfSet( int value, bool force ) {
 		if( !isAValidValue( value ) ) {
 			value = m_defaultValue;
 		}
-		m_cachedValue = value;
+		storeToOpaqueStorage( &m_cachedValue, value );
 		Cvar_Set2( m_name.data(), std::to_string( value ).data(), force );
 	} else {
 		failOnSet();
@@ -545,10 +572,10 @@ auto UntypedEnumValueConfigVar::handleValueChanges( const wsw::StringView &newVa
 		validatedValue = maybeMatchedValue;
 	}
 	if( validatedValue ) {
-		m_cachedValue = *validatedValue;
+		storeToOpaqueStorage( &m_cachedValue, *validatedValue );
 		return std::nullopt;
 	} else {
-		m_cachedValue = m_defaultValue;
+		storeToOpaqueStorage( &m_cachedValue, m_defaultValue );
 		getDefaultValueText( tmpBuffer );
 		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
 	}
@@ -628,10 +655,10 @@ auto UntypedEnumFlagsConfigVar::handleValueChanges( const wsw::StringView &newVa
 		validatedValue = parseValueFromString( newValue );
 	}
 	if( validatedValue ) {
-		m_cachedValue = *validatedValue;
+		storeToOpaqueStorage( &m_cachedValue, *validatedValue );
 		return std::nullopt;
 	} else {
-		m_cachedValue = m_defaultValue;
+		storeToOpaqueStorage( &m_cachedValue, m_defaultValue );
 		getDefaultValueText( tmpBuffer );
 		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
 	}
@@ -680,7 +707,7 @@ bool UntypedEnumFlagsConfigVar::isAnAcceptableValue( unsigned value ) const {
 
 auto UntypedEnumFlagsConfigVar::helperOfGet() const -> unsigned {
 	if( m_underlying ) [[likely]] {
-		return m_cachedValue;
+		return loadFromOpaqueStorage( &m_cachedValue );
 	} else {
 		failOnGet();
 	}
@@ -689,12 +716,12 @@ auto UntypedEnumFlagsConfigVar::helperOfGet() const -> unsigned {
 void UntypedEnumFlagsConfigVar::helperOfSet( unsigned value, bool force ) {
 	if( m_underlying ) [[likely]] {
 		if( isAnAcceptableValue( value ) ) {
-			m_cachedValue = value & m_allBitsInEnumValues;
+			storeToOpaqueStorage( &m_cachedValue, value & m_allBitsInEnumValues );
 		} else {
 			assert( !( m_defaultValue & ~m_allBitsInEnumValues ) );
-			m_cachedValue = m_defaultValue;
+			storeToOpaqueStorage( &m_cachedValue, m_defaultValue );
 		}
-		m_cachedValue = value & m_allBitsInEnumValues;
+		// TODO: Was it incorrect? m_cachedValue = value & m_allBitsInEnumValues;
 		if( value != m_allBitsSetValueForType && value != m_allBitsInEnumValues ) {
 			Cvar_Set2( m_name.data(), std::to_string( value ).data(), force );
 		} else {

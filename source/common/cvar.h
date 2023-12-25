@@ -70,11 +70,6 @@ char *Cvar_Serverinfo( void );
 
 // inlined function implementations
 
-static inline void Cvar_SetModified( cvar_t *var ) {
-	var->modified = ( bool )1;
-	var->modificationId++;
-}
-
 static inline cvar_flag_t Cvar_FlagSet( cvar_flag_t *flags, cvar_flag_t flag ) {
 	return *flags |= flag;
 }

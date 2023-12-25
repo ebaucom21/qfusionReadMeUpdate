@@ -6,7 +6,6 @@
 #include "wswvector.h"
 #include "q_cvar.h"
 
-#include <atomic>
 #include <variant>
 
 struct cvar_s;
@@ -37,7 +36,7 @@ public:
 	[[nodiscard]]
 	bool initialized() const { return m_underlying != nullptr; }
 	[[nodiscard]]
-	auto modificationId() const -> uint64_t { return m_underlying->modificationId; }
+	auto modificationId() const -> uint64_t;
 
 	static void registerAllVars( DeclaredConfigVar *head );
 	static void unregisterAllVars( DeclaredConfigVar *head );
@@ -59,6 +58,8 @@ protected:
 	void failOnSet() const { failOnOp( "set" ); }
 	[[noreturn]]
 	void failOnGet() const { failOnOp( "get" ); }
+
+	static constexpr size_t kOpaqueAtomicAlignment = alignof( void * );
 
 	// TODO: Should be an atomic reference
 	mutable cvar_s *m_underlying { nullptr };
@@ -111,9 +112,8 @@ private:
 	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
 	const Params m_params;
-	// Note: Due to correctness reasons, we have to use atomic wrappers for values
-	// that get read/written from multiple threads. Their operations default to relaxed loads/stores.
-	std::atomic<bool> m_cachedValue { false };
+	// Opaque storage for std::atomic<int>
+	alignas( kOpaqueAtomicAlignment ) volatile bool m_cachedValue { false };
 };
 
 class IntConfigVar final : public DeclaredConfigVar {
@@ -139,8 +139,9 @@ private:
 	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
 	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
-	std::atomic<int> m_cachedValue { 0 };
 	const Params m_params;
+	// Opaque storage for std::atomic<int>
+	alignas( kOpaqueAtomicAlignment ) volatile int m_cachedValue { 0 };
 };
 
 class UnsignedConfigVar final : public DeclaredConfigVar {
@@ -166,8 +167,9 @@ private:
 	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
 	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
-	std::atomic<unsigned> m_cachedValue;
 	const Params m_params;
+	// Opaque storage for std::atomic<unsigned>
+	alignas( kOpaqueAtomicAlignment ) volatile unsigned m_cachedValue { 0 };
 };
 
 class FloatConfigVar final : public DeclaredConfigVar {
@@ -193,8 +195,9 @@ private:
 	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
 	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
-	std::atomic<float> m_cachedValue { 0.0f };
 	const Params m_params;
+	// Opaque storage for std::atomic<float>
+	alignas( kOpaqueAtomicAlignment ) volatile float m_cachedValue { 0.0f };
 };
 
 class StringConfigVar final : public DeclaredConfigVar {
@@ -207,6 +210,8 @@ public:
 
 	StringConfigVar( const wsw::StringView &name, Params &&params );
 
+	// TODO: We must return a ref-counted string by value, and the underlying storage should store strings like that as well.
+	// Keeping as-is for now, as existing facilities aren't thread-safe either.
 	[[nodiscard]]
 	auto get() const -> wsw::StringView;
 	void set( const wsw::StringView &value ) { helperOfSet( value, false ); }
@@ -245,8 +250,9 @@ private:
 	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
 	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
-	std::atomic<int> m_cachedValue;
 	const Params m_params;
+	// Opaque storage for std::atomic<int>
+	alignas( kOpaqueAtomicAlignment ) volatile int m_cachedValue;
 };
 
 class UntypedEnumValueConfigVar : public DeclaredConfigVar {
@@ -274,9 +280,10 @@ private:
 	const MatcherObj m_matcherObj;
 	const MatcherFn m_matcherFn;
 	const wsw::Vector<int> m_enumValues;
+	// Opaque storage for std::atomic<int>
+	alignas( kOpaqueAtomicAlignment ) volatile int m_cachedValue { 0 };
 	int m_minEnumValue { 0 };
 	int m_maxEnumValue { 0 };
-	std::atomic<int> m_cachedValue { 0 };
 	const int m_defaultValue;
 };
 
@@ -338,10 +345,11 @@ private:
 	const MatcherObj m_matcherObj;
 	const MatcherFn m_matcherFn;
 	const wsw::Vector<unsigned> m_enumValues;
+	// Opaque storage for std::atomic<unsigned>
+	alignas( kOpaqueAtomicAlignment ) volatile unsigned m_cachedValue { 0 };
 	unsigned m_defaultValue;
 	unsigned m_allBitsInEnumValues { 0 };
 	unsigned m_allBitsSetValueForType { 0 };
-	std::atomic<unsigned> m_cachedValue { 0 };
 	bool m_hasZeroInValues { false };
 };
 

@@ -6,8 +6,6 @@
 #include "../common/wswstaticvector.h"
 #include "serverinfoparser.h"
 
-#include <atomic>
-
 class PlayerInfo {
 public:
 	wsw::StaticString<32> name;
