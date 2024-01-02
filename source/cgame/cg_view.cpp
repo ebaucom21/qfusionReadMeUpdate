@@ -71,11 +71,11 @@ static int oldState = -1;
 static int oldAlphaScore, oldBetaScore;
 static bool scoresSet = false;
 
-int CG_DemoCam_GetViewType( void ) {
+int CG_DemoCam_GetViewType() {
 	return cam_viewtype;
 }
 
-bool CG_DemoCam_GetThirdPerson( void ) {
+bool CG_DemoCam_GetThirdPerson() {
 	if( !currentcam ) {
 		return ( chaseCam.mode == CAM_THIRDPERSON );
 	}
@@ -103,39 +103,40 @@ float CG_DemoCam_GetOrientation( vec3_t origin, vec3_t angles, vec3_t velocity )
 }
 
 // TODO: Should it belong to the same place where prediction gets executed?
-int CG_DemoCam_FreeFly( void ) {
-	usercmd_t cmd;
-	const float SPEED = 500;
-
+int CG_DemoCam_FreeFly() {
 	if( cgs.demoPlaying && CamIsFree ) {
-		vec3_t wishvel, wishdir, forward, right, up, moveangles;
-		float fmove, smove, upmove, wishspeed, maxspeed;
-		int i;
-
-		maxspeed = 250;
+		float maxspeed = 250;
 
 		// run frame
+		usercmd_t cmd;
 		NET_GetUserCmd( NET_GetCurrentUserCmdNum() - 1, &cmd );
 		cmd.msec = cg.realFrameTime;
 
-		for( i = 0; i < 3; i++ )
+		vec3_t moveangles;
+		for( int i = 0; i < 3; i++ ) {
 			moveangles[i] = SHORT2ANGLE( cmd.angles[i] ) + SHORT2ANGLE( freecam_delta_angles[i] );
+		}
 
-		AngleVectors( moveangles, forward, right, up );
+		vec3_t forward, right;
+		AngleVectors( moveangles, forward, right, nullptr );
 		VectorCopy( moveangles, cam_angles );
 
-		fmove = cmd.forwardmove * SPEED / 127.0f;
-		smove = cmd.sidemove * SPEED / 127.0f;
-		upmove = cmd.upmove * SPEED / 127.0f;
+		const float SPEED = 500;
+		float fmove = cmd.forwardmove * SPEED / 127.0f;
+		float smove = cmd.sidemove * SPEED / 127.0f;
+		float upmove = cmd.upmove * SPEED / 127.0f;
 		if( cmd.buttons & BUTTON_SPECIAL ) {
 			maxspeed *= 2;
 		}
 
-		for( i = 0; i < 3; i++ )
+		vec3_t wishvel;
+		for( int i = 0; i < 3; i++ ) {
 			wishvel[i] = forward[i] * fmove + right[i] * smove;
+		}
 		wishvel[2] += upmove;
 
-		wishspeed = VectorNormalize2( wishvel, wishdir );
+		vec3_t wishdir;
+		float wishspeed = VectorNormalize2( wishvel, wishdir );
 		if( wishspeed > maxspeed ) {
 			wishspeed = maxspeed / wishspeed;
 			VectorScale( wishvel, wishspeed, wishvel );
@@ -152,7 +153,7 @@ int CG_DemoCam_FreeFly( void ) {
 	return VIEWDEF_PLAYERVIEW;
 }
 
-static void CG_Democam_SetCameraPositionFromView( void ) {
+static void CG_Democam_SetCameraPositionFromView() {
 	if( cg.view.type == VIEWDEF_PLAYERVIEW ) {
 		VectorCopy( cg.view.origin, cam_origin );
 		VectorCopy( cg.view.angles, cam_angles );
@@ -161,22 +162,21 @@ static void CG_Democam_SetCameraPositionFromView( void ) {
 	}
 
 	if( !CamIsFree ) {
-		int i;
 		usercmd_t cmd;
-
 		NET_GetUserCmd( NET_GetCurrentUserCmdNum() - 1, &cmd );
 
-		for( i = 0; i < 3; i++ )
+		for( int i = 0; i < 3; i++ ) {
 			freecam_delta_angles[i] = ANGLE2SHORT( cam_angles[i] ) - cmd.angles[i];
+		}
 	}
 }
 
-static int CG_Democam_CalcView( void ) {
+static int CG_Democam_CalcView() {
 	VectorClear( cam_velocity );
 	return VIEWDEF_PLAYERVIEW;
 }
 
-bool CG_DemoCam_Update( void ) {
+bool CG_DemoCam_Update() {
 	if( !cgs.demoPlaying ) {
 		return false;
 	}
@@ -202,7 +202,7 @@ bool CG_DemoCam_Update( void ) {
 	return true;
 }
 
-bool CG_DemoCam_IsFree( void ) {
+bool CG_DemoCam_IsFree() {
 	return CamIsFree;
 }
 
@@ -224,7 +224,7 @@ static void CG_CamSwitch_Cmd_f( const CmdArgs & ) {
 
 }
 
-void CG_DemocamInit( void ) {
+void CG_DemocamInit() {
 	demo_time = 0;
 	demo_initial_timestamp = 0;
 
@@ -241,7 +241,7 @@ void CG_DemocamInit( void ) {
 	CL_Cmd_Register( "camswitch"_asView, CG_CamSwitch_Cmd_f );
 }
 
-void CG_DemocamShutdown( void ) {
+void CG_DemocamShutdown() {
 	if( !cgs.demoPlaying ) {
 		return;
 	}
@@ -251,12 +251,12 @@ void CG_DemocamShutdown( void ) {
 	CL_Cmd_Unregister( "camswitch"_asView );
 }
 
-void CG_DemocamReset( void ) {
+void CG_DemocamReset() {
 	demo_time = 0;
 	demo_initial_timestamp = 0;
 }
 
-int CG_LostMultiviewPOV( void );
+int CG_LostMultiviewPOV();
 
 /*
 * CG_ChaseStep
@@ -264,35 +264,32 @@ int CG_LostMultiviewPOV( void );
 * Returns whether the POV was actually requested to be changed.
 */
 bool CG_ChaseStep( int step ) {
-	int index, checkPlayer, i;
-
 	if( cg.frame.multipov ) {
 		// find the playerState containing our current POV, then cycle playerStates
-		index = -1;
-		for( i = 0; i < cg.frame.numplayers; i++ ) {
+		int index = -1;
+		for( int i = 0; i < cg.frame.numplayers; i++ ) {
 			if( cg.frame.playerStates[i].playerNum < (unsigned)gs.maxclients && cg.frame.playerStates[i].playerNum == cg.multiviewPlayerNum ) {
 				index = i;
 				break;
 			}
 		}
 
+		int checkPlayer;
 		// the POV was lost, find the closer one (may go up or down, but who cares)
 		if( index == -1 ) {
 			checkPlayer = CG_LostMultiviewPOV();
 		} else {
 			checkPlayer = index;
-			for( i = 0; i < cg.frame.numplayers; i++ ) {
+			for( int i = 0; i < cg.frame.numplayers; i++ ) {
 				checkPlayer += step;
 				if( checkPlayer < 0 ) {
 					checkPlayer = cg.frame.numplayers - 1;
 				} else if( checkPlayer >= cg.frame.numplayers ) {
 					checkPlayer = 0;
 				}
-
-				if( ( checkPlayer != index ) && cg.frame.playerStates[checkPlayer].stats[STAT_REALTEAM] == TEAM_SPECTATOR ) {
-					continue;
+				if( checkPlayer == index || cg.frame.playerStates[checkPlayer].stats[STAT_REALTEAM] != TEAM_SPECTATOR ) {
+					break;
 				}
-				break;
 			}
 		}
 
@@ -312,23 +309,19 @@ bool CG_ChaseStep( int step ) {
 	return false;
 }
 
-static void CG_AddLocalSounds( void ) {
+static void CG_AddLocalSounds() {
 	// add local announces
 	if( GS_Countdown() ) {
 		if( GS_MatchDuration() ) {
-			int64_t duration, curtime;
-			unsigned remainingSeconds;
-			float seconds;
-
-			curtime = GS_MatchPaused() ? cg.frame.serverTime : cg.time;
-			duration = GS_MatchDuration();
+			const int64_t curtime = GS_MatchPaused() ? cg.frame.serverTime : cg.time;
+			int64_t duration = GS_MatchDuration();
 
 			if( duration + GS_MatchStartTime() < curtime ) {
 				duration = curtime - GS_MatchStartTime(); // avoid negative results
-
 			}
-			seconds = (float)( GS_MatchStartTime() + duration - curtime ) * 0.001f;
-			remainingSeconds = (unsigned int)seconds;
+
+			auto seconds = (float)( GS_MatchStartTime() + duration - curtime ) * 0.001f;
+			auto remainingSeconds = (unsigned)seconds;
 
 			if( remainingSeconds != lastSecond ) {
 				if( 1 + remainingSeconds < 4 ) {
@@ -379,12 +372,11 @@ static void CG_AddLocalSounds( void ) {
 *
 * Flashes game window in case of important events (match state changes, etc) for user to notice
 */
-static void CG_FlashGameWindow( void ) {
-	int newState;
+static void CG_FlashGameWindow() {
 	bool flash = false;
 
 	// notify player of important match states
-	newState = GS_MatchState();
+	const int newState = GS_MatchState();
 	if( oldState != newState ) {
 		switch( newState ) {
 			case MATCH_STATE_COUNTDOWN:
@@ -399,11 +391,11 @@ static void CG_FlashGameWindow( void ) {
 		oldState = newState;
 	}
 
+	const auto *const stats = cg.predictedPlayerState.stats;
 	// notify player of teams scoring in team-based gametypes
-	if( !scoresSet ||
-		( oldAlphaScore != cg.predictedPlayerState.stats[STAT_TEAM_ALPHA_SCORE] || oldBetaScore != cg.predictedPlayerState.stats[STAT_TEAM_BETA_SCORE] ) ) {
-		oldAlphaScore = cg.predictedPlayerState.stats[STAT_TEAM_ALPHA_SCORE];
-		oldBetaScore = cg.predictedPlayerState.stats[STAT_TEAM_BETA_SCORE];
+	if( !scoresSet || ( oldAlphaScore != stats[STAT_TEAM_ALPHA_SCORE] || oldBetaScore != stats[STAT_TEAM_BETA_SCORE] ) ) {
+		oldAlphaScore = stats[STAT_TEAM_ALPHA_SCORE];
+		oldBetaScore  = stats[STAT_TEAM_BETA_SCORE];
 
 		flash = scoresSet && GS_TeamBasedGametype() && !GS_IndividualGameType();
 		scoresSet = true;
@@ -421,8 +413,8 @@ static void CG_FlashGameWindow( void ) {
 float CG_GetSensitivityScale( float sens, float zoomSens ) {
 	float sensScale = 1.0f;
 
-	if( !cgs.demoPlaying && sens && ( cg.predictedPlayerState.pmove.stats[PM_STAT_ZOOMTIME] > 0 ) ) {
-		if( zoomSens ) {
+	if( !cgs.demoPlaying && sens != 0.0f && ( cg.predictedPlayerState.pmove.stats[PM_STAT_ZOOMTIME] > 0 ) ) {
+		if( zoomSens != 0.0f ) {
 			return zoomSens / sens;
 		}
 
@@ -432,52 +424,36 @@ float CG_GetSensitivityScale( float sens, float zoomSens ) {
 	return sensScale;
 }
 
-void CG_AddKickAngles( vec3_t viewangles ) {
-	float time;
-	float uptime;
-	float delta;
-	int i;
+void CG_AddKickAngles( float *viewangles ) {
+	for( int i = 0; i < MAX_ANGLES_KICKS; i++ ) {
+		if( cg.time <= cg.kickangles[i].timestamp + cg.kickangles[i].kicktime ) {
+			const float time   = (float)( ( cg.kickangles[i].timestamp + cg.kickangles[i].kicktime ) - cg.time );
+			const float uptime = ( (float)cg.kickangles[i].kicktime ) * 0.5f;
 
-	for( i = 0; i < MAX_ANGLES_KICKS; i++ ) {
-		if( cg.time > cg.kickangles[i].timestamp + cg.kickangles[i].kicktime ) {
-			continue;
+			float delta = 1.0f - ( fabs( time - uptime ) / uptime );
+			//Com_Printf("Kick Delta:%f\n", delta );
+			if( delta > 1.0f ) {
+				delta = 1.0f;
+			}
+			if( delta > 0.0f ) {
+				viewangles[PITCH] += cg.kickangles[i].v_pitch * delta;
+				viewangles[ROLL] += cg.kickangles[i].v_roll * delta;
+			}
 		}
-
-		time = (float)( ( cg.kickangles[i].timestamp + cg.kickangles[i].kicktime ) - cg.time );
-		uptime = ( (float)cg.kickangles[i].kicktime ) * 0.5f;
-		delta = 1.0f - ( fabs( time - uptime ) / uptime );
-
-		//Com_Printf("Kick Delta:%f\n", delta );
-		if( delta > 1.0f ) {
-			delta = 1.0f;
-		}
-		if( delta <= 0.0f ) {
-			continue;
-		}
-
-		viewangles[PITCH] += cg.kickangles[i].v_pitch * delta;
-		viewangles[ROLL] += cg.kickangles[i].v_roll * delta;
 	}
 }
 
-static float CG_CalcViewFov( void ) {
-	float frac;
-	float fov, zoomfov;
-
-	fov = v_fov.get();
-	zoomfov = v_zoomfov.get();
-
-	if( !cg.predictedPlayerState.pmove.stats[PM_STAT_ZOOMTIME] ) {
+static float CG_CalcViewFov() {
+	const float fov      = v_fov.get();
+	const float zoomtime = cg.predictedPlayerState.pmove.stats[PM_STAT_ZOOMTIME];
+	if( zoomtime <= 0.0f ) {
 		return fov;
 	}
-
-	frac = (float)cg.predictedPlayerState.pmove.stats[PM_STAT_ZOOMTIME] / (float)ZOOMTIME;
-	return fov - ( fov - zoomfov ) * frac;
+	const float zoomfov = v_zoomfov.get();
+	return std::lerp( fov, zoomfov, zoomtime / (float)ZOOMTIME );
 }
 
-static void CG_CalcViewBob( void ) {
-	float bobMove, bobTime, bobScale;
-
+static void CG_CalcViewBob() {
 	if( !cg.view.drawWeapon ) {
 		return;
 	}
@@ -485,7 +461,7 @@ static void CG_CalcViewBob( void ) {
 	// calculate speed and cycle to be used for all cyclic walking effects
 	cg.xyspeed = sqrt( cg.predictedPlayerState.pmove.velocity[0] * cg.predictedPlayerState.pmove.velocity[0] + cg.predictedPlayerState.pmove.velocity[1] * cg.predictedPlayerState.pmove.velocity[1] );
 
-	bobScale = 0;
+	float bobScale = 0.0f;
 	if( cg.xyspeed < 5 ) {
 		cg.oldBobTime = 0;  // start at beginning of cycle again
 	} else if( v_gunBob.get() ) {
@@ -514,8 +490,8 @@ static void CG_CalcViewBob( void ) {
 		}
 	}
 
-	bobMove = cg.frameTime * bobScale * 0.001f;
-	bobTime = ( cg.oldBobTime += bobMove );
+	const float bobMove = cg.frameTime * bobScale * 0.001f;
+	const float bobTime = ( cg.oldBobTime += bobMove );
 
 	cg.bobCycle = (int)bobTime;
 	cg.bobFracSin = fabs( sin( bobTime * M_PI ) );
@@ -526,15 +502,6 @@ void CG_ResetKickAngles( void ) {
 }
 
 void CG_StartKickAnglesEffect( vec3_t source, float knockback, float radius, int time ) {
-	float kick;
-	float side;
-	float dist;
-	float delta;
-	float ftime;
-	vec3_t forward, right, v;
-	int i, kicknum = -1;
-	vec3_t playerorigin;
-
 	if( knockback <= 0 || time <= 0 || radius <= 0.0f ) {
 		return;
 	}
@@ -549,16 +516,18 @@ void CG_StartKickAnglesEffect( vec3_t source, float knockback, float radius, int
 		return;
 	}
 
+	vec3_t playerorigin;
 	// predictedPlayerState is predicted only when prediction is enabled, otherwise it is interpolated
 	VectorCopy( cg.predictedPlayerState.pmove.origin, playerorigin );
 
+	vec3_t v;
 	VectorSubtract( source, playerorigin, v );
-	dist = VectorNormalize( v );
+	const float dist = VectorNormalize( v );
 	if( dist > radius ) {
 		return;
 	}
 
-	delta = 1.0f - ( dist / radius );
+	float delta = 1.0f - ( dist / radius );
 	if( delta > 1.0f ) {
 		delta = 1.0f;
 	}
@@ -566,10 +535,12 @@ void CG_StartKickAnglesEffect( vec3_t source, float knockback, float radius, int
 		return;
 	}
 
-	kick = fabs( knockback ) * delta;
-	if( kick ) { // kick of 0 means no view adjust at all
+	float kick  = fabs( knockback ) * delta;
+	int kicknum = -1;
+	if( kick != 0.0f ) {
+		// kick of 0 means no view adjust at all
 		//find first free kick spot, or the one closer to be finished
-		for( i = 0; i < MAX_ANGLES_KICKS; i++ ) {
+		for( int i = 0; i < MAX_ANGLES_KICKS; i++ ) {
 			if( cg.time > cg.kickangles[i].timestamp + cg.kickangles[i].kicktime ) {
 				kicknum = i;
 				break;
@@ -578,25 +549,25 @@ void CG_StartKickAnglesEffect( vec3_t source, float knockback, float radius, int
 
 		// all in use. Choose the closer to be finished
 		if( kicknum == -1 ) {
-			int remaintime;
 			int best = ( cg.kickangles[0].timestamp + cg.kickangles[0].kicktime ) - cg.time;
 			kicknum = 0;
-			for( i = 1; i < MAX_ANGLES_KICKS; i++ ) {
-				remaintime = ( cg.kickangles[i].timestamp + cg.kickangles[i].kicktime ) - cg.time;
+			for( int i = 1; i < MAX_ANGLES_KICKS; i++ ) {
+				int remaintime = ( cg.kickangles[i].timestamp + cg.kickangles[i].kicktime ) - cg.time;
 				if( remaintime < best ) {
-					best = remaintime;
+					best    = remaintime;
 					kicknum = i;
 				}
 			}
 		}
 
-		AngleVectors( cg.frame.playerState.viewangles, forward, right, NULL );
+		vec3_t forward, right;
+		AngleVectors( cg.frame.playerState.viewangles, forward, right, nullptr );
 
 		if( kick < 1.0f ) {
 			kick = 1.0f;
 		}
 
-		side = DotProduct( v, right );
+		float side = DotProduct( v, right );
 		cg.kickangles[kicknum].v_roll = kick * side * 0.3;
 		Q_clamp( cg.kickangles[kicknum].v_roll, -20, 20 );
 
@@ -605,7 +576,7 @@ void CG_StartKickAnglesEffect( vec3_t source, float knockback, float radius, int
 		Q_clamp( cg.kickangles[kicknum].v_pitch, -20, 20 );
 
 		cg.kickangles[kicknum].timestamp = cg.time;
-		ftime = (float)time * delta;
+		float ftime = (float)time * delta;
 		if( ftime < 100 ) {
 			ftime = 100;
 		}
@@ -614,40 +585,39 @@ void CG_StartKickAnglesEffect( vec3_t source, float knockback, float radius, int
 }
 
 void CG_StartFallKickEffect( int bounceTime ) {
+	// TODO??? Should it be the opposite?
 	if( v_viewBob.get() ) {
 		cg.fallEffectTime = 0;
 		cg.fallEffectRebounceTime = 0;
-		return;
-	}
-
-	if( cg.fallEffectTime > cg.time ) {
-		cg.fallEffectRebounceTime = 0;
-	}
-
-	bounceTime += 200;
-	clamp_high( bounceTime, 400 );
-
-	cg.fallEffectTime = cg.time + bounceTime;
-	if( cg.fallEffectRebounceTime ) {
-		cg.fallEffectRebounceTime = cg.time - ( ( cg.time - cg.fallEffectRebounceTime ) * 0.5 );
 	} else {
-		cg.fallEffectRebounceTime = cg.time;
+		if( cg.fallEffectTime > cg.time ) {
+			cg.fallEffectRebounceTime = 0;
+		}
+
+		bounceTime += 200;
+		clamp_high( bounceTime, 400 );
+
+		cg.fallEffectTime = cg.time + bounceTime;
+		if( cg.fallEffectRebounceTime ) {
+			cg.fallEffectRebounceTime = cg.time - ( ( cg.time - cg.fallEffectRebounceTime ) * 0.5 );
+		} else {
+			cg.fallEffectRebounceTime = cg.time;
+		}
 	}
 }
 
-void CG_ResetColorBlend( void ) {
+void CG_ResetColorBlend() {
 	memset( cg.colorblends, 0, sizeof( cg.colorblends ) );
 }
 
 void CG_StartColorBlendEffect( float r, float g, float b, float a, int time ) {
-	int i, bnum = -1;
-
 	if( a <= 0.0f || time <= 0 ) {
 		return;
 	}
 
+	int bnum = -1;
 	//find first free colorblend spot, or the one closer to be finished
-	for( i = 0; i < MAX_COLORBLENDS; i++ ) {
+	for( int i = 0; i < MAX_COLORBLENDS; i++ ) {
 		if( cg.time > cg.colorblends[i].timestamp + cg.colorblends[i].blendtime ) {
 			bnum = i;
 			break;
@@ -656,11 +626,10 @@ void CG_StartColorBlendEffect( float r, float g, float b, float a, int time ) {
 
 	// all in use. Choose the closer to be finished
 	if( bnum == -1 ) {
-		int remaintime;
 		int best = ( cg.colorblends[0].timestamp + cg.colorblends[0].blendtime ) - cg.time;
 		bnum = 0;
-		for( i = 1; i < MAX_COLORBLENDS; i++ ) {
-			remaintime = ( cg.colorblends[i].timestamp + cg.colorblends[i].blendtime ) - cg.time;
+		for( int i = 1; i < MAX_COLORBLENDS; i++ ) {
+			int remaintime = ( cg.colorblends[i].timestamp + cg.colorblends[i].blendtime ) - cg.time;
 			if( remaintime < best ) {
 				best = remaintime;
 				bnum = i;
@@ -679,10 +648,9 @@ void CG_StartColorBlendEffect( float r, float g, float b, float a, int time ) {
 }
 
 void CG_DamageIndicatorAdd( int damage, const vec3_t dir ) {
-	int i;
-	int64_t damageTime;
-	vec3_t playerAngles;
-	mat3_t playerAxis;
+	if( !v_damageIndicator.get() ) {
+		return;
+	}
 
 // epsilons are 30 degrees
 #define INDICATOR_EPSILON 0.5f
@@ -691,38 +659,45 @@ void CG_DamageIndicatorAdd( int damage, const vec3_t dir ) {
 #define RIGHT_BLEND 1
 #define BOTTOM_BLEND 2
 #define LEFT_BLEND 3
-	float blends[4];
-	float forward, side;
 
-	if( !v_damageIndicator.get() ) {
-		return;
-	}
+	float blends[4] { 0.0f, 0.0f, 0.0f, 0.0f };
 
+	vec3_t playerAngles;
 	playerAngles[PITCH] = 0;
 	playerAngles[YAW] = cg.predictedPlayerState.viewangles[YAW];
 	playerAngles[ROLL] = 0;
 
+	mat3_t playerAxis;
 	Matrix3_FromAngles( playerAngles, playerAxis );
 
 	Vector4Set( blends, 0, 0, 0, 0 );
-	damageTime = damage * v_damageIndicatorTime.get();
+	const float damageTime = damage * v_damageIndicatorTime.get();
 
-	// up and down go distributed equally to all blends and assumed when no dir is given
-	if( !dir || VectorCompare( dir, vec3_origin ) || v_damageIndicator.get() == 2 || GS_Instagib() ||
-		( fabs( DotProduct( dir, &playerAxis[AXIS_UP] ) ) > INDICATOR_EPSILON_UP ) ) {
+	bool considerDistributedEqually = false;
+	if( !dir || VectorCompare( dir, vec3_origin ) ) {
+		considerDistributedEqually = true;
+	} else if( v_damageIndicator.get() == 2 ) {
+		considerDistributedEqually = true;
+	} else if( GS_Instagib() ) {
+		considerDistributedEqually = true;
+	} else if( std::abs( DotProduct( dir, &playerAxis[AXIS_UP] ) ) > INDICATOR_EPSILON_UP ) {
+		considerDistributedEqually = true;
+	}
+
+	if( considerDistributedEqually ) {
 		blends[RIGHT_BLEND] += damageTime;
 		blends[LEFT_BLEND] += damageTime;
 		blends[TOP_BLEND] += damageTime;
 		blends[BOTTOM_BLEND] += damageTime;
 	} else {
-		side = DotProduct( dir, &playerAxis[AXIS_RIGHT] );
+		const float side = DotProduct( dir, &playerAxis[AXIS_RIGHT] );
 		if( side > INDICATOR_EPSILON ) {
 			blends[LEFT_BLEND] += damageTime;
 		} else if( side < -INDICATOR_EPSILON ) {
 			blends[RIGHT_BLEND] += damageTime;
 		}
 
-		forward = DotProduct( dir, &playerAxis[AXIS_FORWARD] );
+		const float forward = DotProduct( dir, &playerAxis[AXIS_FORWARD] );
 		if( forward > INDICATOR_EPSILON ) {
 			blends[BOTTOM_BLEND] += damageTime;
 		} else if( forward < -INDICATOR_EPSILON ) {
@@ -730,7 +705,7 @@ void CG_DamageIndicatorAdd( int damage, const vec3_t dir ) {
 		}
 	}
 
-	for( i = 0; i < 4; i++ ) {
+	for( int i = 0; i < 4; i++ ) {
 		if( cg.damageBlends[i] < cg.time + blends[i] ) {
 			cg.damageBlends[i] = cg.time + blends[i];
 		}
@@ -743,13 +718,11 @@ void CG_DamageIndicatorAdd( int damage, const vec3_t dir ) {
 #undef INDICATOR_EPSILON_UP
 }
 
-void CG_ResetDamageIndicator( void ) {
-	int i;
-
-	for( i = 0; i < 4; i++ )
+void CG_ResetDamageIndicator() {
+	for( int i = 0; i < 4; i++ ) {
 		cg.damageBlends[i] = 0;
+	}
 }
-
 
 void CG_AddEntityToScene( entity_t *ent, DrawSceneRequest *drawSceneRequest ) {
 	if( ent->model && ( !ent->boneposes || !ent->oldboneposes ) ) {
@@ -761,41 +734,37 @@ void CG_AddEntityToScene( entity_t *ent, DrawSceneRequest *drawSceneRequest ) {
 	drawSceneRequest->addEntity( ent );
 }
 
-int CG_SkyPortal( void ) {
-	float fov = 0;
-	float scale = 0;
-	int noents = 0;
-	float pitchspeed = 0, yawspeed = 0, rollspeed = 0;
-	skyportal_t *sp = &cg.view.refdef.skyportal;
+int CG_SkyPortal() {
+	if( const std::optional<wsw::StringView> maybeConfigString = cgs.configStrings.getSkyBox() ) {
+		float fov   = 0;
+		float scale = 0;
+		int noents  = 0;
+		float pitchspeed = 0, yawspeed = 0, rollspeed = 0;
+		skyportal_t *sp = &cg.view.refdef.skyportal;
 
-	auto maybeConfigString = cgs.configStrings.getSkyBox();
-	if( !maybeConfigString ) {
-		return 0;
-	}
+		assert( maybeConfigString->isZeroTerminated() );
+		if( sscanf( maybeConfigString->data(), "%f %f %f %f %f %i %f %f %f",
+					&sp->vieworg[0], &sp->vieworg[1], &sp->vieworg[2], &fov, &scale,
+					&noents,
+					&pitchspeed, &yawspeed, &rollspeed ) >= 3 ) {
+			float off = cg.view.refdef.time * 0.001f;
 
-	if( sscanf( maybeConfigString->data(), "%f %f %f %f %f %i %f %f %f",
-				&sp->vieworg[0], &sp->vieworg[1], &sp->vieworg[2], &fov, &scale,
-				&noents,
-				&pitchspeed, &yawspeed, &rollspeed ) >= 3 ) {
-		float off = cg.view.refdef.time * 0.001f;
-
-		sp->fov = fov;
-		sp->noEnts = ( noents ? true : false );
-		sp->scale = scale ? 1.0f / scale : 0;
-		VectorSet( sp->viewanglesOffset, anglemod( off * pitchspeed ), anglemod( off * yawspeed ), anglemod( off * rollspeed ) );
-		return RDF_SKYPORTALINVIEW;
+			sp->fov = fov;
+			sp->noEnts = ( noents ? true : false );
+			sp->scale = scale ? 1.0f / scale : 0;
+			VectorSet( sp->viewanglesOffset, anglemod( off * pitchspeed ), anglemod( off * yawspeed ), anglemod( off * rollspeed ) );
+			return RDF_SKYPORTALINVIEW;
+		}
 	}
 
 	return 0;
 }
 
-static int CG_RenderFlags( void ) {
-	int rdflags, contents;
-
-	rdflags = 0;
+static int CG_RenderFlags() {
+	int rdflags = 0;
 
 	// set the RDF_UNDERWATER and RDF_CROSSINGWATER bitflags
-	contents = CG_PointContents( cg.view.origin );
+	int contents = CG_PointContents( cg.view.origin );
 	if( contents & MASK_WATER ) {
 		rdflags |= RDF_UNDERWATER;
 
@@ -830,66 +799,59 @@ static int CG_RenderFlags( void ) {
 }
 
 static void CG_InterpolatePlayerState( player_state_t *playerState ) {
-	int i;
-	player_state_t *ps, *ops;
-	bool teleported;
-
-	ps = &cg.frame.playerState;
-	ops = &cg.oldFrame.playerState;
+	player_state_t *const ps = &cg.frame.playerState;
+	player_state_t *const ops = &cg.oldFrame.playerState;
 
 	*playerState = *ps;
 
-	teleported = ( ps->pmove.pm_flags & PMF_TIME_TELEPORT ) ? true : false;
-
-	if( abs( (int)( ops->pmove.origin[0] - ps->pmove.origin[0] ) ) > 256
-		|| abs( (int)( ops->pmove.origin[1] - ps->pmove.origin[1] ) ) > 256
-		|| abs( (int)( ops->pmove.origin[2] - ps->pmove.origin[2] ) ) > 256 ) {
-		teleported = true;
+	bool teleported = ( ps->pmove.pm_flags & PMF_TIME_TELEPORT ) ? true : false;
+	if( !teleported ) {
+		for( int i = 0; i < 3; ++i ) {
+			if( std::abs( ops->pmove.origin[i] - ps->pmove.origin[i] ) > 256 ) {
+				teleported = true;
+				break;
+			}
+		}
 	}
 
 	// if the player entity was teleported this frame use the final position
 	if( !teleported ) {
-		for( i = 0; i < 3; i++ ) {
-			playerState->pmove.origin[i] = ops->pmove.origin[i] + cg.lerpfrac * ( ps->pmove.origin[i] - ops->pmove.origin[i] );
+		for( int i = 0; i < 3; i++ ) {
+			playerState->pmove.origin[i]   = ops->pmove.origin[i] + cg.lerpfrac * ( ps->pmove.origin[i] - ops->pmove.origin[i] );
 			playerState->pmove.velocity[i] = ops->pmove.velocity[i] + cg.lerpfrac * ( ps->pmove.velocity[i] - ops->pmove.velocity[i] );
-			playerState->viewangles[i] = LerpAngle( ops->viewangles[i], ps->viewangles[i], cg.lerpfrac );
+			playerState->viewangles[i]     = LerpAngle( ops->viewangles[i], ps->viewangles[i], cg.lerpfrac );
 		}
-	}
 
-	// interpolate fov and viewheight
-	if( !teleported ) {
 		playerState->viewheight = ops->viewheight + cg.lerpfrac * ( ps->viewheight - ops->viewheight );
-		playerState->pmove.stats[PM_STAT_ZOOMTIME] = ops->pmove.stats[PM_STAT_ZOOMTIME] + cg.lerpfrac * ( ps->pmove.stats[PM_STAT_ZOOMTIME] - ops->pmove.stats[PM_STAT_ZOOMTIME] );
+		playerState->pmove.stats[PM_STAT_ZOOMTIME] = ops->pmove.stats[PM_STAT_ZOOMTIME] +
+			cg.lerpfrac * ( ps->pmove.stats[PM_STAT_ZOOMTIME] - ops->pmove.stats[PM_STAT_ZOOMTIME] );
 	}
 }
 
 static void CG_ThirdPersonOffsetView( cg_viewdef_t *view ) {
-	float dist, f, r;
-	vec3_t dest, stop;
-	vec3_t chase_dest;
-	trace_t trace;
 	vec3_t mins = { -4, -4, -4 };
 	vec3_t maxs = { 4, 4, 4 };
 
 	// calc exact destination
+	vec3_t chase_dest;
 	VectorCopy( view->origin, chase_dest );
-	r = DEG2RAD( v_thirdPersonAngle.get() );
-	f = -cos( r );
+	float r = DEG2RAD( v_thirdPersonAngle.get() );
+	const float f = -cos( r );
 	r = -sin( r );
 	VectorMA( chase_dest, v_thirdPersonRange.get() * f, &view->axis[AXIS_FORWARD], chase_dest );
 	VectorMA( chase_dest, v_thirdPersonRange.get() * r, &view->axis[AXIS_RIGHT], chase_dest );
 	chase_dest[2] += 8;
 
 	// find the spot the player is looking at
+	vec3_t dest;
+	trace_t trace;
 	VectorMA( view->origin, 512, &view->axis[AXIS_FORWARD], dest );
 	CG_Trace( &trace, view->origin, mins, maxs, dest, view->POVent, MASK_SOLID );
 
+	vec3_t stop;
 	// calculate pitch to look at the same spot from camera
 	VectorSubtract( trace.endpos, view->origin, stop );
-	dist = sqrt( stop[0] * stop[0] + stop[1] * stop[1] );
-	if( dist < 1 ) {
-		dist = 1;
-	}
+	const float dist = wsw::min( 1.0f, std::sqrt( stop[0] * stop[0] + stop[1] * stop[1] ) );
 	view->angles[PITCH] = RAD2DEG( -atan2( stop[2], dist ) );
 	view->angles[YAW] -= v_thirdPersonAngle.get();
 	Matrix3_FromAngles( view->angles, view->axis );
@@ -897,9 +859,9 @@ static void CG_ThirdPersonOffsetView( cg_viewdef_t *view ) {
 	// move towards destination
 	CG_Trace( &trace, view->origin, mins, maxs, chase_dest, view->POVent, MASK_SOLID );
 
-	if( trace.fraction != 1.0 ) {
+	if( trace.fraction != 1.0f ) {
 		VectorCopy( trace.endpos, stop );
-		stop[2] += ( 1.0 - trace.fraction ) * 32;
+		stop[2] += ( 1.0f - trace.fraction ) * 32;
 		CG_Trace( &trace, view->origin, mins, maxs, stop, view->POVent, MASK_SOLID );
 		VectorCopy( trace.endpos, chase_dest );
 	}
@@ -908,20 +870,18 @@ static void CG_ThirdPersonOffsetView( cg_viewdef_t *view ) {
 }
 
 void CG_ViewSmoothPredictedSteps( vec3_t vieworg ) {
-	int timeDelta;
-
 	// smooth out stair climbing
-	timeDelta = cg.realTime - cg.predictedStepTime;
+	const int64_t timeDelta = cg.realTime - cg.predictedStepTime;
 	if( timeDelta < PREDICTED_STEP_TIME ) {
-		vieworg[2] -= cg.predictedStep * ( PREDICTED_STEP_TIME - timeDelta ) / PREDICTED_STEP_TIME;
+		vieworg[2] -= cg.predictedStep * (float)( PREDICTED_STEP_TIME - timeDelta ) / (float)PREDICTED_STEP_TIME;
 	}
 }
 
-float CG_ViewSmoothFallKick( void ) {
+float CG_ViewSmoothFallKick() {
 	// fallkick offset
 	if( cg.fallEffectTime > cg.time ) {
-		float fallfrac = (float)( cg.time - cg.fallEffectRebounceTime ) / (float)( cg.fallEffectTime - cg.fallEffectRebounceTime );
-		float fallkick = -1.0f * sin( DEG2RAD( fallfrac * 180 ) ) * ( ( cg.fallEffectTime - cg.fallEffectRebounceTime ) * 0.01f );
+		const float fallfrac = (float)( cg.time - cg.fallEffectRebounceTime ) / (float)( cg.fallEffectTime - cg.fallEffectRebounceTime );
+		const float fallkick = -1.0f * std::sin( DEG2RAD( fallfrac * 180 ) ) * ( ( cg.fallEffectTime - cg.fallEffectRebounceTime ) * 0.01f );
 		return fallkick;
 	} else {
 		cg.fallEffectTime = cg.fallEffectRebounceTime = 0;
@@ -929,10 +889,9 @@ float CG_ViewSmoothFallKick( void ) {
 	return 0.0f;
 }
 
-bool CG_SwitchChaseCamMode( void ) {
-	bool chasecam = ( cg.frame.playerState.pmove.pm_type == PM_CHASECAM )
-					&& ( cg.frame.playerState.POVnum != (unsigned)( cgs.playerNum + 1 ) );
-	bool realSpec = cgs.demoPlaying || ISREALSPECTATOR();
+bool CG_SwitchChaseCamMode() {
+	const bool chasecam = ( cg.frame.playerState.pmove.pm_type == PM_CHASECAM ) && ( cg.frame.playerState.POVnum != (unsigned)( cgs.playerNum + 1 ) );
+	const bool realSpec = cgs.demoPlaying || ISREALSPECTATOR();
 
 	if( ( cg.frame.multipov || chasecam ) && !CG_DemoCam_IsFree() ) {
 		if( chasecam ) {
@@ -963,9 +922,8 @@ void CG_ClearChaseCam() {
 	memset( &chaseCam, 0, sizeof( chaseCam ) );
 }
 
-static void CG_UpdateChaseCam( void ) {
-	bool chasecam = ( cg.frame.playerState.pmove.pm_type == PM_CHASECAM )
-					&& ( cg.frame.playerState.POVnum != (unsigned)( cgs.playerNum + 1 ) );
+static void CG_UpdateChaseCam() {
+	const bool chasecam = ( cg.frame.playerState.pmove.pm_type == PM_CHASECAM ) && ( cg.frame.playerState.POVnum != (unsigned)( cgs.playerNum + 1 ) );
 
 	if( !( cg.frame.multipov || chasecam ) || CG_DemoCam_IsFree() ) {
 		chaseCam.mode = CAM_INEYES;
@@ -1051,16 +1009,14 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 	//
 
 	if( view->type == VIEWDEF_PLAYERVIEW ) {
-		int i;
 		vec3_t viewoffset;
-
 		if( view->playerPrediction ) {
 			CG_PredictMovement();
 
 			// fixme: crouching is predicted now, but it looks very ugly
 			VectorSet( viewoffset, 0.0f, 0.0f, cg.predictedPlayerState.viewheight );
 
-			for( i = 0; i < 3; i++ ) {
+			for( int i = 0; i < 3; i++ ) {
 				view->origin[i] = cg.predictedPlayerState.pmove.origin[i] + viewoffset[i] - ( 1.0f - cg.lerpfrac ) * cg.predictionError[i];
 				view->angles[i] = cg.predictedPlayerState.viewangles[i];
 			}
@@ -1095,15 +1051,15 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 	Matrix3_FromAngles( view->angles, view->axis );
 
 	// view rectangle size
-	view->refdef.x = scr_vrect.x;
-	view->refdef.y = scr_vrect.y;
-	view->refdef.width = scr_vrect.width;
-	view->refdef.height = scr_vrect.height;
-	view->refdef.time = cg.time;
-	view->refdef.areabits = cg.frame.areabits;
-	view->refdef.scissor_x = scr_vrect.x;
-	view->refdef.scissor_y = scr_vrect.y;
-	view->refdef.scissor_width = scr_vrect.width;
+	view->refdef.x              = scr_vrect.x;
+	view->refdef.y              = scr_vrect.y;
+	view->refdef.width          = scr_vrect.width;
+	view->refdef.height         = scr_vrect.height;
+	view->refdef.time           = cg.time;
+	view->refdef.areabits       = cg.frame.areabits;
+	view->refdef.scissor_x      = scr_vrect.x;
+	view->refdef.scissor_y      = scr_vrect.y;
+	view->refdef.scissor_width  = scr_vrect.width;
 	view->refdef.scissor_height = scr_vrect.height;
 
 	view->refdef.fov_y = CalcFov( view->refdef.fov_x, view->refdef.width, view->refdef.height );
@@ -1135,26 +1091,20 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 	}
 }
 
-#define WAVE_AMPLITUDE  0.015   // [0..1]
-#define WAVE_FREQUENCY  0.6     // [0..1]
 void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t serverTime, unsigned extrapolationTime ) {
 	refdef_t *rd = &cg.view.refdef;
 
 	// update time
-	cg.realTime = realTime;
-	cg.frameTime = frameTime;
+	cg.realTime      = realTime;
+	cg.frameTime     = frameTime;
 	cg.realFrameTime = realFrameTime;
 	cg.frameCount++;
-	cg.time = serverTime;
+	cg.time          = serverTime;
 
 	if( !cgs.precacheDone || !cg.frame.valid ) {
 		CG_Precache();
-		return;
-	}
-
-	{
+	} else {
 		int snapTime = ( cg.frame.serverTime - cg.oldFrame.serverTime );
-
 		if( !snapTime ) {
 			snapTime = cgs.snapFrameTime;
 		}
@@ -1189,118 +1139,115 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			cg.xerpTime = 0.0f;
 			cg.xerpSmoothFrac = 0.0f;
 		}
-	}
 
-	if( v_showClamp.get() ) {
-		if( cg.lerpfrac > 1.0f ) {
-			Com_Printf( "high clamp %f\n", cg.lerpfrac );
-		} else if( cg.lerpfrac < 0.0f ) {
-			Com_Printf( "low clamp  %f\n", cg.lerpfrac );
-		}
-	}
-
-	Q_clamp( cg.lerpfrac, 0.0f, 1.0f );
-
-	if( cgs.configStrings.getWorldModel() == std::nullopt ) {
-		CG_AddLocalSounds();
-
-		R_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorBlack, cgs.shaderWhite );
-
-		SoundSystem::instance()->updateListener( vec3_origin, vec3_origin, axis_identity );
-
-		return;
-	}
-
-	// bring up the game menu after reconnecting
-	if( !cgs.demoPlaying ) {
-		if( ISREALSPECTATOR() && !cg.firstFrame ) {
-			if( !cgs.gameMenuRequested ) {
-				CL_Cmd_ExecuteNow( "gamemenu\n" );
+		if( v_showClamp.get() ) {
+			if( cg.lerpfrac > 1.0f ) {
+				Com_Printf( "high clamp %f\n", cg.lerpfrac );
+			} else if( cg.lerpfrac < 0.0f ) {
+				Com_Printf( "low clamp  %f\n", cg.lerpfrac );
 			}
-			cgs.gameMenuRequested = true;
+		}
+
+		Q_clamp( cg.lerpfrac, 0.0f, 1.0f );
+
+		// TODO: Is it ever going to happen?
+		if( cgs.configStrings.getWorldModel() == std::nullopt ) {
+			CG_AddLocalSounds();
+
+			R_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorBlack, cgs.shaderWhite );
+
+			SoundSystem::instance()->updateListener( vec3_origin, vec3_origin, axis_identity );
+		} else {
+			// bring up the game menu after reconnecting
+			if( !cgs.demoPlaying ) {
+				if( !cgs.gameMenuRequested ) {
+					CL_Cmd_ExecuteNow( "gamemenu\n" );
+					if( ISREALSPECTATOR() && !cg.firstFrame ) {
+					}
+					cgs.gameMenuRequested = true;
+				}
+			}
+
+			if( !cg.viewFrameCount ) {
+				cg.firstViewRealTime = cg.realTime;
+			}
+
+			CG_FlashGameWindow(); // notify player of important game events
+
+			CG_CalcVrect(); // find sizes of the 3d drawing screen
+
+			CG_UpdateChaseCam();
+
+			CG_RunLightStyles();
+
+			CG_ClearFragmentedDecals();
+
+			if( CG_DemoCam_Update() ) {
+				CG_SetupViewDef( &cg.view, CG_DemoCam_GetViewType() );
+			} else {
+				CG_SetupViewDef( &cg.view, VIEWDEF_PLAYERVIEW );
+			}
+
+			CG_LerpEntities();  // interpolate packet entities positions
+
+			CG_CalcViewWeapon( &cg.weapon );
+
+			CG_FireEvents( false );
+
+			DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( cg.view.refdef );
+
+			CG_AddEntities( drawSceneRequest );
+			CG_AddViewWeapon( &cg.weapon, drawSceneRequest );
+
+			cg.effectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
+			// Run the particle system last (don't submit flocks that could be invalidated by the effect system this frame)
+			cg.particleSystem.runFrame( cg.time, drawSceneRequest );
+			cg.polyEffectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
+			cg.simulatedHullsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
+
+			AnglesToAxis( cg.view.angles, rd->viewaxis );
+
+			rd->rdflags = CG_RenderFlags();
+
+			// warp if underwater
+			if( rd->rdflags & RDF_UNDERWATER ) {
+		#define WAVE_AMPLITUDE  0.015   // [0..1]
+		#define WAVE_FREQUENCY  0.6     // [0..1]
+				float phase = rd->time * 0.001 * WAVE_FREQUENCY * M_TWOPI;
+				float v = WAVE_AMPLITUDE * ( sin( phase ) - 1.0 ) + 1;
+				rd->fov_x *= v;
+				rd->fov_y *= v;
+			}
+
+			CG_AddLocalSounds();
+			CG_SetSceneTeamColors(); // update the team colors in the renderer
+
+			SubmitDrawSceneRequest( drawSceneRequest );
+
+			cg.oldAreabits = true;
+
+			SoundSystem::instance()->updateListener( cg.view.origin, cg.view.velocity, cg.view.axis );
+
+			CG_Draw2D();
+
+			CG_ResetTemporaryBoneposesCache(); // clear for next frame
+
+			cg.viewFrameCount++;
 		}
 	}
-
-	if( !cg.viewFrameCount ) {
-		cg.firstViewRealTime = cg.realTime;
-	}
-
-	CG_FlashGameWindow(); // notify player of important game events
-
-	CG_CalcVrect(); // find sizes of the 3d drawing screen
-
-	CG_UpdateChaseCam();
-
-	CG_RunLightStyles();
-
-	CG_ClearFragmentedDecals();
-
-	if( CG_DemoCam_Update() ) {
-		CG_SetupViewDef( &cg.view, CG_DemoCam_GetViewType() );
-	} else {
-		CG_SetupViewDef( &cg.view, VIEWDEF_PLAYERVIEW );
-	}
-
-	CG_LerpEntities();  // interpolate packet entities positions
-
-	CG_CalcViewWeapon( &cg.weapon );
-
-	CG_FireEvents( false );
-
-	DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( cg.view.refdef );
-
-	CG_AddEntities( drawSceneRequest );
-	CG_AddViewWeapon( &cg.weapon, drawSceneRequest );
-
-	cg.effectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
-	// Run the particle system last (don't submit flocks that could be invalidated by the effect system this frame)
-	cg.particleSystem.runFrame( cg.time, drawSceneRequest );
-	cg.polyEffectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
-	cg.simulatedHullsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
-
-	AnglesToAxis( cg.view.angles, rd->viewaxis );
-
-	rd->rdflags = CG_RenderFlags();
-
-	// warp if underwater
-	if( rd->rdflags & RDF_UNDERWATER ) {
-		float phase = rd->time * 0.001 * WAVE_FREQUENCY * M_TWOPI;
-		float v = WAVE_AMPLITUDE * ( sin( phase ) - 1.0 ) + 1;
-		rd->fov_x *= v;
-		rd->fov_y *= v;
-	}
-
-	CG_AddLocalSounds();
-	CG_SetSceneTeamColors(); // update the team colors in the renderer
-
-	SubmitDrawSceneRequest( drawSceneRequest );
-
-	cg.oldAreabits = true;
-
-	SoundSystem::instance()->updateListener( cg.view.origin, cg.view.velocity, cg.view.axis );
-
-	CG_Draw2D();
-
-	CG_ResetTemporaryBoneposesCache(); // clear for next frame
-
-	cg.viewFrameCount++;
 }
 
-void CG_CalcVrect( void ) {
-	int size;
-
-	// bound viewsize
-	size = std::round( v_viewSize.get() );
-
+void CG_CalcVrect() {
+	const int size = std::round( v_viewSize.get() );
 	if( size == 100 ) {
-		scr_vrect.width = cgs.vidWidth;
+		scr_vrect.width  = cgs.vidWidth;
 		scr_vrect.height = cgs.vidHeight;
 		scr_vrect.x = scr_vrect.y = 0;
 	} else {
-		scr_vrect.width = cgs.vidWidth * size / 100;
+		scr_vrect.width = ( cgs.vidWidth * size ) / 100;
 		scr_vrect.width &= ~1;
 
-		scr_vrect.height = cgs.vidHeight * size / 100;
+		scr_vrect.height = ( cgs.vidHeight * size ) / 100;
 		scr_vrect.height &= ~1;
 
 		scr_vrect.x = ( cgs.vidWidth - scr_vrect.width ) / 2;
@@ -1373,17 +1320,13 @@ static void CG_AddBlend( float r, float g, float b, float a, float *v_blend ) {
 }
 
 static void CG_CalcColorBlend( float *color ) {
-	float time;
-	float uptime;
-	float delta;
-	int i, contents;
-
 	//clear old values
-	for( i = 0; i < 4; i++ )
+	for( int i = 0; i < 4; i++ ) {
 		color[i] = 0.0f;
+	}
 
 	// Add colorblend based on world position
-	contents = CG_PointContents( cg.view.origin );
+	const int contents = CG_PointContents( cg.view.origin );
 	if( contents & CONTENTS_WATER ) {
 		CG_AddBlend( 0.0f, 0.1f, 8.0f, 0.2f, color );
 	}
@@ -1395,82 +1338,70 @@ static void CG_CalcColorBlend( float *color ) {
 	}
 
 	// Add colorblends from sfx
-	for( i = 0; i < MAX_COLORBLENDS; i++ ) {
-		if( cg.time > cg.colorblends[i].timestamp + cg.colorblends[i].blendtime ) {
-			continue;
-		}
-
-		time = (float)( ( cg.colorblends[i].timestamp + cg.colorblends[i].blendtime ) - cg.time );
-		uptime = ( (float)cg.colorblends[i].blendtime ) * 0.5f;
-		delta = 1.0f - ( fabs( time - uptime ) / uptime );
-		if( delta <= 0.0f ) {
-			continue;
-		}
-		if( delta > 1.0f ) {
-			delta = 1.0f;
-		}
-
-		CG_AddBlend( cg.colorblends[i].blend[0],
-					 cg.colorblends[i].blend[1],
-					 cg.colorblends[i].blend[2],
-					 cg.colorblends[i].blend[3] * delta,
-					 color );
-	}
-}
-
-static void CG_SCRDrawViewBlend( void ) {
-	vec4_t colorblend;
-
-	if( !v_showViewBlends.get() ) {
-		return;
-	}
-
-	CG_CalcColorBlend( colorblend );
-	if( colorblend[3] < 0.01f ) {
-		return;
-	}
-
-	R_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorblend, cgs.shaderWhite );
-}
-
-void CG_ClearPointedNum( void ) {
-	cg.pointedNum = 0;
-	cg.pointRemoveTime = 0;
-	cg.pointedHealth = 0;
-	cg.pointedArmor = 0;
-}
-
-static void CG_UpdatePointedNum( void ) {
-	// disable cases
-	if( CG_IsScoreboardShown() || cg.view.thirdperson || cg.view.type != VIEWDEF_PLAYERVIEW || !v_showPointedPlayer.get() ) {
-		CG_ClearPointedNum();
-		return;
-	}
-
-	if( cg.predictedPlayerState.stats[STAT_POINTED_PLAYER] ) {
-		bool mega = false;
-
-		cg.pointedNum = cg.predictedPlayerState.stats[STAT_POINTED_PLAYER];
-		cg.pointRemoveTime = cg.time + 150;
-
-		cg.pointedHealth = 3.2 * ( cg.predictedPlayerState.stats[STAT_POINTED_TEAMPLAYER] & 0x1F );
-		mega = cg.predictedPlayerState.stats[STAT_POINTED_TEAMPLAYER] & 0x20 ? true : false;
-		cg.pointedArmor = 5 * ( cg.predictedPlayerState.stats[STAT_POINTED_TEAMPLAYER] >> 6 & 0x3F );
-		if( mega ) {
-			cg.pointedHealth += 100;
-			if( cg.pointedHealth > 200 ) {
-				cg.pointedHealth = 200;
+	for( int i = 0; i < MAX_COLORBLENDS; i++ ) {
+		if( cg.time <= cg.colorblends[i].timestamp + cg.colorblends[i].blendtime ) {
+			const float time   = (float)( ( cg.colorblends[i].timestamp + cg.colorblends[i].blendtime ) - cg.time );
+			const float uptime = ( (float)cg.colorblends[i].blendtime ) * 0.5f;
+			if( float delta = 1.0f - ( fabs( time - uptime ) / uptime ); delta > 0.0f ) {
+				if( delta > 1.0f ) {
+					delta = 1.0f;
+				}
+				CG_AddBlend( cg.colorblends[i].blend[0],
+							 cg.colorblends[i].blend[1],
+					 		 cg.colorblends[i].blend[2],
+					 		 cg.colorblends[i].blend[3] * delta,
+					         color );
 			}
 		}
 	}
+}
 
-	if( cg.pointRemoveTime <= cg.time ) {
-		CG_ClearPointedNum();
+static void CG_SCRDrawViewBlend() {
+	if( v_showViewBlends.get() ) {
+		vec4_t colorblend;
+		CG_CalcColorBlend( colorblend );
+		if( colorblend[3] >= 0.01f ) {
+			R_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorblend, cgs.shaderWhite );
+		}
 	}
+}
 
-	if( cg.pointedNum && v_showPointedPlayer.get() == 2 ) {
-		if( cg_entities[cg.pointedNum].current.team != cg.predictedPlayerState.stats[STAT_TEAM] ) {
+void CG_ClearPointedNum() {
+	cg.pointedNum      = 0;
+	cg.pointRemoveTime = 0;
+	cg.pointedHealth   = 0;
+	cg.pointedArmor    = 0;
+}
+
+static void CG_UpdatePointedNum() {
+	if( CG_IsScoreboardShown() || cg.view.thirdperson || cg.view.type != VIEWDEF_PLAYERVIEW || !v_showPointedPlayer.get() ) {
+		CG_ClearPointedNum();
+	} else {
+		if( cg.predictedPlayerState.stats[STAT_POINTED_PLAYER] ) {
+			bool mega = false;
+
+			cg.pointedNum = cg.predictedPlayerState.stats[STAT_POINTED_PLAYER];
+			cg.pointRemoveTime = cg.time + 150;
+
+			cg.pointedHealth = 3.2 * ( cg.predictedPlayerState.stats[STAT_POINTED_TEAMPLAYER] & 0x1F );
+			mega = cg.predictedPlayerState.stats[STAT_POINTED_TEAMPLAYER] & 0x20 ? true : false;
+			cg.pointedArmor = 5 * ( cg.predictedPlayerState.stats[STAT_POINTED_TEAMPLAYER] >> 6 & 0x3F );
+			if( mega ) {
+				cg.pointedHealth += 100;
+				if( cg.pointedHealth > 200 ) {
+					cg.pointedHealth = 200;
+				}
+			}
+		}
+
+		if( cg.pointRemoveTime <= cg.time ) {
 			CG_ClearPointedNum();
+		}
+
+		if( cg.pointedNum && v_showPointedPlayer.get() == 2 ) {
+			if( cg_entities[cg.pointedNum].current.team != cg.predictedPlayerState.stats[STAT_TEAM] ) {
+				CG_ClearPointedNum();
+			}
 		}
 	}
 }
@@ -1506,9 +1437,6 @@ int CG_VerticalAlignForHeight( const int y, int align, int height ) {
 }
 
 static void CG_DrawHUDRect( int x, int y, int align, int w, int h, int val, int maxval, vec4_t color, struct shader_s *shader ) {
-	float frac;
-	vec2_t tc[2];
-
 	if( val < 1 || maxval < 1 || w < 1 || h < 1 ) {
 		return;
 	}
@@ -1517,12 +1445,14 @@ static void CG_DrawHUDRect( int x, int y, int align, int w, int h, int val, int 
 		shader = cgs.shaderWhite;
 	}
 
+	float frac;
 	if( val >= maxval ) {
 		frac = 1.0f;
 	} else {
 		frac = (float)val / (float)maxval;
 	}
 
+	vec2_t tc[2];
 	tc[0][0] = 0.0f;
 	tc[0][1] = 1.0f;
 	tc[1][0] = 0.0f;
@@ -1557,220 +1487,180 @@ static void CG_DrawHUDRect( int x, int y, int align, int w, int h, int val, int 
 	R_DrawStretchPic( x, y, w, h, tc[0][0], tc[1][0], tc[0][1], tc[1][1], color, shader );
 }
 
-static void CG_DrawTeamMates() {
-	centity_t *cent;
-	vec3_t dir, drawOrigin;
-	vec2_t coords;
-	vec4_t color;
-	int i;
-	int pic_size = 18 * cgs.vidHeight / 600;
+static void drawPlayerBars( qfontface_s *font, const vec2_t coords, vec4_t tmpcolor, int pointed_health, int pointed_armor ) {
+	int barwidth     = SCR_strWidth( "_", font, 0 ) * v_showPlayerNames_barWidth.get(); // size of 8 characters
+	int barheight    = SCR_FontHeight( font ) * 0.25; // quarter of a character height
+	int barseparator = barheight * 0.333;
 
-	if( !v_showTeamInfo.get() ) {
-		return;
-	}
+	vec4_t alphagreen  = { 0, 1, 0, 0 };
+	vec4_t alphared    = { 1, 0, 0, 0 };
+	vec4_t alphayellow = { 1, 1, 0, 0 };
+	vec4_t alphamagenta = { 1, 0, 1, 1 };
+	vec4_t alphagrey = { 0.85, 0.85, 0.85, 1 };
+	alphagreen[3] = alphared[3] = alphayellow[3] = alphamagenta[3] = alphagrey[3] = tmpcolor[3];
 
-	if( cg.predictedPlayerState.stats[STAT_TEAM] < TEAM_ALPHA ) {
-		return;
-	}
+	// soften the alpha of the box color
+	tmpcolor[3] *= 0.4f;
 
-	for( i = 0; i < gs.maxclients; i++ ) {
-		trace_t trace;
+	// we have to align first, then draw as left top, cause we want the bar to grow from left to right
+	int x = CG_HorizontalAlignForWidth( coords[0], ALIGN_CENTER_TOP, barwidth );
+	int y = CG_VerticalAlignForHeight( coords[1], ALIGN_CENTER_TOP, barheight );
 
-		if( !cgs.clientInfo[i].name[0] || ISVIEWERENTITY( i + 1 ) ) {
-			continue;
-		}
+	// draw the background box
+	CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight * 3, 100, 100, tmpcolor, NULL );
 
-		cent = &cg_entities[i + 1];
-		if( cent->serverFrame != cg.frame.serverFrame ) {
-			continue;
-		}
+	y += barseparator;
 
-		if( cent->current.team != cg.predictedPlayerState.stats[STAT_TEAM] ) {
-			continue;
-		}
-
-		VectorSet( drawOrigin, cent->ent.origin[0], cent->ent.origin[1], cent->ent.origin[2] + playerbox_stand_maxs[2] + 16 );
-		VectorSubtract( drawOrigin, cg.view.origin, dir );
-
-		// ignore, if not in view
-		if( DotProduct( dir, &cg.view.axis[AXIS_FORWARD] ) < 0 ) {
-			continue;
-		}
-
-		if( !cent->current.modelindex || !cent->current.solid ||
-			cent->current.solid == SOLID_BMODEL || cent->current.team == TEAM_SPECTATOR ) {
-			continue;
-		}
-
-		// find the 3d point in 2d screen
-		RF_TransformVectorToScreen( &cg.view.refdef, drawOrigin, coords );
-		if( ( coords[0] < 0 || coords[0] > cgs.vidWidth ) || ( coords[1] < 0 || coords[1] > cgs.vidHeight ) ) {
-			continue;
-		}
-
-		CG_Trace( &trace, cg.view.origin, vec3_origin, vec3_origin, cent->ent.origin, cg.predictedPlayerState.POVnum, MASK_OPAQUE );
-		if( v_showTeamInfo.get() == 1 && trace.fraction == 1.0f ) {
-			continue;
-		}
-
-		coords[0] -= pic_size / 2;
-		coords[1] -= pic_size / 2;
-		Q_clamp( coords[0], 0, cgs.vidWidth - pic_size );
-		Q_clamp( coords[1], 0, cgs.vidHeight - pic_size );
-
-		CG_TeamColor( cg.predictedPlayerState.stats[STAT_TEAM], color );
-
-		shader_s *shader;
-		if( cent->current.effects & EF_CARRIER ) {
-			shader = cgs.media.shaderTeamCarrierIndicator;
+	if( pointed_health > 100 ) {
+		alphagreen[3] = alphamagenta[3] = 1.0f;
+		CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, 100, 100, alphagreen, NULL );
+		CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health - 100, 100, alphamagenta, NULL );
+		alphagreen[3] = alphamagenta[3] = alphared[3];
+	} else {
+		if( pointed_health <= 33 ) {
+			CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphared, NULL );
+		} else if( pointed_health <= 66 ) {
+			CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphayellow, NULL );
 		} else {
-			shader = cgs.media.shaderTeamMateIndicator;
+			CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphagreen, NULL );
 		}
+	}
 
-		R_DrawStretchPic( coords[0], coords[1], pic_size, pic_size, 0, 0, 1, 1, color, shader );
+	if( pointed_armor ) {
+		y += barseparator + barheight;
+		CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_armor, 150, alphagrey, NULL );
 	}
 }
 
-static void CG_DrawPlayerNames() {
-	qfontface_s *font = cgs.fontSystemMedium;
-	const float *color = colorWhite;
-	static vec4_t alphagreen = { 0, 1, 0, 0 }, alphared = { 1, 0, 0, 0 }, alphayellow = { 1, 1, 0, 0 }, alphamagenta = { 1, 0, 1, 1 }, alphagrey = { 0.85, 0.85, 0.85, 1 };
-	centity_t *cent;
-	vec4_t tmpcolor;
-	vec3_t dir, drawOrigin;
-	vec2_t coords;
-	float dist, fadeFrac;
-	trace_t trace;
-	int i;
+static void drawNamesAndBeacons() {
+	const int showNamesValue           = v_showPlayerNames.get();
+	const int showTeamInfoValue        = v_showTeamInfo.get();
+	const int showPointedPlayerValue   = v_showPointedPlayer.get();
+	const int povTeam                  = cg.predictedPlayerState.stats[STAT_TEAM];
+	const bool shouldCareOfPlayerNames = showNamesValue || showPointedPlayerValue;
+	const bool shouldCareOfTeamBeacons = showTeamInfoValue && povTeam > TEAM_PLAYERS;
 
-	if( !v_showPlayerNames.get() && !v_showPointedPlayer.get() ) {
+	if( !shouldCareOfPlayerNames && !shouldCareOfTeamBeacons ) {
 		return;
 	}
 
+	qfontface_s *const font = cgs.fontSystemMedium;
+
 	CG_UpdatePointedNum();
 
-	for( i = 0; i < gs.maxclients; i++ ) {
-		int pointed_health, pointed_armor;
+	vec2_t projectedCoords[MAX_CLIENTS];
+	float playerNameAlphaValues[MAX_CLIENTS] {};
+	bool shouldDrawPlayerName[MAX_CLIENTS] {};
+	bool shouldDrawTeamBeacon[MAX_CLIENTS] {};
 
-		if( !cgs.clientInfo[i].name[0] || ISVIEWERENTITY( i + 1 ) ) {
-			continue;
-		}
-
-		cent = &cg_entities[i + 1];
-		if( cent->serverFrame != cg.frame.serverFrame ) {
-			continue;
-		}
-
-		if( cent->current.effects & EF_PLAYER_HIDENAME ) {
-			continue;
-		}
-
-		// only show the pointed player
-		if( !v_showPlayerNames.get() && ( cent->current.number != cg.pointedNum ) ) {
-			continue;
-		}
-
-		if(( v_showPlayerNames.get() == 2 ) && ( cent->current.team != cg.predictedPlayerState.stats[STAT_TEAM] ) ) {
-			continue;
-		}
-
-		if( !cent->current.modelindex || !cent->current.solid ||
-			cent->current.solid == SOLID_BMODEL || cent->current.team == TEAM_SPECTATOR ) {
-			continue;
-		}
-
-		// Kill if behind the view
-		VectorSubtract( cent->ent.origin, cg.view.origin, dir );
-		dist = VectorNormalize( dir ) * cg.view.fracDistFOV;
-
-		if( DotProduct( dir, &cg.view.axis[AXIS_FORWARD] ) < 0 ) {
-			continue;
-		}
-
-		Vector4Copy( color, tmpcolor );
-
-		if( cent->current.number != cg.pointedNum ) {
-			if( dist > v_showPlayerNames_zfar.get() ) {
-				continue;
-			}
-
-			fadeFrac = ( v_showPlayerNames_zfar.get() - dist ) / ( v_showPlayerNames_zfar.get() * 0.25f );
-			Q_clamp( fadeFrac, 0.0f, 1.0f );
-
-			tmpcolor[3] = v_showPlayerNames_alpha.get() * color[3] * fadeFrac;
-		} else {
-			fadeFrac = (float)( cg.pointRemoveTime - cg.time ) / 150.0f;
-			Q_clamp( fadeFrac, 0.0f, 1.0f );
-
-			tmpcolor[3] = color[3] * fadeFrac;
-		}
-
-		if( tmpcolor[3] <= 0.0f ) {
-			continue;
-		}
-
-		CG_Trace( &trace, cg.view.origin, vec3_origin, vec3_origin, cent->ent.origin, cg.predictedPlayerState.POVnum, MASK_OPAQUE );
-		if( trace.fraction < 1.0f && trace.ent != cent->current.number ) {
-			continue;
-		}
-
-		VectorSet( drawOrigin, cent->ent.origin[0], cent->ent.origin[1], cent->ent.origin[2] + playerbox_stand_maxs[2] + 16 );
-
-		// find the 3d point in 2d screen
-		RF_TransformVectorToScreen( &cg.view.refdef, drawOrigin, coords );
-		if( ( coords[0] < 0 || coords[0] > cgs.vidWidth ) || ( coords[1] < 0 || coords[1] > cgs.vidHeight ) ) {
-			continue;
-		}
-
-		SCR_DrawString( coords[0], coords[1], ALIGN_CENTER_BOTTOM, cgs.clientInfo[i].name, font, tmpcolor );
-
-		// if not the pointed player we are done
-		if( cent->current.number != cg.pointedNum ) {
-			continue;
-		}
-
-		pointed_health = cg.pointedHealth;
-		pointed_armor = cg.pointedArmor;
-
-		// pointed player hasn't a health value to be drawn, so skip adding the bars
-		if( pointed_health && v_showPlayerNames_barWidth.get() > 0 ) {
-			int x, y;
-			int barwidth = SCR_strWidth( "_", font, 0 ) * v_showPlayerNames_barWidth.get(); // size of 8 characters
-			int barheight = SCR_FontHeight( font ) * 0.25; // quarter of a character height
-			int barseparator = barheight * 0.333;
-
-			alphagreen[3] = alphared[3] = alphayellow[3] = alphamagenta[3] = alphagrey[3] = tmpcolor[3];
-
-			// soften the alpha of the box color
-			tmpcolor[3] *= 0.4f;
-
-			// we have to align first, then draw as left top, cause we want the bar to grow from left to right
-			x = CG_HorizontalAlignForWidth( coords[0], ALIGN_CENTER_TOP, barwidth );
-			y = CG_VerticalAlignForHeight( coords[1], ALIGN_CENTER_TOP, barheight );
-
-			// draw the background box
-			CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight * 3, 100, 100, tmpcolor, NULL );
-
-			y += barseparator;
-
-			if( pointed_health > 100 ) {
-				alphagreen[3] = alphamagenta[3] = 1.0f;
-				CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, 100, 100, alphagreen, NULL );
-				CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health - 100, 100, alphamagenta, NULL );
-				alphagreen[3] = alphamagenta[3] = alphared[3];
-			} else {
-				if( pointed_health <= 33 ) {
-					CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphared, NULL );
-				} else if( pointed_health <= 66 ) {
-					CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphayellow, NULL );
-				} else {
-					CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphagreen, NULL );
+	for( int i = 0; i < gs.maxclients; i++ ) {
+		const centity_t *const cent = &cg_entities[i + 1];
+		bool mayBeProjectedToScreen = false;
+		if( cgs.clientInfo[i].name[0] && !ISVIEWERENTITY( i + 1 ) ) {
+			if( cent->serverFrame == cg.frame.serverFrame ) {
+				if( cent->current.modelindex && cent->current.team != TEAM_SPECTATOR ) {
+					if( cent->current.solid && cent->current.solid != SOLID_BMODEL ) {
+						mayBeProjectedToScreen = true;
+					}
 				}
 			}
+		}
 
-			if( pointed_armor ) {
-				y += barseparator + barheight;
-				CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_armor, 150, alphagrey, NULL );
+		if( mayBeProjectedToScreen ) {
+			vec3_t drawOrigin;
+			VectorSet( drawOrigin, cent->ent.origin[0], cent->ent.origin[1], cent->ent.origin[2] + playerbox_stand_maxs[2] + 16 );
+
+			vec3_t dir;
+			VectorSubtract( drawOrigin, cg.view.origin, dir );
+
+			if( DotProduct( dir, &cg.view.axis[AXIS_FORWARD] ) > 0.0f ) {
+				// find the 3d point in 2d screen
+				// TODO: Project on demand, use some kind of cache
+				vec2_t coords { 0.0f, 0.0f };
+				RF_TransformVectorToScreen( &cg.view.refdef, drawOrigin, coords );
+				if( coords[0] >= 0 && coords[0] < cgs.vidWidth && coords[1] >= 0 && coords[1] < cgs.vidHeight ) {
+					// TODO: Trace on demand, use some kind of cache
+					trace_t trace;
+					CG_Trace( &trace, cg.view.origin, vec3_origin, vec3_origin, cent->ent.origin, cg.predictedPlayerState.POVnum, MASK_OPAQUE );
+					const bool passedTraceTest = trace.fraction == 1.0f || trace.ent == cent->current.number;
+					if( shouldCareOfPlayerNames ) {
+						if( passedTraceTest ) {
+							bool isAKindOfPlayerWeNeed = false;
+							if( showNamesValue == 2 && cent->current.team == povTeam ) {
+								isAKindOfPlayerWeNeed = true;
+							} else if( showNamesValue ) {
+								isAKindOfPlayerWeNeed = true;
+							} else if( cent->current.number == cg.pointedNum ) {
+								isAKindOfPlayerWeNeed = true;
+							}
+							if( isAKindOfPlayerWeNeed ) {
+								const float dist = VectorNormalize( dir ) * cg.view.fracDistFOV;
+								if( !( cent->current.effects & EF_PLAYER_HIDENAME ) ) {
+									float nameAlpha = 0.0f;
+									if( cent->current.number != cg.pointedNum ) {
+										const float fadeFrac = ( v_showPlayerNames_zfar.get() - dist ) / ( v_showPlayerNames_zfar.get() * 0.25f );
+										nameAlpha = v_showPlayerNames_alpha.get() * wsw::clamp( fadeFrac, 0.0f, 1.0f );
+									} else {
+										const float fadeFrac = (float)( cg.pointRemoveTime - cg.time ) / 150.0f;
+										nameAlpha = wsw::clamp( fadeFrac, 0.0f, 1.0f );
+									}
+									if( nameAlpha > 0.0f ) {
+										shouldDrawPlayerName[i]  = true;
+										playerNameAlphaValues[i] = nameAlpha;
+									}
+								}
+							}
+						}
+						// if not the pointed player we are done
+					}
+					if( shouldCareOfTeamBeacons ) {
+						if( !passedTraceTest ) {
+							if( cent->current.team == povTeam ) {
+								shouldDrawTeamBeacon[i] = true;
+							}
+						}
+					}
+					if( shouldDrawPlayerName[i] | shouldDrawTeamBeacon[i] ) {
+						Vector2Copy( coords, projectedCoords[i] );
+					}
+				}
+			}
+		}
+	}
+
+	if( shouldCareOfTeamBeacons ) {
+		for( int i = 0; i < gs.maxclients; ++i ) {
+			vec4_t color;
+			CG_TeamColor( cg.predictedPlayerState.stats[STAT_TEAM], color );
+			if( shouldDrawTeamBeacon[i] ) {
+				const centity_t *const cent = &cg_entities[i + 1];
+				const int pic_size = 18 * cgs.vidHeight / 600;
+				vec2_t coords { projectedCoords[i][0], projectedCoords[i][1] };
+				coords[0] -= pic_size / 2;
+				coords[1] -= pic_size / 2;
+				Q_clamp( coords[0], 0, cgs.vidWidth - pic_size );
+				Q_clamp( coords[1], 0, cgs.vidHeight - pic_size );
+				shader_s *shader;
+				if( cent->current.effects & EF_CARRIER ) {
+					shader = cgs.media.shaderTeamCarrierIndicator;
+				} else {
+					shader = cgs.media.shaderTeamMateIndicator;
+				}
+				R_DrawStretchPic( coords[0], coords[1], pic_size, pic_size, 0, 0, 1, 1, color, shader );
+			}
+		}
+	}
+
+	if( shouldCareOfPlayerNames ) {
+		for( int i = 0; i < gs.maxclients; ++i ) {
+			vec4_t tmpcolor { 1.0f, 1.0f, 1.0f, playerNameAlphaValues[i] };
+			const vec2_t &coords = projectedCoords[i];
+			SCR_DrawString( coords[0], coords[1], ALIGN_CENTER_BOTTOM, cgs.clientInfo[i].name, font, tmpcolor );
+			if( showPointedPlayerValue && ( i + 1 == cg.pointedNum ) ) {
+				// pointed player hasn't a health value to be drawn, so skip adding the bars
+				if( cg.pointedHealth && v_showPlayerNames_barWidth.get() > 0 ) {
+					drawPlayerBars( font, coords, tmpcolor, cg.pointedHealth, cg.pointedArmor );
+				}
 			}
 		}
 	}
@@ -1969,57 +1859,363 @@ void CG_UpdateCrosshair() {
 
 void CG_DrawCrosshair() {
 	const auto *const playerState = &cg.predictFromPlayerState;
-	const auto weapon = playerState->stats[STAT_WEAPON];
-	if( !weapon ) {
-		return;
-	}
-
-	const auto *const firedef = GS_FiredefForPlayerState( playerState, weapon );
-	if( !firedef ) {
-		return;
-	}
-
-	if( firedef->fire_mode == FIRE_MODE_STRONG ) {
-		::drawCrosshair( &cg.strongCrosshairState );
-	}
-	::drawCrosshair( &cg.crosshairState );
-}
-
-void CG_Draw2DView( void ) {
-	CG_UpdateCrosshair();
-
-	if( !cg.view.draw2D ) {
-		return;
-	}
-
-	CG_SCRDrawViewBlend();
-
-	if( cg.motd && ( cg.time > cg.motd_time ) ) {
-		Q_free(   cg.motd );
-		cg.motd = NULL;
-	}
-
-	if( v_showHud.get() ) {
-		if( !CG_IsScoreboardShown() ) {
-			CG_DrawTeamMates();
-			CG_DrawPlayerNames();
-		}
-
-		// TODO: Does it work for chasers?
-		if( cg.predictedPlayerState.pmove.pm_type == PM_NORMAL ) {
-			if( !wsw::ui::UISystem::instance()->isShown() ) {
-				CG_DrawCrosshair();
+	if( const auto weapon = playerState->stats[STAT_WEAPON] ) {
+		if( const auto *const firedef = GS_FiredefForPlayerState( playerState, weapon ) ) {
+			if( firedef->fire_mode == FIRE_MODE_STRONG ) {
+				::drawCrosshair( &cg.strongCrosshairState );
 			}
+			::drawCrosshair( &cg.crosshairState );
 		}
 	}
-
-	CG_DrawRSpeeds( cgs.vidWidth, cgs.vidHeight / 2 + 8 * cgs.vidHeight / 600,
-					ALIGN_RIGHT_TOP, cgs.fontSystemSmall, colorWhite );
 }
 
 void CG_Draw2D() {
-	// TODO: We still have to update some states even if these conditions do not hold
+	CG_UpdateCrosshair();
 	if( v_draw2D.get() && cg.view.draw2D ) {
-		CG_Draw2DView();
+		CG_SCRDrawViewBlend();
+
+		if( cg.motd && ( cg.time > cg.motd_time ) ) {
+			Q_free( cg.motd );
+			cg.motd = NULL;
+		}
+
+		if( v_showHud.get() ) {
+			if( !CG_IsScoreboardShown() ) {
+				drawNamesAndBeacons();
+			}
+			// TODO: Does it work for chasers?
+			if( cg.predictedPlayerState.pmove.pm_type == PM_NORMAL ) {
+				if( !wsw::ui::UISystem::instance()->isShown() ) {
+					CG_DrawCrosshair();
+				}
+			}
+		}
+
+		CG_DrawRSpeeds( cgs.vidWidth, cgs.vidHeight / 2 + 8 * cgs.vidHeight / 600, ALIGN_RIGHT_TOP, cgs.fontSystemSmall, colorWhite );
+	}
+}
+
+static void CG_ViewWeapon_UpdateProjectionSource( const vec3_t hand_origin, const mat3_t hand_axis,
+												  const vec3_t weap_origin, const mat3_t weap_axis ) {
+	orientation_t tag_weapon;
+
+	VectorCopy( vec3_origin, tag_weapon.origin );
+	Matrix3_Copy( axis_identity, tag_weapon.axis );
+
+	// move to tag_weapon
+	CG_MoveToTag( tag_weapon.origin, tag_weapon.axis, hand_origin, hand_axis, weap_origin, weap_axis );
+
+	const weaponinfo_t *const weaponInfo = CG_GetWeaponInfo( cg.weapon.weapon );
+	orientation_t *const tag_result      = &cg.weapon.projectionSource;
+
+	// move to projectionSource tag
+	if( weaponInfo ) {
+		VectorCopy( vec3_origin, tag_result->origin );
+		Matrix3_Copy( axis_identity, tag_result->axis );
+		CG_MoveToTag( tag_result->origin, tag_result->axis,
+					  tag_weapon.origin, tag_weapon.axis,
+					  weaponInfo->tag_projectionsource.origin, weaponInfo->tag_projectionsource.axis );
+	} else {
+		// fall back: copy gun origin and move it front by 16 units and 8 up
+		VectorCopy( tag_weapon.origin, tag_result->origin );
+		Matrix3_Copy( tag_weapon.axis, tag_result->axis );
+		VectorMA( tag_result->origin, 16, &tag_result->axis[AXIS_FORWARD], tag_result->origin );
+		VectorMA( tag_result->origin, 8, &tag_result->axis[AXIS_UP], tag_result->origin );
+	}
+}
+
+static void CG_ViewWeapon_AddAngleEffects( vec3_t angles ) {
+	if( !cg.view.drawWeapon ) {
+		return;
+	}
+
+	if( v_gun.get() && v_gunBob.get() ) {
+		// gun angles from bobbing
+		if( cg.bobCycle & 1 ) {
+			angles[ROLL] -= cg.xyspeed * cg.bobFracSin * 0.012;
+			angles[YAW] -= cg.xyspeed * cg.bobFracSin * 0.006;
+		} else {
+			angles[ROLL] += cg.xyspeed * cg.bobFracSin * 0.012;
+			angles[YAW] += cg.xyspeed * cg.bobFracSin * 0.006;
+		}
+		angles[PITCH] += cg.xyspeed * cg.bobFracSin * 0.012;
+
+		// gun angles from delta movement
+		for( int i = 0; i < 3; i++ ) {
+			float delta = ( cg.oldFrame.playerState.viewangles[i] - cg.frame.playerState.viewangles[i] ) * cg.lerpfrac;
+			if( delta > 180 ) {
+				delta -= 360;
+			}
+			if( delta < -180 ) {
+				delta += 360;
+			}
+			Q_clamp( delta, -45, 45 );
+
+
+			if( i == YAW ) {
+				angles[ROLL] += 0.001 * delta;
+			}
+			angles[i] += 0.002 * delta;
+		}
+
+		// gun angles from kicks
+		CG_AddKickAngles( angles );
+	}
+}
+
+static int CG_ViewWeapon_baseanimFromWeaponState( int weaponState ) {
+	int anim;
+
+	switch( weaponState ) {
+		case WEAPON_STATE_ACTIVATING:
+			anim = WEAPMODEL_WEAPONUP;
+			break;
+
+		case WEAPON_STATE_DROPPING:
+			anim = WEAPMODEL_WEAPDOWN;
+			break;
+
+		case WEAPON_STATE_FIRING:
+		case WEAPON_STATE_REFIRE:
+		case WEAPON_STATE_REFIRESTRONG:
+
+			/* fall through. Activated by event */
+		case WEAPON_STATE_POWERING:
+		case WEAPON_STATE_COOLDOWN:
+		case WEAPON_STATE_RELOADING:
+		case WEAPON_STATE_NOAMMOCLICK:
+
+			/* fall through. Not used */
+		default:
+		case WEAPON_STATE_READY:
+			if( v_gunBob.get() ) {
+				anim = WEAPMODEL_STANDBY;
+			} else {
+				anim = WEAPMODEL_NOANIM;
+			}
+			break;
+	}
+
+	return anim;
+}
+
+void CG_ViewWeapon_RefreshAnimation( cg_viewweapon_t *viewweapon ) {
+	bool nolerp = false;
+
+	// if the pov changed, or weapon changed, force restart
+	if( viewweapon->POVnum != cg.predictedPlayerState.POVnum ||
+		viewweapon->weapon != cg.predictedPlayerState.stats[STAT_WEAPON] ) {
+		nolerp = true;
+		viewweapon->eventAnim = 0;
+		viewweapon->eventAnimStartTime = 0;
+		viewweapon->baseAnim = 0;
+		viewweapon->baseAnimStartTime = 0;
+	}
+
+	viewweapon->POVnum = cg.predictedPlayerState.POVnum;
+	viewweapon->weapon = cg.predictedPlayerState.stats[STAT_WEAPON];
+
+	// hack cause of missing animation config
+	if( viewweapon->weapon == WEAP_NONE ) {
+		viewweapon->ent.frame = viewweapon->ent.oldframe = 0;
+		viewweapon->ent.backlerp = 0.0f;
+		viewweapon->eventAnim = 0;
+		viewweapon->eventAnimStartTime = 0;
+		return;
+	}
+
+	const int baseAnim = CG_ViewWeapon_baseanimFromWeaponState( cg.predictedPlayerState.weaponState );
+	const weaponinfo_t *weaponInfo = CG_GetWeaponInfo( viewweapon->weapon );
+
+	// Full restart
+	if( !viewweapon->baseAnimStartTime ) {
+		viewweapon->baseAnim = baseAnim;
+		viewweapon->baseAnimStartTime = cg.time;
+		nolerp = true;
+	}
+
+	// base animation changed?
+	if( baseAnim != viewweapon->baseAnim ) {
+		viewweapon->baseAnim = baseAnim;
+		viewweapon->baseAnimStartTime = cg.time;
+	}
+
+	int curframe = 0;
+	float framefrac;
+	// if a eventual animation is running override the baseAnim
+	if( viewweapon->eventAnim ) {
+		if( !viewweapon->eventAnimStartTime ) {
+			viewweapon->eventAnimStartTime = cg.time;
+		}
+
+		framefrac = GS_FrameForTime( &curframe, cg.time, viewweapon->eventAnimStartTime, weaponInfo->frametime[viewweapon->eventAnim],
+									 weaponInfo->firstframe[viewweapon->eventAnim], weaponInfo->lastframe[viewweapon->eventAnim],
+									 weaponInfo->loopingframes[viewweapon->eventAnim], false );
+
+		if( curframe >= 0 ) {
+			goto setupframe;
+		}
+
+		// disable event anim and fall through
+		viewweapon->eventAnim = 0;
+		viewweapon->eventAnimStartTime = 0;
+	}
+
+	// find new frame for the current animation
+	framefrac = GS_FrameForTime( &curframe, cg.time, viewweapon->baseAnimStartTime, weaponInfo->frametime[viewweapon->baseAnim],
+								 weaponInfo->firstframe[viewweapon->baseAnim], weaponInfo->lastframe[viewweapon->baseAnim],
+								 weaponInfo->loopingframes[viewweapon->baseAnim], true );
+
+	if( curframe < 0 ) {
+		CG_Error( "CG_ViewWeapon_UpdateAnimation(2): Base Animation without a defined loop.\n" );
+	}
+
+	setupframe:
+	if( nolerp ) {
+		framefrac = 0;
+		viewweapon->ent.oldframe = curframe;
+	} else {
+		Q_clamp( framefrac, 0, 1 );
+		if( curframe != viewweapon->ent.frame ) {
+			viewweapon->ent.oldframe = viewweapon->ent.frame;
+		}
+	}
+
+	viewweapon->ent.frame = curframe;
+	viewweapon->ent.backlerp = 1.0f - framefrac;
+}
+
+void CG_ViewWeapon_StartAnimationEvent( int newAnim ) {
+	if( !cg.view.drawWeapon ) {
+		return;
+	}
+
+	cg.weapon.eventAnim = newAnim;
+	cg.weapon.eventAnimStartTime = cg.time;
+	CG_ViewWeapon_RefreshAnimation( &cg.weapon );
+}
+
+void CG_CalcViewWeapon( cg_viewweapon_t *viewweapon ) {
+	CG_ViewWeapon_RefreshAnimation( viewweapon );
+
+	//if( cg.view.thirdperson )
+	//	return;
+
+	const weaponinfo_t *const weaponInfo = CG_GetWeaponInfo( viewweapon->weapon );
+	viewweapon->ent.model = weaponInfo->model[HAND];
+	viewweapon->ent.renderfx = RF_MINLIGHT | RF_WEAPONMODEL | RF_FORCENOLOD | RF_NOSHADOW;
+	viewweapon->ent.scale = 1.0f;
+	viewweapon->ent.customShader = NULL;
+	viewweapon->ent.customSkin = NULL;
+	viewweapon->ent.rtype = RT_MODEL;
+	Vector4Set( viewweapon->ent.shaderRGBA, 255, 255, 255, 255 );
+
+	if( const float alpha = v_gunAlpha.get(); alpha < 1.0f ) {
+		viewweapon->ent.renderfx |= RF_ALPHAHACK;
+		viewweapon->ent.shaderRGBA[3] = alpha * 255.0f;
+	}
+
+		// calculate the entity position
+#if 1
+	VectorCopy( cg.view.origin, viewweapon->ent.origin );
+#else
+	VectorCopy( cg.predictedPlayerState.pmove.origin, viewweapon->ent.origin );
+	viewweapon->ent.origin[2] += cg.predictedPlayerState.viewheight;
+#endif
+
+	vec3_t gunAngles;
+	vec3_t gunOffset;
+
+	// weapon config offsets
+	VectorAdd( weaponInfo->handpositionAngles, cg.predictedPlayerState.viewangles, gunAngles );
+	gunOffset[FORWARD] = v_gunZ.get() + weaponInfo->handpositionOrigin[FORWARD];
+	gunOffset[RIGHT] = v_gunX.get() + weaponInfo->handpositionOrigin[RIGHT];
+	gunOffset[UP] = v_gunY.get() + weaponInfo->handpositionOrigin[UP];
+
+	// scale forward gun offset depending on fov and aspect ratio
+	gunOffset[FORWARD] = gunOffset[FORWARD] * cgs.vidWidth / ( cgs.vidHeight * cg.view.fracDistFOV ) ;
+
+	// hand cvar offset
+	float handOffset = 0.0f;
+	if( cgs.demoPlaying ) {
+		if( v_hand.get() == 0 ) {
+			handOffset = +v_handOffset.get();
+		} else if( v_hand.get() == 1 ) {
+			handOffset = -v_handOffset.get();
+		}
+	} else {
+		if( cgs.clientInfo[cg.view.POVent - 1].hand == 0 ) {
+			handOffset = +v_handOffset.get();
+		} else if( cgs.clientInfo[cg.view.POVent - 1].hand == 1 ) {
+			handOffset = -v_handOffset.get();
+		}
+	}
+
+	gunOffset[RIGHT] += handOffset;
+	if( v_gun.get() && v_gunBob.get() ) {
+		gunOffset[UP] += CG_ViewSmoothFallKick();
+	}
+
+		// apply the offsets
+#if 1
+	VectorMA( viewweapon->ent.origin, gunOffset[FORWARD], &cg.view.axis[AXIS_FORWARD], viewweapon->ent.origin );
+	VectorMA( viewweapon->ent.origin, gunOffset[RIGHT], &cg.view.axis[AXIS_RIGHT], viewweapon->ent.origin );
+	VectorMA( viewweapon->ent.origin, gunOffset[UP], &cg.view.axis[AXIS_UP], viewweapon->ent.origin );
+#else
+	Matrix3_FromAngles( cg.predictedPlayerState.viewangles, offsetAxis );
+	VectorMA( viewweapon->ent.origin, gunOffset[FORWARD], &offsetAxis[AXIS_FORWARD], viewweapon->ent.origin );
+	VectorMA( viewweapon->ent.origin, gunOffset[RIGHT], &offsetAxis[AXIS_RIGHT], viewweapon->ent.origin );
+	VectorMA( viewweapon->ent.origin, gunOffset[UP], &offsetAxis[AXIS_UP], viewweapon->ent.origin );
+#endif
+
+	// add angles effects
+	CG_ViewWeapon_AddAngleEffects( gunAngles );
+
+	// finish
+	AnglesToAxis( gunAngles, viewweapon->ent.axis );
+
+	if( v_gunFov.get() > 0.0f && !cg.predictedPlayerState.pmove.stats[PM_STAT_ZOOMTIME] ) {
+		float fracWeapFOV;
+		float gun_fov_x = bound( 20, v_gunFov.get(), 160 );
+		float gun_fov_y = CalcFov( gun_fov_x, cg.view.refdef.width, cg.view.refdef.height );
+
+		AdjustFov( &gun_fov_x, &gun_fov_y, cgs.vidWidth, cgs.vidHeight, false );
+		fracWeapFOV = tan( gun_fov_x * ( M_PI / 180 ) * 0.5f ) / cg.view.fracDistFOV;
+
+		VectorScale( &viewweapon->ent.axis[AXIS_FORWARD], fracWeapFOV, &viewweapon->ent.axis[AXIS_FORWARD] );
+	}
+
+	orientation_t tag;
+	// if the player doesn't want to view the weapon we still have to build the projection source
+	if( CG_GrabTag( &tag, &viewweapon->ent, "tag_weapon" ) ) {
+		CG_ViewWeapon_UpdateProjectionSource( viewweapon->ent.origin, viewweapon->ent.axis, tag.origin, tag.axis );
+	} else {
+		CG_ViewWeapon_UpdateProjectionSource( viewweapon->ent.origin, viewweapon->ent.axis, vec3_origin, axis_identity );
+	}
+}
+
+void CG_AddViewWeapon( cg_viewweapon_t *viewweapon, DrawSceneRequest *drawSceneRequest ) {
+	if( !cg.view.drawWeapon || viewweapon->weapon == WEAP_NONE ) {
+		return;
+	}
+
+	// update the other origins
+	VectorCopy( viewweapon->ent.origin, viewweapon->ent.origin2 );
+	VectorCopy( cg_entities[viewweapon->POVnum].ent.lightingOrigin, viewweapon->ent.lightingOrigin );
+
+	CG_AddColoredOutLineEffect( &viewweapon->ent, cg.effects, 0, 0, 0, viewweapon->ent.shaderRGBA[3] );
+	CG_AddEntityToScene( &viewweapon->ent, drawSceneRequest );
+	CG_AddShellEffects( &viewweapon->ent, cg.effects, drawSceneRequest );
+
+	int64_t flash_time = 0;
+	if( v_weaponFlashes.get() == 2 ) {
+		flash_time = cg_entPModels[viewweapon->POVnum].flash_time;
+	}
+
+	orientation_t tag;
+	if( CG_GrabTag( &tag, &viewweapon->ent, "tag_weapon" ) ) {
+		// add attached weapon
+		CG_AddWeaponOnTag( &viewweapon->ent, &tag, viewweapon->weapon, cg.effects | EF_OUTLINE,
+						   false, nullptr, flash_time, cg_entPModels[viewweapon->POVnum].barrel_time, drawSceneRequest );
 	}
 }
