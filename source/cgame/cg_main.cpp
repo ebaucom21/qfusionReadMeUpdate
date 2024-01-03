@@ -228,7 +228,16 @@ static DrawSceneRequest *laserDrawSceneRequest = nullptr;
 static int cg_num_item_timers = 0;
 static centity_t *cg_item_timers[MAX_ITEM_TIMERS];
 
-static float predictedSteps[CMD_BACKUP]; // for step smoothing
+bool ViewState::isViewerEntity( int entNum ) const {
+	return ( ( predictedPlayerState.POVnum > 0 ) && ( (int)predictedPlayerState.POVnum == (int)( entNum ) ) && ( this->view.type == VIEWDEF_PLAYERVIEW ) );
+}
+
+static ViewState g_primaryViewState;
+
+[[nodiscard]]
+auto getPrimaryViewState() -> ViewState * {
+	return &g_primaryViewState;
+}
 
 static void CG_SC_Print( const CmdArgs &cmdArgs ) {
 	CG_LocalPrint( "%s", Cmd_Argv( 1 ) );
@@ -256,8 +265,9 @@ static void CG_SC_ChatPrint( const CmdArgs &cmdArgs ) {
 	const wsw::StringView textView( text );
 
 	if( teamonly ) {
+		// TODO: What player state should we check?
 		CG_LocalPrint( S_COLOR_YELLOW "[%s]" S_COLOR_WHITE "%s" S_COLOR_YELLOW ": %s\n",
-					   cg.frame.playerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ? "SPEC" : "TEAM", name, text );
+					   getPrimaryViewState()->snapPlayerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ? "SPEC" : "TEAM", name, text );
 		wsw::ui::UISystem::instance()->addToTeamChat( {nameView, textView, sendCommandNum } );
 	} else {
 		CG_LocalPrint( "%s" S_COLOR_GREEN ": %s\n", name, text );
@@ -408,11 +418,14 @@ static const char *CG_SC_AutoRecordName( void ) {
 	time( &long_time );
 	newtime = localtime( &long_time );
 
-	if( cg.view.POVent <= 0 ) {
+	// TODO????
+	const ViewState *const viewState = getPrimaryViewState();
+
+	if( viewState->view.POVent <= 0 ) {
 		cleanplayername2 = "";
 	} else {
 		// remove color tokens from player names (doh)
-		cleanplayername = COM_RemoveColorTokens( cgs.clientInfo[cg.view.POVent - 1].name );
+		cleanplayername = COM_RemoveColorTokens( cgs.clientInfo[viewState->view.POVent - 1].name );
 
 		// remove junk chars from player names for files
 		cleanplayername2 = COM_RemoveJunkChars( cleanplayername );
@@ -454,7 +467,9 @@ void CG_SC_AutoRecordAction( const char *action ) {
 		return;
 	}
 
-	if( cg.frame.playerState.pmove.pm_type == PM_SPECTATOR || cg.frame.playerState.pmove.pm_type == PM_CHASECAM ) {
+	// TODO?
+	const auto *playerState = &getPrimaryViewState()->snapPlayerState;
+	if( playerState->pmove.pm_type == PM_SPECTATOR || playerState->pmove.pm_type == PM_CHASECAM ) {
 		spectator = true;
 	} else {
 		spectator = false;
@@ -751,7 +766,8 @@ static void CG_SC_FragEvent( const CmdArgs &cmdArgs ) {
 					const int victimTeam = cg_entities[victim].current.team;
 					const auto victimAndTeam( std::make_pair( victimName, victimTeam ) );
 					wsw::ui::UISystem::instance()->addFragEvent( victimAndTeam, meansOfDeath, attackerAndTeam );
-					if( attacker && attacker != victim && ISVIEWERENTITY( attacker ) ) {
+					// TODO: How could it be shown for non-primary views?
+					if( attacker && attacker != victim && getPrimaryViewState()->isViewerEntity( attacker ) ) {
 						wsw::StaticString<256> message;
 						if( cg_entities[attacker].current.team == cg_entities[victim].current.team ) {
 							if( GS_TeamBasedGametype() ) {
@@ -820,99 +836,83 @@ void CG_GameCommand( const char *command ) {
 }
 
 void CG_UseItem( const char *name ) {
-	gsitem_t *item;
-
-	if( !cg.frame.valid || cgs.demoPlaying ) {
-		return;
-	}
-
-	if( !name ) {
-		return;
-	}
-
-	item = GS_Cmd_UseItem( &cg.frame.playerState, name, 0 );
-	if( item ) {
-		if( item->type & IT_WEAPON ) {
-			CG_Predict_ChangeWeapon( item->tag );
-			cg.lastWeapon = cg.predictedPlayerState.stats[STAT_PENDING_WEAPON];
+	if( name && cg.frame.valid && !cgs.demoPlaying ) {
+		// TODO?
+		ViewState *const viewState = getPrimaryViewState();
+		if( gsitem_t * item = GS_Cmd_UseItem( &viewState->snapPlayerState, name, 0 ) ) {
+			if( item->type & IT_WEAPON ) {
+				CG_Predict_ChangeWeapon( item->tag );
+				viewState->lastWeapon = viewState->predictedPlayerState.stats[STAT_PENDING_WEAPON];
+			}
+			CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
 		}
-
-		CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
 	}
 }
 
 static void CG_Cmd_UseItem_f( const CmdArgs &cmdArgs ) {
 	if( !Cmd_Argc() ) {
 		cgNotice() << "Usage: 'use <item name>' or 'use <item index>'";
-		return;
+	} else {
+		CG_UseItem( Cmd_Args() );
 	}
-
-	CG_UseItem( Cmd_Args() );
 }
 
 static void CG_Cmd_NextWeapon_f( const CmdArgs & ) {
-	gsitem_t *item;
-
-	if( !cg.frame.valid ) {
-		return;
-	}
-
-	if( cgs.demoPlaying || cg.predictedPlayerState.pmove.pm_type == PM_CHASECAM ) {
-		CG_ChaseStep( 1 );
-		return;
-	}
-
-	item = GS_Cmd_NextWeapon_f( &cg.frame.playerState, cg.predictedWeaponSwitch );
-	if( item ) {
-		CG_Predict_ChangeWeapon( item->tag );
-		CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
-		cg.lastWeapon = cg.predictedPlayerState.stats[STAT_PENDING_WEAPON];
+	if( cg.frame.valid ) {
+		// TODO?
+		ViewState *const viewState = getPrimaryViewState();
+		if( cgs.demoPlaying || viewState->predictedPlayerState.pmove.pm_type == PM_CHASECAM ) {
+			CG_ChaseStep( 1 );
+		} else {
+			if( gsitem_t *item = GS_Cmd_NextWeapon_f( &viewState->snapPlayerState, viewState->predictedWeaponSwitch ) ) {
+				CG_Predict_ChangeWeapon( item->tag );
+				CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
+				viewState->lastWeapon = viewState->predictedPlayerState.stats[STAT_PENDING_WEAPON];
+			}
+		}
 	}
 }
 
 static void CG_Cmd_PrevWeapon_f( const CmdArgs & ) {
-	gsitem_t *item;
-
-	if( !cg.frame.valid ) {
-		return;
-	}
-
-	if( cgs.demoPlaying || cg.predictedPlayerState.pmove.pm_type == PM_CHASECAM ) {
-		CG_ChaseStep( -1 );
-		return;
-	}
-
-	item = GS_Cmd_PrevWeapon_f( &cg.frame.playerState, cg.predictedWeaponSwitch );
-	if( item ) {
-		CG_Predict_ChangeWeapon( item->tag );
-		CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
-		cg.lastWeapon = cg.predictedPlayerState.stats[STAT_PENDING_WEAPON];
+	if( cg.frame.valid ) {
+		// TODO?
+		ViewState *const viewState = getPrimaryViewState();
+		if( cgs.demoPlaying || viewState->predictedPlayerState.pmove.pm_type == PM_CHASECAM ) {
+			CG_ChaseStep( -1 );
+		} else {
+			if( gsitem_t *item = GS_Cmd_PrevWeapon_f( &viewState->snapPlayerState, viewState->predictedWeaponSwitch ) ) {
+				CG_Predict_ChangeWeapon( item->tag );
+				CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
+				viewState->lastWeapon = viewState->predictedPlayerState.stats[STAT_PENDING_WEAPON];
+			}
+		}
 	}
 }
 
 static void CG_Cmd_LastWeapon_f( const CmdArgs & ) {
-	gsitem_t *item;
-
-	if( !cg.frame.valid || cgs.demoPlaying ) {
-		return;
-	}
-
-	if( cg.lastWeapon != WEAP_NONE && cg.lastWeapon != cg.predictedPlayerState.stats[STAT_PENDING_WEAPON] ) {
-		item = GS_Cmd_UseItem( &cg.frame.playerState, va( "%i", cg.lastWeapon ), IT_WEAPON );
-		if( item ) {
-			if( item->type & IT_WEAPON ) {
-				CG_Predict_ChangeWeapon( item->tag );
+	if( cg.frame.valid && !cgs.demoPlaying ) {
+		// TODO???
+		ViewState *const viewState = getPrimaryViewState();
+		if( viewState->lastWeapon != WEAP_NONE ) {
+			if( viewState->lastWeapon != viewState->predictedPlayerState.stats[STAT_PENDING_WEAPON] ) {
+				if( gsitem_t *item = GS_Cmd_UseItem( &viewState->snapPlayerState, va( "%i", viewState->lastWeapon ), IT_WEAPON ) ) {
+					if( item->type & IT_WEAPON ) {
+						CG_Predict_ChangeWeapon( item->tag );
+					}
+					CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
+					viewState->lastWeapon = viewState->predictedPlayerState.stats[STAT_PENDING_WEAPON];
+				}
 			}
-
-			CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
-			cg.lastWeapon = cg.predictedPlayerState.stats[STAT_PENDING_WEAPON];
 		}
 	}
 }
 
 static void CG_Viewpos_f( const CmdArgs & ) {
-	Com_Printf( "\"origin\" \"%i %i %i\"\n", (int)cg.view.origin[0], (int)cg.view.origin[1], (int)cg.view.origin[2] );
-	Com_Printf( "\"angles\" \"%i %i %i\"\n", (int)cg.view.angles[0], (int)cg.view.angles[1], (int)cg.view.angles[2] );
+	const ViewState *const viewState = getPrimaryViewState();
+	const float *const origin        = viewState->view.origin;
+	const float *const angles        = viewState->view.angles;
+	Com_Printf( "\"origin\" \"%i %i %i\"\n", (int)origin[0], (int)origin[1], (int)origin[2] );
+	Com_Printf( "\"angles\" \"%i %i %i\"\n", (int)angles[0], (int)angles[1], (int)angles[2] );
 }
 
 typedef struct {
@@ -1037,7 +1037,8 @@ static void CG_Event_WeaponBeam( vec3_t origin, vec3_t dir, int ownerNum, int we
 	VectorMA( origin, range, dir, end );
 
 	// retrace to spawn wall impact
-	CG_Trace( &trace, origin, vec3_origin, vec3_origin, end, cg.view.POVent, MASK_SOLID );
+	// TODO: Check against the owner, not the view state!
+	CG_Trace( &trace, origin, vec3_origin, vec3_origin, end, getPrimaryViewState()->view.POVent, MASK_SOLID );
 	if( trace.ent != -1 ) {
 		[[maybe_unused]] bool spawnDecal = ( trace.surfFlags & ( SURF_FLESH | SURF_NOMARKS ) ) == 0;
 		if( weapondef->weapon_id == WEAP_ELECTROBOLT ) {
@@ -1053,7 +1054,7 @@ static void CG_Event_WeaponBeam( vec3_t origin, vec3_t dir, int ownerNum, int we
 	VectorCopy( trace.endpos, cg_entities[ownerNum].laserPoint );
 }
 
-void CG_WeaponBeamEffect( centity_t *cent ) {
+void CG_WeaponBeamEffect( centity_t *cent, ViewState *viewState ) {
 	orientation_t projection;
 
 	if( !cent->localEffects[LOCALEFFECT_EV_WEAPONBEAM] ) {
@@ -1061,7 +1062,7 @@ void CG_WeaponBeamEffect( centity_t *cent ) {
 	}
 
 	// now find the projection source for the beam we will draw
-	if( !CG_PModel_GetProjectionSource( cent->current.number, &projection ) ) {
+	if( !CG_PModel_GetProjectionSource( cent->current.number, &projection, viewState ) ) {
 		VectorCopy( cent->laserOrigin, projection.origin );
 	}
 
@@ -1185,9 +1186,9 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 	laserDrawSceneRequest->addLight( lightOrigin, 144.0f, 0.0f, 0.75f, 0.75f, 0.375f );
 }
 
-void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) {
+void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
 	const signed ownerEntNum = owner->current.number;
-	const bool isOwnerThePov = ISVIEWERENTITY( ownerEntNum );
+	const bool isOwnerThePov = viewState->isViewerEntity( ownerEntNum );
 	const bool isCurved      = owner->laserCurved;
 	auto *const soundSystem  = SoundSystem::instance();
 
@@ -1206,10 +1207,10 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) 
 	}
 
 	vec3_t laserOrigin, laserAngles, laserPoint;
-	if( isOwnerThePov && !cg.view.thirdperson ) {
-		VectorCopy( cg.predictedPlayerState.pmove.origin, laserOrigin );
-		laserOrigin[2] += cg.predictedPlayerState.viewheight;
-		VectorCopy( cg.predictedPlayerState.viewangles, laserAngles );
+	if( isOwnerThePov && !viewState->view.thirdperson ) {
+		VectorCopy( viewState->predictedPlayerState.pmove.origin, laserOrigin );
+		laserOrigin[2] += viewState->predictedPlayerState.viewheight;
+		VectorCopy( viewState->predictedPlayerState.viewangles, laserAngles );
 
 		VectorLerp( owner->laserPointOld, cg.lerpfrac, owner->laserPoint, laserPoint );
 	} else {
@@ -1230,7 +1231,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) 
 
 	// draw the beam: for drawing we use the weapon projection source (already handles the case of viewer entity)
 	orientation_t projectsource;
-	if( !CG_PModel_GetProjectionSource( ownerEntNum, &projectsource ) ) {
+	if( !CG_PModel_GetProjectionSource( ownerEntNum, &projectsource, viewState ) ) {
 		VectorCopy( laserOrigin, projectsource.origin );
 	}
 
@@ -1311,7 +1312,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) 
 	laserDrawSceneRequest = nullptr;
 }
 
-void CG_Event_LaserBeam( int entNum, int weapon, int fireMode ) {
+void CG_Event_LaserBeam( int entNum, int weapon, int fireMode, ViewState *viewState ) {
 	centity_t *cent = &cg_entities[entNum];
 	unsigned int timeout;
 	vec3_t dir;
@@ -1326,19 +1327,19 @@ void CG_Event_LaserBeam( int entNum, int weapon, int fireMode ) {
 		timeout = GS_GetWeaponDef( WEAP_LASERGUN )->firedef.reload_time + 10;
 
 		// find destiny point
-		VectorCopy( cg.predictedPlayerState.pmove.origin, cent->laserOrigin );
-		cent->laserOrigin[2] += cg.predictedPlayerState.viewheight;
-		AngleVectors( cg.predictedPlayerState.viewangles, dir, NULL, NULL );
+		VectorCopy( viewState->predictedPlayerState.pmove.origin, cent->laserOrigin );
+		cent->laserOrigin[2] += viewState->predictedPlayerState.viewheight;
+		AngleVectors( viewState->predictedPlayerState.viewangles, dir, NULL, NULL );
 		VectorMA( cent->laserOrigin, GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout, dir, cent->laserPoint );
 	} else {
 		cent->laserCurved = true;
 		timeout = GS_GetWeaponDef( WEAP_LASERGUN )->firedef_weak.reload_time + 10;
 
 		// find destiny point
-		VectorCopy( cg.predictedPlayerState.pmove.origin, cent->laserOrigin );
-		cent->laserOrigin[2] += cg.predictedPlayerState.viewheight;
-		if( !G_GetLaserbeamPoint( &cg.weaklaserTrail, &cg.predictedPlayerState, cg.predictingTimeStamp, cent->laserPoint ) ) {
-			AngleVectors( cg.predictedPlayerState.viewangles, dir, NULL, NULL );
+		VectorCopy( viewState->predictedPlayerState.pmove.origin, cent->laserOrigin );
+		cent->laserOrigin[2] += viewState->predictedPlayerState.viewheight;
+		if( !G_GetLaserbeamPoint( &viewState->weaklaserTrail, &viewState->predictedPlayerState, viewState->predictingTimeStamp, cent->laserPoint ) ) {
+			AngleVectors( viewState->predictedPlayerState.viewangles, dir, NULL, NULL );
 			VectorMA( cent->laserOrigin, GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout, dir, cent->laserPoint );
 		}
 	}
@@ -1353,7 +1354,7 @@ void CG_Event_LaserBeam( int entNum, int weapon, int fireMode ) {
 	cent->localEffects[LOCALEFFECT_LASERBEAM] = cg.time + timeout;
 }
 
-static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
+static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode, ViewState *viewState ) {
 	float attenuation;
 	const SoundSet *sound = NULL;
 	weaponinfo_t *weaponInfo;
@@ -1383,7 +1384,7 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 	}
 
 	if( sound ) {
-		if( ISVIEWERENTITY( entNum ) ) {
+		if( viewState->isViewerEntity( entNum ) ) {
 			SoundSystem::instance()->startGlobalSound( sound, CHAN_AUTO, v_volumeEffects.get() );
 		} else {
 			SoundSystem::instance()->startRelativeSound( sound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
@@ -1391,7 +1392,7 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 
 		if( ( cg_entities[entNum].current.effects & EF_QUAD ) && ( weapon != WEAP_LASERGUN ) ) {
 			const SoundSet *quadSound = cgs.media.sndQuadFireSound;
-			if( ISVIEWERENTITY( entNum ) ) {
+			if( viewState->isViewerEntity( entNum ) ) {
 				SoundSystem::instance()->startGlobalSound( quadSound, CHAN_AUTO, v_volumeEffects.get() );
 			} else {
 				SoundSystem::instance()->startRelativeSound( quadSound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
@@ -1459,8 +1460,8 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 	}
 
 	// add animation to the view weapon model
-	if( ISVIEWERENTITY( entNum ) && !cg.view.thirdperson ) {
-		CG_ViewWeapon_StartAnimationEvent( fireMode == FIRE_MODE_STRONG ? WEAPMODEL_ATTACK_STRONG : WEAPMODEL_ATTACK_WEAK );
+	if( viewState->isViewerEntity( entNum ) && !viewState->view.thirdperson ) {
+		CG_ViewWeapon_StartAnimationEvent( fireMode == FIRE_MODE_STRONG ? WEAPMODEL_ATTACK_STRONG : WEAPMODEL_ATTACK_WEAK, viewState );
 	}
 }
 
@@ -1713,22 +1714,22 @@ void CG_ReleaseAnnouncerEvents( void ) {
 	}
 }
 
-void CG_Event_Fall( entity_state_t *state, int parm ) {
-	if( ISVIEWERENTITY( state->number ) ) {
-		if( cg.frame.playerState.pmove.pm_type != PM_NORMAL ) {
-			CG_SexedSound( state->number, CHAN_AUTO, "*fall_0", v_volumePlayers.get(), state->attenuation );
+void CG_Event_Fall( entity_state_t *state, int parm, ViewState *viewState ) {
+	if( viewState->isViewerEntity( state->number ) ) {
+		if( viewState->snapPlayerState.pmove.pm_type != PM_NORMAL ) {
+			CG_SexedSound( viewState, state->number, CHAN_AUTO, "*fall_0", v_volumePlayers.get(), state->attenuation );
 			return;
 		}
 
-		CG_StartFallKickEffect( ( parm + 5 ) * 10 );
+		CG_StartFallKickEffect( ( parm + 5 ) * 10, viewState );
 
 		if( parm >= 15 ) {
-			CG_DamageIndicatorAdd( parm, tv( 0, 0, 1 ) );
+			CG_DamageIndicatorAdd( parm, tv( 0, 0, 1 ), viewState );
 		}
 	}
 
 	if( parm > 10 ) {
-		CG_SexedSound( state->number, CHAN_PAIN, "*fall_2", v_volumePlayers.get(), state->attenuation );
+		CG_SexedSound( viewState, state->number, CHAN_PAIN, "*fall_2", v_volumePlayers.get(), state->attenuation );
 		switch( (int)brandom( 0, 3 ) ) {
 			case 0:
 				CG_PModel_AddAnimation( state->number, 0, TORSO_PAIN1, 0, EVENT_CHANNEL );
@@ -1742,9 +1743,9 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 				break;
 		}
 	} else if( parm > 0 ) {
-		CG_SexedSound( state->number, CHAN_PAIN, "*fall_1", v_volumePlayers.get(), state->attenuation );
+		CG_SexedSound( viewState, state->number, CHAN_PAIN, "*fall_1", v_volumePlayers.get(), state->attenuation );
 	} else {
-		CG_SexedSound( state->number, CHAN_PAIN, "*fall_0", v_volumePlayers.get(), state->attenuation );
+		CG_SexedSound( viewState, state->number, CHAN_PAIN, "*fall_0", v_volumePlayers.get(), state->attenuation );
 	}
 
 	// smoke effect
@@ -1752,8 +1753,8 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 		vec3_t start, end;
 		trace_t trace;
 
-		if( ISVIEWERENTITY( state->number ) ) {
-			VectorCopy( cg.predictedPlayerState.pmove.origin, start );
+		if( viewState->isViewerEntity( state->number ) ) {
+			VectorCopy( viewState->predictedPlayerState.pmove.origin, start );
 		} else {
 			VectorCopy( state->origin, start );
 		}
@@ -1772,9 +1773,9 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 	}
 }
 
-void CG_Event_Pain( entity_state_t *state, int parm ) {
+void CG_Event_Pain( entity_state_t *state, int parm, ViewState *viewState ) {
 	if( parm == PAIN_WARSHELL ) {
-		if( ISVIEWERENTITY( state->number ) ) {
+		if( viewState->isViewerEntity( state->number ) ) {
 			SoundSystem::instance()->startGlobalSound( cgs.media.sndShellHit, CHAN_PAIN,
 													   v_volumePlayers.get() );
 		} else {
@@ -1782,7 +1783,7 @@ void CG_Event_Pain( entity_state_t *state, int parm ) {
 														 v_volumePlayers.get(), state->attenuation );
 		}
 	} else {
-		CG_SexedSound( state->number, CHAN_PAIN, va( S_PLAYER_PAINS, 25 * parm ),
+		CG_SexedSound( viewState, state->number, CHAN_PAIN, va( S_PLAYER_PAINS, 25 * parm ),
 					   v_volumePlayers.get(), state->attenuation );
 	}
 
@@ -1800,8 +1801,8 @@ void CG_Event_Pain( entity_state_t *state, int parm ) {
 	}
 }
 
-void CG_Event_Die( entity_state_t *state, int parm ) {
-	CG_SexedSound( state->number, CHAN_PAIN, S_PLAYER_DEATH, v_volumePlayers.get(), state->attenuation );
+void CG_Event_Die( entity_state_t *state, int parm, ViewState *viewState ) {
+	CG_SexedSound( viewState, state->number, CHAN_PAIN, S_PLAYER_DEATH, v_volumePlayers.get(), state->attenuation );
 
 	switch( parm ) {
 		case 0:
@@ -1817,28 +1818,28 @@ void CG_Event_Die( entity_state_t *state, int parm ) {
 	}
 }
 
-void CG_Event_Dash( entity_state_t *state, int parm ) {
+void CG_Event_Dash( entity_state_t *state, int parm, ViewState *viewState ) {
 	switch( parm ) {
 		default:
 			break;
 		case 0: // dash front
 			CG_PModel_AddAnimation( state->number, LEGS_DASH, 0, 0, EVENT_CHANNEL );
-			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+			CG_SexedSound( viewState, state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
 						   v_volumePlayers.get(), state->attenuation );
 			break;
 		case 1: // dash left
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_LEFT, 0, 0, EVENT_CHANNEL );
-			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+			CG_SexedSound( viewState, state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
 						   v_volumePlayers.get(), state->attenuation );
 			break;
 		case 2: // dash right
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_RIGHT, 0, 0, EVENT_CHANNEL );
-			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+			CG_SexedSound( viewState, state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
 						   v_volumePlayers.get(), state->attenuation );
 			break;
 		case 3: // dash back
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_BACK, 0, 0, EVENT_CHANNEL );
-			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+			CG_SexedSound( viewState, state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
 						   v_volumePlayers.get(), state->attenuation );
 			break;
 	}
@@ -1849,7 +1850,7 @@ void CG_Event_Dash( entity_state_t *state, int parm ) {
 	cg_entities[state->number].jumpedLeft = true;
 }
 
-void CG_Event_WallJump( entity_state_t *state, int parm, int ev ) {
+void CG_Event_WallJump( entity_state_t *state, int parm, int ev, ViewState *viewState ) {
 	vec3_t normal, forward, right;
 
 	ByteToDir( parm, normal );
@@ -1867,13 +1868,13 @@ void CG_Event_WallJump( entity_state_t *state, int parm, int ev ) {
 	}
 
 	if( ev == EV_WALLJUMP_FAILED ) {
-		if( ISVIEWERENTITY( state->number ) ) {
+		if( viewState->isViewerEntity( state->number ) ) {
 			SoundSystem::instance()->startGlobalSound( cgs.media.sndWalljumpFailed, CHAN_BODY, v_volumeEffects.get() );
 		} else {
 			SoundSystem::instance()->startRelativeSound( cgs.media.sndWalljumpFailed, state->number, CHAN_BODY, v_volumeEffects.get(), ATTN_NORM );
 		}
 	} else {
-		CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_WALLJUMP_1_to_2, ( rand() & 1 ) + 1 ),
+		CG_SexedSound( viewState, state->number, CHAN_BODY, va( S_PLAYER_WALLJUMP_1_to_2, ( rand() & 1 ) + 1 ),
 					   v_volumePlayers.get(), state->attenuation );
 
 		// smoke effect
@@ -1884,12 +1885,12 @@ void CG_Event_WallJump( entity_state_t *state, int parm, int ev ) {
 	}
 }
 
-void CG_Event_DoubleJump( entity_state_t *state, int parm ) {
-	CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+void CG_Event_DoubleJump( entity_state_t *state, int parm, ViewState *viewState ) {
+	CG_SexedSound( viewState, state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 				   v_volumePlayers.get(), state->attenuation );
 }
 
-void CG_Event_Jump( entity_state_t *state, int parm ) {
+void CG_Event_Jump( entity_state_t *state, int parm, ViewState *viewState ) {
 	float attenuation = state->attenuation;
 	// Hack for the bobot jump sound.
 	// Amplifying it is not an option as it becomes annoying at close range.
@@ -1904,7 +1905,7 @@ void CG_Event_Jump( entity_state_t *state, int parm ) {
 	float xyspeedcheck = Q_Sqrt( cent->animVelocity[0] * cent->animVelocity[0] + cent->animVelocity[1] * cent->animVelocity[1] );
 	if( xyspeedcheck < 100 ) { // the player is jumping on the same place, not running
 		CG_PModel_AddAnimation( state->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
-		CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+		CG_SexedSound( viewState, state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 					   v_volumePlayers.get(), attenuation );
 	} else {
 		vec3_t movedir;
@@ -1922,25 +1923,25 @@ void CG_Event_Jump( entity_state_t *state, int parm ) {
 			cent->jumpedLeft = !cent->jumpedLeft;
 			if( !cent->jumpedLeft ) {
 				CG_PModel_AddAnimation( state->number, LEGS_JUMP_LEG2, 0, 0, EVENT_CHANNEL );
-				CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+				CG_SexedSound( viewState, state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 							   v_volumePlayers.get(), attenuation );
 			} else {
 				CG_PModel_AddAnimation( state->number, LEGS_JUMP_LEG1, 0, 0, EVENT_CHANNEL );
-				CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+				CG_SexedSound( viewState, state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 							   v_volumePlayers.get(), attenuation );
 			}
 		} else {
 			CG_PModel_AddAnimation( state->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
-			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+			CG_SexedSound( viewState, state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 						   v_volumePlayers.get(), attenuation );
 		}
 	}
 }
 
-static void handleWeaponActivateEvent( entity_state_t *ent, int parm, bool predicted ) {
+static void handleWeaponActivateEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
 	const int weapon = ( parm >> 1 ) & 0x3f;
 	const int fireMode = ( parm & 0x1 ) ? FIRE_MODE_STRONG : FIRE_MODE_WEAK;
-	const bool viewer = ISVIEWERENTITY( ent->number );
+	const bool viewer = viewState->isViewerEntity( ent->number );
 
 	CG_PModel_AddAnimation( ent->number, 0, TORSO_WEAPON_SWITCHIN, 0, EVENT_CHANNEL );
 
@@ -1950,11 +1951,11 @@ static void handleWeaponActivateEvent( entity_state_t *ent, int parm, bool predi
 			cg_entities[ent->number].current.effects |= EF_STRONG_WEAPON;
 		}
 
-		CG_ViewWeapon_RefreshAnimation( &cg.weapon );
+		CG_ViewWeapon_RefreshAnimation( &viewState->weapon, viewState );
 	}
 
 	if( viewer ) {
-		cg.predictedWeaponSwitch = 0;
+		viewState->predictedWeaponSwitch = 0;
 	}
 
 	if( viewer ) {
@@ -1964,7 +1965,7 @@ static void handleWeaponActivateEvent( entity_state_t *ent, int parm, bool predi
 	}
 }
 
-static void handleSmoothRefireWeaponEvent( entity_state_t *ent, int parm, bool predicted ) {
+static void handleSmoothRefireWeaponEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
 	if( predicted ) {
 		const int weapon = ( parm >> 1 ) & 0x3f;
 		const int fireMode = ( parm & 0x1 ) ? FIRE_MODE_STRONG : FIRE_MODE_WEAK;
@@ -1974,15 +1975,15 @@ static void handleSmoothRefireWeaponEvent( entity_state_t *ent, int parm, bool p
 			cg_entities[ent->number].current.effects |= EF_STRONG_WEAPON;
 		}
 
-		CG_ViewWeapon_RefreshAnimation( &cg.weapon );
+		CG_ViewWeapon_RefreshAnimation( &viewState->weapon, viewState );
 
 		if( weapon == WEAP_LASERGUN ) {
-			CG_Event_LaserBeam( ent->number, weapon, fireMode );
+			CG_Event_LaserBeam( ent->number, weapon, fireMode, viewState );
 		}
 	}
 }
 
-static void handleFireWeaponEvent( entity_state_t *ent, int parm, bool predicted ) {
+static void handleFireWeaponEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
 	const int weapon = ( parm >> 1 ) & 0x3f;
 	const int fireMode = ( parm & 0x1 ) ? FIRE_MODE_STRONG : FIRE_MODE_WEAK;
 
@@ -1993,90 +1994,90 @@ static void handleFireWeaponEvent( entity_state_t *ent, int parm, bool predicted
 		}
 	}
 
-	CG_FireWeaponEvent( ent->number, weapon, fireMode );
+	CG_FireWeaponEvent( ent->number, weapon, fireMode, viewState );
 
 	// riotgun bullets, electrobolt and instagun beams are predicted when the weapon is fired
 	if( predicted ) {
 		vec3_t origin, dir;
 
 		if( ( weapon == WEAP_ELECTROBOLT && fireMode == FIRE_MODE_STRONG ) || weapon == WEAP_INSTAGUN ) {
-			VectorCopy( cg.predictedPlayerState.pmove.origin, origin );
-			origin[2] += cg.predictedPlayerState.viewheight;
-			AngleVectors( cg.predictedPlayerState.viewangles, dir, NULL, NULL );
-			CG_Event_WeaponBeam( origin, dir, cg.predictedPlayerState.POVnum, weapon, fireMode );
+			VectorCopy( viewState->predictedPlayerState.pmove.origin, origin );
+			origin[2] += viewState->predictedPlayerState.viewheight;
+			AngleVectors( viewState->predictedPlayerState.viewangles, dir, NULL, NULL );
+			CG_Event_WeaponBeam( origin, dir, viewState->predictedPlayerState.POVnum, weapon, fireMode );
 		} else if( weapon == WEAP_RIOTGUN || weapon == WEAP_MACHINEGUN ) {
-			int seed = cg.predictedEventTimes[EV_FIREWEAPON] & 255;
+			const int seed = viewState->predictedEventTimes[EV_FIREWEAPON] & 255;
 
-			VectorCopy( cg.predictedPlayerState.pmove.origin, origin );
-			origin[2] += cg.predictedPlayerState.viewheight;
-			AngleVectors( cg.predictedPlayerState.viewangles, dir, NULL, NULL );
+			VectorCopy( viewState->predictedPlayerState.pmove.origin, origin );
+			origin[2] += viewState->predictedPlayerState.viewheight;
+			AngleVectors( viewState->predictedPlayerState.viewangles, dir, NULL, NULL );
 
 			if( weapon == WEAP_RIOTGUN ) {
-				CG_Event_FireRiotgun( origin, dir, weapon, fireMode, seed, cg.predictedPlayerState.POVnum );
+				CG_Event_FireRiotgun( origin, dir, weapon, fireMode, seed, viewState->predictedPlayerState.POVnum );
 			} else {
-				CG_Event_FireMachinegun( origin, dir, weapon, fireMode, seed, cg.predictedPlayerState.POVnum );
+				CG_Event_FireMachinegun( origin, dir, weapon, fireMode, seed, viewState->predictedPlayerState.POVnum );
 			}
 		} else if( weapon == WEAP_LASERGUN ) {
-			CG_Event_LaserBeam( ent->number, weapon, fireMode );
+			CG_Event_LaserBeam( ent->number, weapon, fireMode, viewState );
 		}
 	}
 }
 
-static void handleElectroTrailEvent( entity_state_t *ent, int parm, bool predicted ) {
+static void handleElectroTrailEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
 	// check the owner for predicted case
-	if( ISVIEWERENTITY( parm ) && ( predicted != cg.view.playerPrediction ) ) {
+	if( viewState->isViewerEntity( parm ) && ( predicted != viewState->view.playerPrediction ) ) {
 		return;
 	}
 
 	CG_Event_WeaponBeam( ent->origin, ent->origin2, parm, WEAP_ELECTROBOLT, ent->firemode );
 }
 
-static void handleInstaTrailEvent( entity_state_t *ent, int parm, bool predicted ) {
+static void handleInstaTrailEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
 	// check the owner for predicted case
-	if( ISVIEWERENTITY( parm ) && ( predicted != cg.view.playerPrediction ) ) {
+	if( viewState->isViewerEntity( parm ) && ( predicted != viewState->view.playerPrediction ) ) {
 		return;
 	}
 
 	CG_Event_WeaponBeam( ent->origin, ent->origin2, parm, WEAP_INSTAGUN, FIRE_MODE_STRONG );
 }
 
-static void handleFireRiotgunEvent( entity_state_t *ent, int parm, bool predicted ) {
+static void handleFireRiotgunEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
 	// check the owner for predicted case
-	if( ISVIEWERENTITY( ent->ownerNum ) && ( predicted != cg.view.playerPrediction ) ) {
+	if( viewState->isViewerEntity( ent->ownerNum ) && ( predicted != viewState->view.playerPrediction ) ) {
 		return;
 	}
 
 	CG_Event_FireRiotgun( ent->origin, ent->origin2, ent->weapon, ent->firemode, parm, ent->ownerNum );
 }
 
-static void handleFireBulletEvent( entity_state_t *ent, int parm, bool predicted ) {
+static void handleFireBulletEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
 	// check the owner for predicted case
-	if( ISVIEWERENTITY( ent->ownerNum ) && ( predicted != cg.view.playerPrediction ) ) {
+	if( viewState->isViewerEntity( ent->ownerNum ) && ( predicted != viewState->view.playerPrediction ) ) {
 		return;
 	}
 
 	CG_Event_FireMachinegun( ent->origin, ent->origin2, ent->weapon, ent->firemode, parm, ent->ownerNum );
 }
 
-static void handleNoAmmoClickEvent( entity_state_t *ent, int parm, bool predicted ) {
-	if( ISVIEWERENTITY( ent->number ) ) {
+static void handleNoAmmoClickEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
+	if( viewState->isViewerEntity( ent->number ) ) {
 		SoundSystem::instance()->startGlobalSound( cgs.media.sndWeaponUpNoAmmo, CHAN_ITEM, v_volumeEffects.get() );
 	} else {
 		SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUpNoAmmo, ent->origin, CHAN_ITEM, v_volumeEffects.get(), ATTN_IDLE );
 	}
 }
 
-static void handleJumppadEvent( entity_state_t *ent, bool predicted ) {
-	CG_SexedSound( ent->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+static void handleJumppadEvent( entity_state_t *ent, bool predicted, ViewState *viewState ) {
+	CG_SexedSound( viewState, ent->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 				   v_volumePlayers.get(), ent->attenuation );
 	CG_PModel_AddAnimation( ent->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
 }
 
-static void handleSexedSoundEvent( entity_state_t *ent, int parm, bool predicted ) {
+static void handleSexedSoundEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
 	if( parm == 2 ) {
-		CG_SexedSound( ent->number, CHAN_AUTO, S_PLAYER_GASP, v_volumePlayers.get(), ent->attenuation );
+		CG_SexedSound( viewState, ent->number, CHAN_AUTO, S_PLAYER_GASP, v_volumePlayers.get(), ent->attenuation );
 	} else if( parm == 1 ) {
-		CG_SexedSound( ent->number, CHAN_AUTO, S_PLAYER_DROWN, v_volumePlayers.get(), ent->attenuation );
+		CG_SexedSound( viewState, ent->number, CHAN_AUTO, S_PLAYER_DROWN, v_volumePlayers.get(), ent->attenuation );
 	}
 }
 
@@ -2136,11 +2137,11 @@ static void handleItemRespawnEvent( entity_state_t *ent, int parm, bool predicte
 												 v_volumeEffects.get(), ATTN_IDLE );
 }
 
-static void handlePlayerRespawnEvent( entity_state_t *ent, int parm, bool predicted ) {
+static void handlePlayerRespawnEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
 	if( (unsigned)ent->ownerNum == cgs.playerNum + 1 ) {
-		CG_ResetKickAngles();
-		CG_ResetColorBlend();
-		CG_ResetDamageIndicator();
+		CG_ResetKickAngles( viewState );
+		CG_ResetColorBlend( viewState );
+		CG_ResetDamageIndicator( viewState );
 	}
 
 	SoundSystem::instance()->startFixedSound( cgs.media.sndPlayerRespawn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
@@ -2261,8 +2262,8 @@ static void handleGunbladeBlastImpactEvent( entity_state_t *ent, int parm, bool 
 	CG_StartKickAnglesEffect( ent->origin, ent->skinnum * 8, ent->weapon * 8, 200 );
 }
 
-static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted ) {
-	if( v_showPovBlood.get() || !ISVIEWERENTITY( ent->ownerNum ) ) {
+static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted, ViewState *viewState ) {
+	if( v_showPovBlood.get() || !viewState->isViewerEntity( ent->ownerNum ) ) {
 		vec3_t dir;
 		ByteToDir( parm, dir );
 		if( VectorCompare( dir, vec3_origin ) ) {
@@ -2278,36 +2279,36 @@ static void handleMoverEvent( entity_state_t *ent, int parm ) {
 	SoundSystem::instance()->startFixedSound( cgs.soundPrecache[parm], so, CHAN_AUTO, v_volumeEffects.get(), ATTN_STATIC );
 }
 
-void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
-	if( ISVIEWERENTITY( ent->number ) && ( ev < PREDICTABLE_EVENTS_MAX ) && ( predicted != cg.view.playerPrediction ) ) {
+void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted, ViewState *viewState ) {
+	if( viewState->isViewerEntity( ent->number ) && ( ev < PREDICTABLE_EVENTS_MAX ) && ( predicted != viewState->view.playerPrediction ) ) {
 		return;
 	}
 
 	switch( ev ) {
 		//  PREDICTABLE EVENTS
 
-		case EV_WEAPONACTIVATE: return handleWeaponActivateEvent( ent, parm, predicted );
-		case EV_SMOOTHREFIREWEAPON: return handleSmoothRefireWeaponEvent( ent, parm, predicted );
-		case EV_FIREWEAPON: return handleFireWeaponEvent( ent, parm, predicted );
-		case EV_ELECTROTRAIL: return handleElectroTrailEvent( ent, parm, predicted );
-		case EV_INSTATRAIL: return handleInstaTrailEvent( ent, parm, predicted );
-		case EV_FIRE_RIOTGUN: return handleFireRiotgunEvent( ent, parm, predicted );
-		case EV_FIRE_BULLET: return handleFireBulletEvent( ent, parm, predicted );
-		case EV_NOAMMOCLICK: return handleNoAmmoClickEvent( ent, parm, predicted );
-		case EV_DASH: return CG_Event_Dash( ent, parm );
+		case EV_WEAPONACTIVATE: return handleWeaponActivateEvent( ent, parm, predicted, viewState );
+		case EV_SMOOTHREFIREWEAPON: return handleSmoothRefireWeaponEvent( ent, parm, predicted, viewState );
+		case EV_FIREWEAPON: return handleFireWeaponEvent( ent, parm, predicted, viewState );
+		case EV_ELECTROTRAIL: return handleElectroTrailEvent( ent, parm, predicted, viewState );
+		case EV_INSTATRAIL: return handleInstaTrailEvent( ent, parm, predicted, viewState );
+		case EV_FIRE_RIOTGUN: return handleFireRiotgunEvent( ent, parm, predicted, viewState );
+		case EV_FIRE_BULLET: return handleFireBulletEvent( ent, parm, predicted, viewState );
+		case EV_NOAMMOCLICK: return handleNoAmmoClickEvent( ent, parm, predicted, viewState );
+		case EV_DASH: return CG_Event_Dash( ent, parm, viewState );
 		case EV_WALLJUMP: [[fallthrough]];
-		case EV_WALLJUMP_FAILED: return CG_Event_WallJump( ent, parm, ev );
-		case EV_DOUBLEJUMP: return CG_Event_DoubleJump( ent, parm );
-		case EV_JUMP: return CG_Event_Jump( ent, parm );
-		case EV_JUMP_PAD: return handleJumppadEvent( ent, predicted );
-		case EV_FALL: return CG_Event_Fall( ent, parm );
+		case EV_WALLJUMP_FAILED: return CG_Event_WallJump( ent, parm, ev, viewState );
+		case EV_DOUBLEJUMP: return CG_Event_DoubleJump( ent, parm, viewState );
+		case EV_JUMP: return CG_Event_Jump( ent, parm, viewState );
+		case EV_JUMP_PAD: return handleJumppadEvent( ent, predicted, viewState );
+		case EV_FALL: return CG_Event_Fall( ent, parm, viewState );
 
 			//  NON PREDICTABLE EVENTS
 
 		case EV_WEAPONDROP: return CG_PModel_AddAnimation( ent->number, 0, TORSO_WEAPON_SWITCHOUT, 0, EVENT_CHANNEL );
-		case EV_SEXEDSOUND: return handleSexedSoundEvent( ent, parm, predicted );
-		case EV_PAIN: return CG_Event_Pain( ent, parm );
-		case EV_DIE: return CG_Event_Die( ent, parm );
+		case EV_SEXEDSOUND: return handleSexedSoundEvent( ent, parm, predicted, viewState );
+		case EV_PAIN: return CG_Event_Pain( ent, parm, viewState );
+		case EV_DIE: return CG_Event_Die( ent, parm, viewState );
 		case EV_GIB: return;
 		case EV_EXPLOSION1: return cg.effectsSystem.spawnGenericExplosionEffect( ent->origin, FIRE_MODE_WEAK, parm * 8 );
 		case EV_EXPLOSION2: return cg.effectsSystem.spawnGenericExplosionEffect( ent->origin, FIRE_MODE_STRONG, parm * 16 );
@@ -2316,11 +2317,11 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 		case EV_SPARKS: return handleSparksEvent( ent, parm, predicted );
 		case EV_BULLET_SPARKS: return handleBulletSparksEvent( ent, parm, predicted );
 		case EV_LASER_SPARKS: return;
-		case EV_GESTURE: return CG_SexedSound( ent->number, CHAN_BODY, "*taunt", v_volumePlayers.get(), ent->attenuation );
+		case EV_GESTURE: return CG_SexedSound( viewState, ent->number, CHAN_BODY, "*taunt", v_volumePlayers.get(), ent->attenuation );
 		case EV_DROP: return CG_PModel_AddAnimation( ent->number, 0, TORSO_DROP, 0, EVENT_CHANNEL );
 		case EV_SPOG: return CG_SmallPileOfGibs( ent->origin, parm, ent->origin2, ent->team );
 		case EV_ITEM_RESPAWN: return handleItemRespawnEvent( ent, parm, predicted );
-		case EV_PLAYER_RESPAWN: return handlePlayerRespawnEvent( ent, parm, predicted );
+		case EV_PLAYER_RESPAWN: return handlePlayerRespawnEvent( ent, parm, predicted, viewState );
 		case EV_PLAYER_TELEPORT_IN: return handlePlayerTeleportInEvent( ent, parm, predicted );
 		case EV_PLAYER_TELEPORT_OUT: return handlePlayerTeleportOutEvent( ent, parm, predicted );
 		case EV_PLASMA_EXPLOSION: return handlePlasmaExplosionEvent( ent, parm, predicted );
@@ -2332,7 +2333,7 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 		case EV_GRENADE_BOUNCE: return cg.effectsSystem.spawnGrenadeBounceEffect( ent->number, parm );
 		case EV_BLADE_IMPACT: return cg.effectsSystem.spawnGunbladeBladeHitEffect( ent->origin, ent->origin2 );
 		case EV_GUNBLADEBLAST_IMPACT: return handleGunbladeBlastImpactEvent( ent, parm, predicted );
-		case EV_BLOOD: return handleBloodEvent( ent, parm, predicted );
+		case EV_BLOOD: return handleBloodEvent( ent, parm, predicted, viewState );
 
 			// func movers
 
@@ -2366,22 +2367,22 @@ static void CG_FireEntityEvents( bool early ) {
 
 		for( int j = 0; j < 2; j++ ) {
 			if( early == ISEARLYEVENT( state->events[j] ) ) {
-				CG_EntityEvent( state, state->events[j], state->eventParms[j], false );
+				CG_EntityEvent( state, state->events[j], state->eventParms[j], false, getPrimaryViewState() );
 			}
 		}
 	}
 }
 
-static void handlePlayerStateHitSoundEvent( unsigned event, unsigned parm ) {
+static void handlePlayerStateHitSoundEvent( unsigned event, unsigned parm, ViewState *viewState ) {
 	if( parm < 4 ) {
 		// hit of some caliber
 		SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponHit[parm], v_volumeHitsound.get() );
 		SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponHit2[parm], v_volumeHitsound.get() );
-		CG_ScreenCrosshairDamageUpdate();
+		CG_ScreenCrosshairDamageUpdate( viewState );
 	} else if( parm == 4 ) {
 		// killed an enemy
 		SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponKill, v_volumeHitsound.get() );
-		CG_ScreenCrosshairDamageUpdate();
+		CG_ScreenCrosshairDamageUpdate( viewState );
 	} else if( parm <= 6 ) {
 		// hit a teammate
 		SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponHitTeam, v_volumeHitsound.get() );
@@ -2395,16 +2396,16 @@ static void handlePlayerStateHitSoundEvent( unsigned event, unsigned parm ) {
 	}
 }
 
-static void handlePlayerStatePickupEvent( unsigned event, unsigned parm ) {
-	if( v_pickupFlash.get() && !cg.view.thirdperson ) {
-		CG_StartColorBlendEffect( 1.0f, 1.0f, 1.0f, 0.25f, 150 );
+static void handlePlayerStatePickupEvent( unsigned event, unsigned parm, ViewState *viewState ) {
+	if( v_pickupFlash.get() && !viewState->view.thirdperson ) {
+		CG_StartColorBlendEffect( 1.0f, 1.0f, 1.0f, 0.25f, 150, viewState );
 	}
 
 	bool processAutoSwitch = false;
 	const int autoSwitchVarValue = v_weaponAutoSwitch.get();
 	if( autoSwitchVarValue && !cgs.demoPlaying && ( parm > WEAP_NONE && parm < WEAP_TOTAL ) ) {
-		if( cg.predictedPlayerState.pmove.pm_type == PM_NORMAL && cg.predictedPlayerState.POVnum == cgs.playerNum + 1 ) {
-			if( !cg.oldFrame.playerState.inventory[parm] ) {
+		if( viewState->predictedPlayerState.pmove.pm_type == PM_NORMAL && viewState->predictedPlayerState.POVnum == cgs.playerNum + 1 ) {
+			if( !viewState->oldSnapPlayerState.inventory[parm] ) {
 				processAutoSwitch = true;
 			}
 		}
@@ -2416,7 +2417,7 @@ static void handlePlayerStatePickupEvent( unsigned event, unsigned parm ) {
 			// Switch when player's only weapon is gunblade
 			unsigned i;
 			for( i = WEAP_GUNBLADE + 1; i < WEAP_TOTAL; i++ ) {
-				if( i != parm && cg.predictedPlayerState.inventory[i] ) {
+				if( i != parm && viewState->predictedPlayerState.inventory[i] ) {
 					break;
 				}
 			}
@@ -2427,7 +2428,7 @@ static void handlePlayerStatePickupEvent( unsigned event, unsigned parm ) {
 			// Switch when the new weapon improves player's selected weapon
 			unsigned best = WEAP_GUNBLADE;
 			for( unsigned i = WEAP_GUNBLADE + 1; i < WEAP_TOTAL; i++ ) {
-				if( i != parm && cg.predictedPlayerState.inventory[i] ) {
+				if( i != parm && viewState->predictedPlayerState.inventory[i] ) {
 					best = i;
 				}
 			}
@@ -2441,45 +2442,49 @@ static void handlePlayerStatePickupEvent( unsigned event, unsigned parm ) {
 /*
 * CG_FirePlayerStateEvents
 * This events are only received by this client, and only affect it.
+ * TODO: For other povs
 */
-static void CG_FirePlayerStateEvents( void ) {
-	if( cg.view.POVent != (int)cg.frame.playerState.POVnum ) {
+static void CG_FirePlayerStateEvents() {
+	// TODO: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	ViewState *const viewState = getPrimaryViewState();
+
+	if( viewState->view.POVent != (int)viewState->snapPlayerState.POVnum ) {
 		return;
 	}
 
 	vec3_t dir;
 	for( unsigned count = 0; count < 2; count++ ) {
 		// first byte is event number, second is parm
-		const unsigned event = cg.frame.playerState.event[count] & 127;
-		const unsigned parm = cg.frame.playerState.eventParm[count] & 0xFF;
+		const unsigned event = viewState->snapPlayerState.event[count] & 127;
+		const unsigned parm  = viewState->snapPlayerState.eventParm[count] & 0xFF;
 
 		switch( event ) {
 			case PSEV_HIT:
-				handlePlayerStateHitSoundEvent( event, parm );
+				handlePlayerStateHitSoundEvent( event, parm, viewState );
 				break;
 
 			case PSEV_PICKUP:
-				handlePlayerStatePickupEvent( event, parm );
+				handlePlayerStatePickupEvent( event, parm, viewState );
 				break;
 
 			case PSEV_DAMAGE_20:
 				ByteToDir( parm, dir );
-				CG_DamageIndicatorAdd( 20, dir );
+				CG_DamageIndicatorAdd( 20, dir, viewState );
 				break;
 
 			case PSEV_DAMAGE_40:
 				ByteToDir( parm, dir );
-				CG_DamageIndicatorAdd( 40, dir );
+				CG_DamageIndicatorAdd( 40, dir, viewState );
 				break;
 
 			case PSEV_DAMAGE_60:
 				ByteToDir( parm, dir );
-				CG_DamageIndicatorAdd( 60, dir );
+				CG_DamageIndicatorAdd( 60, dir, viewState );
 				break;
 
 			case PSEV_DAMAGE_80:
 				ByteToDir( parm, dir );
-				CG_DamageIndicatorAdd( 80, dir );
+				CG_DamageIndicatorAdd( 80, dir, viewState );
 				break;
 
 			case PSEV_INDEXEDSOUND:
@@ -2519,7 +2524,7 @@ void CG_FireEvents( bool early ) {
 
 static void CG_UpdateEntities( void );
 
-static bool CG_UpdateLinearProjectilePosition( centity_t *cent ) {
+static bool CG_UpdateLinearProjectilePosition( centity_t *cent, ViewState *viewState ) {
 	vec3_t origin;
 	entity_state_t *state;
 	int moveTime;
@@ -2542,7 +2547,7 @@ static bool CG_UpdateLinearProjectilePosition( centity_t *cent ) {
 	if( state->solid != SOLID_BMODEL ) {
 		// add a time offset to counter antilag visualization
 		if( !cgs.demoPlaying && v_projectileAntilagOffset.get() > 0.0f &&
-			!ISVIEWERENTITY( state->ownerNum ) && ( cgs.playerNum + 1 != cg.predictedPlayerState.POVnum ) ) {
+			!viewState->isViewerEntity( state->ownerNum ) && ( cgs.playerNum + 1 != viewState->predictedPlayerState.POVnum ) ) {
 			serverTime += state->modelindex2 * v_projectileAntilagOffset.get();
 		}
 	}
@@ -2555,7 +2560,7 @@ static bool CG_UpdateLinearProjectilePosition( centity_t *cent ) {
 		// FIXME: is this still valid?
 		float maxBackOffset;
 
-		if( ISVIEWERENTITY( state->ownerNum ) ) {
+		if( viewState->isViewerEntity( state->ownerNum ) ) {
 			maxBackOffset = ( PROJECTILE_PRESTEP - MIN_DRAWDISTANCE_FIRSTPERSON );
 		} else {
 			maxBackOffset = ( PROJECTILE_PRESTEP - MIN_DRAWDISTANCE_THIRDPERSON );
@@ -2600,7 +2605,8 @@ static void CG_NewPacketEntityState( entity_state_t *state ) {
 		VectorClear( cent->velocity );
 		cent->canExtrapolate = false;
 
-		cent->linearProjectileCanDraw = CG_UpdateLinearProjectilePosition( cent );
+		// TODO: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		cent->linearProjectileCanDraw = CG_UpdateLinearProjectilePosition( cent, getPrimaryViewState() );
 
 		VectorCopy( cent->current.linearMovementVelocity, cent->velocity );
 	} else {
@@ -2715,12 +2721,12 @@ int CG_LostMultiviewPOV( void ) {
 	return index > -1 ? index : fallback;
 }
 
-static void CG_SetFramePlayerState( snapshot_t *frame, int index ) {
-	frame->playerState = frame->playerStates[index];
+static void CG_SetFramePlayerState( player_state_t *playerState, snapshot_t *frame, int index ) {
+	*playerState = frame->playerStates[index];
 	if( cgs.demoPlaying || cg.frame.multipov ) {
-		frame->playerState.pmove.pm_flags |= PMF_NO_PREDICTION;
-		if( frame->playerState.pmove.pm_type != PM_SPECTATOR ) {
-			frame->playerState.pmove.pm_type = PM_CHASECAM;
+		playerState->pmove.pm_flags |= PMF_NO_PREDICTION;
+		if( playerState->pmove.pm_type != PM_SPECTATOR ) {
+			playerState->pmove.pm_type = PM_CHASECAM;
 		}
 	}
 }
@@ -2753,8 +2759,10 @@ static void CG_UpdatePlayerState( void ) {
 
 	// set up the playerstates
 
+	ViewState *const viewState = getPrimaryViewState();
+
 	// current
-	CG_SetFramePlayerState( &cg.frame, index );
+	CG_SetFramePlayerState( &viewState->snapPlayerState, &cg.frame, index );
 
 	// old
 	index = -1;
@@ -2767,12 +2775,12 @@ static void CG_UpdatePlayerState( void ) {
 
 	// use the current one for old frame too, if correct POV wasn't found
 	if( index == -1 ) {
-		cg.oldFrame.playerState = cg.frame.playerState;
+		viewState->oldSnapPlayerState = viewState->snapPlayerState;
 	} else {
-		CG_SetFramePlayerState( &cg.oldFrame, index );
+		CG_SetFramePlayerState( &viewState->oldSnapPlayerState, &cg.oldFrame, index );
 	}
 
-	cg.predictedPlayerState = cg.frame.playerState;
+	viewState->predictedPlayerState = viewState->snapPlayerState;
 }
 
 bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
@@ -2789,14 +2797,14 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 	cg.frame = *frame;
 	gs.gameState = frame->gameState;
 
-	cg.portalInView = false;
-
 	CG_UpdatePlayerState();
+
+	ViewState *viewState = getPrimaryViewState();
 
 	static_assert( AccuracyRows::Span::extent == kNumAccuracySlots );
 	wsw::ui::UISystem::instance()->updateScoreboard( frame->scoreboardData, AccuracyRows {
-		.weak   = AccuracyRows::Span( frame->playerState.weakAccuracy ),
-		.strong = AccuracyRows::Span( frame->playerState.strongAccuracy )
+		.weak   = AccuracyRows::Span( viewState->snapPlayerState.weakAccuracy ),
+		.strong = AccuracyRows::Span( viewState->snapPlayerState.strongAccuracy ),
 	});
 
 	for( i = 0; i < frame->numEntities; i++ )
@@ -2812,7 +2820,7 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 		return false;
 	}
 
-	cg.specStateChanged = SPECSTATECHANGED() || lerpframe == NULL || cg.firstFrame;
+	//cg.specStateChanged = SPECSTATECHANGED() || lerpframe == NULL || cg.firstFrame;
 
 	// a new server frame begins now
 
@@ -2820,11 +2828,12 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 	CG_UpdateEntities();
 	CG_CheckPredictionError();
 
-	cg.predictFrom = 0; // force the prediction to be restarted from the new snapshot
+	// TODO...
+	viewState->predictFrom = 0; // force the prediction to be restarted from the new snapshot
 	cg.fireEvents = true;
 
 	for( i = 0; i < cg.frame.numgamecommands; i++ ) {
-		int target = cg.frame.playerState.POVnum - 1;
+		int target = viewState->snapPlayerState.POVnum - 1;
 		if( cg.frame.gamecommands[i].all || cg.frame.gamecommands[i].targets[target >> 3] & ( 1 << ( target & 7 ) ) ) {
 			CG_GameCommand( cg.frame.gamecommandsData + cg.frame.gamecommands[i].commandOffset );
 		}
@@ -2917,7 +2926,7 @@ static void CG_EntAddTeamColorTransitionEffect( centity_t *cent ) {
 	cent->ent.shaderRGBA[2] = (uint8_t)( newcolor[2] * 255 );
 }
 
-static void CG_AddLinkedModel( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
+static void CG_AddLinkedModel( centity_t *cent, DrawSceneRequest *drawSceneRequest, const ViewState *viewState ) {
 	static entity_t ent;
 	orientation_t tag;
 	struct model_s *model;
@@ -2961,14 +2970,13 @@ static void CG_AddLinkedModel( centity_t *cent, DrawSceneRequest *drawSceneReque
 	}
 
 	CG_AddColoredOutLineEffect( &ent, cent->effects,
-								cent->outlineColor[0], cent->outlineColor[1], cent->outlineColor[2], cent->outlineColor[3] );
+								cent->outlineColor[0], cent->outlineColor[1], cent->outlineColor[2], cent->outlineColor[3], viewState );
 	CG_AddEntityToScene( &ent, drawSceneRequest );
 	CG_AddShellEffects( &ent, cent->effects, drawSceneRequest );
 }
 
-void CG_AddCentityOutLineEffect( centity_t *cent ) {
-	CG_AddColoredOutLineEffect( &cent->ent, cent->effects,
-								cent->outlineColor[0], cent->outlineColor[1], cent->outlineColor[2], cent->outlineColor[3] );
+void CG_AddCentityOutLineEffect( centity_t *cent, const ViewState *viewState ) {
+	CG_AddColoredOutLineEffect( &cent->ent, cent->effects, cent->outlineColor[0], cent->outlineColor[1], cent->outlineColor[2], cent->outlineColor[3], viewState );
 }
 
 static void CG_UpdateGenericEnt( centity_t *cent ) {
@@ -3002,7 +3010,8 @@ static void CG_UpdateGenericEnt( centity_t *cent ) {
 void CG_ExtrapolateLinearProjectile( centity_t *cent ) {
 	int i;
 
-	cent->linearProjectileCanDraw = CG_UpdateLinearProjectilePosition( cent );
+	// TODO: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	cent->linearProjectileCanDraw = CG_UpdateLinearProjectilePosition( cent, getPrimaryViewState() );
 
 	cent->ent.backlerp = 1.0f;
 
@@ -3012,14 +3021,14 @@ void CG_ExtrapolateLinearProjectile( centity_t *cent ) {
 	AnglesToAxis( cent->current.angles, cent->ent.axis );
 }
 
-void CG_LerpGenericEnt( centity_t *cent ) {
+void CG_LerpGenericEnt( centity_t *cent, ViewState *viewState ) {
 	int i;
 	vec3_t ent_angles = { 0, 0, 0 };
 
 	cent->ent.backlerp = 1.0f - cg.lerpfrac;
 
-	if( ISVIEWERENTITY( cent->current.number ) || cg.view.POVent == cent->current.number ) {
-		VectorCopy( cg.predictedPlayerState.viewangles, ent_angles );
+	if( viewState->isViewerEntity( cent->current.number ) || viewState->view.POVent == cent->current.number ) {
+		VectorCopy( viewState->predictedPlayerState.viewangles, ent_angles );
 	} else {
 		// interpolate angles
 		for( i = 0; i < 3; i++ )
@@ -3041,8 +3050,8 @@ void CG_LerpGenericEnt( centity_t *cent ) {
 		VectorSubtract( cent->current.origin2, cent->current.origin, move );
 		Matrix3_TransformVector( cent->ent.axis, move, delta );
 		VectorMA( cent->current.origin, cent->ent.backlerp, delta, cent->ent.origin );
-	} else if( ISVIEWERENTITY( cent->current.number ) || cg.view.POVent == cent->current.number ) {
-		VectorCopy( cg.predictedPlayerState.pmove.origin, cent->ent.origin );
+	} else if( viewState->isViewerEntity( cent->current.number ) || viewState->view.POVent == cent->current.number ) {
+		VectorCopy( viewState->predictedPlayerState.pmove.origin, cent->ent.origin );
 		VectorCopy( cent->ent.origin, cent->ent.origin2 );
 	} else {
 		if( cgs.extrapolationTime && cent->canExtrapolate ) { // extrapolation
@@ -3106,7 +3115,7 @@ void CG_LerpGenericEnt( centity_t *cent ) {
 	VectorCopy( cent->ent.origin, cent->ent.lightingOrigin );
 }
 
-static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
+static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
 	if( !cent->ent.scale ) {
 		return;
 	}
@@ -3127,7 +3136,7 @@ static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneReques
 	}
 
 	// add to refresh list
-	CG_AddCentityOutLineEffect( cent );
+	CG_AddCentityOutLineEffect( cent, viewState );
 
 	// render effects
 	cent->ent.renderfx = cent->renderfx;
@@ -3185,7 +3194,7 @@ static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneReques
 
 	// flags are special
 	if( cent->effects & EF_FLAG_TRAIL ) {
-		CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, "tag_linked", drawSceneRequest );
+		CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, "tag_linked", drawSceneRequest, viewState );
 	}
 
 	if( !cent->current.modelindex ) {
@@ -3195,11 +3204,11 @@ static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneReques
 	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 
 	if( cent->current.modelindex2 ) {
-		CG_AddLinkedModel( cent, drawSceneRequest );
+		CG_AddLinkedModel( cent, drawSceneRequest, viewState );
 	}
 }
 
-void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname, DrawSceneRequest *drawSceneRequest ) {
+void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
 	static entity_t flag;
 	orientation_t tag;
 
@@ -3251,7 +3260,7 @@ void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *t
 								(uint8_t)( teamcolor[0] * 0.3 ),
 								(uint8_t)( teamcolor[1] * 0.3 ),
 								(uint8_t)( teamcolor[2] * 0.3 ),
-								255 );
+								255, viewState );
 
 	CG_AddEntityToScene( &flag, drawSceneRequest );
 
@@ -3306,7 +3315,7 @@ static void CG_UpdateFlagBaseEnt( centity_t *cent ) {
 	cent->skel = CG_SkeletonForModel( cent->ent.model );
 }
 
-static void CG_AddFlagBaseEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
+static void CG_AddFlagBaseEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
 	if( !cent->ent.scale ) {
 		return;
 	}
@@ -3335,7 +3344,7 @@ static void CG_AddFlagBaseEnt( centity_t *cent, DrawSceneRequest *drawSceneReque
 	}
 
 	// add to refresh list
-	CG_AddCentityOutLineEffect( cent );
+	CG_AddCentityOutLineEffect( cent, viewState );
 
 	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 
@@ -3348,21 +3357,21 @@ static void CG_AddFlagBaseEnt( centity_t *cent, DrawSceneRequest *drawSceneReque
 	if( cent->effects & EF_FLAG_TRAIL ) {
 		byte_vec4_t teamcolor;
 
-		CG_AddFlagModelOnTag( cent, CG_TeamColorForEntity( cent->current.number, teamcolor ), "tag_flag1", drawSceneRequest );
+		CG_AddFlagModelOnTag( cent, CG_TeamColorForEntity( cent->current.number, teamcolor ), "tag_flag1", drawSceneRequest, viewState );
 	}
 }
 
-static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
+static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
 	// render effects
 	cent->ent.renderfx = cent->renderfx;
 #ifndef CELSHADEDMATERIAL
 	cent->ent.renderfx |= RF_MINLIGHT;
 #endif
 
-	if( ISVIEWERENTITY( cent->current.number ) ) {
+	if( viewState->isViewerEntity( cent->current.number ) ) {
 		cg.effects = cent->effects;
 		VectorCopy( cent->ent.lightingOrigin, cg.lightingOrigin );
-		if( !cg.view.thirdperson && cent->current.modelindex ) {
+		if( !viewState->view.thirdperson && cent->current.modelindex ) {
 			cent->ent.renderfx |= RF_VIEWERMODEL; // only draw from mirrors
 		}
 	}
@@ -3372,10 +3381,10 @@ static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest
 		return;
 	}
 
-	CG_AddPModel( cent, drawSceneRequest );
+	CG_AddPModel( cent, drawSceneRequest, viewState );
 
 	if( v_playerTrail.get() ) {
-		if( cent->current.number != (int)cg.predictedPlayerState.POVnum ) {
+		if( cent->current.number != (int)viewState->predictedPlayerState.POVnum ) {
 			const float timeDeltaSeconds  = 1e-3f * (float)cgs.snapFrameTime;
 			const float speedThreshold    = 0.5f * ( DEFAULT_PLAYERSPEED + DEFAULT_DASHSPEED );
 			const float distanceThreshold = speedThreshold * timeDeltaSeconds;
@@ -3399,12 +3408,12 @@ static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest
 	// corpses can never have a model in modelindex2
 	if( cent->current.type != ET_CORPSE ) {
 		if( cent->current.modelindex2 ) {
-			CG_AddLinkedModel( cent, drawSceneRequest );
+			CG_AddLinkedModel( cent, drawSceneRequest, viewState );
 		}
 	}
 }
 
-static void CG_AddSpriteEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
+static void CG_AddSpriteEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
 	if( !cent->ent.scale ) {
 		return;
 	}
@@ -3430,7 +3439,7 @@ static void CG_AddSpriteEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest
 	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 
 	if( cent->current.modelindex2 ) {
-		CG_AddLinkedModel( cent, drawSceneRequest );
+		CG_AddLinkedModel( cent, drawSceneRequest, viewState );
 	}
 }
 
@@ -3553,7 +3562,7 @@ static void CG_UpdateItemEnt( centity_t *cent ) {
 	}
 }
 
-static void CG_AddItemEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
+static void CG_AddItemEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
 	int msec;
 
 	if( !cent->item ) {
@@ -3592,11 +3601,11 @@ static void CG_AddItemEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest )
 
 		// flags are special
 		if( cent->effects & EF_FLAG_TRAIL ) {
-			CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, NULL, drawSceneRequest );
+			CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, NULL, drawSceneRequest, viewState );
 			return;
 		}
 
-		CG_AddGenericEnt( cent, drawSceneRequest );
+		CG_AddGenericEnt( cent, drawSceneRequest, viewState );
 		return;
 	} else {
 		if( cent->effects & EF_GHOST ) {
@@ -3697,7 +3706,11 @@ static void CG_AddBeamEnt( centity_t *cent ) {
 static void CG_UpdateLaserbeamEnt( centity_t *cent ) {
 	centity_t *owner;
 
-	if( cg.view.playerPrediction && v_predictLaserBeam.get() && ISVIEWERENTITY( cent->current.ownerNum ) ) {
+	const ViewState *const viewState = getPrimaryViewState();
+
+	// TODO: Check whether this condition holds for individual owners?
+	// TODO: We can keep this code as-is (only the primary view gets predicted)
+	if( viewState->view.playerPrediction && v_predictLaserBeam.get() && viewState->isViewerEntity( cent->current.ownerNum ) ) {
 		return;
 	}
 
@@ -3719,10 +3732,10 @@ static void CG_UpdateLaserbeamEnt( centity_t *cent ) {
 	VectorCopy( cent->current.origin2, owner->laserPoint );
 }
 
-static void CG_LerpLaserbeamEnt( centity_t *cent ) {
+static void CG_LerpLaserbeamEnt( centity_t *cent, ViewState *viewState ) {
 	centity_t *owner = &cg_entities[cent->current.ownerNum];
 
-	if( cg.view.playerPrediction && v_predictLaserBeam.get() && ISVIEWERENTITY( cent->current.ownerNum ) ) {
+	if( viewState->view.playerPrediction && v_predictLaserBeam.get() && viewState->isViewerEntity( cent->current.ownerNum ) ) {
 		return;
 	}
 
@@ -3740,7 +3753,6 @@ static void CG_UpdatePortalSurfaceEnt( centity_t *cent ) {
 	VectorCopy( cent->current.origin2, cent->ent.origin2 );
 
 	if( !VectorCompare( cent->ent.origin, cent->ent.origin2 ) ) {
-		cg.portalInView = true;
 		cent->ent.frame = cent->current.skinnum;
 	}
 
@@ -3815,7 +3827,7 @@ void CG_SoundEntityNewState( centity_t *cent ) {
 		if( owner ) {
 			auto string = cgs.configStrings.getSound( soundindex );
 			if( string && string->startsWith( '*' ) ) {
-				CG_SexedSound( owner, channel | ( fixed ? CHAN_FIXED : 0 ), string->data(), 1.0f, attenuation );
+				CG_SexedSound( getPrimaryViewState(), owner, channel | ( fixed ? CHAN_FIXED : 0 ), string->data(), 1.0f, attenuation );
 			}
 		}
 		return;
@@ -3823,7 +3835,7 @@ void CG_SoundEntityNewState( centity_t *cent ) {
 
 	if( fixed ) {
 		SoundSystem::instance()->startFixedSound( cgs.soundPrecache[soundindex], cent->current.origin, channel, 1.0f, attenuation );
-	} else if( ISVIEWERENTITY( owner ) ) {
+	} else if( getPrimaryViewState()->isViewerEntity( owner ) ) {
 		SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[soundindex], channel, 1.0f );
 	} else {
 		SoundSystem::instance()->startRelativeSound( cgs.soundPrecache[soundindex], owner, channel, 1.0f, attenuation );
@@ -3842,7 +3854,7 @@ void CG_EntityLoopSound( entity_state_t *state, float attenuation ) {
 	SoundSystem::instance()->addLoopSound( sound, entNum, loopIdentifyingToken, v_volumeEffects.get(), attenuation );
 }
 
-void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
+void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
 	vec3_t autorotate;
 	// bonus items rotate at a fixed rate
 	VectorSet( autorotate, 0, ( cg.time % 3600 ) * 0.1, 0 );
@@ -3867,7 +3879,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 
 		switch( cent->type ) {
 			case ET_GENERIC:
-				CG_AddGenericEnt( cent, drawSceneRequest );
+				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
 				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
@@ -3876,13 +3888,13 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				break;
 			case ET_GIB:
 				if( false ) {
-					CG_AddGenericEnt( cent, drawSceneRequest );
+					CG_AddGenericEnt( cent, drawSceneRequest, viewState );
 					CG_EntityLoopSound( state, ATTN_STATIC );
 					canLight = true;
 				}
 				break;
 			case ET_BLASTER:
-				CG_AddGenericEnt( cent, drawSceneRequest );
+				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
 				cg.effectsSystem.touchBlastTrail( cent->current.number, cent->ent.origin, cg.time );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				// We use relatively large light radius because this projectile moves very fast, so make it noticeable
@@ -3893,13 +3905,13 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				cent->current.frame = cent->prev.frame = 0;
 				cent->ent.frame =  cent->ent.oldframe = 0;
 
-				CG_AddGenericEnt( cent, drawSceneRequest );
+				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
 				cg.effectsSystem.touchElectroTrail( cent->current.number, cent->current.ownerNum, cent->ent.origin, cg.time );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				drawSceneRequest->addLight( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.9f, 1.0f );
 				break;
 			case ET_ROCKET:
-				CG_AddGenericEnt( cent, drawSceneRequest );
+				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
 				CG_EntityLoopSound( state, ATTN_NORM );
 				if( cent->current.effects & EF_STRONG_WEAPON ) {
 					cg.effectsSystem.touchStrongRocketTrail( cent->current.number, cent->ent.origin, cg.time );
@@ -3910,7 +3922,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				}
 				break;
 			case ET_GRENADE:
-				CG_AddGenericEnt( cent, drawSceneRequest );
+				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
 				if( cent->current.effects & EF_STRONG_WEAPON ) {
 					cg.effectsSystem.touchStrongGrenadeTrail( cent->current.number, cent->ent.origin, cg.time );
 				} else {
@@ -3923,7 +3935,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				plasmaStateIndices[numPlasmaEnts++] = (uint16_t)stateIndex;
 				break;
 			case ET_WAVE:
-				CG_AddGenericEnt( cent, drawSceneRequest );
+				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				// Add the core light
 				drawSceneRequest->addLight( cent->ent.origin, 128.0f, 128.0f, 0.0f, 0.3f, 1.0f );
@@ -3936,13 +3948,13 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				break;
 			case ET_SPRITE:
 			case ET_RADAR:
-				CG_AddSpriteEnt( cent, drawSceneRequest );
+				CG_AddSpriteEnt( cent, drawSceneRequest, viewState );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				canLight = true;
 				break;
 
 			case ET_ITEM:
-				CG_AddItemEnt( cent, drawSceneRequest );
+				CG_AddItemEnt( cent, drawSceneRequest, viewState );
 				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
@@ -3951,18 +3963,18 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				break;
 
 			case ET_PLAYER:
-				CG_AddPlayerEnt( cent, drawSceneRequest );
+				CG_AddPlayerEnt( cent, drawSceneRequest, viewState );
 				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
 				CG_EntityLoopSound( state, ATTN_IDLE );
-				CG_LaserBeamEffect( cent, drawSceneRequest );
-				CG_WeaponBeamEffect( cent );
+				CG_LaserBeamEffect( cent, drawSceneRequest, viewState );
+				CG_WeaponBeamEffect( cent, viewState );
 				canLight = true;
 				break;
 
 			case ET_CORPSE:
-				CG_AddPlayerEnt( cent, drawSceneRequest );
+				CG_AddPlayerEnt( cent, drawSceneRequest, viewState );
 				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
@@ -3985,7 +3997,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				break;
 
 			case ET_FLAG_BASE:
-				CG_AddFlagBaseEnt( cent, drawSceneRequest );
+				CG_AddFlagBaseEnt( cent, drawSceneRequest, viewState );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				canLight = true;
 				break;
@@ -4042,7 +4054,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 	for( unsigned i = 0; i < numPlasmaEnts; ++i ) {
 		entity_state_t *state = &cg.frame.parsedEntities[plasmaStateIndices[i]];
 		centity_t *cent       = &cg_entities[state->number];
-		CG_AddGenericEnt( cent, drawSceneRequest );
+		CG_AddGenericEnt( cent, drawSceneRequest, viewState );
 		CG_EntityLoopSound( state, ATTN_STATIC );
 
 		if( state->effects & EF_STRONG_WEAPON ) {
@@ -4055,7 +4067,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 		float programLightRadius = 0.0f;
 
 		// TODO: This should be handled at rendering layer during culling/light prioritization
-		const float squareDistance = DistanceSquared( cg.view.refdef.vieworg, state->origin );
+		const float squareDistance = DistanceSquared( viewState->view.refdef.vieworg, state->origin );
 		// TODO: Using fov tangent ratio is a more correct approach (but nobody actually notices in zooomed in state)
 		if( squareDistance < 384.0f * 384.0f ) {
 			programLightRadius = desiredProgramLightRadius;
@@ -4076,7 +4088,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 /*
 * Interpolate the entity states positions into the entity_t structs
 */
-void CG_LerpEntities( void ) {
+void CG_LerpEntities( ViewState *viewState ) {
 	entity_state_t *state;
 	int pnum;
 	centity_t *cent;
@@ -4106,7 +4118,7 @@ void CG_LerpEntities( void ) {
 				if( state->linearMovement ) {
 					CG_ExtrapolateLinearProjectile( cent );
 				} else {
-					CG_LerpGenericEnt( cent );
+					CG_LerpGenericEnt( cent, viewState );
 				}
 				break;
 
@@ -4126,7 +4138,7 @@ void CG_LerpEntities( void ) {
 
 			case ET_LASERBEAM:
 			case ET_CURVELASERBEAM:
-				CG_LerpLaserbeamEnt( cent );
+				CG_LerpLaserbeamEnt( cent, viewState );
 				break;
 
 			case ET_MINIMAP_ICON:
@@ -4296,11 +4308,12 @@ void CG_GetEntitySpatilization( int entNum, vec3_t origin, vec3_t velocity ) {
 
 	// hack for client side floatcam
 	if( entNum == -1 ) {
+		const ViewState *const viewState = getPrimaryViewState();
 		if( origin != NULL ) {
-			VectorCopy( cg.frame.playerState.pmove.origin, origin );
+			VectorCopy( viewState->snapPlayerState.pmove.origin, origin );
 		}
 		if( velocity != NULL ) {
-			VectorCopy( cg.frame.playerState.pmove.velocity, velocity );
+			VectorCopy( viewState->snapPlayerState.pmove.velocity, velocity );
 		}
 		return;
 	}
@@ -4338,66 +4351,73 @@ void CG_PredictedEvent( int entNum, int ev, int parm ) {
 		return;
 	}
 
+	ViewState *const viewState = getPrimaryViewState();
+
 	// ignore this action if it has already been predicted (the unclosed ucmd has timestamp zero)
-	if( ucmdReady && ( cg.predictingTimeStamp > cg.predictedEventTimes[ev] ) ) {
+	if( ucmdReady && ( viewState->predictingTimeStamp > viewState->predictedEventTimes[ev] ) ) {
 		// inhibit the fire event when there is a weapon change predicted
 		if( ev == EV_FIREWEAPON ) {
-			if( cg.predictedWeaponSwitch && ( cg.predictedWeaponSwitch != cg.predictedPlayerState.stats[STAT_PENDING_WEAPON] ) ) {
-				return;
+			if( viewState->predictedWeaponSwitch ) {
+				if( viewState->predictedWeaponSwitch != viewState->predictedPlayerState.stats[STAT_PENDING_WEAPON] ) {
+					return;
+				}
 			}
 		}
 
-		cg.predictedEventTimes[ev] = cg.predictingTimeStamp;
-		CG_EntityEvent( &cg_entities[entNum].current, ev, parm, true );
+		viewState->predictedEventTimes[ev] = viewState->predictingTimeStamp;
+		CG_EntityEvent( &cg_entities[entNum].current, ev, parm, true, viewState );
 	}
 }
 
 void CG_Predict_ChangeWeapon( int new_weapon ) {
-	if( cg.view.playerPrediction ) {
-		cg.predictedWeaponSwitch = new_weapon;
+	ViewState *const viewState = getPrimaryViewState();
+	if( viewState->view.playerPrediction ) {
+		viewState->predictedWeaponSwitch = new_weapon;
 	}
 }
 
-void CG_CheckPredictionError( void ) {
-	int delta[3];
-	int frame;
-	vec3_t origin;
-
-	if( !cg.view.playerPrediction ) {
+void CG_CheckPredictionError() {
+	// TODO: Accept as an argument!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	ViewState *const viewState = getPrimaryViewState();
+	if( !viewState->view.playerPrediction ) {
 		return;
 	}
 
 	// calculate the last usercmd_t we sent that the server has processed
-	frame = cg.frame.ucmdExecuted & CMD_MASK;
+	const int frame = cg.frame.ucmdExecuted & CMD_MASK;
 
+	vec3_t origin;
 	// compare what the server returned with what we had predicted it to be
-	VectorCopy( cg.predictedOrigins[frame], origin );
+	VectorCopy( viewState->predictedOrigins[frame], origin );
 
-	if( cg.predictedGroundEntity != -1 ) {
-		entity_state_t *ent = &cg_entities[cg.predictedGroundEntity].current;
+	if( viewState->predictedGroundEntity != -1 ) {
+		entity_state_t *ent = &cg_entities[viewState->predictedGroundEntity].current;
 		if( ent->solid == SOLID_BMODEL ) {
 			if( ent->linearMovement ) {
 				vec3_t move;
 				GS_LinearMovementDelta( ent, cg.oldFrame.serverTime, cg.frame.serverTime, move );
-				VectorAdd( cg.predictedOrigins[frame], move, origin );
+				VectorAdd( viewState->predictedOrigins[frame], move, origin );
 			}
 		}
 	}
 
-	VectorSubtract( cg.frame.playerState.pmove.origin, origin, delta );
+	// TODO: Why int
+	// TODO: Should a proper rounding be used at least
+	int delta[3];
+	VectorSubtract( viewState->snapPlayerState.pmove.origin, origin, delta );
 
 	// save the prediction error for interpolation
 	if( abs( delta[0] ) > 128 || abs( delta[1] ) > 128 || abs( delta[2] ) > 128 ) {
 		if( v_showMiss.get() ) {
 			Com_Printf( "prediction miss on %" PRIi64 ": %i\n", cg.frame.serverFrame, abs( delta[0] ) + abs( delta[1] ) + abs( delta[2] ) );
 		}
-		VectorClear( cg.predictionError );          // a teleport or something
+		VectorClear( viewState->predictionError );          // a teleport or something
 	} else {
 		if( v_showMiss.get() && ( delta[0] || delta[1] || delta[2] ) ) {
 			Com_Printf( "prediction miss on %" PRIi64" : %i\n", cg.frame.serverFrame, abs( delta[0] ) + abs( delta[1] ) + abs( delta[2] ) );
 		}
-		VectorCopy( cg.frame.playerState.pmove.origin, cg.predictedOrigins[frame] );
-		VectorCopy( delta, cg.predictionError ); // save for error interpolation
+		VectorCopy( viewState->snapPlayerState.pmove.origin, viewState->predictedOrigins[frame] );
+		VectorCopy( delta, viewState->predictionError ); // save for error interpolation
 	}
 }
 
@@ -4611,55 +4631,41 @@ int CG_PointContents( const vec3_t point ) {
 	return contents;
 }
 
-static void CG_PredictAddStep( int virtualtime, int predictiontime, float stepSize ) {
+static void CG_PredictSmoothSteps() {
+	ViewState *const viewState = getPrimaryViewState();
 
-	float oldStep;
-	int delta;
+	viewState->predictedStepTime = 0;
+	viewState->predictedStep     = 0;
 
-	// check for stepping up before a previous step is completed
-	delta = cg.realTime - cg.predictedStepTime;
-	if( delta < PREDICTED_STEP_TIME ) {
-		oldStep = cg.predictedStep * ( (float)( PREDICTED_STEP_TIME - delta ) / (float)PREDICTED_STEP_TIME );
-	} else {
-		oldStep = 0;
-	}
-
-	cg.predictedStep = oldStep + stepSize;
-	cg.predictedStepTime = cg.realTime - ( predictiontime - virtualtime );
-}
-
-static void CG_PredictSmoothSteps( void ) {
 	int64_t outgoing;
-	int64_t frame;
-	usercmd_t cmd;
-	int i;
-	int virtualtime = 0, predictiontime = 0;
-
-	cg.predictedStepTime = 0;
-	cg.predictedStep = 0;
-
 	NET_GetCurrentState( NULL, &outgoing, NULL );
 
-	i = outgoing;
-	while( predictiontime < PREDICTED_STEP_TIME ) {
-		if( outgoing - i >= CMD_BACKUP ) {
-			break;
-		}
-
-		frame = i & CMD_MASK;
-		NET_GetUserCmd( frame, &cmd );
+	int64_t index = outgoing;
+	int predictiontime = 0;
+	while( predictiontime < PREDICTED_STEP_TIME && outgoing - index < CMD_BACKUP ) {
+		usercmd_t cmd;
+		NET_GetUserCmd( (int)( index & CMD_MASK ), &cmd );
 		predictiontime += cmd.msec;
-		i--;
+		index--;
 	}
 
 	// run frames
-	while( ++i <= outgoing ) {
-		frame = i & CMD_MASK;
-		NET_GetUserCmd( frame, &cmd );
+	int virtualtime = 0;
+	while( ++index <= outgoing ) {
+		usercmd_t cmd;
+		const int64_t frame = index & CMD_MASK;
+		NET_GetUserCmd( (int)frame, &cmd );
 		virtualtime += cmd.msec;
 
-		if( predictedSteps[frame] ) {
-			CG_PredictAddStep( virtualtime, predictiontime, predictedSteps[frame] );
+		if( const float stepSize = viewState->predictedSteps[frame]; stepSize != 0.0f ) {
+			float oldStep = 0.0f;
+			// check for stepping up before a previous step is completed
+			if( const int64_t delta = cg.realTime - viewState->predictedStepTime; delta < PREDICTED_STEP_TIME ) {
+				oldStep = viewState->predictedStep * ( (float)( PREDICTED_STEP_TIME - delta ) / (float)PREDICTED_STEP_TIME );
+			}
+
+			viewState->predictedStep     = oldStep + stepSize;
+			viewState->predictedStepTime = cg.realTime - ( predictiontime - virtualtime );
 		}
 	}
 }
@@ -4669,100 +4675,99 @@ static void CG_PredictSmoothSteps( void ) {
 *
 * Sets cg.predictedVelocty, cg.predictedOrigin and cg.predictedAngles
 */
-void CG_PredictMovement( void ) {
-	int64_t ucmdExecuted, ucmdHead;
-	int64_t frame;
-	pmove_t pm;
+void CG_PredictMovement() {
+	ViewState *const viewState = getPrimaryViewState();
 
+	int64_t ucmdHead = 0;
 	NET_GetCurrentState( NULL, &ucmdHead, NULL );
-	ucmdExecuted = cg.frame.ucmdExecuted;
+	int64_t ucmdExecuted = cg.frame.ucmdExecuted;
 
-	if( !v_predictOptimize.get() || ( ucmdHead - cg.predictFrom >= CMD_BACKUP ) ) {
-		cg.predictFrom = 0;
+	if( !v_predictOptimize.get() || ( ucmdHead - viewState->predictFrom >= CMD_BACKUP ) ) {
+		viewState->predictFrom = 0;
 	}
 
-	if( cg.predictFrom > 0 ) {
-		ucmdExecuted = cg.predictFrom;
-		cg.predictedPlayerState = cg.predictFromPlayerState;
-		cg_entities[cg.frame.playerState.POVnum].current = cg.predictFromEntityState;
+	if( viewState->predictFrom > 0 ) {
+		ucmdExecuted = viewState->predictFrom;
+		viewState->predictedPlayerState = viewState->predictFromPlayerState;
+		cg_entities[viewState->snapPlayerState.POVnum].current = viewState->predictFromEntityState;
 	} else {
-		cg.predictedPlayerState = cg.frame.playerState; // start from the final position
+		viewState->predictedPlayerState = viewState->snapPlayerState; // start from the final position
 	}
 
-	cg.predictedPlayerState.POVnum = cgs.playerNum + 1;
+	viewState->predictedPlayerState.POVnum = cgs.playerNum + 1;
 
 	// if we are too far out of date, just freeze
 	if( ucmdHead - ucmdExecuted >= CMD_BACKUP ) {
 		if( v_showMiss.get() ) {
 			Com_Printf( "exceeded CMD_BACKUP\n" );
 		}
+		viewState->predictingTimeStamp = cg.time;
+	} else {
+		pmove_t pm;
+		// copy current state to pmove
+		memset( &pm, 0, sizeof( pm ) );
+		pm.playerState = &viewState->predictedPlayerState;
 
-		cg.predictingTimeStamp = cg.time;
-		return;
-	}
+		// clear the triggered toggles for this prediction round
+		memset( &cg_triggersListTriggered, false, sizeof( cg_triggersListTriggered ) );
 
-	// copy current state to pmove
-	memset( &pm, 0, sizeof( pm ) );
-	pm.playerState = &cg.predictedPlayerState;
+		// run frames
+		while( ++ucmdExecuted <= ucmdHead ) {
+			const int64_t frame = ucmdExecuted & CMD_MASK;
+			NET_GetUserCmd( (int)frame, &pm.cmd );
 
-	// clear the triggered toggles for this prediction round
-	memset( &cg_triggersListTriggered, false, sizeof( cg_triggersListTriggered ) );
-
-	// run frames
-	while( ++ucmdExecuted <= ucmdHead ) {
-		frame = ucmdExecuted & CMD_MASK;
-		NET_GetUserCmd( frame, &pm.cmd );
-
-		ucmdReady = ( pm.cmd.serverTimeStamp != 0 );
-		if( ucmdReady ) {
-			cg.predictingTimeStamp = pm.cmd.serverTimeStamp;
-		}
-
-		Pmove( &pm );
-
-		// copy for stair smoothing
-		predictedSteps[frame] = pm.step;
-
-		if( ucmdReady ) { // hmm fixme: the wip command may not be run enough time to get proper key presses
-			if( ucmdExecuted >= ucmdHead - 1 ) {
-				GS_AddLaserbeamPoint( &cg.weaklaserTrail, &cg.predictedPlayerState, pm.cmd.serverTimeStamp );
+			ucmdReady = ( pm.cmd.serverTimeStamp != 0 );
+			if( ucmdReady ) {
+				viewState->predictingTimeStamp = pm.cmd.serverTimeStamp;
 			}
 
-			cg_entities[cg.predictedPlayerState.POVnum].current.weapon = GS_ThinkPlayerWeapon( &cg.predictedPlayerState, pm.cmd.buttons, pm.cmd.msec, 0 );
-		}
+			Pmove( &pm );
 
-		// save for debug checking
-		VectorCopy( cg.predictedPlayerState.pmove.origin, cg.predictedOrigins[frame] ); // store for prediction error checks
+			// copy for stair smoothing
+			viewState->predictedSteps[frame] = pm.step;
 
-		// backup the last predicted ucmd which has a timestamp (it's closed)
-		if( v_predictOptimize.get() && ucmdExecuted == ucmdHead - 1 ) {
-			if( ucmdExecuted != cg.predictFrom ) {
-				cg.predictFrom = ucmdExecuted;
-				cg.predictFromPlayerState = cg.predictedPlayerState;
-				cg.predictFromEntityState = cg_entities[cg.frame.playerState.POVnum].current;
+			if( ucmdReady ) { // hmm fixme: the wip command may not be run enough time to get proper key presses
+				if( ucmdExecuted >= ucmdHead - 1 ) {
+					GS_AddLaserbeamPoint( &viewState->weaklaserTrail, &viewState->predictedPlayerState, pm.cmd.serverTimeStamp );
+				}
+
+				cg_entities[viewState->predictedPlayerState.POVnum].current.weapon =
+					GS_ThinkPlayerWeapon( &viewState->predictedPlayerState, pm.cmd.buttons, pm.cmd.msec, 0 );
+			}
+
+			// save for debug checking
+			VectorCopy( viewState->predictedPlayerState.pmove.origin, viewState->predictedOrigins[frame] ); // store for prediction error checks
+
+			// backup the last predicted ucmd which has a timestamp (it's closed)
+			if( v_predictOptimize.get() && ucmdExecuted == ucmdHead - 1 ) {
+				if( ucmdExecuted != viewState->predictFrom ) {
+					viewState->predictFrom            = ucmdExecuted;
+					viewState->predictFromPlayerState = viewState->predictedPlayerState;
+					viewState->predictFromEntityState = cg_entities[viewState->snapPlayerState.POVnum].current;
+				}
 			}
 		}
-	}
 
-	cg.predictedGroundEntity = pm.groundentity;
+		viewState->predictedGroundEntity = pm.groundentity;
 
-	// compensate for ground entity movement
-	if( pm.groundentity != -1 ) {
-		entity_state_t *ent = &cg_entities[pm.groundentity].current;
+		// compensate for ground entity movement
+		if( pm.groundentity != -1 ) {
+			entity_state_t *ent = &cg_entities[pm.groundentity].current;
 
-		if( ent->solid == SOLID_BMODEL ) {
-			if( ent->linearMovement ) {
-				vec3_t move;
-				int64_t serverTime;
+			if( ent->solid == SOLID_BMODEL ) {
+				if( ent->linearMovement ) {
+					vec3_t move;
+					int64_t serverTime;
 
-				serverTime = GS_MatchPaused() ? cg.frame.serverTime : cg.time + cgs.extrapolationTime;
-				GS_LinearMovementDelta( ent, cg.frame.serverTime, serverTime, move );
-				VectorAdd( cg.predictedPlayerState.pmove.origin, move, cg.predictedPlayerState.pmove.origin );
+					serverTime = GS_MatchPaused() ? cg.frame.serverTime : cg.time + cgs.extrapolationTime;
+					GS_LinearMovementDelta( ent, cg.frame.serverTime, serverTime, move );
+					VectorAdd( viewState->predictedPlayerState.pmove.origin, move, viewState->predictedPlayerState.pmove.origin );
+				}
 			}
 		}
-	}
 
-	CG_PredictSmoothSteps();
+		CG_PredictSmoothSteps();
+	}
 }
 
 void CG_CenterPrint( const char *str ) {
@@ -4772,17 +4777,18 @@ void CG_CenterPrint( const char *str ) {
 }
 
 int CG_RealClientTeam() {
-	return cg.frame.playerState.stats[STAT_REALTEAM];
+	return getPrimaryViewState()->snapPlayerState.stats[STAT_REALTEAM];
 }
 
 std::optional<unsigned> CG_ActiveChasePov() {
+	const ViewState *const viewState = getPrimaryViewState();
 	// Don't even bother in another case
-	if( const unsigned statePovNum = cg.predictedPlayerState.POVnum; statePovNum > 0 ) {
+	if( const unsigned statePovNum = viewState->predictedPlayerState.POVnum; statePovNum > 0 ) {
 		unsigned chosenPovNum = 0;
-		if( !ISREALSPECTATOR() ) {
+		if( !ISREALSPECTATOR( viewState ) ) {
 			chosenPovNum = statePovNum;
 		} else {
-			if( statePovNum != cg.predictedPlayerState.playerNum + 1 ) {
+			if( statePovNum != viewState->predictedPlayerState.playerNum + 1 ) {
 				chosenPovNum = statePovNum;
 			}
 		}
@@ -4795,7 +4801,7 @@ std::optional<unsigned> CG_ActiveChasePov() {
 }
 
 bool CG_IsPovAlive() {
-	return !( cg.predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_DEADPOV );
+	return !( getPrimaryViewState()->predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_DEADPOV );
 }
 
 bool CG_HasTwoTeams() {
@@ -4803,40 +4809,40 @@ bool CG_HasTwoTeams() {
 }
 
 bool CG_CanBeReady() {
-	return !ISREALSPECTATOR() && GS_MatchState() == MATCH_STATE_WARMUP;
+	return !ISREALSPECTATOR( getPrimaryViewState() ) && GS_MatchState() == MATCH_STATE_WARMUP;
 }
 
 bool CG_IsReady() {
-	return ( cg.predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_READY ) != 0;
+	return ( getPrimaryViewState()->predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_READY ) != 0;
 }
 
 bool CG_IsOperator() {
-	return ( cg.predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_OPERATOR ) != 0;
+	return ( getPrimaryViewState()->predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_OPERATOR ) != 0;
 }
 
 bool CG_IsChallenger() {
-	return ( cg.predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_CHALLENGER ) != 0;
+	return ( getPrimaryViewState()->predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_CHALLENGER ) != 0;
 }
 
 int CG_MyRealTeam() {
-	return cg.predictedPlayerState.stats[STAT_REALTEAM];
+	return getPrimaryViewState()->predictedPlayerState.stats[STAT_REALTEAM];
 }
 
 int CG_ActiveWeapon() {
-	return cg.predictedPlayerState.stats[STAT_WEAPON];
+	return getPrimaryViewState()->predictedPlayerState.stats[STAT_WEAPON];
 }
 
 bool CG_HasWeapon( int weapon ) {
 	assert( (unsigned)weapon < (unsigned)WEAP_TOTAL );
-	return cg.predictedPlayerState.inventory[weapon];
+	return getPrimaryViewState()->predictedPlayerState.inventory[weapon];
 }
 
 int CG_Health() {
-	return cg.predictedPlayerState.stats[STAT_HEALTH];
+	return getPrimaryViewState()->predictedPlayerState.stats[STAT_HEALTH];
 }
 
 int CG_Armor() {
-	return cg.predictedPlayerState.stats[STAT_ARMOR];
+	return getPrimaryViewState()->predictedPlayerState.stats[STAT_ARMOR];
 }
 
 [[nodiscard]]
@@ -4856,7 +4862,7 @@ int CG_TeamBetaDisplayedColor() {
 
 auto CG_HudIndicatorState( int num ) -> BasicObjectiveIndicatorState {
 	assert( (unsigned)num < 3 );
-	const auto *const stats = cg.predictedPlayerState.stats;
+	const auto *const stats = getPrimaryViewState()->predictedPlayerState.stats;
 
 	static_assert( (int)wsw::ui::HudDataModel::NoAnim == (int)HUD_INDICATOR_NO_ANIM );
 	static_assert( (int)wsw::ui::HudDataModel::AlertAnim == (int)HUD_INDICATOR_ALERT_ANIM );
@@ -4915,7 +4921,7 @@ auto CG_HudIndicatorStatusString( int stringNum ) -> std::optional<wsw::StringVi
 
 std::pair<int, int> CG_WeaponAmmo( int weapon ) {
 	const auto *weaponDef = GS_GetWeaponDef( weapon );
-	const int *inventory = cg.predictedPlayerState.inventory;
+	const int *inventory = getPrimaryViewState()->predictedPlayerState.inventory;
 	return { inventory[weaponDef->firedef_weak.ammo_id], inventory[weaponDef->firedef.ammo_id] };
 }
 
@@ -4933,8 +4939,9 @@ auto CG_GetMatchClockTime() -> std::pair<int, int> {
 	}
 
 	if( GS_RaceGametype() ) {
-		if( cg.predictedPlayerState.stats[STAT_TIME_SELF] != STAT_NOTSET ) {
-			clocktime = cg.predictedPlayerState.stats[STAT_TIME_SELF] * 100;
+		const ViewState *viewState = getPrimaryViewState();
+		if( viewState->predictedPlayerState.stats[STAT_TIME_SELF] != STAT_NOTSET ) {
+			clocktime = viewState->predictedPlayerState.stats[STAT_TIME_SELF] * 100;
 		} else {
 			clocktime = 0;
 		}
@@ -5476,9 +5483,10 @@ void CG_Reset( void ) {
 
 	CG_ResetPModels();
 
-	CG_ResetKickAngles();
-	CG_ResetColorBlend();
-	CG_ResetDamageIndicator();
+	// TODO:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	CG_ResetKickAngles( getPrimaryViewState() );
+	CG_ResetColorBlend( getPrimaryViewState() );
+	CG_ResetDamageIndicator( getPrimaryViewState() );
 	CG_ResetItemTimers();
 
 	CG_SC_ResetFragsFeed( {} );
@@ -5494,7 +5502,8 @@ void CG_Reset( void ) {
 
 	CG_ClearInputState();
 
-	CG_ClearPointedNum();
+	// TODO !!!!!!!!!!
+	CG_ClearPointedNum( getPrimaryViewState() );
 
 	CG_ClearChaseCam();
 
@@ -5506,7 +5515,8 @@ void CG_Reset( void ) {
 	chaseCam.cmd_mode_delay = 0; // cg.time
 
 	// reset prediction optimization
-	cg.predictFrom = 0;
+	// TODO: !!!!!!!!!!!!!!!!!!!!!!!
+	getPrimaryViewState()->predictFrom = 0;
 
 	memset( cg_entities, 0, sizeof( cg_entities ) );
 }

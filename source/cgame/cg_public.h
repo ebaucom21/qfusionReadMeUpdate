@@ -60,7 +60,6 @@ typedef struct snapshot_s {
 	size_t areabytes;
 	uint8_t *areabits;             // portalarea visibility bits
 	int numplayers;
-	player_state_t playerState;
 	player_state_t playerStates[MAX_CLIENTS];
 	ReplicatedScoreboardData scoreboardData;
 	int numEntities;

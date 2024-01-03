@@ -4092,7 +4092,6 @@ snapshot_t *SNAP_ParseFrame( msg_t *msg, snapshot_t *lastFrame, snapshot_t *back
 		numplayers++;
 	}
 	newframe->numplayers = numplayers;
-	newframe->playerState = newframe->playerStates[0];
 
 	// read packet entities
 	cmd = MSG_ReadUint8( msg );

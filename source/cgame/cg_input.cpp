@@ -422,7 +422,7 @@ void CG_AddViewAngles( vec3_t viewAngles ) {
 	VectorAdd( viewAngles, deltaAngles, viewAngles );
 
 	if( cg_inputCenterView ) {
-		viewAngles[PITCH] = (float)-SHORT2ANGLE( cg.predictedPlayerState.pmove.delta_angles[PITCH] );
+		viewAngles[PITCH] = (float)-SHORT2ANGLE( getPrimaryViewState()->predictedPlayerState.pmove.delta_angles[PITCH] );
 		cg_inputCenterView = false;
 	}
 }

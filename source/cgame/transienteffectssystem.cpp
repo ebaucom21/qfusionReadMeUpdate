@@ -700,7 +700,8 @@ void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const f
 			// TODO:
 			vec3_t localDir;
 			if( !VectorLength( dir ) ) {
-				VectorNegate( &cg.view.axis[AXIS_FORWARD], localDir );
+				// TODO: Why using view state, check how often does it happen
+				VectorNegate( &getPrimaryViewState()->view.axis[AXIS_FORWARD], localDir );
 			} else {
 				VectorNormalize2( dir, localDir );
 			}

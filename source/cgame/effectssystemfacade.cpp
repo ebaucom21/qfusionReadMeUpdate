@@ -748,7 +748,8 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 	VectorMA( pos, -1.0, local_dir, end );
 
 	trace_t trace;
-	CG_Trace( &trace, local_pos, vec3_origin, vec3_origin, end, cg.view.POVent, MASK_SHOT );
+	// TODO: Check against the owner, not the view state!
+	CG_Trace( &trace, local_pos, vec3_origin, vec3_origin, end, getPrimaryViewState()->view.POVent, MASK_SHOT );
 
 	if( trace.fraction != 1.0 ) {
 		bool isHittingFlesh = false;
@@ -2373,15 +2374,18 @@ bool EffectsSystemFacade::MultiGroupEventRateLimiter::acquirePermission( int64_t
 static auto adjustTracerOriginForOwner( int owner, const float *givenOrigin, float *adjustedOrigin ) -> std::pair<float, float> {
 	// This produces satisfactory results, assuming a reasonable prestep.
 
+	// TODO:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	ViewState *viewState = getPrimaryViewState();
+
 	VectorCopy( givenOrigin, adjustedOrigin );
-	if( owner == (int)cg.predictedPlayerState.POVnum ) {
+	if( owner == (int)viewState->predictedPlayerState.POVnum ) {
 		const int handValue     = cgs.demoPlaying ? v_hand.get() : cgs.clientInfo[owner - 1].hand;
 		const float handScale   = ( handValue >= 0 && handValue <= 1 ) ? ( handValue ? -1.0f : +1.0f ) : 0.0f;
 		const float rightOffset = wsw::clamp( handScale * v_handOffset.get() + v_gunX.get(), -16.0f, +16.0f );
 		const float zOffset     = -playerbox_stand_viewheight;
 
 		vec3_t right;
-		AngleVectors( cg.predictedPlayerState.viewangles, nullptr, right, nullptr );
+		AngleVectors( viewState->predictedPlayerState.viewangles, nullptr, right, nullptr );
 		VectorMA( adjustedOrigin, rightOffset, right, adjustedOrigin );
 
 		adjustedOrigin[2] += zOffset;
@@ -2396,13 +2400,15 @@ auto EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const
 	vec3_t adjustedFrom;
 	const auto [rightOffset, zOffset] = adjustTracerOriginForOwner( owner, from, adjustedFrom );
 
+	ViewState *viewState = getPrimaryViewState();
+
 	std::optional<PolyEffectsSystem::TracerParams::AlignForPovParams> alignForPovParams;
-	if( owner == (int)cg.predictedPlayerState.POVnum ) {
+	if( owner == (int)viewState->predictedPlayerState.POVnum ) {
 		constexpr float magicRightOffsetScale = 2.0f, magicZOffsetScale = 0.5f;
 		alignForPovParams = PolyEffectsSystem::TracerParams::AlignForPovParams {
 			.originRightOffset = magicRightOffsetScale * rightOffset,
 			.originZOffset     = magicZOffsetScale * zOffset,
-			.povNum            = cg.predictedPlayerState.POVnum,
+			.povNum            = viewState->predictedPlayerState.POVnum,
 		};
 	}
 
@@ -2414,7 +2420,7 @@ auto EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const
 		.smoothEdgeDistance = 172.0f,
 		.width              = m_rng.nextFloat( 2.0f, 2.5f ),
 		.minLength          = m_rng.nextFloat( 80.0f, 108.0f ),
-		.distancePercentage = ( owner == (int)cg.predictedPlayerState.POVnum ) ? 0.24f : 0.18f,
+		.distancePercentage = ( owner == (int)viewState->predictedPlayerState.POVnum ) ? 0.24f : 0.18f,
 		.programLightRadius = 72.0f,
 		.coronaLightRadius  = 108.0f,
 		.lightColor         = { 0.9f, 0.8f, 1.0f }
