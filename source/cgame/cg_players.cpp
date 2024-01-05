@@ -161,15 +161,13 @@ const SoundSet *CG_RegisterSexedSound( int entnum, const char *name ) {
 /*
 * CG_SexedSound
 */
-void CG_SexedSound( ViewState *viewState, int entnum, int entchannel, const char *name, float fvol, float attn ) {
-	bool fixed;
-
-	fixed = entchannel & CHAN_FIXED ? true : false;
+void CG_SexedSound( int entnum, int entchannel, const char *name, float fvol, float attn ) {
+	const bool fixed = ( entchannel & CHAN_FIXED ) ? true : false;
 	entchannel &= ~CHAN_FIXED;
 
 	if( fixed ) {
 		SoundSystem::instance()->startFixedSound( CG_RegisterSexedSound( entnum, name ), cg_entities[entnum].current.origin, entchannel, fvol, attn );
-	} else if( viewState->isViewerEntity( entnum ) ) {
+	} else if( getOurClientViewState()->isViewerEntity( entnum ) ) {
 		SoundSystem::instance()->startGlobalSound( CG_RegisterSexedSound( entnum, name ), entchannel, fvol );
 	} else {
 		SoundSystem::instance()->startRelativeSound( CG_RegisterSexedSound( entnum, name ), entnum, entchannel, fvol, attn );

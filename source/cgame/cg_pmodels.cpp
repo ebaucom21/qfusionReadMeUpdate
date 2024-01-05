@@ -79,10 +79,6 @@ void CG_ResetPModels( void ) {
 		cg_entPModels[i].flash_time = cg_entPModels[i].barrel_time = 0;
 		memset( &cg_entPModels[i].animState, 0, sizeof( gs_pmodel_animationstate_t ) );
 	}
-
-	// TODO: We should just rely on cleaning up the view state
-	ViewState *viewState = getPrimaryViewState();
-	memset( &viewState->weapon, 0, sizeof( viewState->weapon ) );
 }
 
 /*

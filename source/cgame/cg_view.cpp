@@ -152,7 +152,7 @@ int CG_DemoCam_FreeFly() {
 }
 
 static void CG_Democam_SetCameraPositionFromView() {
-	ViewState *viewState = getPrimaryViewState();
+	ViewState *viewState = getOurClientViewState();
 	if( viewState->view.type == VIEWDEF_PLAYERVIEW ) {
 		VectorCopy( viewState->view.origin, cam_origin );
 		VectorCopy( viewState->view.angles, cam_angles );
@@ -188,7 +188,7 @@ bool CG_DemoCam_Update() {
 
 	cam_3dPerson = false;
 	cam_viewtype = VIEWDEF_PLAYERVIEW;
-	cam_POVent   = getPrimaryViewState()->snapPlayerState.POVnum;
+	cam_POVent   = getOurClientViewState()->snapPlayerState.POVnum;
 
 	if( CamIsFree ) {
 		cam_viewtype = CG_DemoCam_FreeFly();
@@ -267,7 +267,7 @@ bool CG_ChaseStep( int step ) {
 		// find the playerState containing our current POV, then cycle playerStates
 		int index = -1;
 		for( int i = 0; i < cg.frame.numplayers; i++ ) {
-			if( cg.frame.playerStates[i].playerNum < (unsigned)gs.maxclients && cg.frame.playerStates[i].playerNum == cg.multiviewPlayerNum ) {
+			if( cg.frame.playerStates[i].playerNum < (unsigned)gs.maxclients && cg.frame.playerStates[i].playerNum == cg.chasedPlayerNum ) {
 				index = i;
 				break;
 			}
@@ -296,7 +296,8 @@ bool CG_ChaseStep( int step ) {
 			return false;
 		}
 
-		cg.multiviewPlayerNum = cg.frame.playerStates[checkPlayer].playerNum;
+		cg.chasedPlayerNum     = cg.frame.playerStates[checkPlayer].playerNum;
+		cg.chasedViewportIndex = checkPlayer;
 		return true;
 	}
 	
@@ -927,7 +928,7 @@ void CG_ClearChaseCam() {
 }
 
 static void CG_UpdateChaseCam() {
-	const ViewState *viewState = getPrimaryViewState();
+	const ViewState *const viewState = getOurClientViewState();
 
 	const bool chasecam = ( viewState->snapPlayerState.pmove.pm_type == PM_CHASECAM ) && ( viewState->snapPlayerState.POVnum != (unsigned)( cgs.playerNum + 1 ) );
 
@@ -1099,7 +1100,6 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, ViewState *viewState,
 }
 
 void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t serverTime, unsigned extrapolationTime ) {
-	ViewState *const viewState = getPrimaryViewState();
 
 	// update time
 	cg.realTime      = realTime;
@@ -1169,8 +1169,9 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			if( !cgs.demoPlaying ) {
 				if( !cgs.gameMenuRequested ) {
 					CL_Cmd_ExecuteNow( "gamemenu\n" );
+					/*
 					if( ISREALSPECTATOR( viewState ) && !cg.firstFrame ) {
-					}
+					}*/
 					cgs.gameMenuRequested = true;
 				}
 			}
@@ -1205,6 +1206,9 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				viewDefType = CG_DemoCam_GetViewType();
 			}
 
+			// This is going to change for multi
+			ViewState *const viewState = getPrimaryViewState();
+
 			CG_SetupViewDef( &viewState->view, viewDefType, viewState, viewportX, viewportY, viewportWidth, viewportHeight );
 
 			CG_LerpEntities( viewState );  // interpolate packet entities positions
@@ -1231,8 +1235,8 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 			// warp if underwater
 			if( rd->rdflags & RDF_UNDERWATER ) {
-		#define WAVE_AMPLITUDE  0.015   // [0..1]
-		#define WAVE_FREQUENCY  0.6     // [0..1]
+#define WAVE_AMPLITUDE  0.015   // [0..1]
+#define WAVE_FREQUENCY  0.6     // [0..1]
 				float phase = rd->time * 0.001 * WAVE_FREQUENCY * M_TWOPI;
 				float v = WAVE_AMPLITUDE * ( sin( phase ) - 1.0 ) + 1;
 				rd->fov_x *= v;
@@ -1251,6 +1255,9 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			CG_Draw2D( viewState );
 
 			CG_ResetTemporaryBoneposesCache(); // clear for next frame
+
+			const ViewState *primaryViewState = getPrimaryViewState();
+			SoundSystem::instance()->updateListener( primaryViewState->view.origin, primaryViewState->view.velocity, primaryViewState->view.axis );
 		}
 	}
 }

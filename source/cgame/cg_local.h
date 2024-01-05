@@ -1,5 +1,6 @@
 /*
 Copyright (C) 2002-2003 Victor Luchits
+Copyright (C) 2024 Chasseur de bots
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -300,6 +301,8 @@ struct ViewState {
 
 	// current in use, predicted or interpolated
 	player_state_t predictedPlayerState;
+
+	bool mutePovSounds;
 
 	float xyspeed;
 	float oldBobTime;
@@ -648,7 +651,16 @@ typedef struct cg_state_s {
 
 	bool specStateChanged;
 
-	unsigned int multiviewPlayerNum;       // for multipov chasing, takes effect on next snap
+	// Addressed by index in snapshot
+	// The last is for demo TODO fix
+	ViewState viewStates[MAX_CLIENTS + 1];
+	// Addressed by player number (entity number + 1)
+	uint32_t snapViewStatePresentMask;
+	unsigned numSnapViewStates;
+
+	unsigned ourClientViewportIndex;
+	unsigned chasedPlayerNum;
+	unsigned chasedViewportIndex;
 
 	//
 	// transient data from server
@@ -674,6 +686,10 @@ extern cg_state_t cg;
 
 [[nodiscard]]
 auto getPrimaryViewState() -> ViewState *;
+[[nodiscard]]
+auto getOurClientViewState() -> ViewState *;
+[[nodiscard]]
+auto getViewStateForEntity( int number ) -> ViewState *;
 
 #define ISBRUSHMODEL( x ) ( ( ( x > 0 ) && ( (int)x < CG_NumInlineModels() ) ) ? true : false )
 
@@ -712,7 +728,7 @@ struct model_s *CG_RegisterModel( const char *name );
 void CG_ResetClientInfos( void );
 void CG_LoadClientInfo( unsigned client, const wsw::StringView &configString );
 void CG_UpdateSexedSoundsRegistration( pmodelinfo_t *pmodelinfo );
-void CG_SexedSound( ViewState *viewState, int entnum, int entchannel, const char *name, float fvol, float attn );
+void CG_SexedSound( int entnum, int entchannel, const char *name, float fvol, float attn );
 const SoundSet *CG_RegisterSexedSound( int entnum, const char *name );
 
 void CG_PredictedEvent( int entNum, int ev, int parm );
@@ -915,7 +931,7 @@ void CG_ViewWeapon_StartAnimationEvent( int newAnim, ViewState *viewState );
 void CG_ViewWeapon_RefreshAnimation( cg_viewweapon_t *viewweapon, ViewState *viewState );
 
 void CG_FireEvents( bool early );
-void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted, ViewState *viewState );
+void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted );
 void CG_AddAnnouncerEvent( const SoundSet *sound, bool queued );
 void CG_ReleaseAnnouncerEvents( void );
 void CG_ClearAnnouncerEvents( void );

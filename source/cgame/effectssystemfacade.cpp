@@ -739,7 +739,7 @@ static const RgbaLifespan kGunbladeHitColors[1] {
 	}
 };
 
-void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const float *dir ) {
+void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const float *dir, int ownerNum ) {
 	// Find what are we hitting
 	vec3_t local_pos, local_dir;
 	VectorCopy( pos, local_pos );
@@ -748,8 +748,7 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 	VectorMA( pos, -1.0, local_dir, end );
 
 	trace_t trace;
-	// TODO: Check against the owner, not the view state!
-	CG_Trace( &trace, local_pos, vec3_origin, vec3_origin, end, getPrimaryViewState()->view.POVent, MASK_SHOT );
+	CG_Trace( &trace, local_pos, vec3_origin, vec3_origin, end, ownerNum, MASK_SHOT );
 
 	if( trace.fraction != 1.0 ) {
 		bool isHittingFlesh = false;
@@ -2400,6 +2399,7 @@ auto EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const
 	vec3_t adjustedFrom;
 	const auto [rightOffset, zOffset] = adjustTracerOriginForOwner( owner, from, adjustedFrom );
 
+	// TODO:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	ViewState *viewState = getPrimaryViewState();
 
 	std::optional<PolyEffectsSystem::TracerParams::AlignForPovParams> alignForPovParams;
