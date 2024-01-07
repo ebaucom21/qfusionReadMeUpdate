@@ -8,10 +8,12 @@ import net.warsow 2.6
 Item {
     id: rootItem
 
+    readonly property var povDataModel: Hud.povDataModel
+
     // These conditions try to prevent activating the loader until the status of models is well-defined.
     readonly property bool useDifferentHuds:
-        Hud.dataModel.specLayoutModel.name.length > 0 && Hud.dataModel.clientLayoutModel.name.length > 0 &&
-            Hud.dataModel.specLayoutModel.name.toUpperCase() != Hud.dataModel.clientLayoutModel.name.toUpperCase()
+        Hud.commonDataModel.specLayoutModel.name.length > 0 && Hud.commonDataModel.clientLayoutModel.name.length > 0 &&
+            Hud.commonDataModel.specLayoutModel.name.toUpperCase() != Hud.commonDataModel.clientLayoutModel.name.toUpperCase()
 
     Window.onWindowChanged: {
         if (Window.window) {
@@ -22,9 +24,11 @@ Item {
 
     // Try reusing the same instance due to Qml GC quirks
     InGameHud {
-        visible: Hud.ui.isShowingHud && (Hud.dataModel.hasActivePov || !useDifferentHuds)
+        visible: Hud.ui.isShowingHud && (rootItem.povDataModel.hasActivePov || !useDifferentHuds)
         anchors.fill: parent
-        model: Hud.dataModel.clientLayoutModel
+        layoutModel: Hud.commonDataModel.clientLayoutModel
+        commonDataModel: Hud.commonDataModel
+        povDataModel: rootItem.povDataModel
     }
 
     Loader {
@@ -33,8 +37,10 @@ Item {
         anchors.fill: parent
         sourceComponent: InGameHud {
             // Toggle the visibility once it's loaded for the same GC-related reasons
-            visible: Hud.ui.isShowingHud && !Hud.dataModel.hasActivePov
-            model: Hud.dataModel.specLayoutModel
+            visible: Hud.ui.isShowingHud && !rootItem.dataModel.hasActivePov
+            layoutModel: Hud.commonDataModel.specLayoutModel
+            commonDataModel: Hud.commonDataModel
+            povDataModel: rootItem.povDataModel
         }
     }
 

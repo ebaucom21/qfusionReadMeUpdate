@@ -6,10 +6,13 @@ import QtGraphicalEffects 1.12
 import net.warsow 2.6
 
 Item {
+    id: root
     implicitWidth: list.contentWidth + 48
     implicitHeight: cardHeight + 24
     width: implicitWidth
     height: implicitHeight
+
+    property var povDataModel
 
     readonly property real cardWidth: 60
     readonly property real cardHeight: 100
@@ -30,7 +33,7 @@ Item {
         anchors.centerIn: parent
         width: contentWidth
         height: cardHeight
-        model: Hud.dataModel.getInventoryModel()
+        model: root.povDataModel.getInventoryModel()
         orientation: ListView.Horizontal
         boundsBehavior: Flickable.StopAtBounds
         spacing: 24

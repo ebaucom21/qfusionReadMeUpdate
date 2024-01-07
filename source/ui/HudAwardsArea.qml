@@ -9,12 +9,14 @@ Item {
     // Just for anchoring other items
     implicitWidth: 0.5 * rootItem.width
 
+    property var povDataModel
+
     ListView {
         id: listView
         anchors.centerIn: parent
         height: contentHeight
         width: parent.width
-        model: Hud.dataModel.getAwardsModel()
+        model: root.povDataModel.getAwardsModel()
         verticalLayoutDirection: ListView.BottomToTop
         spacing: 8
 

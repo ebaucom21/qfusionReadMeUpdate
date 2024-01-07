@@ -10,6 +10,8 @@ Item {
     implicitWidth: 256
     implicitHeight: 192
 
+    property var povDataModel
+
     Connections {
         target: Hud.ui
         onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(back, 64.0)
@@ -39,7 +41,7 @@ Item {
         font.pointSize: 13
         font.capitalization: Font.AllUppercase
         textFormat: Text.PlainText
-        text: Hud.dataModel.activeWeaponName
+        text: povDataModel.activeWeaponName
     }
 
     Image {
@@ -50,12 +52,11 @@ Item {
         height: 96
         smooth: true
         mipmap: true
-        source: Hud.dataModel.activeWeaponIcon
+        source: povDataModel.activeWeaponIcon
     }
 
-
-    readonly property real strongAmmo: Hud.dataModel.activeWeaponStrongAmmo
-    readonly property real weakAmmo: Hud.dataModel.activeWeaponWeakAmmo
+    readonly property real strongAmmo: povDataModel.activeWeaponStrongAmmo
+    readonly property real weakAmmo: povDataModel.activeWeaponWeakAmmo
     readonly property real primaryAmmo: strongAmmo || weakAmmo
 
     readonly property string infinity: "\u221E"

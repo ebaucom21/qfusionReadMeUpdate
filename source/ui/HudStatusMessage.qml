@@ -4,18 +4,20 @@ import QtQuick.Controls.Material 2.12
 import net.warsow 2.6
 
 Item {
+    id: root
     implicitWidth: stackView.currentItem ? stackView.currentItem.implicitWidth + 96 : 0
     implicitHeight: stackView.height
 
+    property var povDataModel
+
     Connections {
-        target: Hud.dataModel
+        target: root.povDataModel
         onStatusMessageChanged: {
             stackView.clear(StackView.Immediate)
             stackView.push(component, {"message": statusMessage}, StackView.PushTransition)
             timer.start()
         }
     }
-
 
     Timer {
         id: timer

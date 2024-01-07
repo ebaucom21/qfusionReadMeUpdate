@@ -487,7 +487,8 @@ private:
 	ActionRequestsModel m_actionRequestsModel;
 
 	HudEditorModel m_hudEditorModel;
-	HudDataModel m_hudDataModel;
+	HudCommonDataModel m_hudCommonDataModel;
+	HudPovDataModel m_hudPovDataModel;
 
 	QString m_pendingDroppedConnectionTitle;
 	QString m_droppedConnectionTitle;
@@ -706,6 +707,8 @@ void QtUISystem::registerCustomQmlTypes() {
 	qmlRegisterUncreatableType<HudEditorModel>( uri, 2, 6, "HudEditorModel", reason );
 	qmlRegisterUncreatableType<InGameHudLayoutModel>( uri, 2, 6, "InGameHudLayoutModel", reason );
 	qmlRegisterUncreatableType<HudDataModel>( uri, 2, 6, "HudDataModel", reason );
+	qmlRegisterUncreatableType<HudCommonDataModel>( uri, 2, 6, "HudCommonDataModel", reason );
+	qmlRegisterUncreatableType<HudPovDataModel>( uri, 2, 6, "HudPovDataModel", reason );
 	qmlRegisterType<NativelyDrawnImage>( uri, 2, 6, "NativelyDrawnImage_Native" );
 	qmlRegisterType<NativelyDrawnModel>( uri, 2, 6, "NativelyDrawnModel_Native" );
 	qmlRegisterType<VideoSource>( uri, 2, 6, "WswVideoSource" );
@@ -774,7 +777,8 @@ void QtUISystem::registerContextProperties( QQmlContext *context, SandboxKind sa
 	// TODO: Show hud popups in the menu sandbox/context?
 	context->setContextProperty( "__chatProxy", &m_chatProxy );
 	context->setContextProperty( "__teamChatProxy", &m_teamChatProxy );
-	context->setContextProperty( "__hudDataModel", &m_hudDataModel );
+	context->setContextProperty( "__hudCommonDataModel", &m_hudCommonDataModel );
+	context->setContextProperty( "__hudPovDataModel", &m_hudPovDataModel );
 
 	// This condition not only helps to avoid global namespace pollution,
 	// but first and foremost is aimed to prevent keeping excessive GC roots.
@@ -953,7 +957,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	m_menuSandbox = createQmlSandbox( initialWidth, initialHeight, MenuSandbox );
 	m_hudSandbox  = createQmlSandbox( initialWidth, initialHeight, HudSandbox );
 
-	connect( &m_hudEditorModel, &HudEditorModel::hudUpdated, &m_hudDataModel, &HudDataModel::onHudUpdated );
+	connect( &m_hudEditorModel, &HudEditorModel::hudUpdated, &m_hudCommonDataModel, &HudCommonDataModel::onHudUpdated );
 }
 
 QtUISystem::~QtUISystem() {
@@ -1673,7 +1677,8 @@ void QtUISystem::checkPropertyChanges() {
 
 	const auto timestamp = getFrameTimestamp();
 	VideoPlaybackSystem::instance()->update( timestamp );
-	m_hudDataModel.checkPropertyChanges( timestamp );
+	m_hudCommonDataModel.checkPropertyChanges( timestamp );
+	m_hudPovDataModel.checkPropertyChanges( timestamp );
 
 	updateCVarAwareControls();
 	updateHudOccluders();
@@ -2237,7 +2242,8 @@ void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::Stri
 void QtUISystem::updateScoreboard( const ReplicatedScoreboardData &scoreboardData, const AccuracyRows &accuracyRows ) {
 	m_scoreboardModel.update( scoreboardData, accuracyRows );
 	m_playersModel.update( scoreboardData );
-	m_hudDataModel.updateScoreboardData( scoreboardData );
+	m_hudCommonDataModel.updateScoreboardData( scoreboardData );
+	m_hudPovDataModel.updateScoreboardData( scoreboardData );
 }
 
 bool QtUISystem::isShowingScoreboard() const {
@@ -2277,25 +2283,25 @@ void QtUISystem::handleOptionsStatusCommand( const wsw::StringView &status ) {
 }
 
 void QtUISystem::resetFragsFeed() {
-	m_hudDataModel.resetFragsFeed();
+	m_hudCommonDataModel.resetFragsFeed();
 }
 
 void QtUISystem::addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
 							   unsigned meansOfDeath,
 							   const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) {
-	m_hudDataModel.addFragEvent( victimAndTeam, getFrameTimestamp(), meansOfDeath, attackerAndTeam );
+	m_hudCommonDataModel.addFragEvent( victimAndTeam, getFrameTimestamp(), meansOfDeath, attackerAndTeam );
 }
 
 void QtUISystem::addToMessageFeed( const wsw::StringView &message ) {
-	m_hudDataModel.addToMessageFeed( message, getFrameTimestamp() );
+	m_hudPovDataModel.addToMessageFeed( message, getFrameTimestamp() );
 }
 
 void QtUISystem::addAward( const wsw::StringView &award ) {
-	m_hudDataModel.addAward( award, getFrameTimestamp() );
+	m_hudPovDataModel.addAward( award, getFrameTimestamp() );
 }
 
 void QtUISystem::addStatusMessage( const wsw::StringView &message ) {
-	m_hudDataModel.addStatusMessage( message, getFrameTimestamp() );
+	m_hudPovDataModel.addStatusMessage( message, getFrameTimestamp() );
 }
 
 static const QString kConnectionFailedTitle( "Connection failed" );

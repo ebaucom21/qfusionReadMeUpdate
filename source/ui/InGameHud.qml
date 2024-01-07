@@ -9,11 +9,14 @@ Item {
 
     property real alphaNameWidth
     property real betaNameWidth
-    property var model
+
+    property var layoutModel
+    property var commonDataModel
+    property var povDataModel
 
     Repeater {
         id: repeater
-        model: hudField.model
+        model: hudField.layoutModel
 
         property int numInstantiatedItems: 0
 
@@ -46,12 +49,16 @@ Item {
             }
 
             Connections {
-                target: Hud.dataModel
+                target: hudField.commonDataModel
                 onHasTwoTeamsChanged: itemLoader.updateItemVisibility()
-                onHasActivePovChanged: itemLoader.updateItemVisibility()
-                onIsPovAliveChanged: itemLoader.updateItemVisibility()
                 onIsInPostmatchStateChanged: itemLoader.updateItemVisibility()
                 onActiveItemsMaskChanged: itemLoader.updateItemVisibility()
+            }
+
+            Connections {
+                target: hudField.povDataModel
+                onHasActivePovChanged: itemLoader.updateItemVisibility()
+                onIsPovAliveChanged: itemLoader.updateItemVisibility()
             }
 
             Connections {
@@ -85,15 +92,15 @@ Item {
 
             function updateItemVisibility() {
                 if (item) {
-                    if (itemLoader.individualMask && !(itemLoader.individualMask & Hud.dataModel.activeItemsMask)) {
+                    if (itemLoader.individualMask && !(itemLoader.individualMask & hudField.commonDataModel.activeItemsMask)) {
                         item.visible = false
-                    } else if (!Hud.dataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
+                    } else if (!hudField.commonDataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
                         item.visible = false
-                    } else if (!Hud.dataModel.hasActivePov && (flags & HudLayoutModel.PovOnly)) {
+                    } else if (!hudField.povDataModel.hasActivePov && (flags & HudLayoutModel.PovOnly)) {
                         item.visible = false
-                    } else if (!Hud.dataModel.isPovAlive && (flags & HudLayoutModel.AlivePovOnly)) {
+                    } else if (!hudField.povDataModel.isPovAlive && (flags & HudLayoutModel.AlivePovOnly)) {
                         item.visible = false
-                    } else if (Hud.dataModel.isInPostmatchState && !(flags & HudLayoutModel.AllowPostmatch)){
+                    } else if (hudField.commonDataModel.isInPostmatchState && !(flags & HudLayoutModel.AllowPostmatch)){
                         item.visible = false
                     } else {
                         // Put the expensive test last
@@ -140,12 +147,12 @@ Item {
                 id: healthBarComponent
                 HudValueBar {
                     text: "HEALTH"
-                    color: Hud.dataModel.health > 100 ? "deeppink" :
-                                                        (Hud.dataModel.health >= 50 ? "white" : "orangered")
-                    value: Hud.dataModel.health
-                    frac: 0.01 * Math.min(100.0, Math.max(0, Hud.dataModel.health))
-                    iconPath: Hud.dataModel.health > 100 ? "image://wsw/gfx/hud/icons/health/100" :
-                                                          "image://wsw/gfx/hud/icons/health/50"
+                    color: hudField.povDataModel.health > 100 ? "deeppink" :
+                                                                (hudField.povDataModel.health >= 50 ? "white" : "orangered")
+                    value: hudField.povDataModel.health
+                    frac: 0.01 * Math.min(100.0, Math.max(0, hudField.povDataModel.health))
+                    iconPath: hudField.povDataModel.health > 100 ? "image://wsw/gfx/hud/icons/health/100" :
+                                                                   "image://wsw/gfx/hud/icons/health/50"
                 }
             }
 
@@ -153,42 +160,48 @@ Item {
                 id: armorBarComponent
                 HudValueBar {
                     text: "ARMOR"
-                    value: Hud.dataModel.armor
-                    frac: 0.01 * Math.min(100.0, Hud.dataModel.armor)
-                    color: Hud.dataModel.armor >= 125 ? "red" : (Hud.dataModel.armor >= 75 ? "gold" : "green")
+                    value: hudField.povDataModel.armor
+                    frac: 0.01 * Math.min(100.0, hudField.povDataModel.armor)
+                    color: hudField.povDataModel.armor >= 125 ? "red" : (hudField.povDataModel.armor >= 75 ? "gold" : "green")
                     iconPath: {
-                        Hud.dataModel.armor >= 125 ? "image://wsw/gfx/hud/icons/armor/ra" :
-                        (Hud.dataModel.armor >= 75 ? "image://wsw/gfx/hud/icons/armor/ya" :
-                                                    "image://wsw/gfx/hud/icons/armor/ga")
+                        hudField.povDataModel.armor >= 125 ? "image://wsw/gfx/hud/icons/armor/ra" :
+                        (hudField.povDataModel.armor >= 75 ? "image://wsw/gfx/hud/icons/armor/ya" :
+                                                             "image://wsw/gfx/hud/icons/armor/ga")
                     }
                 }
             }
 
             Component {
                 id: inventoryBarComponent
-                HudInventoryBar {}
+                HudInventoryBar {
+                    povDataModel: hudField.povDataModel
+                }
             }
 
             Component {
                 id: weaponStatusComponent
-                HudWeaponStatus {}
+                HudWeaponStatus {
+                    povDataModel: hudField.povDataModel
+                }
             }
 
             Component {
                 id: matchTimeComponent
-                HudMatchTime {}
+                HudMatchTime {
+                    commonDataModel: hudField.commonDataModel
+                }
             }
 
             Component {
                 id: alphaScoreComponent
                 HudTeamScore {
-                    visible: Hud.dataModel.hasTwoTeams
+                    visible: commonDataModel.hasTwoTeams
                     leftAligned: true
-                    color: Hud.dataModel.alphaColor
-                    name: Hud.dataModel.alphaName
-                    clan: Hud.dataModel.alphaClan
-                    score: Hud.dataModel.alphaScore
-                    playersStatus: Hud.dataModel.alphaPlayersStatus
+                    color: hudField.commonDataModel.alphaColor
+                    name: hudField.commonDataModel.alphaName
+                    clan: hudField.commonDataModel.alphaClan
+                    score: hudField.commonDataModel.alphaScore
+                    playersStatus: hudField.commonDataModel.alphaPlayersStatus
                     siblingNameWidth: hudField.betaNameWidth
                     onNameWidthChanged: hudField.alphaNameWidth = nameWidth
                 }
@@ -197,13 +210,13 @@ Item {
             Component {
                 id: betaScoreComponent
                 HudTeamScore {
-                    visible: Hud.dataModel.hasTwoTeams
+                    visible: commonDataModel.hasTwoTeams
                     leftAligned: false
-                    color: Hud.dataModel.betaColor
-                    name: Hud.dataModel.betaName
-                    clan: Hud.dataModel.betaClan
-                    score: Hud.dataModel.betaScore
-                    playersStatus: Hud.dataModel.betaPlayersStatus
+                    color: hudField.commonDataModel.betaColor
+                    name: hudField.commonDataModel.betaName
+                    clan: hudField.commonDataModel.betaClan
+                    score: hudField.commonDataModel.betaScore
+                    playersStatus: hudField.commonDataModel.betaPlayersStatus
                     siblingNameWidth: hudField.alphaNameWidth
                     onNameWidthChanged: hudField.betaNameWidth = nameWidth
                 }
@@ -216,32 +229,45 @@ Item {
 
             Component {
                 id: teamInfoComponent
-                HudTeamInfo {}
+                HudTeamInfo {
+                    commonDataModel: hudField.commonDataModel
+                    povDataModel: hudField.povDataModel
+                }
             }
 
             Component {
                 id: fragsFeedComponent
-                HudFragsFeed {}
+                HudFragsFeed {
+                    commonDataModel: hudField.commonDataModel
+                }
             }
 
             Component {
                 id: messageFeedComponent
-                HudMessageFeed {}
+                HudMessageFeed {
+                    povDataModel: hudField.povDataModel
+                }
             }
 
             Component {
                 id: awardsAreaComponent
-                HudAwardsArea {}
+                HudAwardsArea {
+                    povDataModel: hudField.povDataModel
+                }
             }
 
             Component {
                 id: statusMessageComponent
-                HudStatusMessage {}
+                HudStatusMessage {
+                    povDataModel: hudField.povDataModel
+                }
             }
 
             Component {
                 id: objectiveStatusComponent
-                HudObjectiveStatus {}
+                HudObjectiveStatus {
+                    commonDataModel: hudField.commonDataModel
+                }
             }
 
             function getQmlAnchor(anchorBit) {

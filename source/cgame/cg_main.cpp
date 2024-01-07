@@ -26,7 +26,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/cmdargs.h"
 #include "../client/client.h"
 #include "../common/configvars.h"
-#include "../ui/uisystem.h"
 #include "../common/wswtonum.h"
 #include "../common/cmdargssplitter.h"
 #include "../common/cmdcompat.h"
@@ -34,7 +33,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/gs_public.h"
 #include "../client/snd_public.h"
 #include "cg_local.h"
-#include "../ui/uisystem.h"
 #include "../ui/huddatamodel.h"
 
 using wsw::operator""_asView;
@@ -4926,10 +4924,6 @@ int CG_TeamBetaDisplayedColor() {
 auto CG_HudIndicatorState( int num ) -> BasicObjectiveIndicatorState {
 	assert( (unsigned)num < 3 );
 	const auto *const stats = getPrimaryViewState()->predictedPlayerState.stats;
-
-	static_assert( (int)wsw::ui::HudDataModel::NoAnim == (int)HUD_INDICATOR_NO_ANIM );
-	static_assert( (int)wsw::ui::HudDataModel::AlertAnim == (int)HUD_INDICATOR_ALERT_ANIM );
-	static_assert( (int)wsw::ui::HudDataModel::ActionAnim == (int)HUD_INDICATOR_ACTION_ANIM );
 
 	int anim = stats[STAT_INDICATOR_1_ANIM + num];
 	if( (unsigned)anim > (unsigned)HUD_INDICATOR_ACTION_ANIM ) {

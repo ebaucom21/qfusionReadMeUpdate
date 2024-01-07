@@ -676,51 +676,43 @@ void AwardsModel::update( int64_t currTime ) {
 	}
 }
 
-auto HudDataModel::getActiveWeaponIcon() const -> QByteArray {
-	return m_activeWeapon ? weaponPropsCache.getWeaponIconPath( m_activeWeapon ) : QByteArray();
-}
-
-auto HudDataModel::getActiveWeaponName() const -> QByteArray {
-	return m_activeWeapon ? weaponPropsCache.getWeaponFullName( m_activeWeapon ) : QByteArray();
-}
-
-auto HudDataModel::getWeaponFullName( int weapon ) const -> QByteArray {
+auto HudCommonDataModel::getWeaponFullName( int weapon ) const -> QByteArray {
 	return weaponPropsCache.getWeaponFullName( weapon );
 }
 
-auto HudDataModel::getWeaponShortName( int weapon ) const -> QByteArray {
+auto HudCommonDataModel::getWeaponShortName( int weapon ) const -> QByteArray {
 	return weaponPropsCache.getWeaponShortName( weapon );
 }
 
-auto HudDataModel::getWeaponIconPath( int weapon ) const -> QByteArray {
+auto HudCommonDataModel::getWeaponIconPath( int weapon ) const -> QByteArray {
 	return weaponPropsCache.getWeaponIconPath( weapon );
 }
 
-auto HudDataModel::getWeaponModelPath( int weapon ) const -> QByteArray {
+auto HudCommonDataModel::getWeaponModelPath( int weapon ) const -> QByteArray {
 	return weaponPropsCache.getWeaponModelPath( weapon );
 }
 
-auto HudDataModel::getWeaponColor( int weapon ) const -> QColor {
+auto HudCommonDataModel::getWeaponColor( int weapon ) const -> QColor {
 	return weaponPropsCache.getWeaponColor( weapon );
 }
 
-auto HudDataModel::getAvailableRegularCrosshairs() const -> QStringList {
+auto HudCommonDataModel::getAvailableRegularCrosshairs() const -> QStringList {
 	return weaponPropsCache.getAvailableRegularCrosshairs();
 }
 
-auto HudDataModel::getAvailableStrongCrosshairs() const -> QStringList {
+auto HudCommonDataModel::getAvailableStrongCrosshairs() const -> QStringList {
 	return weaponPropsCache.getAvailableStrongCrosshairs();
 }
 
-auto HudDataModel::getRegularCrosshairFilePath( const QByteArray &fileName ) const -> QByteArray {
+auto HudCommonDataModel::getRegularCrosshairFilePath( const QByteArray &fileName ) const -> QByteArray {
 	return getCrosshairFilePath( kRegularCrosshairsDirName, fileName );
 }
 
-auto HudDataModel::getStrongCrosshairFilePath( const QByteArray &fileName ) const -> QByteArray {
+auto HudCommonDataModel::getStrongCrosshairFilePath( const QByteArray &fileName ) const -> QByteArray {
 	return getCrosshairFilePath( kStrongCrosshairsDirName, fileName );
 }
 
-auto HudDataModel::getCrosshairFilePath( const wsw::StringView &prefix, const QByteArray &fileName ) -> QByteArray {
+auto HudCommonDataModel::getCrosshairFilePath( const wsw::StringView &prefix, const QByteArray &fileName ) -> QByteArray {
 	QByteArray result;
 	if( !fileName.isEmpty() ) {
 		const wsw::StringView fileNameView( fileName.data(), (size_t)fileName.size() );
@@ -731,7 +723,7 @@ auto HudDataModel::getCrosshairFilePath( const wsw::StringView &prefix, const QB
 
 static const QByteArray kIconPathPrefix( "image://wsw/" );
 
-auto HudDataModel::getIndicatorIconPath( int iconNum ) const -> QByteArray {
+auto HudCommonDataModel::getIndicatorIconPath( int iconNum ) const -> QByteArray {
 	if( iconNum ) {
 		if( const auto maybePath = CG_HudIndicatorIconPath( iconNum ) ) {
 			return kIconPathPrefix + QByteArray::fromRawData( maybePath->data(), (int)maybePath->size() );
@@ -740,7 +732,7 @@ auto HudDataModel::getIndicatorIconPath( int iconNum ) const -> QByteArray {
 	return QByteArray();
 }
 
-auto HudDataModel::getIndicatorStatusString( int stringNum ) const -> QByteArray {
+auto HudCommonDataModel::getIndicatorStatusString( int stringNum ) const -> QByteArray {
 	if( stringNum ) {
 		if( const auto maybePath = CG_HudIndicatorStatusString( stringNum ) ) {
 			return QByteArray::fromRawData( maybePath->data(), (int)maybePath->size() );
@@ -749,12 +741,13 @@ auto HudDataModel::getIndicatorStatusString( int stringNum ) const -> QByteArray
 	return QByteArray();
 }
 
+// TODO: Don't even box, use QByteArray wrapping facilities?
 static const QByteArray kWarmup( "WARMUP" );
 static const QByteArray kCountdown( "COUNTDOWN" );
 static const QByteArray kOvertime( "OVERTIME" );
 static const QByteArray kNoMatchState;
 
-void HudDataModel::setFormattedTime( QByteArray *dest, int value ) {
+void HudCommonDataModel::setFormattedTime( QByteArray *dest, int value ) {
 	assert( value >= 0 );
 	dest->clear();
 	if( value >= 100 ) {
@@ -768,35 +761,39 @@ void HudDataModel::setFormattedTime( QByteArray *dest, int value ) {
 	}
 }
 
-void HudDataModel::setStyledName( QByteArray *dest, const wsw::StringView &name ) {
+void HudCommonDataModel::setStyledName( QByteArray *dest, const wsw::StringView &name ) {
 	// TODO: toStyledText() should allow accepting an external buffer of an arbitrary structurally compatible type
 	*dest = toStyledText( name ).toLatin1();
 }
 
-HudDataModel::HudDataModel()
+HudCommonDataModel::HudCommonDataModel()
 	: m_clientHudChangesTracker( &v_clientHud ), m_specHudChangesTracker( &v_specHud ) {
+	static_assert( (int)wsw::ui::HudCommonDataModel::NoAnim == (int)HUD_INDICATOR_NO_ANIM );
+	static_assert( (int)wsw::ui::HudCommonDataModel::AlertAnim == (int)HUD_INDICATOR_ALERT_ANIM );
+	static_assert( (int)wsw::ui::HudCommonDataModel::ActionAnim == (int)HUD_INDICATOR_ACTION_ANIM );
+
 	assert( !m_matchTimeMinutes && !m_matchTimeSeconds );
 	setFormattedTime( &m_formattedMinutes, m_matchTimeMinutes );
 	setFormattedTime( &m_formattedSeconds, m_matchTimeSeconds );
 }
 
-auto HudDataModel::getInventoryModel() -> QObject * {
-	if( !m_hasSetInventoryModelOwnership ) {
-		QQmlEngine::setObjectOwnership( &m_inventoryModel, QQmlEngine::CppOwnership );
-		m_hasSetInventoryModelOwnership = true;
+auto HudCommonDataModel::getClientLayoutModel() -> QObject * {
+	if( !m_hasSetClientLayoutModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_clientLayoutModel, QQmlEngine::CppOwnership );
+		m_hasSetClientLayoutModelOwnership = true;
 	}
-	return &m_inventoryModel;
+	return &m_clientLayoutModel;
 }
 
-auto HudDataModel::getTeamListModel() -> QObject * {
-	if( !m_hasSetTeamListModelOwnership ) {
-		QQmlEngine::setObjectOwnership( &m_teamListModel, QQmlEngine::CppOwnership );
-		m_hasSetTeamListModelOwnership = true;
+auto HudCommonDataModel::getSpecLayoutModel() -> QObject * {
+	if( !m_hasSetSpecLayoutModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_specLayoutModel, QQmlEngine::CppOwnership );
+		m_hasSetSpecLayoutModelOwnership = true;
 	}
-	return &m_teamListModel;
+	return &m_specLayoutModel;
 }
 
-auto HudDataModel::getFragsFeedModel() -> QObject * {
+auto HudCommonDataModel::getFragsFeedModel() -> QObject * {
 	if( !m_hasSetFragsFeedModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_fragsFeedModel, QQmlEngine::CppOwnership );
 		m_hasSetFragsFeedModelOwnership = true;
@@ -804,39 +801,7 @@ auto HudDataModel::getFragsFeedModel() -> QObject * {
 	return &m_fragsFeedModel;
 }
 
-auto HudDataModel::getMessageFeedModel() -> QObject * {
-	if( !m_hasSetMessageFeedModelOwnership ) {
-		QQmlEngine::setObjectOwnership( &m_messageFeedModel, QQmlEngine::CppOwnership );
-		m_hasSetMessageFeedModelOwnership = true;
-	}
-	return &m_messageFeedModel;
-}
-
-auto HudDataModel::getAwardsModel() -> QObject * {
-	if( !m_hasSetAwardsModelOwnership ) {
-		QQmlEngine::setObjectOwnership( &m_awardsModel, QQmlEngine::CppOwnership );
-		m_hasSetAwardsModelOwnership = true;
-	}
-	return &m_awardsModel;
-}
-
-void HudDataModel::addStatusMessage( const wsw::StringView &message, int64_t timestamp ) {
-	const wsw::StringView truncatedMessage( message.take( m_originalStatusMessage.capacity() ) );
-	// Almost always perform updates, except the single case: a rapid stream of the same textual message.
-	// In this case, let initial transitions to complete, otherwise the message won't be noticeable at all.
-	if( m_originalStatusMessage.equals( truncatedMessage ) ) {
-		if( m_lastStatusMessageTimestamp + 500 > timestamp ) {
-			return;
-		}
-	}
-
-	m_lastStatusMessageTimestamp = timestamp;
-	m_originalStatusMessage.assign( truncatedMessage );
-	m_formattedStatusMessage = toStyledText( truncatedMessage );
-	Q_EMIT statusMessageChanged( m_formattedStatusMessage );
-}
-
-void HudDataModel::addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
+void HudCommonDataModel::addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
 								 int64_t timestamp, unsigned int meansOfDeath,
 								 const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) {
 	m_fragsFeedModel.addFrag( victimAndTeam, timestamp, meansOfDeath, attackerAndTeam );
@@ -844,29 +809,29 @@ void HudDataModel::addFragEvent( const std::pair<wsw::StringView, int> &victimAn
 
 static const wsw::StringView kDefaultHudName( "default"_asView );
 
-void HudDataModel::handleVarChanges( StringConfigVar *var, InGameHudLayoutModel *model, HudNameString *currName ) {
+void HudCommonDataModel::handleVarChanges( StringConfigVar *var, InGameHudLayoutModel *model, HudNameString *currName ) {
 	// TODO: We try avoiding using this flag since it assumes a control from a single place in code
-		wsw::StringView name( var->get() );
-		// Protect from redundant load() calls
-		if( !name.equalsIgnoreCase( currName->asView() ) ) {
-			if( name.length() > HudLayoutModel::kMaxHudNameLength ) {
+	wsw::StringView name( var->get() );
+	// Protect from redundant load() calls
+	if( !name.equalsIgnoreCase( currName->asView() ) ) {
+		if( name.length() > HudLayoutModel::kMaxHudNameLength ) {
+			var->setImmediately( kDefaultHudName );
+			name = kDefaultHudName;
+		}
+		if( !model->load( name ) ) {
+			if( !name.equalsIgnoreCase( kDefaultHudName ) ) {
 				var->setImmediately( kDefaultHudName );
 				name = kDefaultHudName;
+				// This could fail as well but we assume that the data of the default HUD is not corrupt.
+				// A HUD won't be displayed in case of a failure.
+				(void)model->load( kDefaultHudName );
 			}
-			if( !model->load( name ) ) {
-				if( !name.equalsIgnoreCase( kDefaultHudName ) ) {
-					var->setImmediately( kDefaultHudName );
-					name = kDefaultHudName;
-					// This could fail as well but we assume that the data of the default HUD is not corrupt.
-					// A HUD won't be displayed in case of a failure.
-					(void)model->load( kDefaultHudName );
-				}
-			}
-			currName->assign( name );
 		}
+		currName->assign( name );
+	}
 }
 
-void HudDataModel::onHudUpdated( const QByteArray &name ) {
+void HudCommonDataModel::onHudUpdated( const QByteArray &name ) {
 	std::pair<InGameHudLayoutModel *, StringConfigVar *> modelsAndVars[2] {
 		{ &m_clientLayoutModel, &v_clientHud }, { &m_specLayoutModel, &v_specHud }
 	};
@@ -887,7 +852,7 @@ void HudDataModel::onHudUpdated( const QByteArray &name ) {
 	}
 }
 
-void HudDataModel::checkPropertyChanges( int64_t currTime ) {
+void HudCommonDataModel::checkPropertyChanges( int64_t currTime ) {
 	if( m_clientHudChangesTracker.checkAndReset() ) {
 		handleVarChanges( &v_clientHud, &m_clientLayoutModel, &m_clientHudName );
 	}
@@ -912,16 +877,6 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 	if( m_realClientTeam != realClientTeam ) {
 		m_realClientTeam = realClientTeam;
 		Q_EMIT realClientTeamChanged( realClientTeam );
-	}
-
-	const bool hadActivePov = m_hasActivePov, wasPovAlive = m_isPovAlive;
-	m_hasActivePov = CG_ActiveChasePov() != std::nullopt;
-	m_isPovAlive = m_hasActivePov && CG_IsPovAlive();
-	if( wasPovAlive != m_isPovAlive ) {
-		Q_EMIT isPovAliveChanged( m_isPovAlive );
-	}
-	if( hadActivePov != m_hasActivePov ) {
-		Q_EMIT hasActivePovChanged( m_hasActivePov );
 	}
 
 	// The best we can get in the current codebase state...
@@ -1072,6 +1027,92 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT isInPostmatchStateChanged( m_isInPostmatchState );
 	}
 
+	const auto hadLocations = m_hasLocations;
+	assert( MAX_LOCATIONS > 1 );
+	// Require having at least a couple of locations defined
+	m_hasLocations = ::cl.configStrings.get( CS_LOCATIONS + 0 ) && ::cl.configStrings.get( CS_LOCATIONS + 1 );
+	if( hadLocations != m_hasLocations ) {
+		Q_EMIT hasLocationsChanged( m_hasLocations );
+	}
+
+	m_fragsFeedModel.update( currTime );
+}
+
+void HudCommonDataModel::updateScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {
+	m_pendingAlphaScore = scoreboardData.alphaScore;
+	m_pendingBetaScore = scoreboardData.betaScore;
+	if( CG_HasTwoTeams() ) {
+		updateTeamPlayerStatuses( scoreboardData );
+	}
+}
+
+auto HudPovDataModel::getActiveWeaponIcon() const -> QByteArray {
+	return m_activeWeapon ? weaponPropsCache.getWeaponIconPath( m_activeWeapon ) : QByteArray();
+}
+
+auto HudPovDataModel::getActiveWeaponName() const -> QByteArray {
+	return m_activeWeapon ? weaponPropsCache.getWeaponFullName( m_activeWeapon ) : QByteArray();
+}
+
+auto HudPovDataModel::getInventoryModel() -> QObject * {
+	if( !m_hasSetInventoryModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_inventoryModel, QQmlEngine::CppOwnership );
+		m_hasSetInventoryModelOwnership = true;
+	}
+	return &m_inventoryModel;
+}
+
+auto HudPovDataModel::getTeamListModel() -> QObject * {
+	if( !m_hasSetTeamListModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_teamListModel, QQmlEngine::CppOwnership );
+		m_hasSetTeamListModelOwnership = true;
+	}
+	return &m_teamListModel;
+}
+
+auto HudPovDataModel::getMessageFeedModel() -> QObject * {
+	if( !m_hasSetMessageFeedModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_messageFeedModel, QQmlEngine::CppOwnership );
+		m_hasSetMessageFeedModelOwnership = true;
+	}
+	return &m_messageFeedModel;
+}
+
+auto HudPovDataModel::getAwardsModel() -> QObject * {
+	if( !m_hasSetAwardsModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_awardsModel, QQmlEngine::CppOwnership );
+		m_hasSetAwardsModelOwnership = true;
+	}
+	return &m_awardsModel;
+}
+
+void HudPovDataModel::addStatusMessage( const wsw::StringView &message, int64_t timestamp ) {
+	const wsw::StringView truncatedMessage( message.take( m_originalStatusMessage.capacity() ) );
+	// Almost always perform updates, except the single case: a rapid stream of the same textual message.
+	// In this case, let initial transitions to complete, otherwise the message won't be noticeable at all.
+	if( m_originalStatusMessage.equals( truncatedMessage ) ) {
+		if( m_lastStatusMessageTimestamp + 500 > timestamp ) {
+			return;
+		}
+	}
+
+	m_lastStatusMessageTimestamp = timestamp;
+	m_originalStatusMessage.assign( truncatedMessage );
+	m_formattedStatusMessage = toStyledText( truncatedMessage );
+	Q_EMIT statusMessageChanged( m_formattedStatusMessage );
+}
+
+void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
+	const bool hadActivePov = m_hasActivePov, wasPovAlive = m_isPovAlive;
+	m_hasActivePov = CG_ActiveChasePov() != std::nullopt;
+	m_isPovAlive = m_hasActivePov && CG_IsPovAlive();
+	if( wasPovAlive != m_isPovAlive ) {
+		Q_EMIT isPovAliveChanged( m_isPovAlive );
+	}
+	if( hadActivePov != m_hasActivePov ) {
+		Q_EMIT hasActivePovChanged( m_hasActivePov );
+	}
+
 	const auto oldActiveWeapon = m_activeWeapon;
 	if( oldActiveWeapon != ( m_activeWeapon = CG_ActiveWeapon() ) ) {
 		Q_EMIT activeWeaponIconChanged( getActiveWeaponIcon() );
@@ -1105,16 +1146,7 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT armorChanged( m_armor );
 	}
 
-	const auto hadLocations = m_hasLocations;
-	assert( MAX_LOCATIONS > 1 );
-	// Require having at least a couple of locations defined
-	m_hasLocations = ::cl.configStrings.get( CS_LOCATIONS + 0 ) && ::cl.configStrings.get( CS_LOCATIONS + 1 );
-	if( hadLocations != m_hasLocations ) {
-		Q_EMIT hasLocationsChanged( m_hasLocations );
-	}
-
 	m_inventoryModel.checkPropertyChanges();
-	m_fragsFeedModel.update( currTime );
 	m_awardsModel.update( currTime );
 
 	const bool wasMessageFeedFadingOut = m_messageFeedModel.isFadingOut();
@@ -1125,11 +1157,8 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 	}
 }
 
-void HudDataModel::updateScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {
-	m_pendingAlphaScore = scoreboardData.alphaScore;
-	m_pendingBetaScore = scoreboardData.betaScore;
+void HudPovDataModel::updateScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {
 	if( CG_HasTwoTeams() ) {
-		updateTeamPlayerStatuses( scoreboardData );
 		if( const auto maybeActiveChasePov = CG_ActiveChasePov() ) {
 			m_teamListModel.update( scoreboardData, *maybeActiveChasePov );
 		}
@@ -1146,11 +1175,11 @@ static const QByteArray kStatusesForNumberOfPlayers[] {
 	"\u2605 \u2605 \u2605 \u2605 \u2605 \u2605"
 };
 
-auto HudDataModel::getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray {
+auto HudCommonDataModel::getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray {
 	return kStatusesForNumberOfPlayers[wsw::min( numPlayers, (int)std::size( kStatusesForNumberOfPlayers ) - 1 )];
 }
 
-void HudDataModel::updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData ) {
+void HudCommonDataModel::updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData ) {
 	m_pendingNumAliveAlphaPlayers = 0;
 	m_pendingNumAliveBetaPlayers = 0;
 

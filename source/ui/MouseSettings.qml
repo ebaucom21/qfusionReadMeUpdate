@@ -6,8 +6,8 @@ import net.warsow 2.6
 
 Item {
     id: root
-    readonly property var availableRegularCrosshairs: UI.hudDataModel.getAvailableRegularCrosshairs()
-    readonly property var availableStrongCrosshairs: UI.hudDataModel.getAvailableStrongCrosshairs()
+    readonly property var availableRegularCrosshairs: UI.hudCommonDataModel.getAvailableRegularCrosshairs()
+    readonly property var availableStrongCrosshairs: UI.hudCommonDataModel.getAvailableStrongCrosshairs()
     readonly property bool drawNativeParts: root.StackView.view && !root.StackView.view.busy
     readonly property real innerPaneMargin: 20.0
     readonly property real innerPaneWidth: 0.5 * root.width - innerPaneMargin
@@ -102,7 +102,7 @@ Item {
             Component.onCompleted: opacity = 1.0
 
             property int selectedIndex: 0
-            property string weaponShortName: UI.hudDataModel.getWeaponShortName(weaponsPane.selectedIndex + 1)
+            property string weaponShortName: UI.hudCommonDataModel.getWeaponShortName(weaponsPane.selectedIndex + 1)
 
             ListView {
                 id: weaponsList
@@ -126,7 +126,7 @@ Item {
                     color: enabled ? ((mouseArea.containsMouse || weaponsPane.selectedIndex === index) ?
                         Material.accent : Material.foreground) : "grey"
                     opacity: enabled ? 1.0 : 0.5
-                    text: UI.hudDataModel.getWeaponFullName(index + 1)
+                    text: UI.hudCommonDataModel.getWeaponFullName(index + 1)
                     enabled: separateCheckBox.checked
                     MouseArea {
                         id: mouseArea
@@ -161,7 +161,7 @@ Item {
                         desiredSize: Qt.size(strongSizeSlider.value, strongSizeSlider.value)
                         borderWidth: 1
                         materialName: strongComboBox.currentIndex < 0 ? "" :
-                            UI.hudDataModel.getStrongCrosshairFilePath(strongComboBox.values[strongComboBox.currentIndex])
+                            UI.hudCommonDataModel.getStrongCrosshairFilePath(strongComboBox.values[strongComboBox.currentIndex])
                         useOutlineEffect: true
                         fitSizeForCrispness: true
                         color: strongColorPicker.selectedColor
@@ -173,7 +173,7 @@ Item {
                         desiredSize: Qt.size(regularSizeSlider.value, regularSizeSlider.value)
                         borderWidth: 1
                         materialName: regularComboBox.currentIndex < 0 ? "" :
-                            UI.hudDataModel.getRegularCrosshairFilePath(regularComboBox.values[regularComboBox.currentIndex])
+                            UI.hudCommonDataModel.getRegularCrosshairFilePath(regularComboBox.values[regularComboBox.currentIndex])
                         useOutlineEffect: true
                         fitSizeForCrispness: true
                         color: regularColorPicker.selectedColor

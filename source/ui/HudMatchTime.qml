@@ -11,13 +11,15 @@ Item {
     width: implicitWidth
     height: implicitHeight
 
+    property var commonDataModel
+
     readonly property Scale scaleTransform: Scale {
         xScale: 1.00
         yScale: 0.85
     }
 
     readonly property real sideMargin: 8
-    readonly property string matchStateString: Hud.dataModel.matchStateString
+    readonly property string matchStateString: root.commonDataModel.matchStateString
 
     Connections {
         target: Hud.ui
@@ -36,7 +38,7 @@ Item {
         font.letterSpacing: 3
         style: Text.Raised
         textFormat: Text.PlainText
-        text: Hud.dataModel.matchTimeMinutes
+        text: root.commonDataModel.matchTimeMinutes
     }
 
     Label {
@@ -66,7 +68,7 @@ Item {
         font.letterSpacing: 1.75
         style: Text.Raised
         textFormat: Text.PlainText
-        text: Hud.dataModel.matchTimeSeconds
+        text: root.commonDataModel.matchTimeSeconds
     }
 
     Label {
