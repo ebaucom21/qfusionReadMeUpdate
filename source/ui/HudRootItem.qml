@@ -10,11 +10,6 @@ Item {
 
     readonly property var povDataModel: Hud.povDataModel
 
-    // These conditions try to prevent activating the loader until the status of models is well-defined.
-    readonly property bool useDifferentHuds:
-        Hud.commonDataModel.specLayoutModel.name.length > 0 && Hud.commonDataModel.clientLayoutModel.name.length > 0 &&
-            Hud.commonDataModel.specLayoutModel.name.toUpperCase() != Hud.commonDataModel.clientLayoutModel.name.toUpperCase()
-
     Window.onWindowChanged: {
         if (Window.window) {
             Window.window.requestActivate()
@@ -24,24 +19,12 @@ Item {
 
     // Try reusing the same instance due to Qml GC quirks
     InGameHud {
-        visible: Hud.ui.isShowingHud && (rootItem.povDataModel.hasActivePov || !useDifferentHuds)
+        // TODO: Is visibility switching it really needed (we don't draw it anyway, but property updates handling may vary)?
+        visible: Hud.ui.isShowingHud
         anchors.fill: parent
-        layoutModel: Hud.commonDataModel.clientLayoutModel
+        layoutModel: Hud.commonDataModel.layoutModel
         commonDataModel: Hud.commonDataModel
         povDataModel: rootItem.povDataModel
-    }
-
-    Loader {
-        // Using separate HUD files for client and spec should be discouraged for now.
-        active: useDifferentHuds
-        anchors.fill: parent
-        sourceComponent: InGameHud {
-            // Toggle the visibility once it's loaded for the same GC-related reasons
-            visible: Hud.ui.isShowingHud && !rootItem.dataModel.hasActivePov
-            layoutModel: Hud.commonDataModel.specLayoutModel
-            commonDataModel: Hud.commonDataModel
-            povDataModel: rootItem.povDataModel
-        }
     }
 
     Loader {

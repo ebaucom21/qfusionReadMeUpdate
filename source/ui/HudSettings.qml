@@ -61,18 +61,10 @@ StackView {
                 SettingsGroupHeaderRow { text: "HUD" }
 
                 SettingsRow {
-                    text: "Player HUD"
+                    text: "Name"
                     CVarAwareComboBox {
                         knownHeadingsAndValues: [listOfHuds, listOfHuds]
-                        cvarName: "cg_clientHUD"
-                    }
-                }
-
-                SettingsRow {
-                    text: "Spectator HUD"
-                    CVarAwareComboBox {
-                        knownHeadingsAndValues: [listOfHuds, listOfHuds]
-                        cvarName: "cg_specHUD"
+                        cvarName: "cg_hudName"
                     }
                 }
 
@@ -80,7 +72,7 @@ StackView {
                     Layout.preferredWidth: 150
                     Layout.margins: 16
                     Layout.alignment: Qt.AlignHCenter
-                    text: "Edit huds"
+                    text: "Edit HUDs"
                     highlighted: true
                     //Material.accent: Qt.lighter(Material.background, 1.1)
                     onClicked: root.startHudEditorWizard()

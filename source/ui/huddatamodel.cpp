@@ -11,8 +11,7 @@
 
 using wsw::operator""_asView;
 
-static StringConfigVar v_clientHud { "cg_clientHud"_asView, { .byDefault = "default"_asView, .flags = CVAR_ARCHIVE } };
-static StringConfigVar v_specHud { "cg_specHud"_asView, { .byDefault = "default"_asView, .flags = CVAR_ARCHIVE } };
+static StringConfigVar v_hudName { "cg_hudName"_asView, { .byDefault = "default"_asView, .flags = CVAR_ARCHIVE } };
 
 namespace wsw::ui {
 
@@ -766,8 +765,7 @@ void HudCommonDataModel::setStyledName( QByteArray *dest, const wsw::StringView 
 	*dest = toStyledText( name ).toLatin1();
 }
 
-HudCommonDataModel::HudCommonDataModel()
-	: m_clientHudChangesTracker( &v_clientHud ), m_specHudChangesTracker( &v_specHud ) {
+HudCommonDataModel::HudCommonDataModel() : m_hudNameChangesTracker( &v_hudName ) {
 	static_assert( (int)wsw::ui::HudCommonDataModel::NoAnim == (int)HUD_INDICATOR_NO_ANIM );
 	static_assert( (int)wsw::ui::HudCommonDataModel::AlertAnim == (int)HUD_INDICATOR_ALERT_ANIM );
 	static_assert( (int)wsw::ui::HudCommonDataModel::ActionAnim == (int)HUD_INDICATOR_ACTION_ANIM );
@@ -777,20 +775,12 @@ HudCommonDataModel::HudCommonDataModel()
 	setFormattedTime( &m_formattedSeconds, m_matchTimeSeconds );
 }
 
-auto HudCommonDataModel::getClientLayoutModel() -> QObject * {
-	if( !m_hasSetClientLayoutModelOwnership ) {
-		QQmlEngine::setObjectOwnership( &m_clientLayoutModel, QQmlEngine::CppOwnership );
-		m_hasSetClientLayoutModelOwnership = true;
+auto HudCommonDataModel::getLayoutModel() -> QObject * {
+	if( !m_hasSetLayoutModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_layoutModel, QQmlEngine::CppOwnership );
+		m_hasSetLayoutModelOwnership = true;
 	}
-	return &m_clientLayoutModel;
-}
-
-auto HudCommonDataModel::getSpecLayoutModel() -> QObject * {
-	if( !m_hasSetSpecLayoutModelOwnership ) {
-		QQmlEngine::setObjectOwnership( &m_specLayoutModel, QQmlEngine::CppOwnership );
-		m_hasSetSpecLayoutModelOwnership = true;
-	}
-	return &m_specLayoutModel;
+	return &m_layoutModel;
 }
 
 auto HudCommonDataModel::getFragsFeedModel() -> QObject * {
@@ -809,55 +799,40 @@ void HudCommonDataModel::addFragEvent( const std::pair<wsw::StringView, int> &vi
 
 static const wsw::StringView kDefaultHudName( "default"_asView );
 
-void HudCommonDataModel::handleVarChanges( StringConfigVar *var, InGameHudLayoutModel *model, HudNameString *currName ) {
-	// TODO: We try avoiding using this flag since it assumes a control from a single place in code
-	wsw::StringView name( var->get() );
-	// Protect from redundant load() calls
-	if( !name.equalsIgnoreCase( currName->asView() ) ) {
-		if( name.length() > HudLayoutModel::kMaxHudNameLength ) {
-			var->setImmediately( kDefaultHudName );
-			name = kDefaultHudName;
-		}
-		if( !model->load( name ) ) {
-			if( !name.equalsIgnoreCase( kDefaultHudName ) ) {
-				var->setImmediately( kDefaultHudName );
-				name = kDefaultHudName;
-				// This could fail as well but we assume that the data of the default HUD is not corrupt.
-				// A HUD won't be displayed in case of a failure.
-				(void)model->load( kDefaultHudName );
-			}
-		}
-		currName->assign( name );
-	}
-}
-
 void HudCommonDataModel::onHudUpdated( const QByteArray &name ) {
-	std::pair<InGameHudLayoutModel *, StringConfigVar *> modelsAndVars[2] {
-		{ &m_clientLayoutModel, &v_clientHud }, { &m_specLayoutModel, &v_specHud }
-	};
 	const wsw::StringView nameView( name.data(), (size_t)name.size() );
-	for( auto [model, var] : modelsAndVars ) {
-		// If the updated HUD name matches the var value
-		if( nameView.equalsIgnoreCase( var->get() ) ) {
-			// Try (re-)loading the respective model
-			if( !model->load( nameView ) ) {
-				// In case of failure, try loading the default HUD
-				if( !nameView.equalsIgnoreCase( kDefaultHudName ) ) {
-					var->setImmediately( kDefaultHudName );
-					// See checkHudVarChanges()
-					(void)model->load( kDefaultHudName );
-				}
+	if( v_hudName.get().equalsIgnoreCase( nameView ) ) {
+		// Try (re-)loading the respective model
+		if( !m_layoutModel.load( nameView ) ) {
+			// In case of failure, try loading the default HUD
+			if( !nameView.equalsIgnoreCase( kDefaultHudName ) ) {
+				v_hudName.setImmediately( kDefaultHudName );
+				(void)m_layoutModel.load( kDefaultHudName );
 			}
 		}
 	}
 }
 
 void HudCommonDataModel::checkPropertyChanges( int64_t currTime ) {
-	if( m_clientHudChangesTracker.checkAndReset() ) {
-		handleVarChanges( &v_clientHud, &m_clientLayoutModel, &m_clientHudName );
-	}
-	if( m_specHudChangesTracker.checkAndReset() ) {
-		handleVarChanges( &v_specHud, &m_specLayoutModel, &m_specHudName );
+	if( m_hudNameChangesTracker.checkAndReset() ) {
+		wsw::StringView newVarValue = v_hudName.get();
+		// Protect from redundant load() calls
+		if( !newVarValue.equalsIgnoreCase( m_hudName.asView() ) ) {
+			if( newVarValue.length() > HudLayoutModel::kMaxHudNameLength ) {
+				v_hudName.setImmediately( kDefaultHudName );
+				newVarValue = kDefaultHudName;
+			}
+			if( !m_layoutModel.load( newVarValue ) ) {
+				if( !newVarValue.equalsIgnoreCase( kDefaultHudName ) ) {
+					v_hudName.setImmediately( kDefaultHudName );
+					newVarValue = kDefaultHudName;
+					// This could fail as well but we assume that the data of the default HUD is not corrupt.
+					// A HUD won't be displayed in case of a failure.
+					(void)m_layoutModel.load( kDefaultHudName );
+				}
+			}
+			m_hudName.assign( newVarValue );
+		}
 	}
 
 	if( const bool hadTwoTeams = m_hasTwoTeams; hadTwoTeams != ( m_hasTwoTeams = CG_HasTwoTeams() ) ) {

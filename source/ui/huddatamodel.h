@@ -259,8 +259,7 @@ class HudCommonDataModel : public HudDataModel {
 	friend class FragsFeedModel;
 
 public:
-	Q_PROPERTY( QObject *clientLayoutModel READ getClientLayoutModel CONSTANT );
-	Q_PROPERTY( QObject *specLayoutModel READ getSpecLayoutModel CONSTANT );
+	Q_PROPERTY( QObject *layoutModel READ getLayoutModel CONSTANT );
 
 	Q_SIGNAL void alphaNameChanged( const QByteArray &alphaName );
 	Q_PROPERTY( const QByteArray alphaName MEMBER m_styledAlphaName NOTIFY alphaNameChanged );
@@ -373,9 +372,7 @@ public:
 	HudCommonDataModel();
 private:
 	[[nodiscard]]
-	auto getClientLayoutModel() -> QObject *;
-	[[nodiscard]]
-	auto getSpecLayoutModel() -> QObject *;
+	auto getLayoutModel() -> QObject *;
 
 	[[nodiscard]]
 	static auto toQColor( int color ) -> QColor {
@@ -392,18 +389,11 @@ private:
 	auto getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray;
 	void updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData );
 
-	using HudNameString = wsw::StaticString<HudLayoutModel::kMaxHudNameLength>;
-	void handleVarChanges( StringConfigVar *var, InGameHudLayoutModel *model, HudNameString *currName );
-
 	FragsFeedModel m_fragsFeedModel { this };
 
-	VarModificationTracker m_clientHudChangesTracker;
-	VarModificationTracker m_specHudChangesTracker;
-
-	InGameHudLayoutModel m_clientLayoutModel;
-	InGameHudLayoutModel m_specLayoutModel;
-
-	HudNameString m_clientHudName, m_specHudName;
+	VarModificationTracker m_hudNameChangesTracker;
+	InGameHudLayoutModel m_layoutModel;
+	wsw::StaticString<HudLayoutModel::kMaxHudNameLength> m_hudName;
 
 	wsw::StaticString<32> m_alphaName, m_betaName;
 	QByteArray m_styledAlphaName, m_styledBetaName;
@@ -439,8 +429,7 @@ private:
 	bool m_hasLocations { false };
 
 	bool m_hasSetFragsFeedModelOwnership { false };
-	bool m_hasSetSpecLayoutModelOwnership { false };
-	bool m_hasSetClientLayoutModelOwnership { false };
+	bool m_hasSetLayoutModelOwnership { false };
 };
 
 class HudPovDataModel : public HudDataModel {
