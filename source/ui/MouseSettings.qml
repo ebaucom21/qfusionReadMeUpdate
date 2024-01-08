@@ -53,7 +53,7 @@ Item {
         SettingsRow {
             text: "Crosshair damage color"
             CVarAwareColorPicker {
-                cvarName: "cg_crosshair_damage_color"
+                cvarName: "cg_crosshairDamageColor"
             }
         }
 
@@ -62,7 +62,7 @@ Item {
             CVarAwareComboBox {
                 id: strongComboBox
                 knownHeadingsAndValues: [["(none)"].concat(availableStrongCrosshairs), [""].concat(availableStrongCrosshairs)]
-                cvarName: "cg_crosshair_strong"
+                cvarName: "cg_strongCrosshairName"
             }
         }
 
@@ -70,7 +70,7 @@ Item {
             text: "Strong crosshair color"
             CVarAwareColorPicker {
                 id: strongColorPicker
-                cvarName: "cg_crosshair_strong_color"
+                cvarName: "cg_strongCrosshairColor"
             }
         }
 
@@ -81,7 +81,7 @@ Item {
                 from: UI.ui.minStrongCrosshairSize
                 to: UI.ui.maxStrongCrosshairSize
                 stepSize: UI.ui.crosshairSizeStep
-                cvarName: "cg_crosshair_strong_size"
+                cvarName: "cg_strongCrosshairSize"
                 fractionalPartDigits: 0
             }
         }
@@ -90,7 +90,7 @@ Item {
             id: separateCheckBox
             Layout.alignment: Qt.AlignHCenter
             text: "Separate per weapon"
-            cvarName: "cg_separate_weapon_settings"
+            cvarName: "cg_separateWeaponCrosshairSettings"
         }
 
         Item {
@@ -183,13 +183,13 @@ Item {
                 CVarAwareComboBox {
                     id: regularComboBox
                     knownHeadingsAndValues: [["(none)"].concat(availableRegularCrosshairs), [""].concat(availableRegularCrosshairs)]
-                    cvarName: separateCheckBox.checked ? "cg_crosshair_" + weaponsPane.weaponShortName : "cg_crosshair"
+                    cvarName: separateCheckBox.checked ? "cg_crosshairName_" + weaponsPane.weaponShortName : "cg_crosshairName"
                 }
 
                 CVarAwareSliderWithBox {
                     id: regularSizeSlider
                     Layout.alignment: Qt.AlignLeft
-                    cvarName: separateCheckBox.checked ? "cg_crosshair_size_" + weaponsPane.weaponShortName : "cg_crosshair_size"
+                    cvarName: separateCheckBox.checked ? "cg_crosshairSize_" + weaponsPane.weaponShortName : "cg_crosshairSize"
                     from: UI.ui.minRegularCrosshairSize
                     to: UI.ui.maxRegularCrosshairSize
                     stepSize: UI.ui.crosshairSizeStep
@@ -199,7 +199,7 @@ Item {
                 CVarAwareColorPicker {
                     id: regularColorPicker
                     Layout.alignment: Qt.AlignLeft
-                    cvarName: separateCheckBox.checked ? "cg_crosshair_color_" + weaponsPane.weaponShortName : "cg_crosshair_color"
+                    cvarName: separateCheckBox.checked ? "cg_crosshairColor_" + weaponsPane.weaponShortName : "cg_crosshairColor"
                 }
             }
         }

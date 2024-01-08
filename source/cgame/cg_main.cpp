@@ -2414,13 +2414,13 @@ static void handlePlayerStateHitSoundEvent( unsigned event, unsigned parm, ViewS
 			SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponHit[parm], v_volumeHitsound.get() );
 			SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponHit2[parm], v_volumeHitsound.get() );
 		}
-		CG_ScreenCrosshairDamageUpdate( viewState );
+		viewState->crosshairDamageTimestamp = cg.time;
 	} else if( parm == 4 ) {
 		// killed an enemy
 		if( !viewState->mutePovSounds ) {
 			SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponKill, v_volumeHitsound.get() );
 		}
-		CG_ScreenCrosshairDamageUpdate( viewState );
+		viewState->crosshairDamageTimestamp = cg.time;
 	} else if( parm <= 6 ) {
 		// hit a teammate
 		if( !viewState->mutePovSounds ) {
@@ -5603,8 +5603,7 @@ void CG_InitPersistentState() {
 	cg_teamBETAskin->modified = true;
 	cg_teamBETAcolor->modified = true;
 
-	CrosshairState::initPersistentState();
-
+	CG_CheckSharedCrosshairState( true );
 	CG_InitTemporaryBoneposesCache();
 }
 
