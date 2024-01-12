@@ -6,7 +6,8 @@ import net.warsow 2.6
 Item {
     id: root
     implicitWidth: separator.width + 2 * (sideMargin + Math.max(minutesLabel.width, secondsLabel.width)) + 16
-    implicitHeight: separator.height + matchStateLabel.anchors.topMargin + matchStateLabel.height
+    // Don't reference anchors directly as it leads to leaks
+    implicitHeight: separator.height + stateLabelTopMargin + matchStateLabel.height
 
     width: implicitWidth
     height: implicitHeight
@@ -19,6 +20,7 @@ Item {
     }
 
     readonly property real sideMargin: 8
+    readonly property real stateLabelTopMargin: -20
     readonly property string matchStateString: root.commonDataModel.matchStateString
 
     Connections {
@@ -77,7 +79,7 @@ Item {
         height: visible ? implicitHeight : 0
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: separator.bottom
-        anchors.topMargin: -20
+        anchors.topMargin: stateLabelTopMargin
         font.family: Hud.ui.headingFontFamily
         font.weight: Font.Black
         font.pointSize: 13

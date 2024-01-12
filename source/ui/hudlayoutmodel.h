@@ -359,6 +359,9 @@ public:
 	Q_SIGNAL void nameChanged( const QString &name );
 	Q_PROPERTY( const QString &name MEMBER m_fileName NOTIFY nameChanged );
 
+	Q_SIGNAL void arrangingItemsDisabled();
+	Q_SIGNAL void arrangingItemsEnabled();
+
 	[[nodiscard]]
 	bool load( const wsw::StringView &fileName ) override;
 private:
@@ -369,6 +372,8 @@ private:
 		AnchorItemIndex,
 		AnchorItemAnchors,
 		IndividualMask,
+		// We don't want to make this role a flag in Flags as it's a purely implementation detail (actually a hack)
+		IsHidden,
 	};
 
 	struct Entry {
@@ -376,6 +381,11 @@ private:
 		int selfAnchors;
 		int otherAnchors;
 		AnchorItem anchorItem;
+		bool isHidden { false };
+	};
+
+	static inline const QVector<int> kAllRolesExceptKind {
+		Flags, SelfAnchors, AnchorItemIndex, AnchorItemAnchors, IndividualMask, IsHidden,
 	};
 
 	wsw::Vector<Entry> m_entries;

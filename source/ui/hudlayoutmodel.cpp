@@ -1099,7 +1099,8 @@ auto InGameHudLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 		{ SelfAnchors, "selfAnchors" },
 		{ AnchorItemAnchors, "anchorItemAnchors" },
 		{ AnchorItemIndex, "anchorItemIndex" },
-		{ IndividualMask, "individualMask" }
+		{ IndividualMask, "individualMask" },
+		{ IsHidden, "isHidden" },
 	};
 }
 
@@ -1117,6 +1118,7 @@ auto InGameHudLayoutModel::data( const QModelIndex &index, int role ) const -> Q
 				case AnchorItemAnchors: return m_entries[row].otherAnchors;
 				case AnchorItemIndex: return m_entries[row].anchorItem.toRawValue();
 				case IndividualMask: return getShownItemBitsForKind( m_entries[row].kind );
+				case IsHidden: return m_entries[row].isHidden;
 				default: return QVariant();
 			}
 		}
@@ -1138,9 +1140,27 @@ bool InGameHudLayoutModel::load( const wsw::StringView &fileName ) {
 }
 
 bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) {
-	beginResetModel();
-	m_entries.clear();
-	m_entries.reserve( fileEntries.size() );
+	const QMetaEnum metaKinds( QMetaEnum::fromType<Kind>() );
+
+	// Discover what kinds are missing from the layout
+	unsigned presentKindsMask = 0;
+	assert( metaKinds.keyCount() < 32 );
+
+	const bool wasEmpty = m_entries.empty();
+	assert( wasEmpty || m_entries.size() == (size_t)metaKinds.keyCount() );
+
+	if( wasEmpty ) {
+		beginResetModel();
+	} else {
+		m_entries.clear();
+	}
+
+	// Items are linked by index, not by kind.
+	// The sorting breaks original indices, hence we have to retranslate anchor item indices upon sorting.
+	// TODO: Specify kinds in file data?
+	assert( fileEntries.size() <= (size_t)metaKinds.keyCount() );
+	auto *kindsForOriginalIndices = (Kind *)alloca( sizeof( Kind ) * fileEntries.size() );
+
 	for( const FileEntry &fileEntry: fileEntries ) {
 		assert( fileEntry.kind && fileEntry.kind < std::size( kEditorPropsForKind ) + 1 );
 		m_entries.emplace_back( Entry {
@@ -1149,8 +1169,60 @@ bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 			.otherAnchors    = fileEntry.otherAnchors,
 			.anchorItem      = fileEntry.anchorItem,
 		});
+
+		const auto kind = (unsigned)fileEntry.kind;
+		assert( kind && kind < 32 );
+		assert( metaKinds.valueToKey( kind ) );
+		assert( !( presentKindsMask & ( 1u << kind ) ) );
+		presentKindsMask |= ( 1u << kind );
+		// TODO: zipWithIndex
+		const auto index = std::addressof( fileEntry ) - fileEntries.data();
+		kindsForOriginalIndices[index] = fileEntry.kind;
 	}
-	endResetModel();
+
+	// Add hidden entries for non-present kinds
+	for( int kind = 1; kind < metaKinds.keyCount() + 1; ++kind ) {
+		if( !( presentKindsMask & ( 1u << (unsigned)kind ) ) ) {
+			m_entries.emplace_back( Entry {
+				.kind         = (Kind)kind,
+				.selfAnchors  = HCenter | VCenter,
+				.otherAnchors = HCenter | VCenter,
+				.anchorItem   = AnchorItem::forField(),
+				.isHidden     = true,
+			});
+		}
+	}
+
+	assert( m_entries.size() == (size_t)metaKinds.keyCount() );
+	std::sort( m_entries.begin(), m_entries.end(), []( const Entry &a, const Entry &b ) { return a.kind < b.kind; } );
+	// Patch item indices after sorting
+	for( Entry &entry: m_entries ) {
+		// If it was in the file layout
+		if( presentKindsMask & ( 1u << (unsigned)entry.kind ) ) {
+			// If it needs index patching
+			if( entry.anchorItem.isOtherItem() ) {
+				const int unpatchedIndex  = entry.anchorItem.toItemIndex();
+				const Kind anchorItemKind = kindsForOriginalIndices[unpatchedIndex];
+				const auto it = std::find_if( m_entries.begin(), m_entries.end(), [&]( const Entry &e ) {
+					return e.kind == anchorItemKind;
+				});
+				const auto newActualIndex = (unsigned)( it - m_entries.begin() );
+				assert( newActualIndex < m_entries.size() );
+				entry.anchorItem = AnchorItem::forItem( newActualIndex );
+			}
+		}
+	}
+
+	if( wasEmpty ) {
+		endResetModel();
+	} else {
+		Q_EMIT arrangingItemsDisabled();
+		const QModelIndex topLeft( this->index( 0 ) );
+		const QModelIndex bottomRight( this->index( (int)( m_entries.size() - 1 ) ) );
+		Q_EMIT dataChanged( topLeft, bottomRight, kAllRolesExceptKind );
+		Q_EMIT arrangingItemsEnabled();
+	}
+
 	return true;
 }
 

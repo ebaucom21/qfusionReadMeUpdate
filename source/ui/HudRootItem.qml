@@ -8,8 +8,6 @@ import net.warsow 2.6
 Item {
     id: rootItem
 
-    readonly property var povDataModel: Hud.povDataModel
-
     Window.onWindowChanged: {
         if (Window.window) {
             Window.window.requestActivate()
@@ -24,7 +22,7 @@ Item {
         anchors.fill: parent
         layoutModel: Hud.commonDataModel.layoutModel
         commonDataModel: Hud.commonDataModel
-        povDataModel: rootItem.povDataModel
+        povDataModel: Hud.povDataModel
     }
 
     Loader {

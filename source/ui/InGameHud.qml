@@ -14,6 +14,15 @@ Item {
     property var commonDataModel
     property var povDataModel
 
+    property bool arrangementReset
+    property int stateIndex
+
+    Connections {
+        target: layoutModel
+        onArrangingItemsEnabled: arrangementReset = false
+        onArrangingItemsDisabled: arrangementReset = true
+    }
+
     Repeater {
         id: repeater
         model: hudField.layoutModel
@@ -30,7 +39,7 @@ Item {
             states: [
                 State {
                     name: "arranged"
-                    when: repeater.numInstantiatedItems === repeater.count
+                    when: repeater.numInstantiatedItems === repeater.count && !hudField.arrangementReset
                     AnchorChanges {
                         target: itemLoader
                         anchors.top: getQmlAnchor(HudLayoutModel.Top)
@@ -39,6 +48,20 @@ Item {
                         anchors.right: getQmlAnchor(HudLayoutModel.Right)
                         anchors.horizontalCenter: getQmlAnchor(HudLayoutModel.HCenter)
                         anchors.verticalCenter: getQmlAnchor(HudLayoutModel.VCenter)
+                    }
+                },
+                // We can't just disable "arranged" state, we have to force transition to the "reset" state with all anchors reset
+                State {
+                    name: "reset"
+                    when: repeater.numInstantiatedItems === repeater.count && hudField.arrangementReset
+                    AnchorChanges {
+                        target: itemLoader
+                        anchors.top: undefined
+                        anchors.bottom: undefined
+                        anchors.left: undefined
+                        anchors.right: undefined
+                        anchors.horizontalCenter: undefined
+                        anchors.verticalCenter: undefined
                     }
                 }
             ]
@@ -92,7 +115,11 @@ Item {
 
             function updateItemVisibility() {
                 if (item) {
-                    if (itemLoader.individualMask && !(itemLoader.individualMask & hudField.commonDataModel.activeItemsMask)) {
+                    // Hack for items which non-present in the actual layout but are added
+                    // to prevent reinstantiation upon file change which leads to leaks
+                    if (isHidden) {
+                        item.visible = false
+                    } else if (itemLoader.individualMask && !(itemLoader.individualMask & hudField.commonDataModel.activeItemsMask)) {
                         item.visible = false
                     } else if (!hudField.commonDataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
                         item.visible = false
