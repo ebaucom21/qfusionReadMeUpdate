@@ -486,7 +486,8 @@ private:
 
 	ActionRequestsModel m_actionRequestsModel;
 
-	HudEditorModel m_hudEditorModel;
+	HudEditorModel m_regularHudEditorModel { HudLayoutModel::Regular };
+	HudEditorModel m_miniviewHudEditorModel { HudLayoutModel::Miniview };
 	HudCommonDataModel m_hudCommonDataModel;
 	HudPovDataModel m_hudPovDataModel;
 
@@ -804,7 +805,8 @@ void QtUISystem::registerContextProperties( QQmlContext *context, SandboxKind sa
 		context->setContextProperty( "__demosResolver", &m_demosResolver );
 		context->setContextProperty( "__demoPlayer", &m_demoPlayer );
 		context->setContextProperty( "__playersModel", &m_playersModel );
-		context->setContextProperty( "__hudEditorModel", &m_hudEditorModel );
+		context->setContextProperty( "__regularHudEditorModel", &m_regularHudEditorModel );
+		context->setContextProperty( "__miniviewHudEditorModel", &m_miniviewHudEditorModel );
 	}
 }
 
@@ -957,7 +959,8 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	m_menuSandbox = createQmlSandbox( initialWidth, initialHeight, MenuSandbox );
 	m_hudSandbox  = createQmlSandbox( initialWidth, initialHeight, HudSandbox );
 
-	connect( &m_hudEditorModel, &HudEditorModel::hudUpdated, &m_hudCommonDataModel, &HudCommonDataModel::onHudUpdated );
+	connect( &m_regularHudEditorModel, &HudEditorModel::hudUpdated, &m_hudCommonDataModel, &HudCommonDataModel::onHudUpdated );
+	connect( &m_miniviewHudEditorModel, &HudEditorModel::hudUpdated, &m_hudCommonDataModel, &HudCommonDataModel::onHudUpdated );
 }
 
 QtUISystem::~QtUISystem() {

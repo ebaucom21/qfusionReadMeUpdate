@@ -259,7 +259,8 @@ class HudCommonDataModel : public HudDataModel {
 	friend class FragsFeedModel;
 
 public:
-	Q_PROPERTY( QObject *layoutModel READ getLayoutModel CONSTANT );
+	Q_PROPERTY( QObject *regularLayoutModel READ getRegularLayoutModel CONSTANT );
+	Q_PROPERTY( QObject *miniviewLayoutModel READ getMiniviewLayoutModel CONSTANT );
 
 	Q_SIGNAL void alphaNameChanged( const QByteArray &alphaName );
 	Q_PROPERTY( const QByteArray alphaName MEMBER m_styledAlphaName NOTIFY alphaNameChanged );
@@ -356,7 +357,7 @@ public:
 	[[nodiscard]]
 	Q_INVOKABLE QByteArray getIndicatorStatusString( int stringNum ) const;
 
-	Q_SLOT void onHudUpdated( const QByteArray &name );
+	Q_SLOT void onHudUpdated( const QByteArray &name, HudLayoutModel::Flavor flavor );
 
 	void resetFragsFeed() {
 		m_fragsFeedModel.reset();
@@ -372,7 +373,9 @@ public:
 	HudCommonDataModel();
 private:
 	[[nodiscard]]
-	auto getLayoutModel() -> QObject *;
+	auto getRegularLayoutModel() -> QObject *;
+	[[nodiscard]]
+	auto getMiniviewLayoutModel() -> QObject *;
 
 	[[nodiscard]]
 	static auto toQColor( int color ) -> QColor {
@@ -389,11 +392,16 @@ private:
 	auto getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray;
 	void updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData );
 
+	using HudNameString = wsw::StaticString<HudLayoutModel::kMaxHudNameLength>;
+	void handleVarChanges( StringConfigVar *var, InGameHudLayoutModel *model, HudNameString *currName );
+
 	FragsFeedModel m_fragsFeedModel { this };
 
-	VarModificationTracker m_hudNameChangesTracker;
-	InGameHudLayoutModel m_layoutModel;
-	wsw::StaticString<HudLayoutModel::kMaxHudNameLength> m_hudName;
+	VarModificationTracker m_regularHudChangesTracker;
+	VarModificationTracker m_miniviewHudChangesTracker;
+	InGameHudLayoutModel m_regularLayoutModel { HudLayoutModel::Regular };
+	InGameHudLayoutModel m_miniviewLayoutModel { HudLayoutModel::Miniview };
+	HudNameString m_regularHudName, m_miniviewHudName;
 
 	wsw::StaticString<32> m_alphaName, m_betaName;
 	QByteArray m_styledAlphaName, m_styledBetaName;
@@ -429,7 +437,8 @@ private:
 	bool m_hasLocations { false };
 
 	bool m_hasSetFragsFeedModelOwnership { false };
-	bool m_hasSetLayoutModelOwnership { false };
+	bool m_hasSetRegularLayoutModelOwnership { false };
+	bool m_hasSetMinivewLayoutModelOwnership { false };
 };
 
 class HudPovDataModel : public HudDataModel {

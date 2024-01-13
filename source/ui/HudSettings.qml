@@ -8,7 +8,8 @@ StackView {
     id: root
     initialItem: settingsComponent
 
-    readonly property var listOfHuds: UI.hudEditorModel.existingHuds
+    readonly property var listOfRegularHuds: UI.regularHudEditorModel.existingHuds
+    readonly property var listOfMiniviewHuds: UI.miniviewHudEditorModel.existingHuds
 
     function startHudEditorWizard() {
         clear(StackView.Immediate)
@@ -61,10 +62,18 @@ StackView {
                 SettingsGroupHeaderRow { text: "HUD" }
 
                 SettingsRow {
-                    text: "Name"
+                    text: "Regular"
                     CVarAwareComboBox {
-                        knownHeadingsAndValues: [listOfHuds, listOfHuds]
-                        cvarName: "cg_hudName"
+                        knownHeadingsAndValues: [listOfRegularHuds, listOfRegularHuds]
+                        cvarName: "cg_regularHud"
+                    }
+                }
+
+                SettingsRow {
+                    text: "Miniview"
+                    CVarAwareComboBox {
+                        knownHeadingsAndValues: [listOfMiniviewHuds, listOfMiniviewHuds]
+                        cvarName: "cg_miniviewHud"
                     }
                 }
 

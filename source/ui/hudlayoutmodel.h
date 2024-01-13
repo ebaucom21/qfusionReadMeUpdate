@@ -70,6 +70,11 @@ public:
 		ShowAwards      = 0x8,
 	};
 
+	enum Flavor {
+		Regular = 1,
+		Miniview
+	};
+
 	static inline const unsigned kMaxHudNameLength = 16u;
 
 	[[nodiscard]]
@@ -77,6 +82,8 @@ public:
 
 	[[nodiscard]]
 	virtual bool load( const wsw::StringView &fileName );
+
+	explicit HudLayoutModel( Flavor flavor ) : m_flavor( flavor ) {}
 protected:
 	// Either this stuff is typed or we keep getting bugs
 	class AnchorItem {
@@ -129,7 +136,10 @@ protected:
 		int kind;
 		QSize size;
 		QColor color;
+		bool allowInMiniviewHud;
 	};
+
+	const Flavor m_flavor;
 
 	static const EditorProps kEditorPropsForKind[];
 
@@ -227,6 +237,8 @@ class HudEditorLayoutModel : public HudLayoutModel {
 	[[nodiscard]]
 	auto data( const QModelIndex &, int role ) const -> QVariant override;
 
+	explicit HudEditorLayoutModel( Flavor flavor ) : HudLayoutModel( flavor ) {}
+
 	wsw::Vector<Entry> m_entries;
 
 	static inline const QVector<int> kDisplayedAnchorRoles { DisplayedAnchors, DisplayedAnchorItemIndex, Draggable };
@@ -263,6 +275,9 @@ class HudEditorToolboxModel : public QAbstractListModel {
 	[[nodiscard]]
 	auto data( const QModelIndex &, int role ) const -> QVariant override;
 
+	[[nodiscard]]
+	auto findEntryByKind( int kind ) const -> const Entry *;
+
 	void setDisplayedAnchorsForKind( int kind, int anchors );
 };
 
@@ -274,10 +289,12 @@ class HudEditorModel : public QObject {
 
 	HudEditorLayoutModel m_layoutModel;
 	HudEditorToolboxModel m_toolboxModel;
+	HudEditorLayoutModel m_scratchpadLayoutModel;
 
 	QSizeF m_fieldAreaSize;
 	QSizeF m_dragAreaSize;
 	int m_displayedFieldAnchors { 0 };
+	const HudLayoutModel::Flavor m_flavor;
 
 	QJsonArray m_existingHuds;
 
@@ -322,7 +339,7 @@ class HudEditorModel : public QObject {
 	[[nodiscard]]
 	static auto getMaxHudNameLength() -> int { return HudLayoutModel::kMaxHudNameLength; }
 public:
-	HudEditorModel();
+	explicit HudEditorModel( HudLayoutModel::Flavor flavor );
 
 	Q_SIGNAL void displayedFieldAnchorsChanged( int displayedFieldAnchors );
 	Q_PROPERTY( int displayedFieldAnchors MEMBER m_displayedFieldAnchors NOTIFY displayedFieldAnchorsChanged );
@@ -332,7 +349,7 @@ public:
 
 	Q_PROPERTY( unsigned maxHudNameLength READ getMaxHudNameLength CONSTANT );
 
-	Q_SIGNAL void hudUpdated( const QByteArray &name );
+	Q_SIGNAL void hudUpdated( const QByteArray &name, HudLayoutModel::Flavor flavor );
 
 	[[nodiscard]]
 	Q_INVOKABLE QObject *getLayoutModel();
@@ -364,6 +381,8 @@ public:
 
 	[[nodiscard]]
 	bool load( const wsw::StringView &fileName ) override;
+
+	explicit InGameHudLayoutModel( Flavor flavor ) : HudLayoutModel( flavor ) {}
 private:
 	enum Role {
 		ItemKind = Qt::UserRole + 1,

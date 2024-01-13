@@ -20,7 +20,7 @@ Item {
         // TODO: Is visibility switching it really needed (we don't draw it anyway, but property updates handling may vary)?
         visible: Hud.ui.isShowingHud
         anchors.fill: parent
-        layoutModel: Hud.commonDataModel.layoutModel
+        layoutModel: Hud.commonDataModel.regularLayoutModel
         commonDataModel: Hud.commonDataModel
         povDataModel: Hud.povDataModel
     }
