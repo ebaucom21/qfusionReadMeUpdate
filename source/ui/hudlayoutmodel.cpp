@@ -761,6 +761,14 @@ const HudLayoutModel::EditorProps HudLayoutModel::kEditorPropsForKind[] {
 	EditorProps {
 		.name = "Objective status"_asView, .kind = ObjectiveStatus, .size = QSize( 96, 64 ),
 		.color = QColor::fromRgbF( 0.9, 0.6, 0.3 ), .allowInMiniviewHud = false,
+	},
+	EditorProps {
+		.name = "Miniview pane 1"_asView, .kind = MiniviewPane1, .size = QSize( 128, 128 ),
+		.color = QColor::fromRgbF( 0.5, 1.0, 0.6 ), .allowInMiniviewHud = false,
+	},
+	EditorProps {
+		.name = "Miniview pane 2"_asView, .kind = MiniviewPane2, .size = QSize( 128, 128 ),
+		.color = QColor::fromRgbF( 0.5, 1.0, 0.6 ), .allowInMiniviewHud = false,
 	}
 };
 
@@ -1151,6 +1159,8 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 		case AwardsArea: return AllowPostmatch;
 		case StatusMessage: return NoFlags;
 		case ObjectiveStatus: return NoFlags;
+		case MiniviewPane1: return NoFlags;
+		case MiniviewPane2: return NoFlags;
 		default: wsw::failWithLogicError( "unreachable" );
 	}
 }
@@ -1171,6 +1181,9 @@ auto HudLayoutModel::getShownItemBitsForKind( Kind kind ) -> ShownItemBits {
 		case AwardsArea: return ShowAwards;
 		case StatusMessage: return NoShownItemBits;
 		case ObjectiveStatus: return NoShownItemBits;
+		// TODO: Should there be some specific bit for miniviews?
+		case MiniviewPane1: return NoShownItemBits;
+		case MiniviewPane2: return NoShownItemBits;
 		default: wsw::failWithLogicError( "unreachable" );
 	}
 }
@@ -1250,8 +1263,6 @@ bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 	assert( metaKinds.keyCount() < 32 );
 
 	const bool wasEmpty = m_entries.empty();
-	assert( wasEmpty || m_entries.size() == (size_t)metaKinds.keyCount() );
-
 	if( wasEmpty ) {
 		beginResetModel();
 	} else {
@@ -1286,17 +1297,18 @@ bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 	// Add hidden entries for non-present kinds
 	for( int kind = 1; kind < metaKinds.keyCount() + 1; ++kind ) {
 		if( !( presentKindsMask & ( 1u << (unsigned)kind ) ) ) {
-			m_entries.emplace_back( Entry {
-				.kind         = (Kind)kind,
-				.selfAnchors  = HCenter | VCenter,
-				.otherAnchors = HCenter | VCenter,
-				.anchorItem   = AnchorItem::forField(),
-				.isHidden     = true,
-			});
+			if( m_flavor != Miniview || kEditorPropsForKind[kind - 1].allowInMiniviewHud ) {
+				m_entries.emplace_back( Entry {
+					.kind         = (Kind)kind,
+					.selfAnchors  = HCenter | VCenter,
+					.otherAnchors = HCenter | VCenter,
+					.anchorItem   = AnchorItem::forField(),
+					.isHidden     = true,
+				});
+			}
 		}
 	}
 
-	assert( m_entries.size() == (size_t)metaKinds.keyCount() );
 	std::sort( m_entries.begin(), m_entries.end(), []( const Entry &a, const Entry &b ) { return a.kind < b.kind; } );
 	// Patch item indices after sorting
 	for( Entry &entry: m_entries ) {

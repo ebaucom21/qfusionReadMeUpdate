@@ -48,7 +48,7 @@ private:
 	wsw::StaticVector<Entry, kNumInventoryItems> m_entries;
 	QVector<int> m_changedRolesStorage;
 
-	void checkPropertyChanges();
+	void checkPropertyChanges( unsigned viewStateIndex );
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;
@@ -254,6 +254,99 @@ public:
 	Q_ENUM( Team );
 };
 
+class HudPovDataModel : public HudDataModel {
+	Q_OBJECT
+
+public:
+	Q_SIGNAL void activeWeaponIconChanged( const QByteArray &activeWeaponIcon );
+	Q_PROPERTY( QByteArray activeWeaponIcon READ getActiveWeaponIcon NOTIFY activeWeaponIconChanged );
+	Q_SIGNAL void activeWeaponNameChanged( const QByteArray &activeWeaponName );
+	Q_PROPERTY( QByteArray activeWeaponName READ getActiveWeaponName NOTIFY activeWeaponNameChanged );
+	Q_SIGNAL int activeWeaponWeakAmmoChanged( int activeWeaponWeaponAmmo );
+	Q_PROPERTY( int activeWeaponWeakAmmo MEMBER m_activeWeaponWeakAmmo NOTIFY activeWeaponWeakAmmoChanged );
+	Q_SIGNAL int activeWeaponStrongAmmoChanged( int activeWeaponStrongAmmo );
+	Q_PROPERTY( int activeWeaponStrongAmmo MEMBER m_activeWeaponStrongAmmo NOTIFY activeWeaponStrongAmmoChanged );
+
+	Q_SIGNAL void healthChanged( int health );
+	Q_PROPERTY( int health MEMBER m_health NOTIFY healthChanged );
+	Q_SIGNAL void armorChanged( int armor );
+	Q_PROPERTY( int armor MEMBER m_armor NOTIFY armorChanged );
+
+	Q_SIGNAL void isMessageFeedFadingOutChanged( bool isMessageFeedFadingOut );
+	Q_PROPERTY( bool isMessageFeedFadingOut READ getIsMessageFeedFadingOut NOTIFY isMessageFeedFadingOutChanged );
+
+	Q_SIGNAL void statusMessageChanged( const QString &statusMessage );
+	Q_PROPERTY( QString statusMessage MEMBER m_formattedStatusMessage NOTIFY statusMessageChanged );
+
+	Q_SIGNAL void hasActivePovChanged( bool hasActivePov );
+	Q_PROPERTY( bool hasActivePov MEMBER m_hasActivePov NOTIFY hasActivePovChanged );
+	Q_SIGNAL void isPovAliveChanged( bool isPovAlive );
+	Q_PROPERTY( bool isPovAlive MEMBER m_isPovAlive NOTIFY isPovAliveChanged );
+
+	[[nodiscard]]
+	Q_INVOKABLE QObject *getInventoryModel();
+	[[nodiscard]]
+	Q_INVOKABLE QObject *getTeamListModel();
+	[[nodiscard]]
+	Q_INVOKABLE QObject *getMessageFeedModel();
+	[[nodiscard]]
+	Q_INVOKABLE QObject *getAwardsModel();
+
+	void addToMessageFeed( const wsw::StringView &message, int64_t timestamp ) {
+		m_messageFeedModel.addMessage( message, timestamp );
+	}
+
+	void addAward( const wsw::StringView &award, int64_t timestamp ) {
+		m_awardsModel.addAward( award, timestamp );
+	}
+
+	[[nodiscard]]
+	bool getIsMessageFeedFadingOut() const { return m_messageFeedModel.isFadingOut(); }
+
+	void addStatusMessage( const wsw::StringView &message, int64_t timestamp );
+
+	void checkPropertyChanges( int64_t currTime );
+	void updateScoreboardData( const ReplicatedScoreboardData &scoreboardData );
+
+	void setViewStateIndex( unsigned viewStateIndex );
+	[[nodiscard]]
+	auto getViewStateIndex() const -> unsigned;
+	[[nodiscard]]
+	bool hasValidViewStateIndex() const;
+	void clearViewStateIndex();
+private:
+	[[nodiscard]]
+	auto getActiveWeaponIcon() const -> QByteArray;
+	[[nodiscard]]
+	auto getActiveWeaponName() const -> QByteArray;
+
+	InventoryModel m_inventoryModel;
+	TeamListModel m_teamListModel;
+	MessageFeedModel m_messageFeedModel;
+	AwardsModel m_awardsModel;
+
+	unsigned m_viewStateIndex { ~0u };
+
+	int64_t m_lastStatusMessageTimestamp { 0 };
+	wsw::StaticString<96> m_originalStatusMessage;
+	// TODO make toStyledText() work with arbitrary types
+	QString m_formattedStatusMessage;
+
+	int m_activeWeapon { 0 };
+	int m_activeWeaponWeakAmmo { 0 };
+	int m_activeWeaponStrongAmmo { 0 };
+
+	int m_health { 0 }, m_armor { 0 };
+
+	bool m_hasActivePov { false };
+	bool m_isPovAlive { false };
+
+	bool m_hasSetInventoryModelOwnership { false };
+	bool m_hasSetTeamListModelOwnership { false };
+	bool m_hasSetMessageFeedModelOwnership { false };
+	bool m_hasSetAwardsModelOwnership { false };
+};
+
 class HudCommonDataModel : public HudDataModel {
 	Q_OBJECT
 
@@ -315,6 +408,19 @@ public:
 
 	Q_SIGNAL void hasLocationsChanged( bool hasLocations );
 	Q_PROPERTY( bool hasLocations MEMBER m_hasLocations NOTIFY hasLocationsChanged );
+
+	enum MiniviewDisplay { MiniviewFixed, MiniviewPane1, MiniviewPane2 };
+	Q_ENUM( MiniviewDisplay );
+
+	Q_SIGNAL void miniviewLayoutChangedPass1();
+	Q_SIGNAL void miniviewLayoutChangedPass2();
+	Q_INVOKABLE QObject *getMiniviewModelForIndex( int index );
+	Q_INVOKABLE QVariant getFixedMiniviewPositionForIndex( int indexOfModel ) const;
+	Q_INVOKABLE QVariant getFixedPositionMiniviewIndices() const;
+	Q_INVOKABLE QVariant getMiniviewIndicesForPane( int paneNum ) const;
+
+	[[nodiscard]]
+	auto getViewStateIndexForMiniviewModelIndex( int miniviewModelIndex ) const -> unsigned;
 
 	enum Powerup { Quad  = 0x1, Shell = 0x2, Regen = 0x4 };
 	Q_ENUM( Powerup );
@@ -396,6 +502,8 @@ private:
 	using HudNameString = wsw::StaticString<HudLayoutModel::kMaxHudNameLength>;
 	void handleVarChanges( StringConfigVar *var, InGameHudLayoutModel *model, HudNameString *currName );
 
+	void updateMiniviewData( int64_t currTime );
+
 	FragsFeedModel m_fragsFeedModel { this };
 
 	VarModificationTracker m_regularHudChangesTracker;
@@ -432,6 +540,24 @@ private:
 	int m_matchTimeSeconds { 0 };
 	int m_matchTimeMinutes { 0 };
 
+	// For wtf gametype
+	static constexpr unsigned kMaxMiniviews = 12;
+
+	struct FixedPositionMinivewEntry {
+		int indexOfModel;
+		vec4_t position;
+	};
+
+	struct HudControlledMiniviewEntry {
+		int indexOfModel;
+		int paneNumber;
+	};
+
+	wsw::StaticVector<FixedPositionMinivewEntry, kMaxMiniviews> m_fixedPositionMinviews;
+	wsw::StaticVector<HudControlledMiniviewEntry, kMaxMiniviews> m_hudControlledMinviewsForPane[2];
+
+	HudPovDataModel m_miniviewDataModels[kMaxMiniviews];
+
 	bool m_isInWarmupState { false };
 	bool m_isInPostmatchState { false };
 
@@ -440,90 +566,6 @@ private:
 	bool m_hasSetFragsFeedModelOwnership { false };
 	bool m_hasSetRegularLayoutModelOwnership { false };
 	bool m_hasSetMinivewLayoutModelOwnership { false };
-};
-
-class HudPovDataModel : public HudDataModel {
-	Q_OBJECT
-
-public:
-	Q_SIGNAL void activeWeaponIconChanged( const QByteArray &activeWeaponIcon );
-	Q_PROPERTY( QByteArray activeWeaponIcon READ getActiveWeaponIcon NOTIFY activeWeaponIconChanged );
-	Q_SIGNAL void activeWeaponNameChanged( const QByteArray &activeWeaponName );
-	Q_PROPERTY( QByteArray activeWeaponName READ getActiveWeaponName NOTIFY activeWeaponNameChanged );
-	Q_SIGNAL int activeWeaponWeakAmmoChanged( int activeWeaponWeaponAmmo );
-	Q_PROPERTY( int activeWeaponWeakAmmo MEMBER m_activeWeaponWeakAmmo NOTIFY activeWeaponWeakAmmoChanged );
-	Q_SIGNAL int activeWeaponStrongAmmoChanged( int activeWeaponStrongAmmo );
-	Q_PROPERTY( int activeWeaponStrongAmmo MEMBER m_activeWeaponStrongAmmo NOTIFY activeWeaponStrongAmmoChanged );
-
-	Q_SIGNAL void healthChanged( int health );
-	Q_PROPERTY( int health MEMBER m_health NOTIFY healthChanged );
-	Q_SIGNAL void armorChanged( int armor );
-	Q_PROPERTY( int armor MEMBER m_armor NOTIFY armorChanged );
-
-	Q_SIGNAL void isMessageFeedFadingOutChanged( bool isMessageFeedFadingOut );
-	Q_PROPERTY( bool isMessageFeedFadingOut READ getIsMessageFeedFadingOut NOTIFY isMessageFeedFadingOutChanged );
-
-	Q_SIGNAL void statusMessageChanged( const QString &statusMessage );
-	Q_PROPERTY( QString statusMessage MEMBER m_formattedStatusMessage NOTIFY statusMessageChanged );
-
-	Q_SIGNAL void hasActivePovChanged( bool hasActivePov );
-	Q_PROPERTY( bool hasActivePov MEMBER m_hasActivePov NOTIFY hasActivePovChanged );
-	Q_SIGNAL void isPovAliveChanged( bool isPovAlive );
-	Q_PROPERTY( bool isPovAlive MEMBER m_isPovAlive NOTIFY isPovAliveChanged );
-
-	[[nodiscard]]
-	Q_INVOKABLE QObject *getInventoryModel();
-	[[nodiscard]]
-	Q_INVOKABLE QObject *getTeamListModel();
-	[[nodiscard]]
-	Q_INVOKABLE QObject *getMessageFeedModel();
-	[[nodiscard]]
-	Q_INVOKABLE QObject *getAwardsModel();
-
-	void addToMessageFeed( const wsw::StringView &message, int64_t timestamp ) {
-		m_messageFeedModel.addMessage( message, timestamp );
-	}
-
-	void addAward( const wsw::StringView &award, int64_t timestamp ) {
-		m_awardsModel.addAward( award, timestamp );
-	}
-
-	[[nodiscard]]
-	bool getIsMessageFeedFadingOut() const { return m_messageFeedModel.isFadingOut(); }
-
-	void addStatusMessage( const wsw::StringView &message, int64_t timestamp );
-
-	void checkPropertyChanges( int64_t currTime );
-	void updateScoreboardData( const ReplicatedScoreboardData &scoreboardData );
-private:
-	[[nodiscard]]
-	auto getActiveWeaponIcon() const -> QByteArray;
-	[[nodiscard]]
-	auto getActiveWeaponName() const -> QByteArray;
-
-	InventoryModel m_inventoryModel;
-	TeamListModel m_teamListModel;
-	MessageFeedModel m_messageFeedModel;
-	AwardsModel m_awardsModel;
-
-	int64_t m_lastStatusMessageTimestamp { 0 };
-	wsw::StaticString<96> m_originalStatusMessage;
-	// TODO make toStyledText() work with arbitrary types
-	QString m_formattedStatusMessage;
-
-	int m_activeWeapon { 0 };
-	int m_activeWeaponWeakAmmo { 0 };
-	int m_activeWeaponStrongAmmo { 0 };
-
-	int m_health { 0 }, m_armor { 0 };
-
-	bool m_hasActivePov { false };
-	bool m_isPovAlive { false };
-
-	bool m_hasSetInventoryModelOwnership { false };
-	bool m_hasSetTeamListModelOwnership { false };
-	bool m_hasSetMessageFeedModelOwnership { false };
-	bool m_hasSetAwardsModelOwnership { false };
 };
 
 }

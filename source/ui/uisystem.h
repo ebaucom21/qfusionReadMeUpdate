@@ -101,6 +101,11 @@ public:
 
 	[[nodiscard]]
 	virtual bool isShown() const = 0;
+
+	virtual void dispatchShuttingDown() = 0;
+
+	[[nodiscard]]
+	virtual auto retrieveHudControlledMiniviews( vec4_t positions[MAX_CLIENTS], unsigned viewStateNums[MAX_CLIENTS] ) -> unsigned = 0;
 };
 
 }

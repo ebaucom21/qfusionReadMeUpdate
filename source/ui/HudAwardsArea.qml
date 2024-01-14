@@ -10,6 +10,7 @@ Item {
     implicitWidth: 0.5 * rootItem.width
 
     property var povDataModel
+    property bool isMiniview
 
     ListView {
         id: listView
@@ -87,6 +88,7 @@ Item {
             // We must report individual items, so we correctly account for transitions
             Connections {
                 target: Hud.ui
+                enabled: !root.isMiniview
                 onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(listDelegate, 4.0)
             }
             property real transformXScale

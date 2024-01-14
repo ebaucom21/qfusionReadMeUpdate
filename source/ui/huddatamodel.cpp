@@ -204,8 +204,8 @@ InventoryModel::InventoryModel() {
 	static_assert( WEAP_TOTAL - WEAP_GUNBLADE == kNumInventoryItems );
 }
 
-void InventoryModel::checkPropertyChanges() {
-	const int activeWeapon = CG_ActiveWeapon();
+void InventoryModel::checkPropertyChanges( unsigned viewStateIndex ) {
+	const int activeWeapon = CG_ActiveWeapon( viewStateIndex );
 
 	assert( WEAP_TOTAL - WEAP_GUNBLADE == m_entries.size() );
 	static_assert( WEAP_TOTAL - WEAP_GUNBLADE == kNumInventoryItems );
@@ -213,8 +213,8 @@ void InventoryModel::checkPropertyChanges() {
 		Entry &entry = m_entries[weapon - 1];
 		assert( entry.weaponNum == weapon );
 
-		const auto [weakCount, strongCount] = CG_WeaponAmmo( weapon );
-		const bool hasWeapon = CG_HasWeapon( weapon );
+		const auto [weakCount, strongCount] = CG_WeaponAmmo( viewStateIndex, weapon );
+		const bool hasWeapon = CG_HasWeapon( viewStateIndex, weapon );
 
 		m_changedRolesStorage.clear();
 		if( entry.weakCount != weakCount ) {
@@ -761,6 +761,43 @@ auto HudCommonDataModel::getFragsFeedModel() -> QObject * {
 	return &m_fragsFeedModel;
 }
 
+auto HudCommonDataModel::getMiniviewModelForIndex( int indexOfModel ) -> QObject * {
+	assert( (size_t)indexOfModel < std::size( m_miniviewDataModels ) );
+	QQmlEngine::setObjectOwnership( &m_miniviewDataModels[indexOfModel], QQmlEngine::CppOwnership );
+	return &m_miniviewDataModels[indexOfModel];
+}
+
+auto HudCommonDataModel::getFixedMiniviewPositionForIndex( int indexOfModel ) const -> QVariant {
+	for( const FixedPositionMinivewEntry &entry: m_fixedPositionMinviews ) {
+		if( entry.indexOfModel == indexOfModel ) {
+			return QRectF( entry.position[0], entry.position[1], entry.position[2], entry.position[3] );
+		}
+	}
+	wsw::failWithRuntimeError( "Illegal index of model" );
+}
+
+auto HudCommonDataModel::getFixedPositionMiniviewIndices() const -> QVariant {
+	QVariantList result;
+	for( const FixedPositionMinivewEntry &entry: m_fixedPositionMinviews ) {
+		result.append( entry.indexOfModel );
+	}
+	return result;
+}
+
+auto HudCommonDataModel::getMiniviewIndicesForPane( int paneNum ) const -> QVariant {
+	assert( paneNum == 1 || paneNum == 2 );
+	QVariantList result;
+	for( const HudControlledMiniviewEntry &entry: m_hudControlledMinviewsForPane[paneNum - 1] ) {
+		result.append( entry.indexOfModel );
+	}
+	return result;
+}
+
+auto HudCommonDataModel::getViewStateIndexForMiniviewModelIndex( int miniviewModelIndex ) const -> unsigned {
+	assert( (size_t)miniviewModelIndex < std::size( m_miniviewDataModels ) );
+	return m_miniviewDataModels[miniviewModelIndex].getViewStateIndex();
+}
+
 void HudCommonDataModel::addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
 								 int64_t timestamp, unsigned int meansOfDeath,
 								 const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) {
@@ -999,6 +1036,80 @@ void HudCommonDataModel::checkPropertyChanges( int64_t currTime ) {
 	}
 
 	m_fragsFeedModel.update( currTime );
+
+	updateMiniviewData( currTime );
+}
+
+void HudCommonDataModel::updateMiniviewData( int64_t currTime ) {
+	unsigned viewStateNums[MAX_CLIENTS];
+	vec4_t positions[MAX_CLIENTS];
+	int panes[MAX_CLIENTS];
+	const unsigned numViews = CG_GetMultiviewConfiguration( kMaxMiniviews, viewStateNums, positions, panes );
+
+	unsigned paneViewStateNums[3][MAX_CLIENTS];
+	unsigned numPaneViewStates[3] { 0, 0, 0 };
+	unsigned panePositionIndices[MAX_CLIENTS];
+	for( unsigned viewIndex = 0; viewIndex < numViews; ++viewIndex ) {
+		const unsigned paneNum = panes[viewIndex];
+		assert( paneNum >= 0 && paneNum <= 2 );
+		unsigned &numViewStates = numPaneViewStates[paneNum];
+		const unsigned viewStateNum = viewStateNums[viewIndex];
+		assert( viewStateNum <= MAX_CLIENTS );
+		paneViewStateNums[paneNum][numViewStates] = viewStateNum;
+		if( paneNum == 0 ) {
+			panePositionIndices[numViewStates] = viewIndex;
+		}
+		numViewStates++;
+	}
+
+	const bool layoutChanged = m_fixedPositionMinviews.size() != numPaneViewStates[0] ||
+							   m_hudControlledMinviewsForPane[0].size() != numPaneViewStates[1] ||
+							   m_hudControlledMinviewsForPane[1].size() != numPaneViewStates[2];
+
+	// Even if the layout stays unchanged, we have to update view indices of models
+	// and respective entires for procedural/explicit retrieval of data.
+
+	// Clear view state indices of all models to detect use of wrong models
+	for( HudPovDataModel &model: m_miniviewDataModels ) {
+		model.clearViewStateIndex();
+		assert( !model.hasValidViewStateIndex() );
+	}
+
+	int numUsedModelsSoFar = 0;
+	m_fixedPositionMinviews.clear();
+	for( unsigned viewIndex = 0, numViewsInPane = numPaneViewStates[0]; viewIndex < numViewsInPane; ++viewIndex ) {
+		const float *position  = positions[panePositionIndices[viewIndex]];
+		m_fixedPositionMinviews.emplace_back( FixedPositionMinivewEntry {
+			.indexOfModel = numUsedModelsSoFar,
+			.position     = { position[0], position[1], position[2], position[3] },
+		});
+		m_miniviewDataModels[numUsedModelsSoFar].setViewStateIndex( paneViewStateNums[0][viewIndex] );
+		numUsedModelsSoFar++;
+	};
+
+	for( int paneNum = 0; paneNum < 2; ++paneNum ) {
+		wsw::StaticVector<HudControlledMiniviewEntry, kMaxMiniviews> &entries = m_hudControlledMinviewsForPane[paneNum];
+		entries.clear();
+		for( unsigned viewIndex = 0, numViewsInPane = numPaneViewStates[paneNum + 1]; viewIndex < numViewsInPane; ++viewIndex ) {
+			entries.emplace_back( HudControlledMiniviewEntry {
+				.indexOfModel = numUsedModelsSoFar,
+				.paneNumber   = paneNum,
+			});
+			m_miniviewDataModels[numUsedModelsSoFar].setViewStateIndex( paneViewStateNums[paneNum + 1][viewIndex] );
+			numUsedModelsSoFar++;
+		}
+	}
+
+	assert( numUsedModelsSoFar == (int)numViews );
+	for( int modelNum = 0; modelNum < numUsedModelsSoFar; ++modelNum ) {
+		assert( m_miniviewDataModels[modelNum].hasValidViewStateIndex() );
+		m_miniviewDataModels[modelNum].checkPropertyChanges( currTime );
+	}
+
+	if( layoutChanged ) {
+		Q_EMIT miniviewLayoutChangedPass1();
+		Q_EMIT miniviewLayoutChangedPass2();
+	}
 }
 
 void HudCommonDataModel::updateScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {
@@ -1068,7 +1179,7 @@ void HudPovDataModel::addStatusMessage( const wsw::StringView &message, int64_t 
 void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
 	const bool hadActivePov = m_hasActivePov, wasPovAlive = m_isPovAlive;
 	m_hasActivePov = CG_ActiveChasePov() != std::nullopt;
-	m_isPovAlive = m_hasActivePov && CG_IsPovAlive();
+	m_isPovAlive = m_hasActivePov && CG_IsPovAlive( m_viewStateIndex );
 	if( wasPovAlive != m_isPovAlive ) {
 		Q_EMIT isPovAliveChanged( m_isPovAlive );
 	}
@@ -1077,14 +1188,14 @@ void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
 	}
 
 	const auto oldActiveWeapon = m_activeWeapon;
-	if( oldActiveWeapon != ( m_activeWeapon = CG_ActiveWeapon() ) ) {
+	if( oldActiveWeapon != ( m_activeWeapon = CG_ActiveWeapon( m_viewStateIndex ) ) ) {
 		Q_EMIT activeWeaponIconChanged( getActiveWeaponIcon() );
 		Q_EMIT activeWeaponNameChanged( getActiveWeaponName() );
 	}
 
 	const auto oldActiveWeaponWeakAmmo = m_activeWeaponWeakAmmo;
 	const auto oldActiveWeaponStrongAmmo = m_activeWeaponStrongAmmo;
-	std::tie( m_activeWeaponWeakAmmo, m_activeWeaponStrongAmmo ) = CG_WeaponAmmo( m_activeWeapon );
+	std::tie( m_activeWeaponWeakAmmo, m_activeWeaponStrongAmmo ) = CG_WeaponAmmo( m_viewStateIndex, m_activeWeapon );
 	if( m_activeWeapon == WEAP_GUNBLADE ) {
 		// TODO: Is it always available?
 		m_activeWeaponWeakAmmo = -1;
@@ -1098,18 +1209,18 @@ void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
 	}
 
 	const auto oldHealth = m_health;
-	m_health = CG_Health();
+	m_health = CG_Health( m_viewStateIndex );
 	if( oldHealth != m_health ) {
 		Q_EMIT healthChanged( m_health );
 	}
 
 	const auto oldArmor = m_armor;
-	m_armor = CG_Armor();
+	m_armor = CG_Armor( m_viewStateIndex );
 	if( oldArmor != m_armor ) {
 		Q_EMIT armorChanged( m_armor );
 	}
 
-	m_inventoryModel.checkPropertyChanges();
+	m_inventoryModel.checkPropertyChanges( m_viewStateIndex );
 	m_awardsModel.update( currTime );
 
 	const bool wasMessageFeedFadingOut = m_messageFeedModel.isFadingOut();
@@ -1126,6 +1237,24 @@ void HudPovDataModel::updateScoreboardData( const ReplicatedScoreboardData &scor
 			m_teamListModel.update( scoreboardData, *maybeActiveChasePov );
 		}
 	}
+}
+
+void HudPovDataModel::setViewStateIndex( unsigned viewStateIndex ) {
+	assert( viewStateIndex <= MAX_CLIENTS );
+	m_viewStateIndex = viewStateIndex;
+}
+
+auto HudPovDataModel::getViewStateIndex() const -> unsigned {
+	assert( m_viewStateIndex <= MAX_CLIENTS );
+	return m_viewStateIndex;
+}
+
+bool HudPovDataModel::hasValidViewStateIndex() const {
+	return m_viewStateIndex <= MAX_CLIENTS;
+}
+
+void HudPovDataModel::clearViewStateIndex() {
+	m_viewStateIndex = ~0u;
 }
 
 static const QByteArray kStatusesForNumberOfPlayers[] {

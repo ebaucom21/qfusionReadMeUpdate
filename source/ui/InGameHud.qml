@@ -5,7 +5,6 @@ import net.warsow 2.6
 
 Item {
     id: hudField
-    anchors.fill: parent
 
     property real alphaNameWidth
     property real betaNameWidth
@@ -13,6 +12,12 @@ Item {
     property var layoutModel
     property var commonDataModel
     property var povDataModel
+
+    property var miniviewAllocator
+
+    // Miniviews can't allocate miniviews
+    readonly property bool isMiniview: !miniviewAllocator
+    readonly property real scale: isMiniview ? Math.min(hudField.width / rootItem.width, hudField.height / rootItem.height) : 1.0
 
     property bool arrangementReset
     property int stateIndex
@@ -68,6 +73,7 @@ Item {
 
             Connections {
                 target: Hud.ui
+                enabled: !hudField.isMiniview
                 onHudOccludersChanged: itemLoader.updateItemVisibility()
             }
 
@@ -165,6 +171,10 @@ Item {
                     statusMessageComponent
                 } else if (kind === HudLayoutModel.ObjectiveStatus) {
                     objectiveStatusComponent
+                } else if (kind === HudLayoutModel.MiniviewPane1) {
+                    miniviewPane1Component
+                } else if (kind === HudLayoutModel.MiniviewPane2) {
+                    miniviewPane2Component
                 } else {
                     undefined
                 }
@@ -174,6 +184,7 @@ Item {
                 id: healthBarComponent
                 HudValueBar {
                     text: "HEALTH"
+                    isMiniview: hudField.isMiniview
                     color: hudField.povDataModel.health > 100 ? "deeppink" :
                                                                 (hudField.povDataModel.health >= 50 ? "white" : "orangered")
                     value: hudField.povDataModel.health
@@ -187,6 +198,7 @@ Item {
                 id: armorBarComponent
                 HudValueBar {
                     text: "ARMOR"
+                    isMiniview: hudField.isMiniview
                     value: hudField.povDataModel.armor
                     frac: 0.01 * Math.min(100.0, hudField.povDataModel.armor)
                     color: hudField.povDataModel.armor >= 125 ? "red" : (hudField.povDataModel.armor >= 75 ? "gold" : "green")
@@ -202,6 +214,7 @@ Item {
                 id: inventoryBarComponent
                 HudInventoryBar {
                     povDataModel: hudField.povDataModel
+                    isMiniview: hudField.isMiniview
                 }
             }
 
@@ -209,6 +222,7 @@ Item {
                 id: weaponStatusComponent
                 HudWeaponStatus {
                     povDataModel: hudField.povDataModel
+                    isMiniview: hudField.isMiniview
                 }
             }
 
@@ -280,6 +294,7 @@ Item {
                 id: awardsAreaComponent
                 HudAwardsArea {
                     povDataModel: hudField.povDataModel
+                    isMiniview: hudField.isMiniview
                 }
             }
 
@@ -287,6 +302,7 @@ Item {
                 id: statusMessageComponent
                 HudStatusMessage {
                     povDataModel: hudField.povDataModel
+                    isMiniview: hudField.isMiniview
                 }
             }
 
@@ -294,6 +310,24 @@ Item {
                 id: objectiveStatusComponent
                 HudObjectiveStatus {
                     commonDataModel: hudField.commonDataModel
+                }
+            }
+
+            Component {
+                id: miniviewPane1Component
+                HudMiniviewPane {
+                    commonDataModel: hudField.commonDataModel
+                    miniviewAllocator: hudField.miniviewAllocator
+                    paneNumber: 1
+                }
+            }
+
+            Component {
+                id: miniviewPane2Component
+                HudMiniviewPane {
+                    commonDataModel: hudField.commonDataModel
+                    miniviewAllocator: hudField.miniviewAllocator
+                    paneNumber: 2
                 }
             }
 

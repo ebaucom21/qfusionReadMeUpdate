@@ -24,10 +24,14 @@ BasicObjectiveIndicatorState CG_HudIndicatorState( int );
 
 int CG_RealClientTeam();
 bool CG_HasTwoTeams();
-int CG_ActiveWeapon();
-bool CG_HasWeapon( int weapon );
-int CG_Health();
-int CG_Armor();
+
+int CG_ActiveWeapon( unsigned viewStateIndex );
+bool CG_HasWeapon( unsigned viewStateIndex, int weapon );
+int CG_Health( unsigned viewStateIndex );
+int CG_Armor( unsigned viewStateIndex );
+auto CG_WeaponAmmo( unsigned viewStateIndex, int weapon ) -> std::pair<int, int>;
+bool CG_IsPovAlive( unsigned viewStateIndex );
+
 int CG_TeamAlphaDisplayedColor();
 int CG_TeamBetaDisplayedColor();
 int CG_TeamToForcedTeam( int team );
@@ -37,12 +41,14 @@ bool CG_CanBeReady();
 bool CG_IsReady();
 int CG_MyRealTeam();
 
+unsigned CG_GetPrimaryViewStateIndex();
+// The primary pov is not included
+unsigned CG_GetMultiviewConfiguration( unsigned limit, unsigned *viewStateNums, float (*positions)[4], int *panes );
+
 std::optional<wsw::StringView> CG_HudIndicatorIconPath( int );
 std::optional<wsw::StringView> CG_HudIndicatorStatusString( int );
 auto CG_GetMatchClockTime() -> std::pair<int, int>;
-auto CG_WeaponAmmo( int weapon ) -> std::pair<int, int>;
 std::optional<unsigned> CG_ActiveChasePov();
-bool CG_IsPovAlive();
 wsw::StringView CG_PlayerName( unsigned playerNum );
 wsw::StringView CG_PlayerClan( unsigned playerClan );
 wsw::StringView CG_LocationName( unsigned location );

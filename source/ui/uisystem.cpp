@@ -190,6 +190,9 @@ public:
 	[[nodiscard]]
 	bool isShown() const override;
 
+	void dispatchShuttingDown() override { Q_EMIT shuttingDown(); }
+	auto retrieveHudControlledMiniviews( vec4_t positions[MAX_CLIENTS], unsigned viewStateNums[MAX_CLIENTS] ) -> unsigned override;
+
 	[[nodiscard]]
 	auto getFrameTimestamp() const -> int64_t { return ::cls.realtime; }
 
@@ -243,6 +246,11 @@ public:
 	Q_SIGNAL void nativelyDrawnItemsRetrievalRequested();
 	// Qml should call this method in reply
 	Q_INVOKABLE void supplyNativelyDrawnItem( QQuickItem *item );
+
+	// Asks Qml
+	Q_SIGNAL void hudControlledMiniviewItemsRetrievalRequested();
+	// Qml should call this method in reply
+	Q_INVOKABLE void supplyHudControlledMiniviewItemAndModelIndex( QQuickItem *item, int modelIndex );
 
 	Q_INVOKABLE QVariant getCVarValue( const QString &name ) const;
 	Q_INVOKABLE void setCVarValue( const QString &name, const QVariant &value );
@@ -407,6 +415,8 @@ signals:
 	Q_SIGNAL void isShowingDemoPlaybackMenuChanged( bool isShowingDemoMenu );
 	Q_SIGNAL void isDebuggingNativelyDrawnItemsChanged( bool isDebuggingNativelyDrawnItems );
 	Q_SIGNAL void hasPendingCVarChangesChanged( bool hasPendingCVarChanges );
+
+	Q_SIGNAL void shuttingDown();
 private:
 	static inline QGuiApplication *s_application { nullptr };
 	static inline int s_fakeArgc { 0 };
@@ -459,6 +469,10 @@ private:
 	wsw::Vector<QPair<unsigned, unsigned>> m_columnRangesOfCellGridRows;
 
 	wsw::Vector<QPair<QString, QVariant>> m_pendingCVarChanges;
+
+	vec4_t *m_miniviewItemPositions { nullptr };
+	unsigned *m_miniviewViewStateIndices { nullptr };
+	unsigned m_numRetrievedMiniviews { 0 };
 
 	std::unique_ptr<QmlSandbox> m_menuSandbox;
 	std::unique_ptr<QmlSandbox> m_hudSandbox;
@@ -913,6 +927,7 @@ void UISystem::init( int width, int height ) {
 
 void UISystem::shutdown() {
 	VideoPlaybackSystem::shutdown();
+	uiSystemInstanceHolder.instance()->dispatchShuttingDown();
 	uiSystemInstanceHolder.shutdown();
 }
 
@@ -1681,6 +1696,7 @@ void QtUISystem::checkPropertyChanges() {
 	const auto timestamp = getFrameTimestamp();
 	VideoPlaybackSystem::instance()->update( timestamp );
 	m_hudCommonDataModel.checkPropertyChanges( timestamp );
+	m_hudPovDataModel.setViewStateIndex( CG_GetPrimaryViewStateIndex() );
 	m_hudPovDataModel.checkPropertyChanges( timestamp );
 
 	updateCVarAwareControls();
@@ -2374,28 +2390,33 @@ bool QtUISystem::isShown() const {
 	return false;
 }
 
+auto QtUISystem::retrieveHudControlledMiniviews( vec4_t *positions, unsigned *viewStateIndices ) -> unsigned {
+	m_miniviewItemPositions    = positions;
+	m_miniviewViewStateIndices = viewStateIndices;
+	m_numRetrievedMiniviews    = 0;
+
+	Q_EMIT hudControlledMiniviewItemsRetrievalRequested();
+
+	return m_numRetrievedMiniviews;
 }
 
-bool CG_IsScoreboardShown() {
-	return wsw::ui::UISystem::instance()->isShowingScoreboard();
+void QtUISystem::supplyHudControlledMiniviewItemAndModelIndex( QQuickItem *item, int modelIndex ) {
+	const QRectF &rect         = item->boundingRect();
+	const QPointF &realTopLeft = item->mapToGlobal( rect.topLeft() );
+
+	float *const position = m_miniviewItemPositions[m_numRetrievedMiniviews];
+
+	position[0] = (float)realTopLeft.x();
+	position[1] = (float)realTopLeft.y();
+	position[2] = (float)rect.width();
+	position[3] = (float)rect.height();
+
+	const unsigned viewStateIndex = m_hudCommonDataModel.getViewStateIndexForMiniviewModelIndex( modelIndex );
+
+	m_miniviewViewStateIndices[m_numRetrievedMiniviews] = viewStateIndex;
+	m_numRetrievedMiniviews++;
 }
 
-void CG_ScoresOn_f( const CmdArgs & ) {
-	wsw::ui::UISystem::instance()->setScoreboardShown( true );
-}
-
-void CG_ScoresOff_f( const CmdArgs & ) {
-	wsw::ui::UISystem::instance()->setScoreboardShown( false );
-}
-
-void CG_MessageMode( const CmdArgs & ) {
-	wsw::ui::UISystem::instance()->toggleChatPopup();
-	CL_ClearInputState();
-}
-
-void CG_MessageMode2( const CmdArgs & ) {
-	wsw::ui::UISystem::instance()->toggleTeamChatPopup();
-	CL_ClearInputState();
 }
 
 #include "uisystem.moc"

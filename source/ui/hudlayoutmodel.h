@@ -48,6 +48,8 @@ public:
 		AwardsArea,
 		StatusMessage,
 		ObjectiveStatus,
+		MiniviewPane1,
+		MiniviewPane2,
 	};
 	Q_ENUM( Kind );
 

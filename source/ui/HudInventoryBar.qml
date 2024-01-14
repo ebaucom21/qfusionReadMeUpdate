@@ -16,6 +16,7 @@ Item {
     height: implicitHeight
 
     property var povDataModel
+    property bool isMiniview
 
     readonly property real cardWidth: 60
     readonly property real cardHeight: 100
@@ -23,6 +24,7 @@ Item {
 
     Connections {
         target: Hud.ui
+        enabled: !root.isMiniview
         onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(layout, 24.0)
     }
 

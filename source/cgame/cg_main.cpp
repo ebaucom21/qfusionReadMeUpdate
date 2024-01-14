@@ -250,8 +250,8 @@ auto getViewStateForEntity( int number ) -> ViewState * {
 			if( cg.viewStates[i].predictedPlayerState.playerNum + 1 == number ) {
 				return &cg.viewStates[i];
 			}
-			CG_Error( "Failed to get view state for entity %d (there are %d view states)", number, cg.numSnapViewStates );
 		}
+		CG_Error( "Failed to get view state for entity %d (there are %d view states)", number, cg.numSnapViewStates );
 	}
 	return &cg.viewStates[cg.chasedViewportIndex];
 }
@@ -4860,8 +4860,8 @@ std::optional<unsigned> CG_ActiveChasePov() {
 	return std::nullopt;
 }
 
-bool CG_IsPovAlive() {
-	return !( getPrimaryViewState()->predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_DEADPOV );
+bool CG_IsPovAlive( unsigned viewStateIndex ) {
+	return !( cg.viewStates[viewStateIndex].predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_DEADPOV );
 }
 
 bool CG_HasTwoTeams() {
@@ -4889,21 +4889,21 @@ int CG_MyRealTeam() {
 	return getOurClientViewState()->predictedPlayerState.stats[STAT_REALTEAM];
 }
 
-int CG_ActiveWeapon() {
-	return getPrimaryViewState()->predictedPlayerState.stats[STAT_WEAPON];
+int CG_ActiveWeapon( unsigned viewStateIndex ) {
+	return cg.viewStates[viewStateIndex].predictedPlayerState.stats[STAT_WEAPON];
 }
 
-bool CG_HasWeapon( int weapon ) {
+bool CG_HasWeapon( unsigned viewStateIndex, int weapon ) {
 	assert( (unsigned)weapon < (unsigned)WEAP_TOTAL );
-	return getPrimaryViewState()->predictedPlayerState.inventory[weapon];
+	return cg.viewStates[viewStateIndex].predictedPlayerState.inventory[weapon];
 }
 
-int CG_Health() {
-	return getPrimaryViewState()->predictedPlayerState.stats[STAT_HEALTH];
+int CG_Health( unsigned viewStateIndex ) {
+	return cg.viewStates[viewStateIndex].predictedPlayerState.stats[STAT_HEALTH];
 }
 
-int CG_Armor() {
-	return getPrimaryViewState()->predictedPlayerState.stats[STAT_ARMOR];
+int CG_Armor( unsigned viewStateIndex ) {
+	return cg.viewStates[viewStateIndex].predictedPlayerState.stats[STAT_ARMOR];
 }
 
 [[nodiscard]]
@@ -4960,6 +4960,32 @@ auto CG_HudIndicatorState( int num ) -> BasicObjectiveIndicatorState {
 	};
 }
 
+unsigned CG_GetPrimaryViewStateIndex() {
+	const auto result = (unsigned)( getPrimaryViewState() - cg.viewStates );
+	assert( result <= MAX_CLIENTS );
+	return result;
+}
+
+unsigned CG_GetMultiviewConfiguration( unsigned limit, unsigned *viewStateNums, vec4_t *positions, int *panes ) {
+	const ViewState *ourClientViewState = getOurClientViewState();
+
+	unsigned result = 0;
+	unsigned viewStateNum = 0;
+	while( viewStateNum < cg.numSnapViewStates && result < limit ) {
+		const ViewState *viewState = &cg.viewStates[viewStateNum];
+		if( viewState != ourClientViewState ) {
+			// TODO: Are spectators included?
+			viewStateNums[result] = viewStateNum;
+			// TODO: Sort/classify by team
+			panes[result]         = (int)( viewStateNum % 2 ) + 1;
+			result++;
+		}
+		viewStateNum++;
+	}
+
+	return result;
+}
+
 auto CG_HudIndicatorIconPath( int iconNum ) -> std::optional<wsw::StringView> {
 	assert( (unsigned)iconNum < (unsigned)MAX_GENERAL );
 	if( iconNum ) {
@@ -4976,9 +5002,9 @@ auto CG_HudIndicatorStatusString( int stringNum ) -> std::optional<wsw::StringVi
 	return std::nullopt;
 }
 
-std::pair<int, int> CG_WeaponAmmo( int weapon ) {
+std::pair<int, int> CG_WeaponAmmo( unsigned viewStateIndex, int weapon ) {
 	const auto *weaponDef = GS_GetWeaponDef( weapon );
-	const int *inventory = getPrimaryViewState()->predictedPlayerState.inventory;
+	const int *inventory = cg.viewStates[viewStateIndex].predictedPlayerState.inventory;
 	return { inventory[weaponDef->firedef_weak.ammo_id], inventory[weaponDef->firedef.ammo_id] };
 }
 
@@ -5044,6 +5070,28 @@ wsw::StringView CG_PlayerName( unsigned playerNum ) {
 wsw::StringView CG_PlayerClan( unsigned playerNum ) {
 	assert( playerNum < (unsigned)MAX_CLIENTS );
 	return wsw::StringView( cgs.clientInfo[playerNum].clan );
+}
+
+bool CG_IsScoreboardShown() {
+	return wsw::ui::UISystem::instance()->isShowingScoreboard();
+}
+
+void CG_ScoresOn_f( const CmdArgs & ) {
+	wsw::ui::UISystem::instance()->setScoreboardShown( true );
+}
+
+void CG_ScoresOff_f( const CmdArgs & ) {
+	wsw::ui::UISystem::instance()->setScoreboardShown( false );
+}
+
+void CG_MessageMode( const CmdArgs & ) {
+	wsw::ui::UISystem::instance()->toggleChatPopup();
+	CL_ClearInputState();
+}
+
+void CG_MessageMode2( const CmdArgs & ) {
+	wsw::ui::UISystem::instance()->toggleTeamChatPopup();
+	CL_ClearInputState();
 }
 
 void CG_Error( const char *format, ... ) {

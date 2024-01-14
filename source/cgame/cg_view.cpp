@@ -1274,27 +1274,9 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			}
 
 			CG_FlashGameWindow(); // notify player of important game events
-
-			int viewportX, viewportY, viewportWidth, viewportHeight;
-			if( const int size = std::round( v_viewSize.get() ); size < 100 ) {
-				// Round to a multiple of 2
-				const int regionWidth  = ( ( cgs.vidWidth * size ) / 100 ) & ( ~1 );
-				const int regionHeight = ( ( cgs.vidHeight * size ) / 100 ) & ( ~1 );
-
-				viewportX      = ( cgs.vidWidth - regionWidth ) / 2;
-				viewportY      = ( cgs.vidHeight - regionHeight ) / 2;
-				viewportWidth  = regionWidth;
-				viewportHeight = regionHeight;
-			} else {
-				viewportX      = 0;
-				viewportY      = 0;
-				viewportWidth  = cgs.vidWidth;
-				viewportHeight = cgs.vidHeight;
-			}
-
 			CG_UpdateChaseCam();
-
 			CG_RunLightStyles();
+			CG_SetSceneTeamColors(); // update the team colors in the renderer
 
 			CG_ClearFragmentedDecals();
 
@@ -1303,55 +1285,82 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				viewDefType = CG_DemoCam_GetViewType();
 			}
 
-			// This is going to change for multi
-			ViewState *const viewState = getPrimaryViewState();
+			vec4_t viewRects[MAX_CLIENTS + 1];
+			unsigned viewStateIndices[MAX_CLIENTS + 1];
+			unsigned numDisplayedViewStates = 0;
 
-			CG_SetupViewDef( &viewState->view, viewDefType, viewState, viewportX, viewportY, viewportWidth, viewportHeight );
+			if( const int size = std::round( v_viewSize.get() ); size < 100 ) {
+				// Round to a multiple of 2
+				const int regionWidth  = ( ( cgs.vidWidth * size ) / 100 ) & ( ~1 );
+				const int regionHeight = ( ( cgs.vidHeight * size ) / 100 ) & ( ~1 );
 
-			CG_LerpEntities( viewState );  // interpolate packet entities positions
+				viewRects[0][0] = ( cgs.vidWidth - regionWidth ) / 2;
+				viewRects[0][1] = ( cgs.vidHeight - regionHeight ) / 2;
+				viewRects[0][2] = regionWidth;
+				viewRects[0][3] = regionHeight;
+			} else {
+				viewRects[0][0] = 0;
+				viewRects[0][1] = 0;
+				viewRects[0][2] = cgs.vidWidth;
+				viewRects[0][3] = cgs.vidHeight;
+			}
 
-			CG_CalcViewWeapon( &viewState->weapon, viewState );
+			viewStateIndices[0] = (unsigned)( getPrimaryViewState() - cg.viewStates );
+			numDisplayedViewStates = 1;
 
-			CG_FireEvents( false );
+			numDisplayedViewStates += wsw::ui::UISystem::instance()->retrieveHudControlledMiniviews( viewRects + 1, viewStateIndices + 1 );
 
-			DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( viewState->view.refdef );
+			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
+				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
+				const float *viewport      = viewRects[viewNum];
 
-			CG_AddEntities( drawSceneRequest, viewState );
-			CG_AddViewWeapon( &viewState->weapon, drawSceneRequest, viewState );
+				CG_SetupViewDef( &viewState->view, viewDefType, viewState, (int)viewport[0], (int)viewport[1], (int)viewport[2], (int)viewport[3] );
 
-			cg.effectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
-			// Run the particle system last (don't submit flocks that could be invalidated by the effect system this frame)
-			cg.particleSystem.runFrame( cg.time, drawSceneRequest );
-			cg.polyEffectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
-			cg.simulatedHullsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
+				CG_LerpEntities( viewState );  // interpolate packet entities positions
 
-			refdef_t *rd = &viewState->view.refdef;
-			AnglesToAxis( viewState->view.angles, rd->viewaxis );
+				CG_CalcViewWeapon( &viewState->weapon, viewState );
 
-			rd->rdflags = CG_RenderFlags( viewState );
+				if( viewNum == 0 ) {
+					CG_FireEvents( false );
+				}
 
-			// warp if underwater
-			if( rd->rdflags & RDF_UNDERWATER ) {
-#define WAVE_AMPLITUDE  0.015   // [0..1]
-#define WAVE_FREQUENCY  0.6     // [0..1]
-				float phase = rd->time * 0.001 * WAVE_FREQUENCY * M_TWOPI;
-				float v = WAVE_AMPLITUDE * ( sin( phase ) - 1.0 ) + 1;
-				rd->fov_x *= v;
-				rd->fov_y *= v;
+				DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( viewState->view.refdef );
+
+				CG_AddEntities( drawSceneRequest, viewState );
+				CG_AddViewWeapon( &viewState->weapon, drawSceneRequest, viewState );
+
+				// TODO: Separate simulation and submission
+				if( viewNum == 0 ) {
+					cg.effectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
+					// Run the particle system last (don't submit flocks that could be invalidated by the effect system this frame)
+					cg.particleSystem.runFrame( cg.time, drawSceneRequest );
+					cg.polyEffectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
+					cg.simulatedHullsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
+				}
+
+				refdef_t *rd = &viewState->view.refdef;
+				AnglesToAxis( viewState->view.angles, rd->viewaxis );
+
+				rd->rdflags = CG_RenderFlags( viewState );
+
+				// warp if underwater
+				if( rd->rdflags & RDF_UNDERWATER ) {
+					const float phase = rd->time * 0.001f * 0.6f * M_TWOPI;
+					const float v = 0.015f * ( std::sin( phase ) - 1.0f ) + 1.0f;
+					rd->fov_x *= v;
+					rd->fov_y *= v;
+				}
+
+				SubmitDrawSceneRequest( drawSceneRequest );
+
+				CG_Draw2D( viewState );
+
+				CG_ResetTemporaryBoneposesCache(); // clear for next frame
 			}
 
 			CG_AddLocalSounds();
-			CG_SetSceneTeamColors(); // update the team colors in the renderer
-
-			SubmitDrawSceneRequest( drawSceneRequest );
 
 			cg.oldAreabits = true;
-
-			SoundSystem::instance()->updateListener( viewState->view.origin, viewState->view.velocity, viewState->view.axis );
-
-			CG_Draw2D( viewState );
-
-			CG_ResetTemporaryBoneposesCache(); // clear for next frame
 
 			const ViewState *primaryViewState = getPrimaryViewState();
 			SoundSystem::instance()->updateListener( primaryViewState->view.origin, primaryViewState->view.velocity, primaryViewState->view.axis );
