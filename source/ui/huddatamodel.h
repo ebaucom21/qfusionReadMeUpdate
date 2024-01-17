@@ -23,8 +23,15 @@ class HudPovDataModel;
 class InventoryModel : public QAbstractListModel {
 	friend class HudPovDataModel;
 
+	Q_OBJECT
+public:
+	InventoryModel();
+
+	Q_PROPERTY( int numInventoryItems MEMBER kNumInventoryItems CONSTANT );
+private:
 	enum Role {
-		HasWeapon = Qt::UserRole + 1,
+		Displayed = Qt::UserRole + 1,
+		HasWeapon,
 		Active,
 		IconPath,
 		Color,
@@ -34,20 +41,14 @@ class InventoryModel : public QAbstractListModel {
 
 	struct Entry {
 		int weaponNum, weakCount, strongCount;
-		bool hasWeapon;
+		bool displayed, hasWeapon, active;
 	};
 
-	wsw::StaticVector<Entry, 10> m_entries;
-	int m_activeWeaponNum { 0 };
+	static constexpr unsigned kNumInventoryItems { 10 };
+	wsw::StaticVector<Entry, kNumInventoryItems> m_entries;
+	QVector<int> m_changedRolesStorage;
 
 	void checkPropertyChanges();
-
-	static inline const QVector<int> kWeakAmmoRoleAsVector { WeakAmmoCount };
-	static inline const QVector<int> kStrongAmmoRoleAsVector { StrongAmmoCount };
-	static inline const QVector<int> kActiveAsRole { Active };
-	static inline const QVector<int> kAllMutableRolesAsVector { HasWeapon, Active, WeakAmmoCount, StrongAmmoCount };
-
-	void resetWithEntries( const wsw::StaticVector<Entry, 10> &entries );
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;

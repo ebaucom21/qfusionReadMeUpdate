@@ -157,6 +157,7 @@ static WeaponPropsCache weaponPropsCache;
 
 auto InventoryModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
+		{ Displayed, "displayed" },
 		{ HasWeapon, "hasWeapon" },
 		{ Active, "active" },
 		{ IconPath, "iconPath" },
@@ -174,8 +175,9 @@ auto InventoryModel::data( const QModelIndex &index, int role ) const -> QVarian
 	if( index.isValid() ) {
 		if( const int row = index.row(); (unsigned)row < m_entries.size() ) {
 			switch( role ) {
+				case Displayed: return m_entries[row].displayed;
 				case HasWeapon: return m_entries[row].hasWeapon;
-				case Active: return m_entries[row].weaponNum == m_activeWeaponNum;
+				case Active: return m_entries[row].active;
 				case IconPath: return weaponPropsCache.getWeaponIconPath( m_entries[row].weaponNum );
 				case Color: return weaponPropsCache.getWeaponColor( m_entries[row].weaponNum );
 				case WeakAmmoCount: return m_entries[row].weakCount;
@@ -187,110 +189,68 @@ auto InventoryModel::data( const QModelIndex &index, int role ) const -> QVarian
 	return QVariant();
 }
 
-void InventoryModel::resetWithEntries( const wsw::StaticVector<Entry, 10> &entries ) {
-	assert( entries.begin() != m_entries.begin() );
-	beginResetModel();
-	m_entries.clear();
-	for( const Entry &e: entries ) {
-		m_entries.push_back( e );
+InventoryModel::InventoryModel() {
+	while( !m_entries.full() ) {
+		m_entries.emplace_back( Entry {
+			.weaponNum   = (int)( WEAP_GUNBLADE + m_entries.size() ),
+			.weakCount   = 0,
+			.strongCount = 0,
+			.displayed   = false,
+			.hasWeapon   = false,
+			.active      = false,
+		});
 	}
-	endResetModel();
+	assert( WEAP_TOTAL - WEAP_GUNBLADE == m_entries.size() );
+	static_assert( WEAP_TOTAL - WEAP_GUNBLADE == kNumInventoryItems );
 }
 
 void InventoryModel::checkPropertyChanges() {
-	wsw::StaticVector<Entry, 10> entries;
-	for( int i = WEAP_GUNBLADE; i < WEAP_TOTAL; ++i ) {
-		const auto [weakCount, strongCount] = CG_WeaponAmmo( i );
-		const bool hasWeapon = CG_HasWeapon( i );
-		if( weakCount || strongCount || hasWeapon ) {
-			Entry entry;
-			// TODO: Detect infinite IG ammo
-			if( i == WEAP_GUNBLADE ) {
-				// TODO: Is it always available?
-				entry.weakCount = -1;
-				entry.strongCount = -strongCount;
-			} else {
+	const int activeWeapon = CG_ActiveWeapon();
+
+	assert( WEAP_TOTAL - WEAP_GUNBLADE == m_entries.size() );
+	static_assert( WEAP_TOTAL - WEAP_GUNBLADE == kNumInventoryItems );
+	for( int weapon = WEAP_GUNBLADE; weapon < WEAP_TOTAL; ++weapon ) {
+		Entry &entry = m_entries[weapon - 1];
+		assert( entry.weaponNum == weapon );
+
+		const auto [weakCount, strongCount] = CG_WeaponAmmo( weapon );
+		const bool hasWeapon = CG_HasWeapon( weapon );
+
+		m_changedRolesStorage.clear();
+		if( entry.weakCount != weakCount ) {
+			if( weapon != WEAP_GUNBLADE ) {
 				entry.weakCount = weakCount;
-				entry.strongCount = strongCount;
-			}
-			entry.weaponNum = i;
-			entry.hasWeapon = hasWeapon;
-			entries.push_back( entry );
-		}
-	}
-
-	// Too much additions, don't complicate things.
-	// Removals are unlikely as well.
-	if( entries.size() > m_entries.size() + 1 || entries.size() < m_entries.size() ) {
-		resetWithEntries( entries );
-		return;
-	}
-
-	// Try detecting insertion of items into inventory
-	if( entries.size() == m_entries.size() + 1 ) {
-		unsigned mismatchIndex = 0;
-		for(; mismatchIndex < m_entries.size(); ++mismatchIndex ) {
-			if( entries[mismatchIndex].weaponNum != m_entries[mismatchIndex].weaponNum ) {
-				break;
-			}
-		}
-		for( unsigned i = mismatchIndex; i < m_entries.size(); ++i ) {
-			// Another mismatch detected
-			if( entries[i + 1].weaponNum != m_entries[i].weaponNum ) {
-				resetWithEntries( entries );
-				return;
-			}
-		}
-		// This triggers an insertion animation
-		beginInsertRows( QModelIndex(), (int)mismatchIndex, (int)mismatchIndex );
-		m_entries.insert( m_entries.begin() + mismatchIndex, entries[mismatchIndex] );
-		endInsertRows();
-	} else {
-		assert( entries.size() == m_entries.size() );
-		// Simultaneous removals and additions of weapons are rare but possible.
-		// We have to detect that.
-		for( unsigned i = 0; i < entries.size(); ++i ) {
-			if( entries[i].weaponNum != m_entries[i].weaponNum ) {
-				resetWithEntries( entries );
-				return;
-			}
-		}
-	}
-
-	const auto oldActiveWeapon = m_activeWeaponNum;
-	m_activeWeaponNum = CG_ActiveWeapon();
-
-	// Weapon numbers of respective entries are the same at this moment.
-	// Check updates of other fields.
-	assert( entries.size() == m_entries.size() );
-	for( unsigned i = 0; i < entries.size(); ++i ) {
-		const auto &oldEntry = m_entries[i];
-		const auto &newEntry = entries[i];
-		assert( oldEntry.weaponNum == newEntry.weaponNum );
-
-		int numMismatchingRoles = 0;
-		const bool hasWeaponMismatch = oldEntry.hasWeapon != newEntry.hasWeapon;
-		numMismatchingRoles += hasWeaponMismatch;
-		const bool weakCountMismatch = oldEntry.weakCount != newEntry.weakCount;
-		numMismatchingRoles += weakCountMismatch;
-		const bool strongCountMismatch = oldEntry.strongCount != newEntry.strongCount;
-		numMismatchingRoles += strongCountMismatch;
-		const bool wasActive = oldEntry.weaponNum == oldActiveWeapon;
-		const bool isActive = newEntry.weaponNum == m_activeWeaponNum;
-		numMismatchingRoles += wasActive != isActive;
-
-		if( numMismatchingRoles ) {
-			m_entries[i] = entries[i];
-			const QModelIndex modelIndex( createIndex( ( int )i, 0 ) );
-			if( numMismatchingRoles > 1 ) {
-				Q_EMIT dataChanged( modelIndex, modelIndex, kAllMutableRolesAsVector );
-			} else if( weakCountMismatch ) {
-				Q_EMIT dataChanged( modelIndex, modelIndex, kWeakAmmoRoleAsVector );
-			} else if( strongCountMismatch ) {
-				Q_EMIT dataChanged( modelIndex, modelIndex, kStrongAmmoRoleAsVector );
 			} else {
-				Q_EMIT dataChanged( modelIndex, modelIndex, kActiveAsRole );
+				entry.weakCount = -1;
 			}
+			m_changedRolesStorage.append( WeakAmmoCount );
+		}
+		if( entry.strongCount != strongCount ) {
+			if( weapon != WEAP_GUNBLADE ) {
+				entry.strongCount = strongCount;
+			} else {
+				entry.strongCount = -strongCount;
+			}
+			m_changedRolesStorage.append( StrongAmmoCount );
+		}
+		if( entry.hasWeapon != hasWeapon ) {
+			entry.hasWeapon = hasWeapon;
+			m_changedRolesStorage.append( HasWeapon );
+		}
+
+		if( const bool canBeDisplayed = weakCount | strongCount | hasWeapon; entry.displayed != canBeDisplayed ) {
+			entry.displayed = canBeDisplayed;
+			m_changedRolesStorage.append( Displayed );
+		}
+
+		if( const bool isActive = ( weapon == activeWeapon ); entry.active != isActive ) {
+			entry.active = isActive;
+			m_changedRolesStorage.append( Active );
+		}
+
+		if( !m_changedRolesStorage.empty() ) {
+			const QModelIndex modelIndex( createIndex( weapon - 1, 0 ) );
+			Q_EMIT dataChanged( modelIndex, modelIndex, m_changedRolesStorage );
 		}
 	}
 }
