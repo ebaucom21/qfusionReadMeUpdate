@@ -657,8 +657,6 @@ private:
 	auto getPressedKeyboardModifiers() const -> Qt::KeyboardModifiers;
 
 	[[nodiscard]]
-	bool tryHandlingKeyEventAsAMouseEvent( int quakeKey, bool keyDown );
-	[[nodiscard]]
 	auto getTargetWindowForKeyboardInput() -> QQuickWindow *;
 
 	void drawBackgroundMapIfNeeded();
@@ -1741,7 +1739,10 @@ bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
 }
 
 bool QtUISystem::requestsKeyboardFocus() const {
-	return m_activeMenuMask != 0 || ( m_isShowingChatPopup || m_isShowingTeamChatPopup );
+	if( m_activeMenuMask != 0 ) {
+		return ( m_activeMenuMask & DemoPlaybackMenu ) == 0;
+	}
+	return m_isShowingChatPopup || m_isShowingTeamChatPopup;
 }
 
 void QtUISystem::handleEscapeKey() {
@@ -1792,8 +1793,40 @@ bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
 		return false;
 	}
 
-	if( tryHandlingKeyEventAsAMouseEvent( quakeKey, keyDown ) ) {
+	[[maybe_unused]]
+	bool isTargetingDemoPlaybackMenu = false;
+	if( m_menuSandbox && targetWindow == m_menuSandbox->m_window.get() ) {
+		if( m_activeMenuMask & DemoPlaybackMenu ) {
+			isTargetingDemoPlaybackMenu = true;
+		}
+	}
+
+	Qt::MouseButton mouseButton = Qt::NoButton;
+	if( quakeKey == K_MOUSE1 ) {
+		mouseButton = Qt::LeftButton;
+	} else if( quakeKey == K_MOUSE2 ) {
+		mouseButton = Qt::RightButton;
+	} else if( quakeKey == K_MOUSE3 ) {
+		mouseButton = Qt::MiddleButton;
+	}
+
+	if( mouseButton != Qt::NoButton ) {
+		QPointF point( m_mouseXY[0], m_mouseXY[1] );
+		QEvent::Type eventType = keyDown ? QEvent::MouseButtonPress : QEvent::MouseButtonRelease;
+		QMouseEvent event( eventType, point, mouseButton, getPressedMouseButtons(), getPressedKeyboardModifiers() );
+		const bool sent = QCoreApplication::sendEvent( m_menuSandbox->m_window.get(), &event );
+		// Allow propagation of events to the cgame view switching logic
+		// if the mouse event was not handled by the player bar
+		if( sent && isTargetingDemoPlaybackMenu ) {
+			return event.isAccepted();
+		}
 		return true;
+	}
+
+	// To allow propagation of events to the cgame view switching logic,
+	// don't handle other keys when the demo playback menu is on.
+	if( isTargetingDemoPlaybackMenu ) {
+		return false;
 	}
 
 	const auto maybeQtKey = convertQuakeKeyToQtKey( quakeKey );
@@ -1856,25 +1889,6 @@ auto QtUISystem::getPressedKeyboardModifiers() const -> Qt::KeyboardModifiers {
 		result |= Qt::ShiftModifier;
 	}
 	return result;
-}
-
-bool QtUISystem::tryHandlingKeyEventAsAMouseEvent( int quakeKey, bool keyDown ) {
-	Qt::MouseButton button;
-	if( quakeKey == K_MOUSE1 ) {
-		button = Qt::LeftButton;
-	} else if( quakeKey == K_MOUSE2 ) {
-		button = Qt::RightButton;
-	} else if( quakeKey == K_MOUSE3 ) {
-		button = Qt::MiddleButton;
-	} else {
-		return false;
-	}
-
-	QPointF point( m_mouseXY[0], m_mouseXY[1] );
-	QEvent::Type eventType = keyDown ? QEvent::MouseButtonPress : QEvent::MouseButtonRelease;
-	QMouseEvent event( eventType, point, button, getPressedMouseButtons(), getPressedKeyboardModifiers() );
-	QCoreApplication::sendEvent( m_menuSandbox->m_window.get(), &event );
-	return true;
 }
 
 auto QtUISystem::getTargetWindowForKeyboardInput() -> QQuickWindow * {
