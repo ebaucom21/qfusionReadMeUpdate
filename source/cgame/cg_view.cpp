@@ -349,8 +349,6 @@ void CG_DemocamReset() {
 	demo_initial_timestamp = 0;
 }
 
-int CG_LostMultiviewPOV();
-
 /*
 * CG_ChaseStep
 *
@@ -358,43 +356,52 @@ int CG_LostMultiviewPOV();
 */
 bool CG_ChaseStep( int step ) {
 	if( cg.frame.multipov ) {
-		// find the playerState containing our current POV, then cycle playerStates
-		int index = -1;
-		for( int i = 0; i < cg.frame.numplayers; i++ ) {
-			if( cg.frame.playerStates[i].playerNum < (unsigned)gs.maxclients && cg.frame.playerStates[i].playerNum == cg.chasedPlayerNum ) {
-				index = i;
-				break;
-			}
-		}
+		// It's always PM_CHASECAM for demos
+		const auto ourActualMoveType = getOurClientViewState()->predictedPlayerState.pmove.pm_type;
+		if( ourActualMoveType == PM_SPECTATOR || ourActualMoveType == PM_CHASECAM ) {
+			const std::optional<unsigned> existingIndex = CG_FindChaseableViewportForPlayernum( cg.chasedPlayerNum );
 
-		int checkPlayer;
-		// the POV was lost, find the closer one (may go up or down, but who cares)
-		if( index == -1 ) {
-			checkPlayer = CG_LostMultiviewPOV();
-		} else {
-			checkPlayer = index;
-			for( int i = 0; i < cg.frame.numplayers; i++ ) {
-				checkPlayer += step;
-				if( checkPlayer < 0 ) {
-					checkPlayer = cg.frame.numplayers - 1;
-				} else if( checkPlayer >= cg.frame.numplayers ) {
-					checkPlayer = 0;
+			std::optional<std::pair<unsigned, unsigned>> chosenIndexAndPlayerNum;
+
+			// the POV was lost, find the closer one (may go up or down, but who cares)
+			// TODO: Is it going to happen for new MV code?
+			if( existingIndex == std::nullopt ) {
+				chosenIndexAndPlayerNum = CG_FindMultiviewPovToChase();
+			} else {
+				int testedViewStateIndex = (int)existingIndex.value_or( std::numeric_limits<unsigned>::max() );
+				for( int i = 0; i < cg.frame.numplayers; i++ ) {
+					testedViewStateIndex += step;
+					if( testedViewStateIndex < 0 ) {
+						testedViewStateIndex = (int)cg.numSnapViewStates;
+					} else if( testedViewStateIndex >= cg.frame.numplayers ) {
+						testedViewStateIndex = 0;
+					}
+					// TODO: Are specs even included in snapshots?
+					if( testedViewStateIndex == existingIndex ) {
+						break;
+					}
+					if( cg.viewStates[testedViewStateIndex].canBeAMultiviewChaseTarget() ) {
+						break;
+					}
 				}
-				if( checkPlayer == index || cg.frame.playerStates[checkPlayer].stats[STAT_REALTEAM] != TEAM_SPECTATOR ) {
-					break;
+				if( testedViewStateIndex != existingIndex ) {
+					assert( cg.viewStates[testedViewStateIndex].canBeAMultiviewChaseTarget() );
+					chosenIndexAndPlayerNum = { testedViewStateIndex, cg.frame.playerStates[testedViewStateIndex].playerNum };
 				}
 			}
-		}
 
-		if( index < 0 ) {
-			return false;
-		}
+			if( !chosenIndexAndPlayerNum ) {
+				return false;
+			}
 
-		cg.chasedPlayerNum     = cg.frame.playerStates[checkPlayer].playerNum;
-		cg.chasedViewportIndex = checkPlayer;
-		return true;
+			cg.chasedViewportIndex = chosenIndexAndPlayerNum->first;
+			cg.chasedPlayerNum     = chosenIndexAndPlayerNum->second;
+			assert( cg.chasedViewportIndex < cg.numSnapViewStates );
+			return true;
+		}
+		return false;
 	}
-	
+
 	if( !cgs.demoPlaying ) {
 		CL_Cmd_ExecuteNow( step > 0 ? "chasenext" : "chaseprev" );
 		return true;
@@ -987,33 +994,36 @@ float CG_ViewSmoothFallKick( ViewState *viewState ) {
 }
 
 bool CG_SwitchChaseCamMode() {
-	ViewState *viewState = getPrimaryViewState();
+	const ViewState *ourClientViewState = getOurClientViewState();
+	const auto actualMoveType = ourClientViewState->predictedPlayerState.pmove.pm_type;
+	if( actualMoveType == PM_SPECTATOR || actualMoveType == PM_CHASECAM ) {
+		const bool chasecam = ourClientViewState->isUsingChasecam();
+		const bool realSpec = cgs.demoPlaying || ISREALSPECTATOR( ourClientViewState );
 
-	const bool chasecam = ( viewState->snapPlayerState.pmove.pm_type == PM_CHASECAM ) && ( viewState->snapPlayerState.POVnum != (unsigned)( cgs.playerNum + 1 ) );
-	const bool realSpec = cgs.demoPlaying || ISREALSPECTATOR( viewState );
-
-	if( ( cg.frame.multipov || chasecam ) && !CG_DemoCam_IsFree() ) {
-		if( chasecam ) {
-			if( realSpec ) {
-				if( ++chaseCam.mode >= CAM_MODES ) {
-					// if exceeds the cycle, start free fly
-					CL_Cmd_ExecuteNow( "camswitch" );
-					chaseCam.mode = 0;
+		if( ( cg.frame.multipov || chasecam ) && !CG_DemoCam_IsFree() ) {
+			if( chasecam ) {
+				if( realSpec ) {
+					if( ++chaseCam.mode >= CAM_MODES ) {
+						// if exceeds the cycle, start free fly
+						CL_Cmd_ExecuteNow( "camswitch" );
+						chaseCam.mode = 0;
+					}
+					return true;
 				}
-				return true;
+				return false;
 			}
-			return false;
+
+			chaseCam.mode = ( ( chaseCam.mode != CAM_THIRDPERSON ) ? CAM_THIRDPERSON : CAM_INEYES );
+			return true;
 		}
 
-		chaseCam.mode = ( ( chaseCam.mode != CAM_THIRDPERSON ) ? CAM_THIRDPERSON : CAM_INEYES );
-		return true;
-	}
+		if( realSpec && ( CG_DemoCam_IsFree() || ourClientViewState->snapPlayerState.pmove.pm_type == PM_SPECTATOR ) ) {
+			CL_Cmd_ExecuteNow( "camswitch" );
+			return true;
+		}
 
-	if( realSpec && ( CG_DemoCam_IsFree() || viewState->snapPlayerState.pmove.pm_type == PM_SPECTATOR ) ) {
-		CL_Cmd_ExecuteNow( "camswitch" );
-		return true;
+		return false;
 	}
-
 	return false;
 }
 

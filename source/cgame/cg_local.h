@@ -298,6 +298,10 @@ typedef struct {
 struct ViewState {
 	[[nodiscard]]
 	bool isViewerEntity( int entNum ) const;
+	[[nodiscard]]
+	bool canBeAMultiviewChaseTarget() const;
+	[[nodiscard]]
+	bool isUsingChasecam() const;
 
 	// current in use, predicted or interpolated
 	player_state_t predictedPlayerState;
@@ -848,6 +852,9 @@ void CG_AddKickAngles( vec3_t viewangles, ViewState *viewState );
 bool CG_ChaseStep( int step );
 bool CG_SwitchChaseCamMode( void );
 void CG_ClearChaseCam();
+
+std::optional<std::pair<unsigned, unsigned>> CG_FindMultiviewPovToChase();
+std::optional<unsigned> CG_FindChaseableViewportForPlayernum( unsigned playerNum );
 
 inline void CG_SmallPileOfGibs( const vec3_t origin, int damage, const vec3_t initialVelocity, int team ) {}
 

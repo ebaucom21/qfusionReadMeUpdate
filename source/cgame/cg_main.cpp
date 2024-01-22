@@ -232,6 +232,14 @@ bool ViewState::isViewerEntity( int entNum ) const {
 	return ( ( predictedPlayerState.POVnum > 0 ) && ( (int)predictedPlayerState.POVnum == (int)( entNum ) ) && ( this->view.type == VIEWDEF_PLAYERVIEW ) );
 }
 
+bool ViewState::canBeAMultiviewChaseTarget() const {
+	return predictedPlayerState.stats[STAT_REALTEAM] != TEAM_SPECTATOR && predictedPlayerState.POVnum == predictedPlayerState.playerNum + 1;
+}
+
+bool ViewState::isUsingChasecam() const {
+	return predictedPlayerState.pmove.pm_type == PM_CHASECAM && predictedPlayerState.POVnum != predictedPlayerState.playerNum + 1;
+}
+
 [[nodiscard]]
 auto getPrimaryViewState() -> ViewState * {
 	return &cg.viewStates[cg.chasedViewportIndex];
@@ -2734,34 +2742,32 @@ static void CG_NewPacketEntityState( entity_state_t *state ) {
 	}
 }
 
-int CG_LostMultiviewPOV( void ) {
-	/*
-	int best, value, fallback;
-	int i, index;
-
-	best = gs.maxclients;
-	index = fallback = -1;
-
-	for( i = 0; i < cg.frame.numplayers; i++ ) {
-		value = abs( (int)cg.frame.playerStates[i].playerNum - (int)cg.multiviewPlayerNum );
-		if( value == best && i > index ) {
-			continue;
-		}
-
-		if( value < best ) {
-			if( cg.frame.playerStates[i].pmove.pm_type == PM_SPECTATOR ) {
-				fallback = i;
-				continue;
-			}
-
-			best = value;
-			index = i;
+// TODO: Should take teams/etc into account
+// TODO: Share the code with the game module
+// TODO: The old code used to make players with closest index preferred but that seems to be useless
+std::optional<std::pair<unsigned, unsigned>> CG_FindMultiviewPovToChase() {
+	for( unsigned viewStateIndex = 0; viewStateIndex < cg.numSnapViewStates; ++viewStateIndex ) {
+		const ViewState &viewState = cg.viewStates[viewStateIndex];
+		if( viewState.canBeAMultiviewChaseTarget() ) {
+			return std::make_pair( viewStateIndex, viewState.predictedPlayerState.playerNum );
 		}
 	}
+	return std::nullopt;
+}
 
-	return index > -1 ? index : fallback;
-	 */
-	return 0;
+std::optional<unsigned> CG_FindChaseableViewportForPlayernum( unsigned playerNum ) {
+	const ViewState *viewStateForPlayer = nullptr;
+	for( unsigned i = 0; i < cg.numSnapViewStates; ++i ) {
+		const ViewState *viewState = &cg.viewStates[i];
+		if( viewState->snapPlayerState.playerNum == playerNum ) {
+			viewStateForPlayer = viewState;
+			break;
+		}
+	}
+	if( viewStateForPlayer && viewStateForPlayer->canBeAMultiviewChaseTarget() ) {
+		return (unsigned)( viewStateForPlayer - cg.viewStates );
+	}
+	return std::nullopt;
 }
 
 static void CG_SetFramePlayerState( player_state_t *playerState, snapshot_t *frame, int index, bool forcePrediction ) {
@@ -2780,7 +2786,6 @@ static void CG_UpdatePlayerState() {
 	cg.snapViewStatePresentMask = 0;
 	cg.numSnapViewStates        = 0;
 	cg.ourClientViewportIndex   = ~0u;
-	cg.chasedViewportIndex      = ~0u;
 
 	for( int playerIndex = 0; playerIndex < cg.frame.numplayers; ++playerIndex ) {
 		ViewState *const viewState             = &cg.viewStates[playerIndex];
@@ -2789,9 +2794,6 @@ static void CG_UpdatePlayerState() {
 		bool forcePrediction = false;
 		if( framePlayerState->playerNum == cgs.playerNum ) {
 			cg.ourClientViewportIndex = playerIndex;
-			if( framePlayerState->pmove.pm_type == PM_NORMAL ) {
-				cg.chasedViewportIndex    = playerIndex;
-			}
 			if( !cgs.demoPlaying ) {
 				forcePrediction = true;
 			}
@@ -2830,13 +2832,30 @@ static void CG_UpdatePlayerState() {
 		assert( cgs.demoPlaying );
 		std::memset( &cg.viewStates[MAX_CLIENTS], 0, sizeof( ViewState ) );
 		cg.ourClientViewportIndex = MAX_CLIENTS;
+		// TODO: There should be default initializers for that
+		cg.viewStates[MAX_CLIENTS].predictedPlayerState.pmove.pm_type   = PM_SPECTATOR;
+		cg.viewStates[MAX_CLIENTS].predictFromPlayerState.pmove.pm_type = PM_SPECTATOR;
 	}
 	cg.viewStates[cg.ourClientViewportIndex].mutePovSounds = false;
 
-	// Check whether we have lost the pov
-	if( cg.chasedViewportIndex >= cg.numSnapViewStates ) {
-		// TODO:!!!!!!!!!!!!!!!!!!!!!!!!!!
-		cg.chasedViewportIndex = 0;
+	const auto ourActualMoveType = cg.viewStates[cg.ourClientViewportIndex].predictedPlayerState.pmove.pm_type;
+	// Force view from our in-game client
+	if( ourActualMoveType != PM_SPECTATOR && ourActualMoveType != PM_CHASECAM ) {
+		cg.chasedViewportIndex = cg.ourClientViewportIndex;
+		cg.chasedPlayerNum     = cgs.playerNum;
+	} else {
+		// Check whether we have lost the pov.
+		// Update the viewport index for pov in case if it's changed.
+		if( const std::optional<unsigned> maybeIndex = CG_FindChaseableViewportForPlayernum( cg.chasedPlayerNum ) ) {
+			cg.chasedViewportIndex = *maybeIndex;
+		} else if( const std::optional<std::pair<unsigned, unsigned>> maybePlayerNumAndIndex = CG_FindMultiviewPovToChase() ) {
+			cg.chasedViewportIndex = maybePlayerNumAndIndex->first;
+			cg.chasedPlayerNum     = maybePlayerNumAndIndex->second;
+		} else {
+			// Should not happen?
+			cg.chasedViewportIndex = cg.ourClientViewportIndex;
+			cg.chasedPlayerNum     = cgs.playerNum;
+		}
 	}
 }
 
