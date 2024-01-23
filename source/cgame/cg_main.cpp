@@ -5113,6 +5113,14 @@ void CG_MessageMode2( const CmdArgs & ) {
 	CL_ClearInputState();
 }
 
+// Only covers the demo playback case, otherwise the UI grabs it first on its own
+bool CG_GrabsMouseMovement() {
+	if( cgs.demoPlaying ) {
+		return CG_DemoCam_IsFree();
+	}
+	return true;
+}
+
 void CG_Error( const char *format, ... ) {
 	char msg[1024];
 	va_list argptr;

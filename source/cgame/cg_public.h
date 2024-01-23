@@ -93,6 +93,7 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe );
 void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t serverTime, unsigned extrapolationTime );
 void CG_InputFrame( int64_t inputTimestamp, int keyboardDeltaMillis, float mouseDeltaMillis );
 void CG_ClearInputState();
+bool CG_GrabsMouseMovement();
 unsigned CG_GetButtonBits();
 void CG_AddViewAngles( vec3_t viewAngles );
 void CG_AddMovement( vec3_t movement );

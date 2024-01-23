@@ -838,6 +838,7 @@ extern cg_chasecam_t chaseCam;
 
 void CG_DemocamInit( void );
 void CG_DemocamShutdown( void );
+bool CG_DemoCam_IsFree();
 
 void CG_ResetKickAngles( ViewState *viewState );
 void CG_ResetColorBlend( ViewState *viewState );

@@ -135,13 +135,15 @@ public:
 	void endRegistration() override;
 
 	[[nodiscard]]
-	bool requestsKeyboardFocus() const override;
+	bool grabsKeyboardAndMouseButtons() const override;
+	[[nodiscard]]
+	bool grabsMouseMovement() const override;
 	[[nodiscard]]
 	bool handleKeyEvent( int quakeKey, bool keyDown ) override;
 	[[nodiscard]]
 	bool handleCharEvent( int ch ) override;
 	[[nodiscard]]
-	bool handleMouseMove( int frameTime, int dx, int dy ) override;
+	bool handleMouseMovement( float frameTimeMillis, int dx, int dy ) override;
 
 	void handleEscapeKey() override;
 
@@ -1701,7 +1703,7 @@ void QtUISystem::checkPropertyChanges() {
 	updateHudOccluders();
 }
 
-bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
+bool QtUISystem::handleMouseMovement( float frameTime, int dx, int dy ) {
 	// Mouse handling is only available for the main menu
 	if( !m_activeMenuMask || !m_menuSandbox ) {
 		return false;
@@ -1738,7 +1740,14 @@ bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
 	return true;
 }
 
-bool QtUISystem::requestsKeyboardFocus() const {
+bool QtUISystem::grabsKeyboardAndMouseButtons() const {
+	if( m_activeMenuMask != 0 ) {
+		return ( m_activeMenuMask & DemoPlaybackMenu ) == 0;
+	}
+	return m_isShowingChatPopup || m_isShowingTeamChatPopup;
+}
+
+bool QtUISystem::grabsMouseMovement() const {
 	if( m_activeMenuMask != 0 ) {
 		return ( m_activeMenuMask & DemoPlaybackMenu ) == 0;
 	}

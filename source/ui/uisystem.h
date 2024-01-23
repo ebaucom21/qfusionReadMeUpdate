@@ -42,13 +42,15 @@ public:
 	virtual void endRegistration() = 0;
 
 	[[nodiscard]]
-	virtual bool requestsKeyboardFocus() const = 0;
+	virtual bool grabsKeyboardAndMouseButtons() const = 0;
+	[[nodiscard]]
+	virtual bool grabsMouseMovement() const = 0;
 	[[nodiscard]]
 	virtual bool handleKeyEvent( int quakeKey, bool keyDown ) = 0;
 	[[nodiscard]]
 	virtual bool handleCharEvent( int ch ) = 0;
 	[[nodiscard]]
-	virtual bool handleMouseMove( int frameTime, int dx, int dy ) = 0;
+	virtual bool handleMouseMovement( float frameTimeMillis, int dx, int dy ) = 0;
 
 	virtual void handleEscapeKey() = 0;
 

@@ -309,6 +309,13 @@ void CL_GameModule_ClearInputState( void ) {
 	}
 }
 
+bool CL_GameModule_GrabsMouseMovement() {
+	if( cge ) {
+		return CG_GrabsMouseMovement();
+	}
+	return false;
+}
+
 unsigned CL_GameModule_GetButtonBits( void ) {
 	if( cge ) {
 		return CG_GetButtonBits();
@@ -335,7 +342,7 @@ void CL_GameModule_MouseMove( int dx, int dy ) {
 }
 
 bool CG_HasKeyboardFocus() {
-	return cge && !Con_HasKeyboardFocus() && !wsw::ui::UISystem::instance()->requestsKeyboardFocus();
+	return cge && !Con_HasKeyboardFocus() && !wsw::ui::UISystem::instance()->grabsKeyboardAndMouseButtons();
 }
 
 static void CL_CreateNewUserCommand( int realMsec );
@@ -360,10 +367,19 @@ static void CL_UpdateGameInput( int64_t inputTimestamp, int keyboardDeltaMillis,
 	// refresh input in cgame
 	CL_GameModule_InputFrame( inputTimestamp, keyboardDeltaMillis, mouseDeltaMillis );
 
-	if( !wsw::ui::UISystem::instance()->handleMouseMove( mouseDeltaMillis, mx, my ) ) {
-		CL_GameModule_MouseMove( mx, my );
-		// TODO: Check whether a console is open?
-		CL_GameModule_AddViewAngles( cl.viewangles );
+	bool handledByCGame = false;
+	auto *const uiSystem = wsw::ui::UISystem::instance();
+	if( !uiSystem->grabsMouseMovement() ) {
+		if( CL_GameModule_GrabsMouseMovement() ) {
+			CL_GameModule_MouseMove( mx, my );
+			CL_GameModule_AddViewAngles( cl.viewangles );
+			handledByCGame = true;
+		}
+	}
+
+	if( !handledByCGame ) {
+		// Let the UI handle it for non-modal stuff like the demo player bar
+		(void)uiSystem->handleMouseMovement( mouseDeltaMillis, mx, my );
 	}
 }
 
