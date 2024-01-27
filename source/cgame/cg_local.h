@@ -34,6 +34,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../ref/ref.h"
 
 #include "cg_public.h"
+#include "../ui/cgameimports.h"
 
 #include <cmath>
 #include <new>
@@ -612,6 +613,10 @@ typedef struct cg_state_s {
 	int chaseMode;
 	int64_t chaseSwitchTimestamp;
 
+	wsw::StaticVector<uint8_t, MAX_CLIENTS> hudControlledMiniviewViewStateIndicesForPane[2];
+	wsw::StaticVector<uint8_t, MAX_CLIENTS> tileMiniviewViewStateIndices;
+	wsw::StaticVector<Rect, MAX_CLIENTS> tileMiniviewPositions;
+
 	vec3_t demoFreeCamOrigin;
 	vec3_t demoFreeCamAngles;
 	vec3_t demoFreeCamVelocity;
@@ -833,6 +838,8 @@ uint8_t *CG_PlayerColorForEntity( int entNum, byte_vec4_t color );
 enum {
 	CAM_INEYES,
 	CAM_THIRDPERSON,
+	// TODO: Freecam should be another mode
+	CAM_TILED,
 	CAM_MODES
 };
 

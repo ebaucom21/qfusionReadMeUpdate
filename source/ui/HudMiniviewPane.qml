@@ -41,6 +41,11 @@ Item {
                 Hud.ui.supplyDisplayedHudItemAndMargin(root, 4.0)
             }
         }
+        onHudMiniviewPanesRetrievalRequested: {
+            if (root.visible) {
+                Hud.ui.supplyHudMiniviewPane(paneNumber)
+            }
+        }
         onHudControlledMiniviewItemsRetrievalRequested: {
             if (root.visible) {
                 for (let i = 0; i < oldMiniviews.length; ++i) {
@@ -58,7 +63,7 @@ Item {
 
     function applyMiniviewLayoutPass1() {
         const miniviewIndices = commonDataModel.getMiniviewIndicesForPane(paneNumber)
-        for (let i = 0; i < oldMiniviews.length; i) {
+        for (let i = 0; i < oldMiniviews.length;) {
             const oldMiniviewIndex = oldMiniviewIndices[i]
             if (!miniviewIndices.includes(oldMiniviewIndex)) {
                 const view = oldMiniviews[i]
@@ -92,11 +97,11 @@ Item {
 
         let accumHeight = 0
         for (const view of oldMiniviews) {
-            view.parent = root
             view.x      = 0
             view.y      = accumHeight
             view.width  = itemWidth
             view.height = itemHeight
+            view.parent = root
             accumHeight += itemHeight
         }
     }

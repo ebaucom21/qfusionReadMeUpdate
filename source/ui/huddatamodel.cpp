@@ -770,7 +770,9 @@ auto HudCommonDataModel::getMiniviewModelForIndex( int indexOfModel ) -> QObject
 auto HudCommonDataModel::getFixedMiniviewPositionForIndex( int indexOfModel ) const -> QVariant {
 	for( const FixedPositionMinivewEntry &entry: m_fixedPositionMinviews ) {
 		if( entry.indexOfModel == indexOfModel ) {
-			return QRectF( entry.position[0], entry.position[1], entry.position[2], entry.position[3] );
+			return QRectF {
+				(qreal)entry.position.x, (qreal)entry.position.y, (qreal)entry.position.width, (qreal)entry.position.height,
+			};
 		}
 	}
 	wsw::failWithRuntimeError( "Illegal index of model" );
@@ -1041,30 +1043,29 @@ void HudCommonDataModel::checkPropertyChanges( int64_t currTime ) {
 }
 
 void HudCommonDataModel::updateMiniviewData( int64_t currTime ) {
-	unsigned viewStateNums[MAX_CLIENTS];
-	vec4_t positions[MAX_CLIENTS];
-	int panes[MAX_CLIENTS];
-	const unsigned numViews = CG_GetMultiviewConfiguration( kMaxMiniviews, viewStateNums, positions, panes );
+	std::span<const uint8_t> pane1ViewStateIndices, pane2ViewStateIndices, tileViewStateIndices;
+	std::span<const Rect> tilePositions;
 
-	unsigned paneViewStateNums[3][MAX_CLIENTS];
-	unsigned numPaneViewStates[3] { 0, 0, 0 };
-	unsigned panePositionIndices[MAX_CLIENTS];
-	for( unsigned viewIndex = 0; viewIndex < numViews; ++viewIndex ) {
-		const unsigned paneNum = panes[viewIndex];
-		assert( paneNum >= 0 && paneNum <= 2 );
-		unsigned &numViewStates = numPaneViewStates[paneNum];
-		const unsigned viewStateNum = viewStateNums[viewIndex];
-		assert( viewStateNum <= MAX_CLIENTS );
-		paneViewStateNums[paneNum][numViewStates] = viewStateNum;
-		if( paneNum == 0 ) {
-			panePositionIndices[numViewStates] = viewIndex;
+	CG_GetMultiviewConfiguration( &pane1ViewStateIndices, &pane2ViewStateIndices, &tileViewStateIndices, &tilePositions );
+	assert( pane1ViewStateIndices.size() + pane2ViewStateIndices.size() + tileViewStateIndices.size() <= kMaxMiniviews );
+	assert( tileViewStateIndices.size() == tilePositions.size() );
+
+	bool layoutChanged = m_hudControlledMinviewsForPane[0].size() != pane1ViewStateIndices.size() ||
+						 m_hudControlledMinviewsForPane[1].size() != pane2ViewStateIndices.size();
+	if( !layoutChanged ) {
+		if( m_fixedPositionMinviews.size() != tileViewStateIndices.size() ) {
+			layoutChanged = true;
+		} else {
+			for( unsigned i = 0; i < m_fixedPositionMinviews.size(); ++i ) {
+				const FixedPositionMinivewEntry &entry = m_fixedPositionMinviews[i];
+				// Note: indexOfModel has 1-1 correspondence to view state index in this case
+				if( entry.viewStateIndex != tileViewStateIndices[i] ) {
+					layoutChanged = true;
+					break;
+				}
+			}
 		}
-		numViewStates++;
 	}
-
-	const bool layoutChanged = m_fixedPositionMinviews.size() != numPaneViewStates[0] ||
-							   m_hudControlledMinviewsForPane[0].size() != numPaneViewStates[1] ||
-							   m_hudControlledMinviewsForPane[1].size() != numPaneViewStates[2];
 
 	// Even if the layout stays unchanged, we have to update view indices of models
 	// and respective entires for procedural/explicit retrieval of data.
@@ -1077,30 +1078,31 @@ void HudCommonDataModel::updateMiniviewData( int64_t currTime ) {
 
 	int numUsedModelsSoFar = 0;
 	m_fixedPositionMinviews.clear();
-	for( unsigned viewIndex = 0, numViewsInPane = numPaneViewStates[0]; viewIndex < numViewsInPane; ++viewIndex ) {
-		const float *position  = positions[panePositionIndices[viewIndex]];
+	for( unsigned viewIndex = 0; viewIndex < tileViewStateIndices.size(); ++viewIndex ) {
+		const unsigned viewStateIndex = tileViewStateIndices[viewIndex];
 		m_fixedPositionMinviews.emplace_back( FixedPositionMinivewEntry {
-			.indexOfModel = numUsedModelsSoFar,
-			.position     = { position[0], position[1], position[2], position[3] },
+			.indexOfModel   = numUsedModelsSoFar,
+			.viewStateIndex = viewStateIndex,
+			.position       = tilePositions[viewIndex],
 		});
-		m_miniviewDataModels[numUsedModelsSoFar].setViewStateIndex( paneViewStateNums[0][viewIndex] );
+		m_miniviewDataModels[numUsedModelsSoFar].setViewStateIndex( viewStateIndex );
 		numUsedModelsSoFar++;
 	};
 
 	for( int paneNum = 0; paneNum < 2; ++paneNum ) {
 		wsw::StaticVector<HudControlledMiniviewEntry, kMaxMiniviews> &entries = m_hudControlledMinviewsForPane[paneNum];
 		entries.clear();
-		for( unsigned viewIndex = 0, numViewsInPane = numPaneViewStates[paneNum + 1]; viewIndex < numViewsInPane; ++viewIndex ) {
+		for( const unsigned viewStateIndex: ( paneNum == 0 ? pane1ViewStateIndices : pane2ViewStateIndices ) ) {
 			entries.emplace_back( HudControlledMiniviewEntry {
 				.indexOfModel = numUsedModelsSoFar,
 				.paneNumber   = paneNum,
 			});
-			m_miniviewDataModels[numUsedModelsSoFar].setViewStateIndex( paneViewStateNums[paneNum + 1][viewIndex] );
+			m_miniviewDataModels[numUsedModelsSoFar].setViewStateIndex( viewStateIndex );
 			numUsedModelsSoFar++;
 		}
 	}
 
-	assert( numUsedModelsSoFar == (int)numViews );
+	assert( (size_t)numUsedModelsSoFar == pane1ViewStateIndices.size() + pane2ViewStateIndices.size() + tileViewStateIndices.size() );
 	for( int modelNum = 0; modelNum < numUsedModelsSoFar; ++modelNum ) {
 		assert( m_miniviewDataModels[modelNum].hasValidViewStateIndex() );
 		m_miniviewDataModels[modelNum].checkPropertyChanges( currTime );
@@ -1178,7 +1180,7 @@ void HudPovDataModel::addStatusMessage( const wsw::StringView &message, int64_t 
 
 void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
 	const bool hadActivePov = m_hasActivePov, wasPovAlive = m_isPovAlive;
-	m_hasActivePov = CG_ActiveChasePov() != std::nullopt;
+	m_hasActivePov = CG_ActiveChasePovOfViewState( m_viewStateIndex ) != std::nullopt;
 	m_isPovAlive = m_hasActivePov && CG_IsPovAlive( m_viewStateIndex );
 	if( wasPovAlive != m_isPovAlive ) {
 		Q_EMIT isPovAliveChanged( m_isPovAlive );
@@ -1233,7 +1235,7 @@ void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
 
 void HudPovDataModel::updateScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {
 	if( CG_HasTwoTeams() ) {
-		if( const auto maybeActiveChasePov = CG_ActiveChasePov() ) {
+		if( const auto maybeActiveChasePov = CG_ActiveChasePovOfViewState( m_viewStateIndex ) ) {
 			m_teamListModel.update( scoreboardData, *maybeActiveChasePov );
 		}
 	}

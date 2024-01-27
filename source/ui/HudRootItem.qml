@@ -10,6 +10,9 @@ Item {
 
     property var instantiatedMiniviewHuds: ({})
 
+    property var oldMiniviews: []
+    property var oldMiniviewIndices: []
+
     Window.onWindowChanged: {
         if (Window.window) {
             Window.window.requestActivate()
@@ -41,6 +44,11 @@ Item {
 
     Connections {
         target: Hud.ui
+        onDisplayedHudItemsRetrievalRequested: {
+            for (const view of oldMiniviews) {
+                Hud.ui.supplyDisplayedHudItemAndMargin(view, 4.0)
+            }
+        }
         onShuttingDown: {
             for (const view of Object.values(rootItem.instantiatedMiniviewHuds)) {
                 view.parent = null
@@ -51,8 +59,31 @@ Item {
     }
 
     function applyMiniviewLayoutPass1() {
+        // Recycle all (we have to care of preserving the original order)
+        for (let i = 0; i < oldMiniviews.length; ++i) {
+            recycle(oldMiniviews[i], oldMiniviewIndices[i])
+        }
+        oldMiniviews.length       = 0
+        oldMiniviewIndices.length = 0
     }
+
     function applyMiniviewLayoutPass2() {
+        // Take all needed
+        const miniviewIndices = Hud.commonDataModel.getFixedPositionMiniviewIndices()
+        for (const miniviewIndex of miniviewIndices) {
+            const view = take(miniviewIndex)
+            oldMiniviewIndices.push(miniviewIndex)
+            oldMiniviews.push(view)
+            const position = Hud.commonDataModel.getFixedMiniviewPositionForIndex(miniviewIndex)
+            view.x         = position.x
+            view.y         = position.y
+            view.width     = position.width
+            view.height    = position.height
+            view.parent    = rootItem
+        }
+
+        console.assert(miniviewIndices.length === oldMiniviewIndices.length)
+        console.assert(miniviewIndices.length === oldMiniviews.length)
     }
 
     function recycle(view, miniviewIndex) {

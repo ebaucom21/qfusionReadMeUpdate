@@ -2857,6 +2857,92 @@ static void CG_UpdatePlayerState() {
 			cg.chasedPlayerNum     = cgs.playerNum;
 		}
 	}
+
+	cg.hudControlledMiniviewViewStateIndicesForPane[0].clear();
+	cg.hudControlledMiniviewViewStateIndicesForPane[1].clear();
+	cg.tileMiniviewViewStateIndices.clear();
+	cg.tileMiniviewPositions.clear();
+
+	unsigned numMiniviewViewStates  = 0;
+	const unsigned limitOfMiniviews = wsw::ui::UISystem::instance()->retrieveLimitOfMiniviews();
+
+	const unsigned numPanes = wsw::ui::UISystem::instance()->retrieveNumberOfHudMiniviewPanes();
+	assert( numPanes >= 0 && numPanes <= 2 );
+
+	const auto ourTeam = cg.viewStates[cg.ourClientViewportIndex].predictedPlayerState.stats[STAT_REALTEAM];
+	// Disallow anything for our client in PLAYERS team. See the "Pruning by team" remark below.
+	if( ourTeam != TEAM_PLAYERS ) {
+		const bool hasTwoTeams = GS_TeamBasedGametype();
+		for( unsigned viewStateIndex = 0; viewStateIndex < cg.numSnapViewStates; ++viewStateIndex ) {
+			bool isViewStateAcceptable = false;
+			if( viewStateIndex != cg.ourClientViewportIndex ) {
+				// If we're in freecam/tiled view state, the primary pov is put to miniviews
+				if( viewStateIndex != cg.chasedViewportIndex || ( cg.isDemoCamFree || cg.chaseMode == CAM_TILED ) ) {
+					isViewStateAcceptable = true;
+				}
+			}
+			if( isViewStateAcceptable ) {
+				// TODO: Should we exclude view states that should not be shown from cg.viewStates[]?
+				// Seemingly no, as we already have to include view state for our client, regardless of its in-game activity.
+				const player_state_t &playerState = cg.viewStates[viewStateIndex].predictedPlayerState;
+				bool isPlayerStateAcceptable      = false;
+				if( const auto playerTeam = playerState.stats[STAT_REALTEAM]; playerTeam != TEAM_SPECTATOR ) {
+					if( playerState.POVnum == playerState.playerNum + 1 ) {
+						// Pruning by team could be redundant, but it adds a protection against malicious servers
+						if( !hasTwoTeams ) {
+							isPlayerStateAcceptable = true;
+						} else {
+							if( ourTeam == playerTeam || ourTeam == TEAM_SPECTATOR ) {
+								isPlayerStateAcceptable = true;
+							}
+						}
+					}
+				}
+				if( isPlayerStateAcceptable ) {
+					if( cg.chaseMode != CAM_TILED ) {
+						wsw::StaticVector<uint8_t, MAX_CLIENTS> *indices = cg.hudControlledMiniviewViewStateIndicesForPane;
+						if( numPanes == 2 ) {
+							unsigned chosenPaneIndex;
+							if( hasTwoTeams && ourTeam == TEAM_SPECTATOR ) {
+								chosenPaneIndex = ( playerState.stats[STAT_REALTEAM] == TEAM_ALPHA ) ? 0 : 1;
+							} else {
+								chosenPaneIndex = indices[0].size() < indices[1].size() ? 0 : 1;
+							}
+							indices[chosenPaneIndex].push_back( (uint8_t)viewStateIndex );
+						} else if( numPanes == 1 ) {
+							indices[0].push_back( (uint8_t)viewStateIndex );
+						}
+					} else {
+						cg.tileMiniviewViewStateIndices.push_back( (uint8_t)viewStateIndex );
+					}
+					numMiniviewViewStates++;
+					if( numMiniviewViewStates == limitOfMiniviews ) {
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	// Smaller than best fit
+	const int tileWidth  = cgs.vidWidth / ( cg.tileMiniviewViewStateIndices.size() + 1 );
+	const int tileHeight = cgs.vidHeight / ( cg.tileMiniviewViewStateIndices.size() + 1 );
+
+	int x = ( cgs.vidWidth - tileWidth * (int)cg.tileMiniviewViewStateIndices.size() ) / 2;
+	const int y = ( cgs.vidHeight - tileHeight ) / 2;
+
+	for( const unsigned viewStateIndex: cg.tileMiniviewViewStateIndices ) {
+		cg.tileMiniviewPositions.emplace_back( Rect {
+			.x       = x,
+			.y       = y,
+			.width  = tileWidth,
+			.height = tileHeight,
+		});
+		x += tileWidth;
+		// TODO: Use a smarter/team-aware layout
+	}
+
+	assert( cg.tileMiniviewViewStateIndices.size() == cg.tileMiniviewPositions.size() );
 }
 
 bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
@@ -4859,8 +4945,10 @@ int CG_RealClientTeam() {
 	return getOurClientViewState()->snapPlayerState.stats[STAT_REALTEAM];
 }
 
-std::optional<unsigned> CG_ActiveChasePov() {
-	const ViewState *const viewState = getPrimaryViewState();
+std::optional<unsigned> CG_ActiveChasePovOfViewState( unsigned viewStateIndex ) {
+	assert( viewStateIndex <= cg.numSnapViewStates || ( cgs.demoPlaying && viewStateIndex == MAX_CLIENTS ) );
+	const ViewState *viewState = cg.viewStates + viewStateIndex;
+
 	// Don't even bother in another case
 	if( const unsigned statePovNum = viewState->predictedPlayerState.POVnum; statePovNum > 0 ) {
 		unsigned chosenPovNum = 0;
@@ -4876,6 +4964,7 @@ std::optional<unsigned> CG_ActiveChasePov() {
 			return chosenPovNum - 1u;
 		}
 	}
+
 	return std::nullopt;
 }
 
@@ -4985,24 +5074,30 @@ unsigned CG_GetPrimaryViewStateIndex() {
 	return result;
 }
 
-unsigned CG_GetMultiviewConfiguration( unsigned limit, unsigned *viewStateNums, vec4_t *positions, int *panes ) {
-	const ViewState *ourClientViewState = getOurClientViewState();
-
-	unsigned result = 0;
-	unsigned viewStateNum = 0;
-	while( viewStateNum < cg.numSnapViewStates && result < limit ) {
-		const ViewState *viewState = &cg.viewStates[viewStateNum];
-		if( viewState != ourClientViewState ) {
-			// TODO: Are spectators included?
-			viewStateNums[result] = viewStateNum;
-			// TODO: Sort/classify by team
-			panes[result]         = (int)( viewStateNum % 2 ) + 1;
-			result++;
-		}
-		viewStateNum++;
-	}
-
+unsigned CG_GetOurClientViewStateIndex() {
+	const auto result = (unsigned)( getOurClientViewState() - cg.viewStates );
+	assert( result <= MAX_CLIENTS );
 	return result;
+}
+
+bool CG_IsViewAttachedToPlayer() {
+	if( cg.chaseMode == CAM_TILED ) {
+		return false;
+	}
+	if( cgs.demoPlaying && cg.isDemoCamFree ) {
+		return false;
+	}
+	return true;
+}
+
+void CG_GetMultiviewConfiguration( std::span<const uint8_t> *pane1ViewStateNums,
+								   std::span<const uint8_t> *pane2ViewStateNums,
+								   std::span<const uint8_t> *tileViewStateNums,
+								   std::span<const Rect> *tilePositions ) {
+	*pane1ViewStateNums = cg.hudControlledMiniviewViewStateIndicesForPane[0];
+	*pane2ViewStateNums = cg.hudControlledMiniviewViewStateIndicesForPane[1];
+	*tileViewStateNums  = cg.tileMiniviewViewStateIndices;
+	*tilePositions      = cg.tileMiniviewPositions;
 }
 
 auto CG_HudIndicatorIconPath( int iconNum ) -> std::optional<wsw::StringView> {

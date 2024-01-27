@@ -221,46 +221,49 @@ bool CG_ChaseStep( int step ) {
 	if( cg.frame.multipov ) {
 		// It's always PM_CHASECAM for demos
 		const auto ourActualMoveType = getOurClientViewState()->predictedPlayerState.pmove.pm_type;
-		if( ( ourActualMoveType == PM_SPECTATOR || ourActualMoveType == PM_CHASECAM ) && ( !cgs.demoPlaying || !cg.isDemoCamFree ) ) {
-			const std::optional<unsigned> existingIndex = CG_FindChaseableViewportForPlayernum( cg.chasedPlayerNum );
+		if( ( ourActualMoveType == PM_SPECTATOR || ourActualMoveType == PM_CHASECAM ) ) {
+			if( ( !cgs.demoPlaying || !cg.isDemoCamFree ) && cg.chaseMode != CAM_TILED ) {
+				const std::optional<unsigned> existingIndex = CG_FindChaseableViewportForPlayernum( cg.chasedPlayerNum );
 
-			std::optional<std::pair<unsigned, unsigned>> chosenIndexAndPlayerNum;
+				std::optional<std::pair<unsigned, unsigned>> chosenIndexAndPlayerNum;
 
-			// the POV was lost, find the closer one (may go up or down, but who cares)
-			// TODO: Is it going to happen for new MV code?
-			if( existingIndex == std::nullopt ) {
-				chosenIndexAndPlayerNum = CG_FindMultiviewPovToChase();
-			} else {
-				int testedViewStateIndex = (int)existingIndex.value_or( std::numeric_limits<unsigned>::max() );
-				for( int i = 0; i < cg.frame.numplayers; i++ ) {
-					testedViewStateIndex += step;
-					if( testedViewStateIndex < 0 ) {
-						testedViewStateIndex = (int)cg.numSnapViewStates;
-					} else if( testedViewStateIndex >= cg.frame.numplayers ) {
-						testedViewStateIndex = 0;
+				// the POV was lost, find the closer one (may go up or down, but who cares)
+				// TODO: Is it going to happen for new MV code?
+				if( existingIndex == std::nullopt ) {
+					chosenIndexAndPlayerNum = CG_FindMultiviewPovToChase();
+				} else {
+					int testedViewStateIndex = (int)existingIndex.value_or( std::numeric_limits<unsigned>::max() );
+					for( int i = 0; i < cg.frame.numplayers; i++ ) {
+						testedViewStateIndex += step;
+						if( testedViewStateIndex < 0 ) {
+							testedViewStateIndex = (int)cg.numSnapViewStates;
+						} else if( testedViewStateIndex >= cg.frame.numplayers ) {
+							testedViewStateIndex = 0;
+						}
+						// TODO: Are specs even included in snapshots?
+						if( testedViewStateIndex == existingIndex ) {
+							break;
+						}
+						if( cg.viewStates[testedViewStateIndex].canBeAMultiviewChaseTarget() ) {
+							break;
+						}
 					}
-					// TODO: Are specs even included in snapshots?
-					if( testedViewStateIndex == existingIndex ) {
-						break;
-					}
-					if( cg.viewStates[testedViewStateIndex].canBeAMultiviewChaseTarget() ) {
-						break;
+					if( testedViewStateIndex != existingIndex ) {
+						const ViewState &chosenViewState = cg.viewStates[testedViewStateIndex];
+						assert( chosenViewState.canBeAMultiviewChaseTarget() );
+						chosenIndexAndPlayerNum = { testedViewStateIndex, chosenViewState.predictedPlayerState.playerNum };
 					}
 				}
-				if( testedViewStateIndex != existingIndex ) {
-					assert( cg.viewStates[testedViewStateIndex].canBeAMultiviewChaseTarget() );
-					chosenIndexAndPlayerNum = { testedViewStateIndex, cg.frame.playerStates[testedViewStateIndex].playerNum };
+
+				if( !chosenIndexAndPlayerNum ) {
+					return false;
 				}
-			}
 
-			if( !chosenIndexAndPlayerNum ) {
-				return false;
+				cg.chasedViewportIndex = chosenIndexAndPlayerNum->first;
+				cg.chasedPlayerNum     = chosenIndexAndPlayerNum->second;
+				assert( cg.chasedViewportIndex < cg.numSnapViewStates );
+				return true;
 			}
-
-			cg.chasedViewportIndex = chosenIndexAndPlayerNum->first;
-			cg.chasedPlayerNum     = chosenIndexAndPlayerNum->second;
-			assert( cg.chasedViewportIndex < cg.numSnapViewStates );
-			return true;
 		}
 		return false;
 	}
@@ -867,7 +870,8 @@ bool CG_SwitchChaseCamMode() {
 			if( chasecam ) {
 				if( realSpec ) {
 					// TODO: Use well-defined bounds
-					if( ++cg.chaseMode >= CAM_MODES ) {
+					// TODO: "camswitch" only if needed
+					if( ++cg.chaseMode >= CAM_TILED ) {
 						// if exceeds the cycle, start free fly
 						CL_Cmd_ExecuteNow( "camswitch" );
 						// TODO: Use well-defined bounds
@@ -878,7 +882,9 @@ bool CG_SwitchChaseCamMode() {
 				return false;
 			}
 
-			cg.chaseMode = ( ( cg.chaseMode != CAM_THIRDPERSON ) ? CAM_THIRDPERSON : CAM_INEYES );
+			if( ++cg.chaseMode >= CAM_MODES ) {
+				cg.chaseMode = 0;
+			}
 			return true;
 		}
 
@@ -1185,41 +1191,50 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				}
 			}
 
-			vec4_t viewRects[MAX_CLIENTS + 1];
+			Rect viewRects[MAX_CLIENTS + 1];
 			unsigned viewStateIndices[MAX_CLIENTS + 1];
 			unsigned numDisplayedViewStates = 0;
 
-			if( const int size = std::round( v_viewSize.get() ); size < 100 ) {
-				// Round to a multiple of 2
-				const int regionWidth  = ( ( cgs.vidWidth * size ) / 100 ) & ( ~1 );
-				const int regionHeight = ( ( cgs.vidHeight * size ) / 100 ) & ( ~1 );
+			// TODO: Should we stay in tiled mode for the single pov?
+			if( cg.chaseMode != CAM_TILED || cg.tileMiniviewViewStateIndices.empty() ) {
+				if( const int size = std::round( v_viewSize.get() ); size < 100 ) {
+					// Round to a multiple of 2
+					const int regionWidth  = ( ( cgs.vidWidth * size ) / 100 ) & ( ~1 );
+					const int regionHeight = ( ( cgs.vidHeight * size ) / 100 ) & ( ~1 );
 
-				viewRects[0][0] = ( cgs.vidWidth - regionWidth ) / 2;
-				viewRects[0][1] = ( cgs.vidHeight - regionHeight ) / 2;
-				viewRects[0][2] = regionWidth;
-				viewRects[0][3] = regionHeight;
+					viewRects[0].x      = ( cgs.vidWidth - regionWidth ) / 2;
+					viewRects[0].y      = ( cgs.vidHeight - regionHeight ) / 2;
+					viewRects[0].width  = regionWidth;
+					viewRects[0].height = regionHeight;
+				} else {
+					viewRects[0].x      = 0;
+					viewRects[0].y      = 0;
+					viewRects[0].width  = cgs.vidWidth;
+					viewRects[0].height = cgs.vidHeight;
+				}
+				viewStateIndices[0] = (unsigned)( getPrimaryViewState() - cg.viewStates );
+				numDisplayedViewStates = 1;
+				numDisplayedViewStates += wsw::ui::UISystem::instance()->retrieveHudControlledMiniviews( viewRects + 1, viewStateIndices + 1 );
 			} else {
-				viewRects[0][0] = 0;
-				viewRects[0][1] = 0;
-				viewRects[0][2] = cgs.vidWidth;
-				viewRects[0][3] = cgs.vidHeight;
+				assert( cg.tileMiniviewViewStateIndices.size() == cg.tileMiniviewPositions.size() );
+				// TODO: Std::copy?
+				for( unsigned i = 0; i < cg.tileMiniviewViewStateIndices.size(); ++i ) {
+					viewRects[i] = cg.tileMiniviewPositions[i];
+					viewStateIndices[i] = cg.tileMiniviewViewStateIndices[i];
+				}
+				numDisplayedViewStates = cg.tileMiniviewViewStateIndices.size();
 			}
-
-			viewStateIndices[0] = (unsigned)( getPrimaryViewState() - cg.viewStates );
-			numDisplayedViewStates = 1;
-
-			numDisplayedViewStates += wsw::ui::UISystem::instance()->retrieveHudControlledMiniviews( viewRects + 1, viewStateIndices + 1 );
 
 			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
 				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
-				const float *viewport      = viewRects[viewNum];
+				const Rect viewport      = viewRects[viewNum];
 
 				int viewDefType = VIEWDEF_PLAYERVIEW;
 				if( viewState == getPrimaryViewState() && cg.isDemoCamFree ) {
 					viewDefType = VIEWDEF_CAMERA;
 				}
 
-				CG_SetupViewDef( &viewState->view, viewDefType, viewState, (int)viewport[0], (int)viewport[1], (int)viewport[2], (int)viewport[3] );
+				CG_SetupViewDef( &viewState->view, viewDefType, viewState, viewport.x, viewport.y, viewport.width, viewport.height );
 
 				CG_LerpEntities( viewState );  // interpolate packet entities positions
 

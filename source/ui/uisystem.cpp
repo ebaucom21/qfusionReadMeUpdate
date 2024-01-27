@@ -193,7 +193,9 @@ public:
 	bool isShown() const override;
 
 	void dispatchShuttingDown() override { Q_EMIT shuttingDown(); }
-	auto retrieveHudControlledMiniviews( vec4_t positions[MAX_CLIENTS], unsigned viewStateNums[MAX_CLIENTS] ) -> unsigned override;
+	auto retrieveNumberOfHudMiniviewPanes() -> unsigned override;
+	auto retrieveLimitOfMiniviews() -> unsigned override { return m_hudCommonDataModel.kMaxMiniviews; }
+	auto retrieveHudControlledMiniviews( Rect positions[MAX_CLIENTS], unsigned viewStateNums[MAX_CLIENTS] ) -> unsigned override;
 
 	[[nodiscard]]
 	auto getFrameTimestamp() const -> int64_t { return ::cls.realtime; }
@@ -220,8 +222,6 @@ public:
 
 	Q_SIGNAL void isShowingHudChanged( bool isShowingHud );
 	Q_PROPERTY( bool isShowingHud MEMBER m_isShowingHud NOTIFY isShowingHudChanged );
-	Q_SIGNAL void isShowingPovHudChanged( bool isShowingPovHud );
-	Q_PROPERTY( bool isShowingPovHud MEMBER m_isShowingPovHud NOTIFY isShowingPovHudChanged );
 
 	Q_PROPERTY( bool isShowingActionRequests READ isShowingActionRequests NOTIFY isShowingActionRequestsChanged );
 
@@ -253,6 +253,11 @@ public:
 	Q_SIGNAL void hudControlledMiniviewItemsRetrievalRequested();
 	// Qml should call this method in reply
 	Q_INVOKABLE void supplyHudControlledMiniviewItemAndModelIndex( QQuickItem *item, int modelIndex );
+
+	// Asks Qml
+	Q_SIGNAL void hudMiniviewPanesRetrievalRequested();
+	// Qml should call this method in reply
+	Q_INVOKABLE void supplyHudMiniviewPane( int number );
 
 	Q_INVOKABLE QVariant getCVarValue( const QString &name ) const;
 	Q_INVOKABLE void setCVarValue( const QString &name, const QVariant &value );
@@ -472,9 +477,11 @@ private:
 
 	wsw::Vector<QPair<QString, QVariant>> m_pendingCVarChanges;
 
-	vec4_t *m_miniviewItemPositions { nullptr };
+	Rect *m_miniviewItemPositions { nullptr };
 	unsigned *m_miniviewViewStateIndices { nullptr };
 	unsigned m_numRetrievedMiniviews { 0 };
+	bool m_hasMiniviewPane1 { false };
+	bool m_hasMiniviewPane2 { false };
 
 	std::unique_ptr<QmlSandbox> m_menuSandbox;
 	std::unique_ptr<QmlSandbox> m_hudSandbox;
@@ -538,7 +545,6 @@ private:
 	bool m_isShowingActionRequests { false };
 
 	bool m_hasTeamChat { false };
-	bool m_isShowingPovHud { false };
 	bool m_isShowingHud { false };
 
 	bool m_isConsoleOpen { false };
@@ -1597,14 +1603,9 @@ void QtUISystem::checkPropertyChanges() {
 	}
 
 	const bool wasShowingHud = m_isShowingHud;
-	const bool wasShowingPovHud = m_isShowingPovHud;
 	m_isShowingHud = actualClientState == CA_ACTIVE && !( m_activeMenuMask & MainMenu );
 	if( m_isShowingHud != wasShowingHud ) {
 		Q_EMIT isShowingHudChanged( m_isShowingHud );
-	}
-	m_isShowingPovHud = m_isShowingHud && ( CG_ActiveChasePov() != std::nullopt );
-	if( m_isShowingPovHud != wasShowingPovHud ) {
-		Q_EMIT isShowingPovHudChanged( m_isShowingPovHud );
 	}
 
 	const bool wasShowingActionRequests = m_isShowingActionRequests;
@@ -1696,7 +1697,11 @@ void QtUISystem::checkPropertyChanges() {
 	const auto timestamp = getFrameTimestamp();
 	VideoPlaybackSystem::instance()->update( timestamp );
 	m_hudCommonDataModel.checkPropertyChanges( timestamp );
-	m_hudPovDataModel.setViewStateIndex( CG_GetPrimaryViewStateIndex() );
+	if( CG_IsViewAttachedToPlayer() ) {
+		m_hudPovDataModel.setViewStateIndex( CG_GetPrimaryViewStateIndex() );
+	} else {
+		m_hudPovDataModel.setViewStateIndex( CG_GetOurClientViewStateIndex() );
+	}
 	m_hudPovDataModel.checkPropertyChanges( timestamp );
 
 	updateCVarAwareControls();
@@ -2413,7 +2418,16 @@ bool QtUISystem::isShown() const {
 	return false;
 }
 
-auto QtUISystem::retrieveHudControlledMiniviews( vec4_t *positions, unsigned *viewStateIndices ) -> unsigned {
+auto QtUISystem::retrieveNumberOfHudMiniviewPanes() -> unsigned {
+	m_hasMiniviewPane1 = false;
+	m_hasMiniviewPane2 = false;
+
+	Q_EMIT hudMiniviewPanesRetrievalRequested();
+
+	return ( m_hasMiniviewPane1 ? 1 : 0 ) + ( m_hasMiniviewPane2 ? 1 : 0 );
+}
+
+auto QtUISystem::retrieveHudControlledMiniviews( Rect *positions, unsigned *viewStateIndices ) -> unsigned {
 	m_miniviewItemPositions    = positions;
 	m_miniviewViewStateIndices = viewStateIndices;
 	m_numRetrievedMiniviews    = 0;
@@ -2423,16 +2437,28 @@ auto QtUISystem::retrieveHudControlledMiniviews( vec4_t *positions, unsigned *vi
 	return m_numRetrievedMiniviews;
 }
 
+void QtUISystem::supplyHudMiniviewPane( int number ) {
+	assert( number == 1 || number == 2 );
+	if( number == 1 ) {
+		m_hasMiniviewPane1 = true;
+	} else if( number == 2 ) {
+		m_hasMiniviewPane2 = true;
+	}
+}
+
 void QtUISystem::supplyHudControlledMiniviewItemAndModelIndex( QQuickItem *item, int modelIndex ) {
-	const QRectF &rect         = item->boundingRect();
-	const QPointF &realTopLeft = item->mapToGlobal( rect.topLeft() );
+	const QRectF &fRect        = item->boundingRect();
+	const QPointF &fRealTopLeft = item->mapToGlobal( fRect.topLeft() );
 
-	float *const position = m_miniviewItemPositions[m_numRetrievedMiniviews];
+	const QRect iRect         = fRect.toRect();
+	const QPoint iRealTopLeft = fRealTopLeft.toPoint();
 
-	position[0] = (float)realTopLeft.x();
-	position[1] = (float)realTopLeft.y();
-	position[2] = (float)rect.width();
-	position[3] = (float)rect.height();
+	m_miniviewItemPositions[m_numRetrievedMiniviews] = Rect {
+		.x      = iRealTopLeft.x(),
+		.y      = iRealTopLeft.y(),
+		.width  = iRect.width(),
+		.height = iRect.height(),
+	};
 
 	const unsigned viewStateIndex = m_hudCommonDataModel.getViewStateIndexForMiniviewModelIndex( modelIndex );
 

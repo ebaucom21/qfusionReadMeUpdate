@@ -412,6 +412,9 @@ public:
 	enum MiniviewDisplay { MiniviewFixed, MiniviewPane1, MiniviewPane2 };
 	Q_ENUM( MiniviewDisplay );
 
+	// For wtf gametype
+	static constexpr unsigned kMaxMiniviews = 12;
+
 	Q_SIGNAL void miniviewLayoutChangedPass1();
 	Q_SIGNAL void miniviewLayoutChangedPass2();
 	Q_INVOKABLE QObject *getMiniviewModelForIndex( int index );
@@ -540,12 +543,10 @@ private:
 	int m_matchTimeSeconds { 0 };
 	int m_matchTimeMinutes { 0 };
 
-	// For wtf gametype
-	static constexpr unsigned kMaxMiniviews = 12;
-
 	struct FixedPositionMinivewEntry {
 		int indexOfModel;
-		vec4_t position;
+		unsigned viewStateIndex;
+		Rect position;
 	};
 
 	struct HudControlledMiniviewEntry {

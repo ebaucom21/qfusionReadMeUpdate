@@ -8,6 +8,7 @@
 #include "../common/q_shared.h"
 #include "../common/q_math.h"
 #include "../common/q_comref.h"
+#include "cgameimports.h"
 
 struct MessageFault;
 struct ReplicatedScoreboardData;
@@ -107,7 +108,11 @@ public:
 	virtual void dispatchShuttingDown() = 0;
 
 	[[nodiscard]]
-	virtual auto retrieveHudControlledMiniviews( vec4_t positions[MAX_CLIENTS], unsigned viewStateNums[MAX_CLIENTS] ) -> unsigned = 0;
+	virtual auto retrieveNumberOfHudMiniviewPanes() -> unsigned = 0;
+	[[nodiscard]]
+	virtual auto retrieveLimitOfMiniviews() -> unsigned = 0;
+	[[nodiscard]]
+	virtual auto retrieveHudControlledMiniviews( Rect positions[MAX_CLIENTS], unsigned viewStateNums[MAX_CLIENTS] ) -> unsigned = 0;
 };
 
 }
