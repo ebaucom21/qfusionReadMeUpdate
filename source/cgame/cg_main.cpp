@@ -5116,7 +5116,7 @@ void CG_MessageMode2( const CmdArgs & ) {
 // Only covers the demo playback case, otherwise the UI grabs it first on its own
 bool CG_GrabsMouseMovement() {
 	if( cgs.demoPlaying ) {
-		return CG_DemoCam_IsFree();
+		return cg.isDemoCamFree;
 	}
 	return true;
 }
@@ -5638,8 +5638,6 @@ void CG_Reset( void ) {
 	cg.realTime = 0;
 	cg.helpmessage_time = 0;
 	cg.motd_time = 0;
-
-	chaseCam.cmd_mode_delay = 0; // cg.time
 
 	memset( cg_entities, 0, sizeof( cg_entities ) );
 }

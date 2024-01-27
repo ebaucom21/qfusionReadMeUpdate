@@ -32,36 +32,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 using wsw::operator""_asView;
 
-static int64_t demo_initial_timestamp;
-static int64_t demo_time;
-
-static bool CamIsFree;
-
-#define CG_DemoCam_UpdateDemoTime() ( demo_time = cg.time - demo_initial_timestamp )
-
-typedef struct cg_democam_s
-{
-	int type;
-	int64_t timeStamp;
-	vec3_t origin;
-	vec3_t angles;
-	int fov;
-	float speed;
-	struct cg_democam_s *next;
-} cg_democam_t;
-
-cg_democam_t *currentcam;
-
-static vec3_t cam_origin, cam_angles, cam_velocity;
-static float cam_fov = 90;
-static int cam_viewtype;
-static int cam_POVent;
-static bool cam_3dPerson;
-
-static short freecam_delta_angles[3];
-
-cg_chasecam_t chaseCam;
-
 static bool postmatchsilence_set = false, demostream = false, background = false;
 static unsigned lastSecond = 0;
 
@@ -163,154 +133,63 @@ struct CrosshairSettingsTracker {
 
 static CrosshairSettingsTracker crosshairSettingsTracker;
 
-int CG_DemoCam_GetViewType() {
-	return cam_viewtype;
-}
-
-bool CG_DemoCam_GetThirdPerson() {
-	if( !currentcam ) {
-		return ( chaseCam.mode == CAM_THIRDPERSON );
-	}
-	return ( cam_viewtype == VIEWDEF_PLAYERVIEW && cam_3dPerson );
-}
-
-void CG_DemoCam_GetViewDef( cg_viewdef_t *view ) {
-	view->POVent = cam_POVent;
-	view->thirdperson = cam_3dPerson;
-	view->playerPrediction = false;
-	view->drawWeapon = false;
-	view->draw2D = false;
-}
-
-float CG_DemoCam_GetOrientation( vec3_t origin, vec3_t angles, vec3_t velocity ) {
-	VectorCopy( cam_angles, angles );
-	VectorCopy( cam_origin, origin );
-	VectorCopy( cam_velocity, velocity );
-
-	if( !currentcam || !currentcam->fov ) {
-		return v_fov.get();
-	}
-
-	return cam_fov;
-}
-
 // TODO: Should it belong to the same place where prediction gets executed?
-int CG_DemoCam_FreeFly() {
-	if( cgs.demoPlaying && CamIsFree ) {
-		float maxspeed = 250;
+void CG_DemoCam_FreeFly() {
+	assert( cgs.demoPlaying && cg.isDemoCamFree );
+	float maxspeed = 250;
 
-		// run frame
-		usercmd_t cmd;
-		NET_GetUserCmd( NET_GetCurrentUserCmdNum() - 1, &cmd );
-		cmd.msec = cg.realFrameTime;
+	// run frame
+	usercmd_t cmd;
+	NET_GetUserCmd( NET_GetCurrentUserCmdNum() - 1, &cmd );
+	cmd.msec = cg.realFrameTime;
 
-		vec3_t moveangles;
-		for( int i = 0; i < 3; i++ ) {
-			moveangles[i] = SHORT2ANGLE( cmd.angles[i] ) + SHORT2ANGLE( freecam_delta_angles[i] );
-		}
-
-		vec3_t forward, right;
-		AngleVectors( moveangles, forward, right, nullptr );
-		VectorCopy( moveangles, cam_angles );
-
-		const float SPEED = 500;
-		float fmove = cmd.forwardmove * SPEED / 127.0f;
-		float smove = cmd.sidemove * SPEED / 127.0f;
-		float upmove = cmd.upmove * SPEED / 127.0f;
-		if( cmd.buttons & BUTTON_SPECIAL ) {
-			maxspeed *= 2;
-		}
-
-		vec3_t wishvel;
-		for( int i = 0; i < 3; i++ ) {
-			wishvel[i] = forward[i] * fmove + right[i] * smove;
-		}
-		wishvel[2] += upmove;
-
-		vec3_t wishdir;
-		float wishspeed = VectorNormalize2( wishvel, wishdir );
-		if( wishspeed > maxspeed ) {
-			wishspeed = maxspeed / wishspeed;
-			VectorScale( wishvel, wishspeed, wishvel );
-			wishspeed = maxspeed;
-		}
-
-		VectorMA( cam_origin, (float)cg.realFrameTime * 0.001f, wishvel, cam_origin );
-
-		cam_POVent = 0;
-		cam_3dPerson = false;
-		return VIEWDEF_CAMERA;
+	vec3_t moveangles;
+	for( int i = 0; i < 3; i++ ) {
+		moveangles[i] = SHORT2ANGLE( cmd.angles[i] ) + SHORT2ANGLE( cg.demoFreeCamDeltaAngles[i] );
 	}
 
-	return VIEWDEF_PLAYERVIEW;
+	vec3_t forward, right;
+	AngleVectors( moveangles, forward, right, nullptr );
+	VectorCopy( moveangles, cg.demoFreeCamAngles );
+
+	const float SPEED = 500;
+	float fmove = cmd.forwardmove * SPEED / 127.0f;
+	float smove = cmd.sidemove * SPEED / 127.0f;
+	float upmove = cmd.upmove * SPEED / 127.0f;
+	if( cmd.buttons & BUTTON_SPECIAL ) {
+		maxspeed *= 2;
+	}
+
+	vec3_t wishvel;
+	for( int i = 0; i < 3; i++ ) {
+		wishvel[i] = forward[i] * fmove + right[i] * smove;
+	}
+	wishvel[2] += upmove;
+
+	vec3_t wishdir;
+	float wishspeed = VectorNormalize2( wishvel, wishdir );
+	if( wishspeed > maxspeed ) {
+		wishspeed = maxspeed / wishspeed;
+		VectorScale( wishvel, wishspeed, wishvel );
+		wishspeed = maxspeed;
+	}
+
+	VectorMA( cg.demoFreeCamOrigin, (float)cg.realFrameTime * 0.001f, wishvel, cg.demoFreeCamOrigin );
 }
 
-static void CG_Democam_SetCameraPositionFromView() {
-	ViewState *viewState = getOurClientViewState();
-	if( viewState->view.type == VIEWDEF_PLAYERVIEW ) {
-		VectorCopy( viewState->view.origin, cam_origin );
-		VectorCopy( viewState->view.angles, cam_angles );
-		VectorCopy( viewState->view.velocity, cam_velocity );
-		cam_fov = viewState->view.refdef.fov_x;
-	}
-
-	if( !CamIsFree ) {
-		usercmd_t cmd;
-		NET_GetUserCmd( NET_GetCurrentUserCmdNum() - 1, &cmd );
-
-		for( int i = 0; i < 3; i++ ) {
-			freecam_delta_angles[i] = ANGLE2SHORT( cam_angles[i] ) - cmd.angles[i];
-		}
-	}
-}
-
-static int CG_Democam_CalcView() {
-	VectorClear( cam_velocity );
-	return VIEWDEF_PLAYERVIEW;
-}
-
-bool CG_DemoCam_Update() {
-	if( !cgs.demoPlaying ) {
-		return false;
-	}
-
-	if( !demo_initial_timestamp && cg.frame.valid ) {
-		demo_initial_timestamp = cg.time;
-	}
-
-	CG_DemoCam_UpdateDemoTime();
-
-	cam_3dPerson = false;
-	cam_viewtype = VIEWDEF_PLAYERVIEW;
-	cam_POVent   = getOurClientViewState()->snapPlayerState.POVnum;
-
-	if( CamIsFree ) {
-		cam_viewtype = CG_DemoCam_FreeFly();
-	} else if( currentcam ) {
-		cam_viewtype = CG_Democam_CalcView();
-	}
-
-	CG_Democam_SetCameraPositionFromView();
-
-	return true;
-}
-
-bool CG_DemoCam_IsFree() {
-	return CamIsFree;
-}
 
 static void CG_DemoFreeFly_Cmd_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() > 1 ) {
 		if( !Q_stricmp( Cmd_Argv( 1 ), "on" ) ) {
-			CamIsFree = true;
+			cg.isDemoCamFree = true;
 		} else if( !Q_stricmp( Cmd_Argv( 1 ), "off" ) ) {
-			CamIsFree = false;
+			cg.isDemoCamFree = false;
 		}
 	} else {
-		CamIsFree = !CamIsFree;
+		cg.isDemoCamFree = !cg.isDemoCamFree;
 	}
 
-	VectorClear( cam_velocity );
+	VectorClear( cg.demoFreeCamVelocity );
 }
 
 static void CG_CamSwitch_Cmd_f( const CmdArgs & ) {
@@ -318,35 +197,19 @@ static void CG_CamSwitch_Cmd_f( const CmdArgs & ) {
 }
 
 void CG_DemocamInit() {
-	demo_time = 0;
-	demo_initial_timestamp = 0;
-
-	if( !cgs.demoPlaying ) {
-		return;
+	if( cgs.demoPlaying ) {
+		// add console commands
+		CL_Cmd_Register( "demoFreeFly"_asView, CG_DemoFreeFly_Cmd_f );
+		CL_Cmd_Register( "camswitch"_asView, CG_CamSwitch_Cmd_f );
 	}
-
-	if( !*cgs.demoName ) {
-		CG_Error( "CG_DemocamInit: no demo name string\n" );
-	}
-
-	// add console commands
-	CL_Cmd_Register( "demoFreeFly"_asView, CG_DemoFreeFly_Cmd_f );
-	CL_Cmd_Register( "camswitch"_asView, CG_CamSwitch_Cmd_f );
 }
 
 void CG_DemocamShutdown() {
-	if( !cgs.demoPlaying ) {
-		return;
+	if( cgs.demoPlaying ) {
+		// remove console commands
+		CL_Cmd_Unregister( "demoFreeFly"_asView );
+		CL_Cmd_Unregister( "camswitch"_asView );
 	}
-
-	// remove console commands
-	CL_Cmd_Unregister( "demoFreeFly"_asView );
-	CL_Cmd_Unregister( "camswitch"_asView );
-}
-
-void CG_DemocamReset() {
-	demo_time = 0;
-	demo_initial_timestamp = 0;
 }
 
 /*
@@ -358,7 +221,7 @@ bool CG_ChaseStep( int step ) {
 	if( cg.frame.multipov ) {
 		// It's always PM_CHASECAM for demos
 		const auto ourActualMoveType = getOurClientViewState()->predictedPlayerState.pmove.pm_type;
-		if( ourActualMoveType == PM_SPECTATOR || ourActualMoveType == PM_CHASECAM ) {
+		if( ( ourActualMoveType == PM_SPECTATOR || ourActualMoveType == PM_CHASECAM ) && ( !cgs.demoPlaying || !cg.isDemoCamFree ) ) {
 			const std::optional<unsigned> existingIndex = CG_FindChaseableViewportForPlayernum( cg.chasedPlayerNum );
 
 			std::optional<std::pair<unsigned, unsigned>> chosenIndexAndPlayerNum;
@@ -996,28 +859,30 @@ float CG_ViewSmoothFallKick( ViewState *viewState ) {
 bool CG_SwitchChaseCamMode() {
 	const ViewState *ourClientViewState = getOurClientViewState();
 	const auto actualMoveType = ourClientViewState->predictedPlayerState.pmove.pm_type;
-	if( actualMoveType == PM_SPECTATOR || actualMoveType == PM_CHASECAM ) {
+	if( ( actualMoveType == PM_SPECTATOR || actualMoveType == PM_CHASECAM ) && ( !cgs.demoPlaying || !cg.isDemoCamFree ) ) {
 		const bool chasecam = ourClientViewState->isUsingChasecam();
 		const bool realSpec = cgs.demoPlaying || ISREALSPECTATOR( ourClientViewState );
 
-		if( ( cg.frame.multipov || chasecam ) && !CG_DemoCam_IsFree() ) {
+		if( ( cg.frame.multipov || chasecam ) && !cg.isDemoCamFree ) {
 			if( chasecam ) {
 				if( realSpec ) {
-					if( ++chaseCam.mode >= CAM_MODES ) {
+					// TODO: Use well-defined bounds
+					if( ++cg.chaseMode >= CAM_MODES ) {
 						// if exceeds the cycle, start free fly
 						CL_Cmd_ExecuteNow( "camswitch" );
-						chaseCam.mode = 0;
+						// TODO: Use well-defined bounds
+						cg.chaseMode = 0;
 					}
 					return true;
 				}
 				return false;
 			}
 
-			chaseCam.mode = ( ( chaseCam.mode != CAM_THIRDPERSON ) ? CAM_THIRDPERSON : CAM_INEYES );
+			cg.chaseMode = ( ( cg.chaseMode != CAM_THIRDPERSON ) ? CAM_THIRDPERSON : CAM_INEYES );
 			return true;
 		}
 
-		if( realSpec && ( CG_DemoCam_IsFree() || ourClientViewState->snapPlayerState.pmove.pm_type == PM_SPECTATOR ) ) {
+		if( realSpec && ( cg.isDemoCamFree || ourClientViewState->snapPlayerState.pmove.pm_type == PM_SPECTATOR ) ) {
 			CL_Cmd_ExecuteNow( "camswitch" );
 			return true;
 		}
@@ -1028,7 +893,8 @@ bool CG_SwitchChaseCamMode() {
 }
 
 void CG_ClearChaseCam() {
-	memset( &chaseCam, 0, sizeof( chaseCam ) );
+	cg.chaseMode            = 0;
+	cg.chaseSwitchTimestamp = 0;
 }
 
 static void CG_UpdateChaseCam() {
@@ -1036,19 +902,17 @@ static void CG_UpdateChaseCam() {
 
 	const bool chasecam = ( viewState->snapPlayerState.pmove.pm_type == PM_CHASECAM ) && ( viewState->snapPlayerState.POVnum != (unsigned)( cgs.playerNum + 1 ) );
 
-	if( !( cg.frame.multipov || chasecam ) || CG_DemoCam_IsFree() ) {
-		chaseCam.mode = CAM_INEYES;
+	if( !( cg.frame.multipov || chasecam ) || cg.isDemoCamFree ) {
+		cg.chaseMode = CAM_INEYES;
 	}
 
-	if( cg.time > chaseCam.cmd_mode_delay ) {
-		const int delay = 250;
-
+	if( cg.time > cg.chaseSwitchTimestamp + 250 ) {
 		usercmd_t cmd;
 		NET_GetUserCmd( NET_GetCurrentUserCmdNum() - 1, &cmd );
 
 		if( cmd.buttons & BUTTON_ATTACK ) {
 			if( CG_SwitchChaseCamMode() ) {
-				chaseCam.cmd_mode_delay = cg.time + delay;
+				cg.chaseSwitchTimestamp = cg.time;
 			}
 		}
 
@@ -1060,7 +924,7 @@ static void CG_UpdateChaseCam() {
 		}
 		if( chaseStep ) {
 			if( CG_ChaseStep( chaseStep ) ) {
-				chaseCam.cmd_mode_delay = cg.time + delay;
+				cg.chaseSwitchTimestamp = cg.time;
 			}
 		}
 	}
@@ -1081,9 +945,7 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, ViewState *viewState,
 		view->draw2D = true;
 
 		// set up third-person
-		if( cgs.demoPlaying ) {
-			view->thirdperson = CG_DemoCam_GetThirdPerson();
-		} else if( chaseCam.mode == CAM_THIRDPERSON ) {
+		if( cg.chaseMode == CAM_THIRDPERSON ) {
 			view->thirdperson = true;
 		} else {
 			view->thirdperson = v_thirdPerson.get();
@@ -1110,7 +972,11 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, ViewState *viewState,
 			}
 		}
 	} else if( view->type == VIEWDEF_CAMERA ) {
-		CG_DemoCam_GetViewDef( view );
+		view->POVent           = 0;
+		view->thirdperson      = false;
+		view->playerPrediction = false;
+		view->drawWeapon       = false;
+		view->draw2D           = false;
 	} else {
 		Com_Error( ERR_DROP, "CG_SetupView: Invalid view type %i\n", view->type );
 	}
@@ -1135,6 +1001,7 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, ViewState *viewState,
 			CG_ViewSmoothPredictedSteps( view->origin, viewState ); // smooth out stair climbing
 
 			if( v_viewBob.get() && !v_thirdPerson.get() ) {
+				// TODO: Is fall kick applied to non-predicted views?
 				view->origin[2] += CG_ViewSmoothFallKick( viewState ) * 6.5f;
 			}
 		} else {
@@ -1156,7 +1023,25 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, ViewState *viewState,
 
 		VectorCopy( viewState->predictedPlayerState.pmove.velocity, view->velocity );
 	} else if( view->type == VIEWDEF_CAMERA ) {
-		view->refdef.fov_x = CG_DemoCam_GetOrientation( view->origin, view->angles, view->velocity );
+		ViewState *const viewState = getOurClientViewState();
+
+		// If the old view type was player view, start from that
+		if( viewState->view.type == VIEWDEF_PLAYERVIEW ) {
+			VectorCopy( viewState->view.origin, cg.demoFreeCamOrigin );
+			VectorCopy( viewState->view.angles, cg.demoFreeCamAngles );
+			VectorCopy( viewState->view.velocity, cg.demoFreeCamVelocity );
+		}
+
+		// We dislike putting it here, but we do the similar operation (predict movement) in the same enclosing subroutine
+		// TODO: Lift it to the caller, as well as the movement prediction?
+		// This is not that easy as it sounds as handling of the prediction results may depend of viewState->view
+		CG_DemoCam_FreeFly();
+
+		VectorCopy( cg.demoFreeCamAngles, view->angles );
+		VectorCopy( cg.demoFreeCamOrigin, view->origin );
+		VectorCopy( cg.demoFreeCamVelocity, view->velocity );
+
+		view->refdef.fov_x = v_fov.get();
 	}
 
 	Matrix3_FromAngles( view->angles, view->axis );
@@ -1290,9 +1175,14 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 			CG_ClearFragmentedDecals();
 
-			int viewDefType = VIEWDEF_PLAYERVIEW;
-			if( CG_DemoCam_Update() ) {
-				viewDefType = CG_DemoCam_GetViewType();
+			// Keep updating freecam_delta_angles (is it really needed?)
+			if( cgs.demoPlaying && !cg.isDemoCamFree ) {
+				usercmd_t cmd;
+				NET_GetUserCmd( NET_GetCurrentUserCmdNum() - 1, &cmd );
+
+				for( int i = 0; i < 3; i++ ) {
+					cg.demoFreeCamDeltaAngles[i] = ANGLE2SHORT( cg.demoFreeCamAngles[i] ) - cmd.angles[i];
+				}
 			}
 
 			vec4_t viewRects[MAX_CLIENTS + 1];
@@ -1323,6 +1213,11 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
 				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
 				const float *viewport      = viewRects[viewNum];
+
+				int viewDefType = VIEWDEF_PLAYERVIEW;
+				if( viewState == getPrimaryViewState() && cg.isDemoCamFree ) {
+					viewDefType = VIEWDEF_CAMERA;
+				}
 
 				CG_SetupViewDef( &viewState->view, viewDefType, viewState, (int)viewport[0], (int)viewport[1], (int)viewport[2], (int)viewport[3] );
 

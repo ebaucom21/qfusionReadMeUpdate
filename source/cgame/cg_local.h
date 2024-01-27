@@ -598,8 +598,6 @@ typedef struct cg_state_s {
 
 	vec3_t lightingOrigin;
 
-	bool specStateChanged;
-
 	// Addressed by index in snapshot
 	// The last is for demo TODO fix
 	ViewState viewStates[MAX_CLIENTS + 1];
@@ -610,6 +608,15 @@ typedef struct cg_state_s {
 	unsigned ourClientViewportIndex;
 	unsigned chasedPlayerNum;
 	unsigned chasedViewportIndex;
+
+	int chaseMode;
+	int64_t chaseSwitchTimestamp;
+
+	vec3_t demoFreeCamOrigin;
+	vec3_t demoFreeCamAngles;
+	vec3_t demoFreeCamVelocity;
+	short demoFreeCamDeltaAngles[3];
+	bool isDemoCamFree;
 
 	//
 	// transient data from server
@@ -829,16 +836,8 @@ enum {
 	CAM_MODES
 };
 
-typedef struct {
-	int mode;
-	unsigned int cmd_mode_delay;
-} cg_chasecam_t;
-
-extern cg_chasecam_t chaseCam;
-
 void CG_DemocamInit( void );
 void CG_DemocamShutdown( void );
-bool CG_DemoCam_IsFree();
 
 void CG_ResetKickAngles( ViewState *viewState );
 void CG_ResetColorBlend( ViewState *viewState );
