@@ -1174,6 +1174,11 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				}
 			}
 
+			if( cg.motd && ( cg.time > cg.motd_time ) ) {
+				Q_free( cg.motd );
+				cg.motd = NULL;
+			}
+
 			CG_FlashGameWindow(); // notify player of important game events
 			CG_UpdateChaseCam();
 			CG_RunLightStyles();
@@ -1288,37 +1293,6 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	}
 }
 
-void CG_DrawRSpeeds( int x, int y, int align, struct qfontface_s *font, const vec4_t color ) {
-	char msg[1024];
-
-	RF_GetSpeedsMessage( msg, sizeof( msg ) );
-
-	if( msg[0] ) {
-		int height;
-		const char *p, *start, *end;
-
-		height = SCR_FontHeight( font );
-
-		p = start = msg;
-		do {
-			end = strchr( p, '\n' );
-			if( end ) {
-				msg[end - start] = '\0';
-			}
-
-			SCR_DrawString( x, y, align,
-							p, font, color );
-			y += height;
-
-			if( end ) {
-				p = end + 1;
-			} else {
-				break;
-			}
-		} while( 1 );
-	}
-}
-
 void CG_LoadingString( const char *str ) {
 	Q_strncpyz( cgs.loadingstring, str, sizeof( cgs.loadingstring ) );
 }
@@ -1394,7 +1368,8 @@ static void CG_SCRDrawViewBlend( ViewState *viewState ) {
 		vec4_t colorblend;
 		CG_CalcColorBlend( colorblend, viewState );
 		if( colorblend[3] >= 0.01f ) {
-			R_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorblend, cgs.shaderWhite );
+			const refdef_t &rd = viewState->view.refdef;
+			R_DrawStretchPic( rd.x, rd.y, rd.width, rd.height, 0.0f, 0.0f, 1.0f, 1.0f, colorblend, cgs.shaderWhite );
 		}
 	}
 }
@@ -1469,7 +1444,7 @@ int CG_VerticalAlignForHeight( const int y, int align, int height ) {
 	return ny;
 }
 
-static void CG_DrawHUDRect( int x, int y, int align, int w, int h, int val, int maxval, vec4_t color, struct shader_s *shader ) {
+static void drawBar( int x, int y, int align, int w, int h, int val, int maxval, const vec4_t color, struct shader_s *shader ) {
 	if( val < 1 || maxval < 1 || w < 1 || h < 1 ) {
 		return;
 	}
@@ -1520,48 +1495,45 @@ static void CG_DrawHUDRect( int x, int y, int align, int w, int h, int val, int 
 	R_DrawStretchPic( x, y, w, h, tc[0][0], tc[1][0], tc[0][1], tc[1][1], color, shader );
 }
 
-static void drawPlayerBars( qfontface_s *font, const vec2_t coords, vec4_t tmpcolor, int pointed_health, int pointed_armor ) {
-	int barwidth     = SCR_strWidth( "_", font, 0 ) * v_showPlayerNames_barWidth.get(); // size of 8 characters
-	int barheight    = SCR_FontHeight( font ) * 0.25; // quarter of a character height
-	int barseparator = barheight * 0.333;
-
-	vec4_t alphagreen  = { 0, 1, 0, 0 };
-	vec4_t alphared    = { 1, 0, 0, 0 };
-	vec4_t alphayellow = { 1, 1, 0, 0 };
-	vec4_t alphamagenta = { 1, 0, 1, 1 };
-	vec4_t alphagrey = { 0.85, 0.85, 0.85, 1 };
-	alphagreen[3] = alphared[3] = alphayellow[3] = alphamagenta[3] = alphagrey[3] = tmpcolor[3];
+static void drawPlayerBars( qfontface_s *font, int requestedX, int requestedY, const vec4_t color, int health, int armor ) {
+	const int barwidth     = (int)std::round( (float)SCR_strWidth( "_", font, 0 ) * v_showPlayerNames_barWidth.get() ); // size of 8 characters
+	const int barheight    = (int)std::round( (float)SCR_FontHeight( font ) * 0.25 ); // quarter of a character height
+	const int barseparator = (int)barheight / 3;
 
 	// soften the alpha of the box color
-	tmpcolor[3] *= 0.4f;
+	const vec4_t tmpcolor = { color[0], color[1], color[2], 0.4f * color[3] };
 
 	// we have to align first, then draw as left top, cause we want the bar to grow from left to right
-	int x = CG_HorizontalAlignForWidth( coords[0], ALIGN_CENTER_TOP, barwidth );
-	int y = CG_VerticalAlignForHeight( coords[1], ALIGN_CENTER_TOP, barheight );
+	const int x = CG_HorizontalAlignForWidth( requestedX, ALIGN_CENTER_TOP, barwidth );
+	int y = CG_VerticalAlignForHeight( requestedY, ALIGN_CENTER_TOP, barheight );
 
 	// draw the background box
-	CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight * 3, 100, 100, tmpcolor, NULL );
+	drawBar( x, y, ALIGN_LEFT_TOP, barwidth, barheight * 3, 100, 100, tmpcolor, NULL );
 
 	y += barseparator;
 
-	if( pointed_health > 100 ) {
-		alphagreen[3] = alphamagenta[3] = 1.0f;
-		CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, 100, 100, alphagreen, NULL );
-		CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health - 100, 100, alphamagenta, NULL );
-		alphagreen[3] = alphamagenta[3] = alphared[3];
+	if( health > 100 ) {
+		const vec4_t alphagreen   = { 0.0f, 1.0f, 0.0f, 1.0f };
+		const vec4_t alphamagenta = { 1.0f, 0.0f, 1.0f, 1.0f };
+		drawBar( x, y, ALIGN_LEFT_TOP, barwidth, barheight, 100, 100, alphagreen, NULL );
+		drawBar( x, y, ALIGN_LEFT_TOP, barwidth, barheight, health - 100, 100, alphamagenta, NULL );
 	} else {
-		if( pointed_health <= 33 ) {
-			CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphared, NULL );
-		} else if( pointed_health <= 66 ) {
-			CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphayellow, NULL );
+		if( health <= 33 ) {
+			const vec4_t alphared { 1.0f, 0.0f, 0.0f, color[3] };
+			drawBar( x, y, ALIGN_LEFT_TOP, barwidth, barheight, health, 100, alphared, NULL );
+		} else if( health <= 66 ) {
+			const vec4_t alphayellow { 1.0f, 1.0f, 0.0f, color[3] };
+			drawBar( x, y, ALIGN_LEFT_TOP, barwidth, barheight, health, 100, alphayellow, NULL );
 		} else {
-			CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_health, 100, alphagreen, NULL );
+			const vec4_t alphagreen { 0.0f, 1.0f, 0.0f, color[3] };
+			drawBar( x, y, ALIGN_LEFT_TOP, barwidth, barheight, health, 100, alphagreen, NULL );
 		}
 	}
 
-	if( pointed_armor ) {
+	if( armor ) {
 		y += barseparator + barheight;
-		CG_DrawHUDRect( x, y, ALIGN_LEFT_TOP, barwidth, barheight, pointed_armor, 150, alphagrey, NULL );
+		const vec4_t alphagrey { 0.85, 0.85, 0.85, color[3] };
+		drawBar( x, y, ALIGN_LEFT_TOP, barwidth, barheight, armor, 150, alphagrey, NULL );
 	}
 }
 
@@ -1577,15 +1549,35 @@ static void drawNamesAndBeacons( ViewState *viewState ) {
 		return;
 	}
 
-	qfontface_s *const font = cgs.fontSystemMedium;
-
 	CG_UpdatePointedNum( viewState );
 
-	vec2_t projectedCoords[MAX_CLIENTS];
+	int savedCoords[MAX_CLIENTS][2];
 	float playerNameAlphaValues[MAX_CLIENTS] {};
 	bool shouldDrawPlayerName[MAX_CLIENTS] {};
 	bool shouldDrawTeamBeacon[MAX_CLIENTS] {};
+	bool hasNamesToDraw   = false;
+	bool hasBeaconsToDraw = false;
 
+	struct LazyCachedTrace {
+		const ViewState *const m_viewState;
+		const centity_t *const m_cent;
+		bool m_performedTest { false };
+		bool m_passedTest { false };
+		[[nodiscard]]
+		bool passes() {
+			if( !m_performedTest ) {
+				trace_t trace;
+				// TODO: Should it be a visual trace?
+				CG_Trace( &trace, m_viewState->view.origin, vec3_origin, vec3_origin, m_cent->ent.origin,
+						  (int)m_viewState->predictedPlayerState.POVnum, MASK_OPAQUE );
+				m_passedTest    = trace.fraction == 1.0f || trace.ent == m_cent->current.number;
+				m_performedTest = true;
+			}
+			return m_passedTest;
+		}
+	};
+
+	const refdef_t &refdef = viewState->view.refdef;
 	for( int i = 0; i < gs.maxclients; i++ ) {
 		const centity_t *const cent = &cg_entities[i + 1];
 		bool mayBeProjectedToScreen = false;
@@ -1609,37 +1601,42 @@ static void drawNamesAndBeacons( ViewState *viewState ) {
 			if( DotProduct( dir, &viewState->view.axis[AXIS_FORWARD] ) > 0.0f ) {
 				// find the 3d point in 2d screen
 				// TODO: Project on demand, use some kind of cache
-				vec2_t coords { 0.0f, 0.0f };
-				RF_TransformVectorToScreen( &viewState->view.refdef, drawOrigin, coords );
-				if( coords[0] >= 0 && coords[0] < cgs.vidWidth && coords[1] >= 0 && coords[1] < cgs.vidHeight ) {
-					// TODO: Trace on demand, use some kind of cache
-					trace_t trace;
-					CG_Trace( &trace, viewState->view.origin, vec3_origin, vec3_origin, cent->ent.origin, viewState->predictedPlayerState.POVnum, MASK_OPAQUE );
-					const bool passedTraceTest = trace.fraction == 1.0f || trace.ent == cent->current.number;
+				vec2_t tmpCoords { 0.0f, 0.0f };
+				// May legitimately out of viewport bounds.
+				// The actual clipping relies on scissor test.
+				// TODO: Calculate the mvp matrix before the loop
+				if( RF_TransformVectorToViewport( &refdef, drawOrigin, tmpCoords ) ) {
+					const auto coordX = (int)std::round( tmpCoords[0] );
+					const auto coordY = (int)std::round( tmpCoords[1] );
+					LazyCachedTrace trace { .m_viewState = viewState, .m_cent = cent };
 					if( shouldCareOfPlayerNames ) {
-						if( passedTraceTest ) {
-							bool isAKindOfPlayerWeNeed = false;
-							if( showNamesValue == 2 && cent->current.team == povTeam ) {
-								isAKindOfPlayerWeNeed = true;
-							} else if( showNamesValue ) {
-								isAKindOfPlayerWeNeed = true;
-							} else if( cent->current.number == viewState->pointedNum ) {
-								isAKindOfPlayerWeNeed = true;
-							}
-							if( isAKindOfPlayerWeNeed ) {
-								const float dist = VectorNormalize( dir ) * viewState->view.fracDistFOV;
-								if( !( cent->current.effects & EF_PLAYER_HIDENAME ) ) {
-									float nameAlpha = 0.0f;
-									if( cent->current.number != viewState->pointedNum ) {
-										const float fadeFrac = ( v_showPlayerNames_zfar.get() - dist ) / ( v_showPlayerNames_zfar.get() * 0.25f );
-										nameAlpha = v_showPlayerNames_alpha.get() * wsw::clamp( fadeFrac, 0.0f, 1.0f );
-									} else {
-										const float fadeFrac = (float)( viewState->pointRemoveTime - cg.time ) / 150.0f;
-										nameAlpha = wsw::clamp( fadeFrac, 0.0f, 1.0f );
-									}
-									if( nameAlpha > 0.0f ) {
+						bool isAKindOfPlayerWeNeed = false;
+						if( showNamesValue == 2 && cent->current.team == povTeam ) {
+							isAKindOfPlayerWeNeed = true;
+						} else if( showNamesValue ) {
+							isAKindOfPlayerWeNeed = true;
+						} else if( cent->current.number == viewState->pointedNum ) {
+							isAKindOfPlayerWeNeed = true;
+						}
+						if( isAKindOfPlayerWeNeed ) {
+							const float dist = VectorNormalize( dir ) * viewState->view.fracDistFOV;
+							if( !( cent->current.effects & EF_PLAYER_HIDENAME ) ) {
+								float nameAlpha = 0.0f;
+								if( cent->current.number != viewState->pointedNum ) {
+									const float fadeFrac = ( v_showPlayerNames_zfar.get() - dist ) / ( v_showPlayerNames_zfar.get() * 0.25f );
+									nameAlpha = v_showPlayerNames_alpha.get() * wsw::clamp( fadeFrac, 0.0f, 1.0f );
+								} else {
+									const float fadeFrac = (float)( viewState->pointRemoveTime - cg.time ) / 150.0f;
+									nameAlpha = wsw::clamp( fadeFrac, 0.0f, 1.0f );
+								}
+								if( nameAlpha > 0.0f ) {
+									// Do the expensive trace test last
+									if( trace.passes() ) {
+										// We fully rely on scissor test for clipping names out.
+										// TODO: Adjust the name position like it's performed for beacons?
 										shouldDrawPlayerName[i]  = true;
 										playerNameAlphaValues[i] = nameAlpha;
+										hasNamesToDraw           = true;
 									}
 								}
 							}
@@ -1647,52 +1644,60 @@ static void drawNamesAndBeacons( ViewState *viewState ) {
 						// if not the pointed player we are done
 					}
 					if( shouldCareOfTeamBeacons ) {
-						if( !passedTraceTest ) {
-							if( cent->current.team == povTeam ) {
-								shouldDrawTeamBeacon[i] = true;
+						if( cent->current.team == povTeam ) {
+							// Clip the beacon as a point.
+							// Note that we adjust its coords while drawing so it's always fully displayed if drawn.
+							if( coordX >= refdef.x && coordX <= refdef.x + refdef.width ) {
+								if( coordY >= refdef.y && coordY <= refdef.y + refdef.height ) {
+									// Do the expensive trace test last
+									if( !trace.passes() ) {
+										shouldDrawTeamBeacon[i] = true;
+										hasBeaconsToDraw        = true;
+									}
+								}
 							}
 						}
 					}
 					if( shouldDrawPlayerName[i] | shouldDrawTeamBeacon[i] ) {
-						Vector2Copy( coords, projectedCoords[i] );
+						savedCoords[i][0] = coordX;
+						savedCoords[i][1] = coordY;
 					}
 				}
 			}
 		}
 	}
 
-	if( shouldCareOfTeamBeacons ) {
+	if( hasBeaconsToDraw ) {
+		vec4_t color;
+		CG_TeamColor( viewState->predictedPlayerState.stats[STAT_TEAM], color );
 		for( int i = 0; i < gs.maxclients; ++i ) {
-			vec4_t color;
-			CG_TeamColor( viewState->predictedPlayerState.stats[STAT_TEAM], color );
 			if( shouldDrawTeamBeacon[i] ) {
-				const centity_t *const cent = &cg_entities[i + 1];
-				const int pic_size = 18 * cgs.vidHeight / 600;
-				vec2_t coords { projectedCoords[i][0], projectedCoords[i][1] };
-				coords[0] -= pic_size / 2;
-				coords[1] -= pic_size / 2;
-				Q_clamp( coords[0], 0, cgs.vidWidth - pic_size );
-				Q_clamp( coords[1], 0, cgs.vidHeight - pic_size );
+				const int picSize = 18 * cgs.vidHeight / 600;
+				assert( refdef.width > picSize && refdef.height > picSize );
+				const int picX = wsw::clamp( savedCoords[i][0] - picSize / 2, refdef.x, refdef.x + refdef.width - picSize );
+				const int picY = wsw::clamp( savedCoords[i][1] - picSize / 2, refdef.y, refdef.y + refdef.height - picSize );
 				shader_s *shader;
-				if( cent->current.effects & EF_CARRIER ) {
+				if( const centity_t *const cent = &cg_entities[i + 1]; cent->current.effects & EF_CARRIER ) {
 					shader = cgs.media.shaderTeamCarrierIndicator;
 				} else {
 					shader = cgs.media.shaderTeamMateIndicator;
 				}
-				R_DrawStretchPic( coords[0], coords[1], pic_size, pic_size, 0, 0, 1, 1, color, shader );
+				R_DrawStretchPic( picX, picY, picSize, picSize, 0.0f, 0.0f, 1.0f, 1.0f, color, shader );
 			}
 		}
 	}
 
-	if( shouldCareOfPlayerNames ) {
+	if( hasNamesToDraw ) {
+		qfontface_s *const font = cgs.fontSystemMedium;
 		for( int i = 0; i < gs.maxclients; ++i ) {
-			vec4_t tmpcolor { 1.0f, 1.0f, 1.0f, playerNameAlphaValues[i] };
-			const vec2_t &coords = projectedCoords[i];
-			SCR_DrawString( coords[0], coords[1], ALIGN_CENTER_BOTTOM, cgs.clientInfo[i].name, font, tmpcolor );
+			const vec4_t color { 1.0f, 1.0f, 1.0f, playerNameAlphaValues[i] };
+			const int requestedX = savedCoords[i][0];
+			const int requestedY = savedCoords[i][1];
+			SCR_DrawString( requestedX, requestedY, ALIGN_CENTER_BOTTOM, cgs.clientInfo[i].name, font, color );
 			if( showPointedPlayerValue && ( i + 1 == viewState->pointedNum ) ) {
 				// pointed player hasn't a health value to be drawn, so skip adding the bars
 				if( viewState->pointedHealth && v_showPlayerNames_barWidth.get() > 0 ) {
-					drawPlayerBars( font, coords, tmpcolor, viewState->pointedHealth, viewState->pointedArmor );
+					drawPlayerBars( font, requestedX, requestedY, color, viewState->pointedHealth, viewState->pointedArmor );
 				}
 			}
 		}
@@ -1781,7 +1786,12 @@ static void drawCrosshair( int weapon, int fireMode, const ViewState *viewState 
 }
 
 void CG_DrawCrosshair( ViewState *viewState ) {
-	const auto *const playerState = &viewState->predictFromPlayerState;
+	const player_state_t *playerState;
+	if( viewState->view.playerPrediction ) {
+		playerState = &viewState->predictFromPlayerState;
+	} else {
+		playerState = &viewState->predictedPlayerState;
+	}
 	if( const auto weapon = playerState->stats[STAT_WEAPON] ) {
 		if( const auto *const firedef = GS_FiredefForPlayerState( playerState, weapon ) ) {
 			if( firedef->fire_mode == FIRE_MODE_STRONG ) {
@@ -1794,26 +1804,22 @@ void CG_DrawCrosshair( ViewState *viewState ) {
 
 void CG_Draw2D( ViewState *viewState ) {
 	if( v_draw2D.get() && viewState->view.draw2D ) {
+		const refdef_t &rd = viewState->view.refdef;
+		RF_Set2DScissor( rd.x, rd.y, rd.width, rd.height );
+		// TODO: Does it mean we can just turn blends locally off?
 		CG_SCRDrawViewBlend( viewState );
-
-		if( cg.motd && ( cg.time > cg.motd_time ) ) {
-			Q_free( cg.motd );
-			cg.motd = NULL;
-		}
 
 		if( v_showHud.get() ) {
 			if( !CG_IsScoreboardShown() ) {
 				drawNamesAndBeacons( viewState );
 			}
-			// TODO: Does it work for chasers?
-			if( viewState->predictedPlayerState.pmove.pm_type == PM_NORMAL ) {
-				if( !wsw::ui::UISystem::instance()->isShown() ) {
+			if( !wsw::ui::UISystem::instance()->isShown() ) {
+				const auto viewStateIndex = (unsigned)( viewState - cg.viewStates );
+				if( CG_ActiveChasePovOfViewState( viewStateIndex ) != std::nullopt && CG_IsPovAlive( viewStateIndex ) ) {
 					CG_DrawCrosshair( viewState );
 				}
 			}
 		}
-
-		CG_DrawRSpeeds( cgs.vidWidth, cgs.vidHeight / 2 + 8 * cgs.vidHeight / 600, ALIGN_RIGHT_TOP, cgs.fontSystemSmall, colorWhite );
 	}
 }
 

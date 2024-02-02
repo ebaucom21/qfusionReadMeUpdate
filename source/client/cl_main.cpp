@@ -1537,6 +1537,10 @@ void SCR_UpdateScreen( void ) {
 	if( canRenderView ) {
 		SCR_RenderView( timedemo );
 	}
+
+	R_Set2DMode( true );
+	RF_Set2DScissor( 0, 0, viddef.width, viddef.height );
+
 	if( canDrawConsoleNotify ) {
 		Con_DrawNotify( viddef.width, viddef.height );
 	}
