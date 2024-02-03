@@ -2780,6 +2780,135 @@ static void CG_SetFramePlayerState( player_state_t *playerState, snapshot_t *fra
 	}
 }
 
+struct TileLayoutSpecs {
+	unsigned numRows;
+	unsigned numColumns;
+	int cellWidth;
+	int cellHeight;
+};
+
+[[nodiscard]]
+static auto findBestLayoutForTiles( int fieldWidth, int fieldHeight, unsigned numTargetViews,
+									int horizontalSpacing, int verticalSpacing,
+									std::span<const float> allowedAspectRatio ) -> TileLayoutSpecs {
+	assert( numTargetViews > 0 && numTargetViews <= MAX_CLIENTS );
+	// TODO: Put a restriction on the aspect ratio as well?
+	assert( !allowedAspectRatio.empty() );
+
+	unsigned chosenNumRows    = 0;
+	unsigned chosenNumColumns = 0;
+	int chosenCellWidth       = 0;
+	int chosenCellHeight      = 0;
+
+	float bestScore = 0.0f;
+	for( unsigned numRows = 1; numRows <= numTargetViews; ++numRows ) {
+		const int initialCellHeight = ( fieldHeight - (int)( numRows - 1 ) * verticalSpacing ) / (int)numRows;
+		for( unsigned numColumns = 1; numColumns <= numTargetViews; ++numColumns ) {
+			// Make sure all views may theoretically fit, and also there won't be empty rows
+			if( numRows * numColumns >= numTargetViews && numRows * numColumns < numTargetViews + numColumns ) {
+				const int initialCellWidth = ( fieldWidth - (int)( numColumns - 1 ) * horizontalSpacing ) / (int)numColumns;
+				for( unsigned fixedDimensionStep = 0; fixedDimensionStep < 2; ++fixedDimensionStep ) {
+					for( const float ratio: allowedAspectRatio ) {
+						int cellWidthToTest  = -1;
+						int cellHeightToTest = -1;
+						if( fixedDimensionStep == 0 ) {
+							// Alternate width for the fixed height
+							const int cellWidthForRatio = (int)std::round( (float)initialCellHeight * ratio );
+							if( initialCellWidth >= cellWidthForRatio ) {
+								cellWidthToTest  = cellWidthForRatio;
+								cellHeightToTest = initialCellHeight;
+							} else {
+								// Check whether the increased width still fits
+								if( (int)( cellWidthForRatio * numColumns + horizontalSpacing * ( numColumns - 1 ) ) <= fieldWidth ) {
+									cellWidthToTest  = cellWidthForRatio;
+									cellHeightToTest = initialCellHeight;
+								}
+							}
+						} else {
+							// Alternate height for the fixed width
+							const int cellHeightForRatio = (int)std::round( (float)initialCellWidth / ratio );
+							if( initialCellHeight >= cellHeightForRatio ) {
+								cellWidthToTest  = initialCellWidth;
+								cellHeightToTest = cellHeightForRatio;
+							} else {
+								// Check whether the increased height still fits
+								if( (int)( cellHeightForRatio * numRows + verticalSpacing * ( numRows - 1 ) ) <= fieldHeight ) {
+									cellWidthToTest  = initialCellWidth;
+									cellHeightToTest = initialCellHeight;
+								}
+							}
+						}
+						if( cellWidthToTest > cellHeightToTest ) {
+							float score = (float)cellWidthToTest * (float)cellHeightToTest;
+							if( numColumns > numRows ) {
+								if( fieldWidth <= fieldHeight ) {
+									score *= 0.9f;
+								}
+							} else if( numColumns < numRows ) {
+								if( fieldWidth >= fieldHeight ) {
+									score *= 0.9f;
+								}
+							} else {
+								if( fieldWidth != fieldHeight ) {
+									score *= 0.9f;
+								}
+							}
+							if( bestScore < score ) {
+								bestScore        = score;
+								chosenNumRows    = numRows;
+								chosenNumColumns = numColumns;
+								chosenCellWidth  = cellWidthToTest;
+								chosenCellHeight = cellHeightToTest;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	assert( bestScore > 0.0f );
+
+	return TileLayoutSpecs {
+		.numRows = chosenNumRows, .numColumns = chosenNumColumns, .cellWidth = chosenCellWidth, .cellHeight = chosenCellHeight,
+	};
+}
+
+static void prepareMiniviewTiles( const TileLayoutSpecs &layoutSpecs, const Rect &fieldRect,
+								  unsigned numTargetViews, int horizontalSpacing, int verticalSpacing,
+								  wsw::StaticVector<Rect, MAX_CLIENTS> *targetViewRects ) {
+	const auto actualGridWidth  = (int)( layoutSpecs.cellWidth * layoutSpecs.numColumns + horizontalSpacing * ( layoutSpecs.numColumns - 1 ) );
+	const auto actualGridHeight = (int)( layoutSpecs.cellHeight * layoutSpecs.numRows + verticalSpacing * ( layoutSpecs.numRows - 1 ) );
+
+	int y           = fieldRect.y + ( fieldRect.height - actualGridHeight ) / 2;
+	const int baseX = fieldRect.x + ( fieldRect.width - actualGridWidth ) / 2;
+
+	unsigned numFilledRects = 0;
+	for( unsigned rowNum = 0; rowNum < layoutSpecs.numRows && numFilledRects < numTargetViews; ++rowNum ) {
+		int x = baseX;
+		// Center cells of incomplete last row
+		if( numFilledRects + layoutSpecs.numColumns > numTargetViews ) {
+			const unsigned numEmptyCells = numFilledRects + layoutSpecs.numColumns - numTargetViews;
+			assert( numEmptyCells > 0 && numEmptyCells < layoutSpecs.numColumns );
+			const int extraWidth = (int)numEmptyCells * ( layoutSpecs.cellWidth + horizontalSpacing );
+			x += extraWidth / 2;
+		}
+		for( unsigned columnNum = 0; columnNum < layoutSpecs.numColumns && numFilledRects < numTargetViews; ++columnNum ) {
+			targetViewRects->emplace_back( Rect {
+				.x      = x,
+				.y      = y,
+				.width  = layoutSpecs.cellWidth,
+				.height = layoutSpecs.cellHeight,
+			});
+			numFilledRects++;
+			x += layoutSpecs.cellWidth + horizontalSpacing;
+		}
+		y += layoutSpecs.cellHeight + verticalSpacing;
+	}
+
+	assert( numFilledRects == numTargetViews );
+}
+
 static void CG_UpdatePlayerState() {
 	const uint32_t oldSnapViewStatePresentMask = cg.snapViewStatePresentMask;
 
@@ -2869,10 +2998,13 @@ static void CG_UpdatePlayerState() {
 	const unsigned numPanes = wsw::ui::UISystem::instance()->retrieveNumberOfHudMiniviewPanes();
 	assert( numPanes >= 0 && numPanes <= 2 );
 
-	const auto ourTeam = cg.viewStates[cg.ourClientViewportIndex].predictedPlayerState.stats[STAT_REALTEAM];
+	const bool hasTwoTeams = GS_TeamBasedGametype() && !GS_IndividualGameType();
+	const auto ourTeam     = cg.viewStates[cg.ourClientViewportIndex].predictedPlayerState.stats[STAT_REALTEAM];
+
+	wsw::StaticVector<uint8_t, MAX_CLIENTS> tmpIndicesForTwoTilePanes[2];
+
 	// Disallow anything for our client in PLAYERS team. See the "Pruning by team" remark below.
 	if( ourTeam != TEAM_PLAYERS ) {
-		const bool hasTwoTeams = GS_TeamBasedGametype();
 		for( unsigned viewStateIndex = 0; viewStateIndex < cg.numSnapViewStates; ++viewStateIndex ) {
 			bool isViewStateAcceptable = false;
 			if( viewStateIndex != cg.ourClientViewportIndex ) {
@@ -2913,7 +3045,12 @@ static void CG_UpdatePlayerState() {
 							indices[0].push_back( (uint8_t)viewStateIndex );
 						}
 					} else {
-						cg.tileMiniviewViewStateIndices.push_back( (uint8_t)viewStateIndex );
+						if( hasTwoTeams && ourTeam == TEAM_SPECTATOR ) {
+							const unsigned chosenPaneIndex = playerState.stats[STAT_REALTEAM] == TEAM_ALPHA ? 0 : 1;
+							tmpIndicesForTwoTilePanes[chosenPaneIndex].push_back( (uint8_t)viewStateIndex );
+						} else {
+							tmpIndicesForTwoTilePanes[0].push_back( (uint8_t)viewStateIndex );
+						}
 					}
 					numMiniviewViewStates++;
 					if( numMiniviewViewStates == limitOfMiniviews ) {
@@ -2924,25 +3061,77 @@ static void CG_UpdatePlayerState() {
 		}
 	}
 
-	// Smaller than best fit
-	const int tileWidth  = cgs.vidWidth / ( cg.tileMiniviewViewStateIndices.size() + 1 );
-	const int tileHeight = cgs.vidHeight / ( cg.tileMiniviewViewStateIndices.size() + 1 );
+	if( tmpIndicesForTwoTilePanes[0].size() + tmpIndicesForTwoTilePanes[1].size() > 0 ) {
+		wsw::StaticVector<float, 8> allowedAspectRatio;
+		const auto primaryRatio   = (float)cgs.vidWidth / (float)cgs.vidHeight;
+		bool addedThePrimaryRatio = false;
+		for( const float ratio: { 5.0f / 4.0f, 3.0f / 4.0f, 16.0f / 10.0f } ) {
+			if( ratio <= primaryRatio ) {
+				allowedAspectRatio.push_back( ratio );
+				if( ratio == primaryRatio ) {
+					addedThePrimaryRatio = true;
+				}
+			}
+		}
+		if( !addedThePrimaryRatio ) {
+			allowedAspectRatio.push_back( primaryRatio );
+		}
 
-	int x = ( cgs.vidWidth - tileWidth * (int)cg.tileMiniviewViewStateIndices.size() ) / 2;
-	const int y = ( cgs.vidHeight - tileHeight ) / 2;
+		constexpr int horizontalSpacing = 16;
+		constexpr int verticalSpacing   = 16;
 
-	for( const unsigned viewStateIndex: cg.tileMiniviewViewStateIndices ) {
-		cg.tileMiniviewPositions.emplace_back( Rect {
-			.x       = x,
-			.y       = y,
-			.width  = tileWidth,
-			.height = tileHeight,
-		});
-		x += tileWidth;
-		// TODO: Use a smarter/team-aware layout
+		if( hasTwoTeams ) {
+			const int fieldWidth  = ( ( 3 * cgs.vidWidth ) / 4 ) / 2;
+			const int fieldHeight = ( ( 5 * cgs.vidHeight ) / 8 ) / 2;
+
+			unsigned useLayoutOfPane;
+			if( tmpIndicesForTwoTilePanes[0].size() < tmpIndicesForTwoTilePanes[1].size() ) {
+				useLayoutOfPane = 1;
+			} else {
+				useLayoutOfPane = 0;
+			}
+
+			const TileLayoutSpecs &layoutSpecs = findBestLayoutForTiles( fieldWidth, fieldHeight,
+																		 tmpIndicesForTwoTilePanes[useLayoutOfPane].size(),
+																		 horizontalSpacing, verticalSpacing,
+																		 allowedAspectRatio );
+
+			const int spaceBetweenPanes = ( cgs.vidWidth - 2 * fieldWidth ) / 5;
+			int fieldX                  = ( cgs.vidWidth - spaceBetweenPanes - 2 * fieldWidth ) / 2;
+			const int fieldY            = ( cgs.vidHeight - fieldHeight ) / 2;
+
+			for( const auto &indices: tmpIndicesForTwoTilePanes ) {
+				if( !indices.empty() ) {
+					const Rect fieldRect { .x = fieldX, .y = fieldY, .width  = fieldWidth, .height = fieldHeight };
+					prepareMiniviewTiles( layoutSpecs, fieldRect, indices.size(),
+										  horizontalSpacing, verticalSpacing, &cg.tileMiniviewPositions );
+					cg.tileMiniviewViewStateIndices.insert(
+						cg.tileMiniviewViewStateIndices.end(), indices.begin(), indices.end() );
+				}
+				fieldX += fieldWidth + spaceBetweenPanes;
+			}
+		} else {
+			assert( !tmpIndicesForTwoTilePanes[0].empty() && tmpIndicesForTwoTilePanes[1].empty() );
+			const auto &indices = tmpIndicesForTwoTilePanes[0];
+
+			const int fieldWidth  = ( 3 * cgs.vidWidth ) / 4;
+			const int fieldHeight = ( 5 * cgs.vidHeight ) / 8;
+			const Rect fieldRect {
+				.x      = ( cgs.vidWidth - fieldWidth ) / 2,
+				.y      = ( cgs.vidHeight - fieldHeight ) / 2,
+				.width  = fieldWidth,
+				.height = fieldHeight,
+			};
+
+			const TileLayoutSpecs &layoutSpecs = findBestLayoutForTiles( fieldWidth, fieldHeight, indices.size(),
+																		 horizontalSpacing, verticalSpacing,
+																		 allowedAspectRatio );
+			prepareMiniviewTiles( layoutSpecs, fieldRect, indices.size(),
+								  horizontalSpacing, verticalSpacing, &cg.tileMiniviewPositions );
+			cg.tileMiniviewViewStateIndices.insert(
+				cg.tileMiniviewViewStateIndices.end(), indices.begin(), indices.end() );
+		}
 	}
-
-	assert( cg.tileMiniviewViewStateIndices.size() == cg.tileMiniviewPositions.size() );
 }
 
 bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
