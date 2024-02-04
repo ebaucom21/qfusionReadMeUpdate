@@ -11,12 +11,9 @@ Item {
     implicitWidth: 256
     implicitHeight: 192
     property var povDataModel
-    property bool isMiniview
-
 
     Connections {
         target: Hud.ui
-        enabled: !root.isMiniview
         onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(back, 64.0)
     }
 
@@ -28,7 +25,7 @@ Item {
         height: 0.75 * parent.height
         color: "black"
         opacity: 0.7
-        layer.enabled: !root.isMiniview
+        layer.enabled: true
         layer.effect: ElevationEffect { elevation: 64 }
         Component.onDestruction: Hud.destroyLayer(layer)
     }

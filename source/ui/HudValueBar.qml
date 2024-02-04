@@ -16,11 +16,9 @@ Item {
     property color color
     property real value
     property real frac
-    property bool isMiniview
 
     Connections {
         target: Hud.ui
-        enabled: !root.isMiniview
         onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(root, 32.0)
     }
 
@@ -33,7 +31,7 @@ Item {
         color: "black"
         opacity: 0.7
 
-        layer.enabled: !root.isMiniview
+        layer.enabled: true
         layer.effect: ElevationEffect { elevation: 16 }
         Component.onDestruction: Hud.destroyLayer(layer)
     }

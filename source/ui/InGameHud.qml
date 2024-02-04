@@ -22,6 +22,25 @@ Item {
     property bool arrangementReset
     property int stateIndex
 
+    readonly property string healthIconPath:
+        hudField.povDataModel.health > 100 ? "image://wsw/gfx/hud/icons/health/100" :
+                                             "image://wsw/gfx/hud/icons/health/50"
+
+    readonly property string armorIconPath:
+        hudField.povDataModel.armor >= 125 ? "image://wsw/gfx/hud/icons/armor/ra" :
+            (hudField.povDataModel.armor >= 75 ? "image://wsw/gfx/hud/icons/armor/ya" :
+                                                 "image://wsw/gfx/hud/icons/armor/ga")
+
+    readonly property color healthColor:
+        hudField.povDataModel.health > 100 ? "deeppink" :
+            (hudField.povDataModel.health >= 50 ? "white" : "orangered")
+
+    readonly property color armorColor:
+        hudField.povDataModel.armor >= 125 ? "red" : (hudField.povDataModel.armor >= 75 ? "gold" : "green")
+
+    readonly property real healthFrac: 0.01 * Math.min(100.0, Math.max(0, hudField.povDataModel.health))
+    readonly property real armorFrac: 0.01 * Math.min(100.0, hudField.povDataModel.armor)
+
     Connections {
         target: layoutModel
         onArrangingItemsEnabled: arrangementReset = false
@@ -144,13 +163,13 @@ Item {
 
             sourceComponent: {
                 if (kind === HudLayoutModel.HealthBar) {
-                    healthBarComponent
+                    hudField.isMiniview ? miniHealthBarComponent : healthBarComponent
                 } else if (kind === HudLayoutModel.ArmorBar) {
-                    armorBarComponent
+                    hudField.isMiniview? miniArmorBarComponent : armorBarComponent
                 } else if (kind === HudLayoutModel.InventoryBar) {
-                    inventoryBarComponent
+                    hudField.isMiniview ? miniInventoryBarComponent : inventoryBarComponent
                 } else if (kind === HudLayoutModel.WeaponStatus) {
-                    weaponStatusComponent
+                    hudField.isMiniview ? miniWeaponStatusComponent : weaponStatusComponent
                 } else if (kind === HudLayoutModel.MatchTime) {
                     matchTimeComponent
                 } else if (kind === HudLayoutModel.AlphaScore) {
@@ -184,13 +203,10 @@ Item {
                 id: healthBarComponent
                 HudValueBar {
                     text: "HEALTH"
-                    isMiniview: hudField.isMiniview
-                    color: hudField.povDataModel.health > 100 ? "deeppink" :
-                                                                (hudField.povDataModel.health >= 50 ? "white" : "orangered")
                     value: hudField.povDataModel.health
-                    frac: 0.01 * Math.min(100.0, Math.max(0, hudField.povDataModel.health))
-                    iconPath: hudField.povDataModel.health > 100 ? "image://wsw/gfx/hud/icons/health/100" :
-                                                                   "image://wsw/gfx/hud/icons/health/50"
+                    frac: hudField.healthFrac
+                    color: hudField.healthColor
+                    iconPath: hudField.healthIconPath
                 }
             }
 
@@ -198,15 +214,32 @@ Item {
                 id: armorBarComponent
                 HudValueBar {
                     text: "ARMOR"
-                    isMiniview: hudField.isMiniview
                     value: hudField.povDataModel.armor
-                    frac: 0.01 * Math.min(100.0, hudField.povDataModel.armor)
-                    color: hudField.povDataModel.armor >= 125 ? "red" : (hudField.povDataModel.armor >= 75 ? "gold" : "green")
-                    iconPath: {
-                        hudField.povDataModel.armor >= 125 ? "image://wsw/gfx/hud/icons/armor/ra" :
-                        (hudField.povDataModel.armor >= 75 ? "image://wsw/gfx/hud/icons/armor/ya" :
-                                                             "image://wsw/gfx/hud/icons/armor/ga")
-                    }
+                    frac: hudField.armorFrac
+                    color: hudField.armorColor
+                    iconPath: hudField.armorIconPath
+                }
+            }
+
+            Component {
+                id: miniHealthBarComponent
+                HudMiniValueBar {
+                    miniviewScale: hudField.width / rootItem.width
+                    value: hudField.povDataModel.health
+                    frac: hudField.healthFrac
+                    color: hudField.healthColor
+                    iconPath: hudField.healthIconPath
+                }
+            }
+
+            Component {
+                id: miniArmorBarComponent
+                HudMiniValueBar {
+                    miniviewScale: hudField.width / rootItem.width
+                    value: hudField.povDataModel.armor
+                    frac: hudField.armorFrac
+                    color: hudField.armorColor
+                    iconPath: hudField.armorIconPath
                 }
             }
 
@@ -214,7 +247,14 @@ Item {
                 id: inventoryBarComponent
                 HudInventoryBar {
                     povDataModel: hudField.povDataModel
-                    isMiniview: hudField.isMiniview
+                }
+            }
+
+            Component {
+                id: miniInventoryBarComponent
+                HudMiniInventoryBar {
+                    povDataModel: hudField.povDataModel
+                    miniviewScale: hudField.width / rootItem.width
                 }
             }
 
@@ -222,7 +262,14 @@ Item {
                 id: weaponStatusComponent
                 HudWeaponStatus {
                     povDataModel: hudField.povDataModel
-                    isMiniview: hudField.isMiniview
+                }
+            }
+
+            Component {
+                id: miniWeaponStatusComponent
+                HudMiniWeaponStatus {
+                    povDataModel: hudField.povDataModel
+                    miniviewScale: hudField.width / rootItem.width
                 }
             }
 
