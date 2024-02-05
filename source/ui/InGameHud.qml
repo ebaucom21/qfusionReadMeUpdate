@@ -138,26 +138,39 @@ Item {
                 Hud.ui.ensureObjectDestruction(itemLoader)
             }
 
-            function updateItemVisibility() {
+            function shouldBeVisibleIfNotOccluded() {
                 if (item) {
                     // Hack for items which non-present in the actual layout but are added
                     // to prevent reinstantiation upon file change which leads to leaks
                     if (isHidden) {
-                        item.visible = false
-                    } else if (itemLoader.individualMask && !(itemLoader.individualMask & hudField.commonDataModel.activeItemsMask)) {
-                        item.visible = false
-                    } else if (!hudField.commonDataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
-                        item.visible = false
-                    } else if (!hudField.povDataModel.hasActivePov && (flags & HudLayoutModel.PovOnly)) {
-                        item.visible = false
-                    } else if (!hudField.povDataModel.isPovAlive && (flags & HudLayoutModel.AlivePovOnly)) {
-                        item.visible = false
-                    } else if (hudField.commonDataModel.isInPostmatchState && !(flags & HudLayoutModel.AllowPostmatch)){
-                        item.visible = false
-                    } else {
-                        // Put the expensive test last
-                        item.visible = !Hud.ui.isHudItemOccluded(item)
+                        return false
                     }
+                    if (itemLoader.individualMask && !(itemLoader.individualMask & hudField.commonDataModel.activeItemsMask)) {
+                        return false
+                    }
+                    if (!hudField.commonDataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
+                        return false
+                    }
+                    if (!hudField.povDataModel.hasActivePov && (flags & HudLayoutModel.PovOnly)) {
+                        return false
+                    }
+                    if (!hudField.povDataModel.isPovAlive && (flags & HudLayoutModel.AlivePovOnly)) {
+                        return false
+                    }
+                    if (hudField.commonDataModel.isInPostmatchState && !(flags & HudLayoutModel.AllowPostmatch)){
+                        return false
+                    }
+                    return true
+                }
+                return false
+            }
+
+            function updateItemVisibility() {
+                if (shouldBeVisibleIfNotOccluded()) {
+                    // Put the expensive test last
+                    item.visible = !Hud.ui.isHudItemOccluded(item)
+                } else {
+                    item.visible = false
                 }
             }
 

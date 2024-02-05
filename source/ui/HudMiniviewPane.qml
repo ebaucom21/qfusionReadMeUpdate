@@ -42,8 +42,14 @@ Item {
             }
         }
         onHudMiniviewPanesRetrievalRequested: {
-            if (root.visible) {
-                Hud.ui.supplyHudMiniviewPane(paneNumber)
+            if (parent) {
+                console.assert(parent instanceof HudLayoutItem)
+                // Don't let occlusion affect the reported number of panes.
+                // Otherwise it's possible to indroduce flicker loops
+                // due to moving all views to another pane which becomes occluded next frame.
+                if (parent.shouldBeVisibleIfNotOccluded()) {
+                    Hud.ui.supplyHudMiniviewPane(paneNumber)
+                }
             }
         }
         onHudControlledMiniviewItemsRetrievalRequested: {
