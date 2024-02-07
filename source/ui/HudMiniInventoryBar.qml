@@ -3,7 +3,6 @@ import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
 import QtQuick.Controls.Material.impl 2.12
 import QtQuick.Layouts 1.12
-import QtGraphicalEffects 1.12
 import net.warsow 2.6
 
 Item {
@@ -79,16 +78,9 @@ Item {
                     anchors.centerIn: parent
                     width: 32 * actualScale
                     height: 32 * actualScale
-                    source: model.iconPath
+                    source: model.hasWeapon ? model.iconPath : (model.iconPath + "?grayscale=true")
                     smooth: true
                     mipmap: true
-                }
-
-                Desaturate {
-                    anchors.fill: icon
-                    cached: false
-                    source: icon
-                    desaturation: hasWeapon ? 0.0 : 1.0
                 }
             }
         }
