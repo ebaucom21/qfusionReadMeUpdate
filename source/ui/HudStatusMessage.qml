@@ -5,11 +5,17 @@ import net.warsow 2.6
 
 Item {
     id: root
-    implicitWidth: stackView.currentItem ? stackView.currentItem.implicitWidth + 96 : 0
+    implicitWidth: stackView.currentItem ? stackView.currentItem.implicitWidth + 96 * actualScale : 0
     implicitHeight: stackView.height
 
     property var povDataModel
     property bool isMiniview
+    property real miniviewScale: 1.0
+
+    readonly property real defaultFontSize: 20
+    readonly property real minFontSize: 11
+    readonly property bool hasReachedDownscalingLimit: isMiniview ? (miniviewScale * defaultFontSize < minFontSize) : false
+    readonly property real actualScale: hasReachedDownscalingLimit ? (minFontSize / defaultFontSize) : miniviewScale
 
     Connections {
         target: root.povDataModel
@@ -29,7 +35,7 @@ Item {
     StackView {
         id: stackView
         width: rootItem.width
-        height: 96
+        height: 96 * actualScale
         anchors.centerIn: parent
 
         pushEnter: Transition {
@@ -89,12 +95,12 @@ Item {
             horizontalAlignment: Qt.AlignHCenter
             verticalAlignment: Qt.AlignVCenter
             font.weight: Font.Bold
-            font.pointSize: 20
-            font.letterSpacing: 2
-            font.wordSpacing: 3
+            font.pointSize: defaultFontSize * actualScale
+            font.letterSpacing: 2 * actualScale
+            font.wordSpacing: 3 * actualScale
             font.capitalization: Font.SmallCaps
             textFormat: Text.StyledText
-            style: Text.Raised
+            style: hasReachedDownscalingLimit ? Text.Normal : Text.Raised
             text: message
         }
     }

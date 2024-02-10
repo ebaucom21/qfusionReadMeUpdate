@@ -590,6 +590,14 @@ void MessageFeedModel::update( int64_t currTime ) {
 	}
 }
 
+void MessageFeedModel::reset() {
+	beginResetModel();
+	m_entries.clear();
+	m_numPendingEntries = m_pendingEntriesHead = m_pendingEntriesTail = 0;
+	m_isFadingOut = false;
+	endResetModel();
+}
+
 auto AwardsModel::roleNames() const -> QHash<int, QByteArray> {
 	return { { Message, "message" } };
 }
@@ -634,6 +642,13 @@ void AwardsModel::update( int64_t currTime ) {
 		m_pendingEntries.erase( m_pendingEntries.begin() );
 		endInsertRows();
 	}
+}
+
+void AwardsModel::reset() {
+	beginResetModel();
+	m_entries.clear();
+	m_pendingEntries.clear();
+	endResetModel();
 }
 
 auto HudCommonDataModel::getWeaponFullName( int weapon ) const -> QByteArray {
@@ -804,6 +819,40 @@ void HudCommonDataModel::addFragEvent( const std::pair<wsw::StringView, int> &vi
 								 int64_t timestamp, unsigned int meansOfDeath,
 								 const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) {
 	m_fragsFeedModel.addFrag( victimAndTeam, timestamp, meansOfDeath, attackerAndTeam );
+}
+
+void HudCommonDataModel::resetHudFeed() {
+	m_fragsFeedModel.reset();
+	for( HudPovDataModel &povModel: m_miniviewDataModels ) {
+		povModel.resetHudFeed();
+	}
+}
+
+auto HudCommonDataModel::findPovModelByPlayerNum( unsigned playerNum ) -> HudPovDataModel * {
+	for( HudPovDataModel &model: m_miniviewDataModels ) {
+		if( model.getPlayerNum() == std::optional( playerNum ) ) {
+			return std::addressof( model );
+		}
+	}
+	return nullptr;
+}
+
+void HudCommonDataModel::addToMessageFeed( unsigned playerNum, const wsw::StringView &message, int64_t timestamp ) {
+	if( HudPovDataModel *povModel = findPovModelByPlayerNum( playerNum ) ) {
+		povModel->addToMessageFeed( message, timestamp );
+	}
+}
+
+void HudCommonDataModel::addAward( unsigned playerNum, const wsw::StringView &award, int64_t timestamp ) {
+	if( HudPovDataModel *povModel = findPovModelByPlayerNum( playerNum ) ) {
+		povModel->addAward( award, timestamp );
+	}
+}
+
+void HudCommonDataModel::addStatusMessage( unsigned playerNum, const wsw::StringView &message, int64_t timestamp ) {
+	if( HudPovDataModel *povModel = findPovModelByPlayerNum( playerNum ) ) {
+		povModel->addStatusMessage( message, timestamp );
+	}
 }
 
 // TODO: Should it be shared for regular/miniview models?
@@ -1086,6 +1135,7 @@ void HudCommonDataModel::updateMiniviewData( int64_t currTime ) {
 			.position       = tilePositions[viewIndex],
 		});
 		m_miniviewDataModels[numUsedModelsSoFar].setViewStateIndex( viewStateIndex );
+		m_miniviewDataModels[numUsedModelsSoFar].setPlayerNum( CG_GetPlayerNumForViewState( viewStateIndex ).value() );
 		numUsedModelsSoFar++;
 	};
 
@@ -1098,6 +1148,7 @@ void HudCommonDataModel::updateMiniviewData( int64_t currTime ) {
 				.paneNumber   = paneNum,
 			});
 			m_miniviewDataModels[numUsedModelsSoFar].setViewStateIndex( viewStateIndex );
+			m_miniviewDataModels[numUsedModelsSoFar].setPlayerNum( CG_GetPlayerNumForViewState( viewStateIndex ).value() );
 			numUsedModelsSoFar++;
 		}
 	}
@@ -1106,6 +1157,10 @@ void HudCommonDataModel::updateMiniviewData( int64_t currTime ) {
 	for( int modelNum = 0; modelNum < numUsedModelsSoFar; ++modelNum ) {
 		assert( m_miniviewDataModels[modelNum].hasValidViewStateIndex() );
 		m_miniviewDataModels[modelNum].checkPropertyChanges( currTime );
+	}
+	for( int modelNum = numUsedModelsSoFar; modelNum < (int)std::size( m_miniviewDataModels ); ++modelNum ) {
+		assert( !m_miniviewDataModels[modelNum].hasValidViewStateIndex() );
+		m_miniviewDataModels[modelNum].clearPlayerNum();
 	}
 
 	if( layoutChanged ) {
@@ -1176,6 +1231,16 @@ void HudPovDataModel::addStatusMessage( const wsw::StringView &message, int64_t 
 	m_originalStatusMessage.assign( truncatedMessage );
 	m_formattedStatusMessage = toStyledText( truncatedMessage );
 	Q_EMIT statusMessageChanged( m_formattedStatusMessage );
+}
+
+void HudPovDataModel::resetHudFeed() {
+	m_lastStatusMessageTimestamp = 0;
+	m_originalStatusMessage.clear();
+	m_formattedStatusMessage.clear();
+	Q_EMIT statusMessageChanged( m_formattedStatusMessage );
+
+	m_messageFeedModel.reset();
+	m_awardsModel.reset();
 }
 
 void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
@@ -1257,6 +1322,24 @@ bool HudPovDataModel::hasValidViewStateIndex() const {
 
 void HudPovDataModel::clearViewStateIndex() {
 	m_viewStateIndex = ~0u;
+}
+
+void HudPovDataModel::setPlayerNum( unsigned playerNum ) {
+	if( m_playerNum != playerNum ) {
+		resetHudFeed();
+		m_playerNum = playerNum;
+	}
+}
+
+auto HudPovDataModel::getPlayerNum() const -> std::optional<unsigned> {
+	return m_playerNum != ~0u ? std::optional( m_playerNum ) : std::nullopt;
+}
+
+void HudPovDataModel::clearPlayerNum() {
+	if( m_playerNum != ~0u ) {
+		resetHudFeed();
+		m_playerNum = ~0u;
+	}
 }
 
 static const QByteArray kStatusesForNumberOfPlayers[] {

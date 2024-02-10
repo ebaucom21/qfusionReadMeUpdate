@@ -179,6 +179,7 @@ class MessageFeedModel : public QAbstractListModel {
 	void addMessage( const wsw::StringView &message, int64_t timestamp );
 
 	void update( int64_t currTime );
+	void reset();
 
 	[[nodiscard]]
 	bool isFadingOut() const { return m_isFadingOut; }
@@ -208,6 +209,7 @@ class AwardsModel : public QAbstractListModel {
 	void addAward( const wsw::StringView &award, int64_t timestamp );
 
 	void update( int64_t currTime );
+	void reset();
 };
 
 struct ObjectiveIndicatorState {
@@ -300,6 +302,8 @@ public:
 		m_awardsModel.addAward( award, timestamp );
 	}
 
+	void resetHudFeed();
+
 	[[nodiscard]]
 	bool getIsMessageFeedFadingOut() const { return m_messageFeedModel.isFadingOut(); }
 
@@ -311,9 +315,17 @@ public:
 	void setViewStateIndex( unsigned viewStateIndex );
 	[[nodiscard]]
 	auto getViewStateIndex() const -> unsigned;
+	// Note: We don't return std::optional<unsigned> as models with unset view state index
+	// should not be accessed. hasValidViewStateIndex() is only for debug checks.
+	// Contrary to that, retrieval of unset player number by getPlayerNum() is perfectly valid in the current codebase.
 	[[nodiscard]]
 	bool hasValidViewStateIndex() const;
 	void clearViewStateIndex();
+
+	void setPlayerNum( unsigned playerNum );
+	[[nodiscard]]
+	auto getPlayerNum() const -> std::optional<unsigned>;
+	void clearPlayerNum();
 private:
 	[[nodiscard]]
 	auto getActiveWeaponIcon() const -> QByteArray;
@@ -325,6 +337,7 @@ private:
 	MessageFeedModel m_messageFeedModel;
 	AwardsModel m_awardsModel;
 
+	unsigned m_playerNum { ~0u };
 	unsigned m_viewStateIndex { ~0u };
 
 	int64_t m_lastStatusMessageTimestamp { 0 };
@@ -469,13 +482,16 @@ public:
 
 	Q_SLOT void onHudUpdated( const QByteArray &name, HudLayoutModel::Flavor flavor );
 
-	void resetFragsFeed() {
-		m_fragsFeedModel.reset();
-	}
+	void resetHudFeed();
 
 	void addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
 					   int64_t timestamp, unsigned meansOfDeath,
 					   const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam );
+
+	// For miniview models
+	void addToMessageFeed( unsigned playerNum, const wsw::StringView &message, int64_t timestamp );
+	void addAward( unsigned playerNum, const wsw::StringView &award, int64_t timestamp );
+	void addStatusMessage( unsigned playerNum, const wsw::StringView &message, int64_t timestamp );
 
 	void checkPropertyChanges( int64_t currTime );
 	void updateScoreboardData( const ReplicatedScoreboardData &scoreboardData );
@@ -486,6 +502,9 @@ private:
 	auto getRegularLayoutModel() -> QObject *;
 	[[nodiscard]]
 	auto getMiniviewLayoutModel() -> QObject *;
+
+	[[nodiscard]]
+	auto findPovModelByPlayerNum( unsigned playerNum ) -> HudPovDataModel *;
 
 	[[nodiscard]]
 	static auto toQColor( int color ) -> QColor {

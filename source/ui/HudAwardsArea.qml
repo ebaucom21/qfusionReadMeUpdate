@@ -5,12 +5,18 @@ import net.warsow 2.6
 
 Item {
     id: root
-    implicitHeight: listView.contentHeight + 144
+    implicitHeight: listView.contentHeight + 144 * actualScale
     // Just for anchoring other items
     implicitWidth: 0.5 * rootItem.width
 
     property var povDataModel
     property bool isMiniview
+    property real miniviewScale: 1.0
+
+    readonly property real defaultFontSize: 26
+    readonly property real minFontSize: 12
+    readonly property bool hasReachedDownscalingLimit: isMiniview ? (miniviewScale * defaultFontSize < minFontSize) : false
+    readonly property real actualScale: hasReachedDownscalingLimit ? (minFontSize / defaultFontSize) : miniviewScale
 
     ListView {
         id: listView
@@ -19,7 +25,7 @@ Item {
         width: parent.width
         model: root.povDataModel.getAwardsModel()
         verticalLayoutDirection: ListView.BottomToTop
-        spacing: 8
+        spacing: 8 * actualScale
 
         add: Transition {
             NumberAnimation {
@@ -103,11 +109,11 @@ Item {
             horizontalAlignment: Qt.AlignHCenter
             verticalAlignment: Qt.AlignVCenter
             font.weight: Font.Bold
-            font.pointSize: 26
+            font.pointSize: defaultFontSize * actualScale
             font.capitalization: Font.SmallCaps
-            font.letterSpacing: 2
-            font.wordSpacing: 3
-            style: Text.Raised
+            font.letterSpacing: 2 * actualScale
+            font.wordSpacing: 3 * actualScale
+            style: hasReachedDownscalingLimit ? Text.Normal : Text.Raised
             textFormat: Text.StyledText
             text: model.message
         }

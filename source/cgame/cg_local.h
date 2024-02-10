@@ -701,7 +701,7 @@ void CG_Predict_TouchTriggers( pmove_t *pm, const vec3_t previous_origin );
 // cg_screen.c
 //
 void CG_Draw2D( ViewState *viewState );
-void CG_CenterPrint( const char *str );
+void CG_CenterPrint( ViewState *viewState, const char *str );
 
 void CG_LoadingString( const char *str );
 bool CG_LoadingItemName( const char *str );
@@ -710,8 +710,6 @@ void CG_CheckSharedCrosshairState( bool initial );
 void CG_DrawCrosshair( ViewState *viewState );
 
 void CG_ClearPointedNum( ViewState *viewState );
-
-void CG_SC_ResetFragsFeed( const CmdArgs & );
 
 //
 // cg_scoreboard.c
@@ -798,10 +796,10 @@ void CG_ValidateItemDef( int tag, const char *name );
 
 #ifndef _MSC_VER
 void CG_Error( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) ) __attribute__( ( noreturn ) );
-void CG_LocalPrint( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
+void CG_LocalPrint( ViewState *viewState, const char *format, ... ) __attribute__( ( format( printf, 2, 3 ) ) );
 #else
 __declspec( noreturn ) void CG_Error( _Printf_format_string_ const char *format, ... );
-void CG_LocalPrint( _Printf_format_string_ const char *format, ... );
+void CG_LocalPrint( ViewState *viewState, _Printf_format_string_ const char *format, ... );
 #endif
 
 void CG_Precache( void );
@@ -817,7 +815,7 @@ void CG_StartBackgroundTrack( void );
 // cg_svcmds.c
 //
 
-void CG_SC_AutoRecordAction( const char *action );
+void CG_SC_AutoRecordAction( ViewState *viewState, const char *action );
 
 //
 // cg_teams.c

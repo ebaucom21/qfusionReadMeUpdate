@@ -173,17 +173,17 @@ public:
 
 	void handleOptionsStatusCommand( const wsw::StringView &status ) override;
 
-	void resetFragsFeed() override;
+	void resetHudFeed() override;
 
 	void addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
 					   unsigned meansOfDeath,
 					   const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) override;
 
-	void addToMessageFeed( const wsw::StringView &message ) override;
+	void addToMessageFeed( unsigned playerNum, const wsw::StringView &message ) override;
 
-	void addAward( const wsw::StringView &award ) override;
+	void addAward( unsigned playerNum, const wsw::StringView &award ) override;
 
-	void addStatusMessage( const wsw::StringView &message ) override;
+	void addStatusMessage( unsigned playerNum, const wsw::StringView &message ) override;
 
 	void notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour rectonnectBehaviour, ConnectionDropStage dropStage );
 
@@ -1698,9 +1698,16 @@ void QtUISystem::checkPropertyChanges() {
 	VideoPlaybackSystem::instance()->update( timestamp );
 	m_hudCommonDataModel.checkPropertyChanges( timestamp );
 	if( CG_IsViewAttachedToPlayer() ) {
-		m_hudPovDataModel.setViewStateIndex( CG_GetPrimaryViewStateIndex() );
+		const unsigned viewStateIndex = CG_GetPrimaryViewStateIndex();
+		m_hudPovDataModel.setViewStateIndex( viewStateIndex );
+		if( const std::optional<unsigned> playerNum = CG_GetPlayerNumForViewState( viewStateIndex ) ) {
+			m_hudPovDataModel.setPlayerNum( *playerNum );
+		} else {
+			m_hudPovDataModel.clearPlayerNum();
+		}
 	} else {
 		m_hudPovDataModel.setViewStateIndex( CG_GetOurClientViewStateIndex() );
+		m_hudPovDataModel.clearPlayerNum();
 	}
 	m_hudPovDataModel.checkPropertyChanges( timestamp );
 
@@ -2329,8 +2336,9 @@ void QtUISystem::handleOptionsStatusCommand( const wsw::StringView &status ) {
 	m_gametypeOptionsModel.handleOptionsStatusCommand( status );
 }
 
-void QtUISystem::resetFragsFeed() {
-	m_hudCommonDataModel.resetFragsFeed();
+void QtUISystem::resetHudFeed() {
+	m_hudCommonDataModel.resetHudFeed();
+	m_hudPovDataModel.resetHudFeed();
 }
 
 void QtUISystem::addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
@@ -2339,16 +2347,29 @@ void QtUISystem::addFragEvent( const std::pair<wsw::StringView, int> &victimAndT
 	m_hudCommonDataModel.addFragEvent( victimAndTeam, getFrameTimestamp(), meansOfDeath, attackerAndTeam );
 }
 
-void QtUISystem::addToMessageFeed( const wsw::StringView &message ) {
-	m_hudPovDataModel.addToMessageFeed( message, getFrameTimestamp() );
+void QtUISystem::addToMessageFeed( unsigned playerNum, const wsw::StringView &message ) {
+	// TODO: Decouple pov-specific messages and messages to everybody
+	if( m_hudPovDataModel.getPlayerNum() == std::optional( playerNum ) ) {
+		m_hudPovDataModel.addToMessageFeed( message, getFrameTimestamp() );
+	} else {
+		m_hudCommonDataModel.addToMessageFeed( playerNum, message, getFrameTimestamp() );
+	}
 }
 
-void QtUISystem::addAward( const wsw::StringView &award ) {
-	m_hudPovDataModel.addAward( award, getFrameTimestamp() );
+void QtUISystem::addAward( unsigned playerNum, const wsw::StringView &award ) {
+	if( m_hudPovDataModel.getPlayerNum() == std::optional( playerNum ) ) {
+		m_hudPovDataModel.addAward( award, getFrameTimestamp() );
+	} else {
+		m_hudCommonDataModel.addAward( playerNum, award, getFrameTimestamp() );
+	}
 }
 
-void QtUISystem::addStatusMessage( const wsw::StringView &message ) {
-	m_hudPovDataModel.addStatusMessage( message, getFrameTimestamp() );
+void QtUISystem::addStatusMessage( unsigned playerNum, const wsw::StringView &message ) {
+	if( m_hudPovDataModel.getPlayerNum() == std::optional( playerNum ) ) {
+		m_hudPovDataModel.addStatusMessage( message, getFrameTimestamp() );
+	} else {
+		m_hudCommonDataModel.addStatusMessage( playerNum, message, getFrameTimestamp() );
+	}
 }
 
 static const QString kConnectionFailedTitle( "Connection failed" );

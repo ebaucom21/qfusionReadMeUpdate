@@ -41,6 +41,8 @@ Item {
     readonly property real healthFrac: 0.01 * Math.min(100.0, Math.max(0, hudField.povDataModel.health))
     readonly property real armorFrac: 0.01 * Math.min(100.0, hudField.povDataModel.armor)
 
+    clip: isMiniview
+
     Connections {
         target: layoutModel
         onArrangingItemsEnabled: arrangementReset = false
@@ -355,6 +357,7 @@ Item {
                 HudAwardsArea {
                     povDataModel: hudField.povDataModel
                     isMiniview: hudField.isMiniview
+                    miniviewScale: hudField.width / rootItem.width
                 }
             }
 
@@ -363,6 +366,7 @@ Item {
                 HudStatusMessage {
                     povDataModel: hudField.povDataModel
                     isMiniview: hudField.isMiniview
+                    miniviewScale: hudField.width / rootItem.width
                 }
             }
 

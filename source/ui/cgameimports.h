@@ -44,6 +44,7 @@ int CG_MyRealTeam();
 
 unsigned CG_GetPrimaryViewStateIndex();
 unsigned CG_GetOurClientViewStateIndex();
+std::optional<unsigned> CG_GetPlayerNumForViewState( unsigned viewStateIndex );
 bool CG_IsViewAttachedToPlayer();
 
 // TODO: Lift it to the top level

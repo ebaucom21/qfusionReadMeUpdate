@@ -89,16 +89,16 @@ public:
 
 	virtual void handleOptionsStatusCommand( const wsw::StringView &status ) = 0;
 
-	virtual void resetFragsFeed() = 0;
+	virtual void resetHudFeed() = 0;
 	virtual void addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
 							   unsigned meansOfDeath,
 							   const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) = 0;
 
-	virtual void addToMessageFeed( const wsw::StringView &message ) = 0;
+	virtual void addToMessageFeed( unsigned playerNum, const wsw::StringView &message ) = 0;
 
-	virtual void addAward( const wsw::StringView &award ) = 0;
+	virtual void addAward( unsigned playerNum, const wsw::StringView &award ) = 0;
 
-	virtual void addStatusMessage( const wsw::StringView &message ) = 0;
+	virtual void addStatusMessage( unsigned playerNum, const wsw::StringView &message ) = 0;
 
 	virtual void notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour reconnectBehaviour, ConnectionDropStage dropStage ) = 0;
 

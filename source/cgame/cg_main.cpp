@@ -264,11 +264,11 @@ auto getViewStateForEntity( int number ) -> ViewState * {
 	return &cg.viewStates[cg.chasedViewportIndex];
 }
 
-static void CG_SC_Print( const CmdArgs &cmdArgs ) {
-	CG_LocalPrint( "%s", Cmd_Argv( 1 ) );
+static void CG_SC_Print( ViewState *viewState, const CmdArgs &cmdArgs ) {
+	CG_LocalPrint( viewState, "%s", Cmd_Argv( 1 ) );
 }
 
-static void CG_SC_ChatPrint( const CmdArgs &cmdArgs ) {
+static void CG_SC_ChatPrint( ViewState *viewState, const CmdArgs &cmdArgs ) {
 	const wsw::StringView commandName( Cmd_Argv( 0 ) );
 	const bool teamonly = commandName.startsWith( 't' );
 	std::optional<uint64_t> sendCommandNum;
@@ -290,13 +290,18 @@ static void CG_SC_ChatPrint( const CmdArgs &cmdArgs ) {
 	const wsw::StringView textView( text );
 
 	if( teamonly ) {
-		// TODO: What player state should we check?
-		CG_LocalPrint( S_COLOR_YELLOW "[%s]" S_COLOR_WHITE "%s" S_COLOR_YELLOW ": %s\n",
-					   getPrimaryViewState()->snapPlayerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ? "SPEC" : "TEAM", name, text );
-		wsw::ui::UISystem::instance()->addToTeamChat( {nameView, textView, sendCommandNum } );
+		CG_LocalPrint( viewState, S_COLOR_YELLOW "[%s]" S_COLOR_WHITE "%s" S_COLOR_YELLOW ": %s\n",
+					   viewState->snapPlayerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ? "SPEC" : "TEAM", name, text );
+		// TODO: What view state should we check?
+		if( viewState == getPrimaryViewState() ) {
+			wsw::ui::UISystem::instance()->addToTeamChat( {nameView, textView, sendCommandNum } );
+		}
 	} else {
-		CG_LocalPrint( "%s" S_COLOR_GREEN ": %s\n", name, text );
-		wsw::ui::UISystem::instance()->addToChat( {nameView, textView, sendCommandNum } );
+		CG_LocalPrint( viewState, "%s" S_COLOR_GREEN ": %s\n", name, text );
+		// TODO: What view state should we check?
+		if( viewState == getPrimaryViewState() ) {
+			wsw::ui::UISystem::instance()->addToChat( {nameView, textView, sendCommandNum } );
+		}
 	}
 
 	if( v_chatBeep.get() ) {
@@ -304,7 +309,7 @@ static void CG_SC_ChatPrint( const CmdArgs &cmdArgs ) {
 	}
 }
 
-static void CG_SC_IgnoreCommand( const CmdArgs &cmdArgs ) {
+static void CG_SC_IgnoreCommand( ViewState *viewState, const CmdArgs &cmdArgs ) {
 	const char *firstArg = Cmd_Argv( 1 );
 	// TODO: Is there a more generic method of setting client vars?
 	// In fact this is actually a safer alternative so it should be kept
@@ -327,10 +332,10 @@ static void CG_SC_IgnoreCommand( const CmdArgs &cmdArgs ) {
 	}
 
 	const char *format = S_COLOR_GREY "A message from " S_COLOR_WHITE "%s" S_COLOR_GREY " was ignored\n";
-	CG_LocalPrint( format, cgs.clientInfo[who - 1].name );
+	CG_LocalPrint( viewState, format, cgs.clientInfo[who - 1].name );
 }
 
-static void CG_SC_MessageFault( const CmdArgs &cmdArgs ) {
+static void CG_SC_MessageFault( ViewState *viewState, const CmdArgs &cmdArgs ) {
 	const char *const commandNumString = Cmd_Argv( 1 );
 	const char *const faultKindString  = Cmd_Argv( 2 );
 	const char *const timeoutString    = Cmd_Argv( 3 );
@@ -344,9 +349,9 @@ static void CG_SC_MessageFault( const CmdArgs &cmdArgs ) {
 						const auto timeout = *maybeTimeoutValue;
 						if( kind == MessageFault::Flood ) {
 							const auto secondsLeft = (int)( *maybeTimeoutValue / 1000 ) + 1;
-							CG_LocalPrint( "Flood protection. You can talk again in %d second(s)\n", secondsLeft );
+							CG_LocalPrint( viewState, "Flood protection. You can talk again in %d second(s)\n", secondsLeft );
 						} else if( kind == MessageFault::Muted ) {
-							CG_LocalPrint( "You are muted on this server\n" );
+							CG_LocalPrint( viewState, "You are muted on this server\n" );
 						} else {
 							wsw::failWithLogicError( "unreachable" );
 						}
@@ -358,25 +363,25 @@ static void CG_SC_MessageFault( const CmdArgs &cmdArgs ) {
 	}
 }
 
-static void CG_SC_CenterPrint( const CmdArgs &cmdArgs ) {
-	CG_CenterPrint( Cmd_Argv( 1 ) );
+static void CG_SC_CenterPrint( ViewState *viewState, const CmdArgs &cmdArgs ) {
+	CG_CenterPrint( viewState, Cmd_Argv( 1 ) );
 }
 
-static void CG_SC_CenterPrintFormat( const CmdArgs &cmdArgs ) {
+static void CG_SC_CenterPrintFormat( ViewState *viewState, const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() == 8 ) {
-		CG_CenterPrint( va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ), Cmd_Argv( 4 ), Cmd_Argv( 5 ), Cmd_Argv( 6 ), Cmd_Argv( 7 ) ) );
+		CG_CenterPrint( viewState, va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ), Cmd_Argv( 4 ), Cmd_Argv( 5 ), Cmd_Argv( 6 ), Cmd_Argv( 7 ) ) );
 	} else if( Cmd_Argc() == 7 ) {
-		CG_CenterPrint( va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ), Cmd_Argv( 4 ), Cmd_Argv( 5 ), Cmd_Argv( 6 ) ) );
+		CG_CenterPrint( viewState, va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ), Cmd_Argv( 4 ), Cmd_Argv( 5 ), Cmd_Argv( 6 ) ) );
 	} else if( Cmd_Argc() == 6 ) {
-		CG_CenterPrint( va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ), Cmd_Argv( 4 ), Cmd_Argv( 5 ) ) );
+		CG_CenterPrint( viewState, va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ), Cmd_Argv( 4 ), Cmd_Argv( 5 ) ) );
 	} else if( Cmd_Argc() == 5 ) {
-		CG_CenterPrint( va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ), Cmd_Argv( 4 ) ) );
+		CG_CenterPrint( viewState, va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ), Cmd_Argv( 4 ) ) );
 	} else if( Cmd_Argc() == 4 ) {
-		CG_CenterPrint( va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ) ) );
+		CG_CenterPrint( viewState, va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ) ) );
 	} else if( Cmd_Argc() == 3 ) {
-		CG_CenterPrint( va( Cmd_Argv( 1 ), Cmd_Argv( 2 ) ) );
+		CG_CenterPrint( viewState, va( Cmd_Argv( 1 ), Cmd_Argv( 2 ) ) );
 	} else if( Cmd_Argc() == 2 ) {
-		CG_CenterPrint( Cmd_Argv( 1 ) ); // theoretically, shouldn't happen
+		CG_CenterPrint( viewState, Cmd_Argv( 1 ) ); // theoretically, shouldn't happen
 	}
 }
 
@@ -390,7 +395,7 @@ void CG_ConfigString( int i, const wsw::StringView &string ) {
 	} else if( i == CS_GAMETYPENAME ) {
 		GS_SetGametypeName( string.data() );
 	} else if( i == CS_AUTORECORDSTATE ) {
-		CG_SC_AutoRecordAction( string.data() );
+		CG_SC_AutoRecordAction( getOurClientViewState(), string.data() );
 	} else if( i >= CS_MODELS && i < CS_MODELS + MAX_MODELS ) {
 		if( string.startsWith( '$' ) ) {  // indexed pmodel
 			cgs.pModelsIndex[i - CS_MODELS] = CG_RegisterPlayerModel( string.data() + 1 );
@@ -432,7 +437,9 @@ void CG_ConfigString( int i, const wsw::StringView &string ) {
 	wsw::ui::UISystem::instance()->handleConfigString( i, string );
 }
 
-static const char *CG_SC_AutoRecordName( void ) {
+static const char *CG_SC_AutoRecordName( ViewState *viewState ) {
+	assert( viewState == getOurClientViewState() );
+
 	time_t long_time;
 	struct tm *newtime;
 	static char name[MAX_STRING_CHARS];
@@ -442,8 +449,6 @@ static const char *CG_SC_AutoRecordName( void ) {
 	// get date from system
 	time( &long_time );
 	newtime = localtime( &long_time );
-
-	const ViewState *const viewState = getOurClientViewState();
 
 	if( viewState->view.POVent <= 0 ) {
 		cleanplayername2 = "";
@@ -473,63 +478,65 @@ static const char *CG_SC_AutoRecordName( void ) {
 	return name;
 }
 
-void CG_SC_AutoRecordAction( const char *action ) {
-	const char *name;
-	bool spectator;
+void CG_SC_AutoRecordAction( ViewState *viewState, const char *action ) {
+	if( viewState == getOurClientViewState() ) {
+		const char *name;
+		bool spectator;
 
-	if( !action[0] ) {
-		return;
-	}
-
-	// filter out autorecord commands when playing a demo
-	if( cgs.demoPlaying ) {
-		return;
-	}
-
-	// let configstrings and other stuff arrive before taking any action
-	if( !cgs.precacheDone ) {
-		return;
-	}
-
-	const auto *playerState = &getOurClientViewState()->snapPlayerState;
-	if( playerState->pmove.pm_type == PM_SPECTATOR || playerState->pmove.pm_type == PM_CHASECAM ) {
-		spectator = true;
-	} else {
-		spectator = false;
-	}
-
-	name = CG_SC_AutoRecordName();
-
-	if( !Q_stricmp( action, "start" ) ) {
-		if( v_autoactionDemo.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
-			CL_Cmd_ExecuteNow( "stop silent" );
-			CL_Cmd_ExecuteNow( va( "record autorecord/%s/%s silent",
-								   gs.gametypeName, name ) );
-			autorecording = true;
-		}
-	} else if( !Q_stricmp( action, "altstart" ) ) {
-		if( v_autoactionDemo.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
-			CL_Cmd_ExecuteNow( va( "record autorecord/%s/%s silent",
-								   gs.gametypeName, name ) );
-			autorecording = true;
-		}
-	} else if( !Q_stricmp( action, "stop" ) ) {
-		if( autorecording ) {
-			CL_Cmd_ExecuteNow( "stop silent" );
-			autorecording = false;
+		if( !action[0] ) {
+			return;
 		}
 
-		if( v_autoactionScreenshot.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
-			CL_Cmd_ExecuteNow( va( "screenshot autorecord/%s/%s silent",
-								   gs.gametypeName, name ) );
+		// filter out autorecord commands when playing a demo
+		if( cgs.demoPlaying ) {
+			return;
 		}
-	} else if( !Q_stricmp( action, "cancel" ) ) {
-		if( autorecording ) {
-			CL_Cmd_ExecuteNow( "stop cancel silent" );
-			autorecording = false;
+
+		// let configstrings and other stuff arrive before taking any action
+		if( !cgs.precacheDone ) {
+			return;
 		}
-	} else if( developer->integer ) {
-		Com_Printf( "CG_SC_AutoRecordAction: Unknown action: %s\n", action );
+
+		const auto *playerState = &getOurClientViewState()->snapPlayerState;
+		if( playerState->pmove.pm_type == PM_SPECTATOR || playerState->pmove.pm_type == PM_CHASECAM ) {
+			spectator = true;
+		} else {
+			spectator = false;
+		}
+
+		name = CG_SC_AutoRecordName( viewState );
+
+		if( !Q_stricmp( action, "start" ) ) {
+			if( v_autoactionDemo.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
+				CL_Cmd_ExecuteNow( "stop silent" );
+				CL_Cmd_ExecuteNow( va( "record autorecord/%s/%s silent",
+									   gs.gametypeName, name ) );
+				autorecording = true;
+			}
+		} else if( !Q_stricmp( action, "altstart" ) ) {
+			if( v_autoactionDemo.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
+				CL_Cmd_ExecuteNow( va( "record autorecord/%s/%s silent",
+									   gs.gametypeName, name ) );
+				autorecording = true;
+			}
+		} else if( !Q_stricmp( action, "stop" ) ) {
+			if( autorecording ) {
+				CL_Cmd_ExecuteNow( "stop silent" );
+				autorecording = false;
+			}
+
+			if( v_autoactionScreenshot.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
+				CL_Cmd_ExecuteNow( va( "screenshot autorecord/%s/%s silent",
+									   gs.gametypeName, name ) );
+			}
+		} else if( !Q_stricmp( action, "cancel" ) ) {
+			if( autorecording ) {
+				CL_Cmd_ExecuteNow( "stop cancel silent" );
+				autorecording = false;
+			}
+		} else if( developer->integer ) {
+			Com_Printf( "CG_SC_AutoRecordAction: Unknown action: %s\n", action );
+		}
 	}
 }
 
@@ -568,73 +575,77 @@ static const char *CG_MatchMessageString( matchmessage_t mm ) {
 	return "";
 }
 
-static void CG_SC_MatchMessage( const CmdArgs &cmdArgs ) {
-	matchmessage_t mm;
-	const char *matchmessage;
+static void CG_SC_MatchMessage( ViewState *viewState, const CmdArgs &cmdArgs ) {
+	if( viewState == getOurClientViewState() ) {
+		matchmessage_t mm;
+		const char *matchmessage;
 
-	cg.matchmessage = NULL;
+		cg.matchmessage = NULL;
 
-	mm = (matchmessage_t)atoi( Cmd_Argv( 1 ) );
-	matchmessage = CG_MatchMessageString( mm );
-	if( !matchmessage || !matchmessage[0] ) {
-		return;
-	}
-
-	cg.matchmessage = matchmessage;
-}
-
-static void CG_SC_HelpMessage( const CmdArgs &cmdArgs ) {
-	cg.helpmessage[0] = '\0';
-
-	unsigned index = atoi( Cmd_Argv( 1 ) );
-	if( !index || index > MAX_HELPMESSAGES ) {
-		return;
-	}
-
-	const auto maybeConfigString = cgs.configStrings.getHelpMessage( index - 1 );
-	if( !maybeConfigString ) {
-		return;
-	}
-
-	unsigned outlen = 0;
-	int c;
-	const char *helpmessage = maybeConfigString->data();
-	while( ( c = helpmessage[0] ) && ( outlen < MAX_HELPMESSAGE_CHARS - 1 ) ) {
-		helpmessage++;
-
-		if( c == '{' ) { // template
-			int t = *( helpmessage++ );
-			switch( t ) {
-				case 'B': // key binding
-				{
-					char cmd[MAX_STRING_CHARS];
-					unsigned cmdlen = 0;
-					while( ( c = helpmessage[0] ) != '\0' ) {
-						helpmessage++;
-						if( c == '}' ) {
-							break;
-						}
-						if( cmdlen < MAX_STRING_CHARS - 1 ) {
-							cmd[cmdlen++] = c;
-						}
-					}
-					cmd[cmdlen] = '\0';
-					CG_GetBoundKeysString( cmd, cg.helpmessage + outlen, MAX_HELPMESSAGE_CHARS - outlen );
-					outlen += strlen( cg.helpmessage + outlen );
-				}
-					continue;
-				default:
-					helpmessage--;
-					break;
-			}
+		mm = (matchmessage_t)atoi( Cmd_Argv( 1 ) );
+		matchmessage = CG_MatchMessageString( mm );
+		if( !matchmessage || !matchmessage[0] ) {
+			return;
 		}
 
-		cg.helpmessage[outlen++] = c;
+		cg.matchmessage = matchmessage;
 	}
-	cg.helpmessage[outlen] = '\0';
-	Q_FixTruncatedUtf8( cg.helpmessage );
+}
 
-	cg.helpmessage_time = cg.time;
+static void CG_SC_HelpMessage( ViewState *viewState, const CmdArgs &cmdArgs ) {
+	if( viewState == getOurClientViewState() ) {
+		cg.helpmessage[0] = '\0';
+
+		unsigned index = atoi( Cmd_Argv( 1 ) );
+		if( !index || index > MAX_HELPMESSAGES ) {
+			return;
+		}
+
+		const auto maybeConfigString = cgs.configStrings.getHelpMessage( index - 1 );
+		if( !maybeConfigString ) {
+			return;
+		}
+
+		unsigned outlen = 0;
+		int c;
+		const char *helpmessage = maybeConfigString->data();
+		while( ( c = helpmessage[0] ) && ( outlen < MAX_HELPMESSAGE_CHARS - 1 ) ) {
+			helpmessage++;
+
+			if( c == '{' ) { // template
+				int t = *( helpmessage++ );
+				switch( t ) {
+					case 'B': // key binding
+					{
+						char cmd[MAX_STRING_CHARS];
+						unsigned cmdlen = 0;
+						while( ( c = helpmessage[0] ) != '\0' ) {
+							helpmessage++;
+							if( c == '}' ) {
+								break;
+							}
+							if( cmdlen < MAX_STRING_CHARS - 1 ) {
+								cmd[cmdlen++] = c;
+							}
+						}
+						cmd[cmdlen] = '\0';
+						CG_GetBoundKeysString( cmd, cg.helpmessage + outlen, MAX_HELPMESSAGE_CHARS - outlen );
+						outlen += strlen( cg.helpmessage + outlen );
+					}
+						continue;
+					default:
+						helpmessage--;
+						break;
+				}
+			}
+
+			cg.helpmessage[outlen++] = c;
+		}
+		cg.helpmessage[outlen] = '\0';
+		Q_FixTruncatedUtf8( cg.helpmessage );
+
+		cg.helpmessage_time = cg.time;
+	}
 }
 
 static void CG_Cmd_DemoGet_f( const CmdArgs &cmdArgs ) {
@@ -655,117 +666,121 @@ static void CG_Cmd_DemoGet_f( const CmdArgs &cmdArgs ) {
 	demo_requested = true;
 }
 
-static void CG_SC_DemoGet( const CmdArgs &cmdArgs ) {
-	const char *filename, *extension;
+static void CG_SC_DemoGet( ViewState *viewState, const CmdArgs &cmdArgs ) {
+	if( viewState == getOurClientViewState() ) {
+		const char *filename, *extension;
 
-	if( cgs.demoPlaying ) {
-		// ignore download commands coming from demo files
-		return;
-	}
-
-	if( !demo_requested ) {
-		cgWarning() << cmdArgs[0] << "when not requested, ignored";
-		return;
-	}
-
-	demo_requested = false;
-
-	if( Cmd_Argc() < 2 ) {
-		cgWarning() << "No such demo found";
-		return;
-	}
-
-	filename = Cmd_Argv( 1 );
-	extension = COM_FileExtension( filename );
-	if( !COM_ValidateRelativeFilename( filename ) ||
-		!extension || Q_stricmp( extension, cgs.demoExtension ) ) {
-		cgWarning() << cmdArgs[0] << "Invalid filename, ignored";
-		return;
-	}
-
-	CL_DownloadRequest( filename, false );
-}
-
-static void CG_SC_MOTD( const CmdArgs &cmdArgs ) {
-	const char *motd;
-
-	if( cg.motd ) {
-		Q_free(   cg.motd );
-	}
-	cg.motd = NULL;
-
-	motd = Cmd_Argv( 2 );
-	if( !motd[0] ) {
-		return;
-	}
-
-	if( !strcmp( Cmd_Argv( 1 ), "1" ) ) {
-		cg.motd = Q_strdup( motd );
-		cg.motd_time = cg.time + 50 * strlen( motd );
-		if( cg.motd_time < cg.time + 5000 ) {
-			cg.motd_time = cg.time + 5000;
+		if( cgs.demoPlaying ) {
+			// ignore download commands coming from demo files
+			return;
 		}
-	}
 
-	Com_Printf( "\nMessage of the Day:\n%s", motd );
+		if( !demo_requested ) {
+			cgWarning() << cmdArgs[0] << "when not requested, ignored";
+			return;
+		}
+
+		demo_requested = false;
+
+		if( Cmd_Argc() < 2 ) {
+			cgWarning() << "No such demo found";
+			return;
+		}
+
+		filename = Cmd_Argv( 1 );
+		extension = COM_FileExtension( filename );
+		if( !COM_ValidateRelativeFilename( filename ) ||
+			!extension || Q_stricmp( extension, cgs.demoExtension ) ) {
+			cgWarning() << cmdArgs[0] << "Invalid filename, ignored";
+			return;
+		}
+
+		CL_DownloadRequest( filename, false );
+	}
 }
 
-static void CG_SC_AddAward( const CmdArgs &cmdArgs ) {
+static void CG_SC_MOTD( ViewState *viewState, const CmdArgs &cmdArgs ) {
+	if( viewState == getOurClientViewState() ) {
+		const char *motd;
+
+		if( cg.motd ) {
+			Q_free(   cg.motd );
+		}
+		cg.motd = NULL;
+
+		motd = Cmd_Argv( 2 );
+		if( !motd[0] ) {
+			return;
+		}
+
+		if( !strcmp( Cmd_Argv( 1 ), "1" ) ) {
+			cg.motd = Q_strdup( motd );
+			cg.motd_time = cg.time + 50 * strlen( motd );
+			if( cg.motd_time < cg.time + 5000 ) {
+				cg.motd_time = cg.time + 5000;
+			}
+		}
+
+		Com_Printf( "\nMessage of the Day:\n%s", motd );
+	}
+}
+
+static void CG_SC_AddAward( ViewState *viewState, const CmdArgs &cmdArgs ) {
 	const char *str = Cmd_Argv( 1 );
 	if( str && *str ) {
-		wsw::ui::UISystem::instance()->addAward( wsw::StringView( str ) );
+		wsw::ui::UISystem::instance()->addAward( viewState->snapPlayerState.playerNum, wsw::StringView( str ) );
 	}
 }
 
-static void CG_SC_ActionRequest( const CmdArgs &cmdArgs ) {
-	int argNum = 1;
-	// Expect a timeout
-	if( const auto maybeTimeout = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( argNum++ ) ) ) ) {
-		// Expect a tag
-		if( const wsw::StringView tag( Cmd_Argv( argNum++ ) ); !tag.empty() ) {
-			// Expect a title
-			if( const wsw::StringView title( Cmd_Argv( argNum++ ) ); !title.empty() ) {
-				const wsw::StringView desc( Cmd_Argv( argNum++ ) );
-				// Expect a number of commands
-				if ( const auto maybeNumCommands = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( argNum++ ) ) ) ) {
-					// Read (key, command) pairs
-					const auto maxArgNum = (int)wsw::min( 9u, *maybeNumCommands ) + argNum;
-					wsw::StaticVector<std::pair<wsw::StringView, int>, 9> actions;
-					const auto *bindingsSystem = wsw::cl::KeyBindingsSystem::instance();
-					while( argNum < maxArgNum ) {
-						const wsw::StringView keyView( Cmd_Argv( argNum++ ) );
-						const auto maybeKey = bindingsSystem->getKeyForName( keyView );
-						if( !maybeKey ) {
-							return;
+static void CG_SC_ActionRequest( ViewState *viewState, const CmdArgs &cmdArgs ) {
+	if( viewState == getOurClientViewState() ) {
+		int argNum = 1;
+		// Expect a timeout
+		if( const auto maybeTimeout = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( argNum++ ) ) ) ) {
+			// Expect a tag
+			if( const wsw::StringView tag( Cmd_Argv( argNum++ ) ); !tag.empty() ) {
+				// Expect a title
+				if( const wsw::StringView title( Cmd_Argv( argNum++ ) ); !title.empty() ) {
+					const wsw::StringView desc( Cmd_Argv( argNum++ ) );
+					// Expect a number of commands
+					if ( const auto maybeNumCommands = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( argNum++ ) ) ) ) {
+						// Read (key, command) pairs
+						const auto maxArgNum = (int)wsw::min( 9u, *maybeNumCommands ) + argNum;
+						wsw::StaticVector<std::pair<wsw::StringView, int>, 9> actions;
+						const auto *bindingsSystem = wsw::cl::KeyBindingsSystem::instance();
+						while( argNum < maxArgNum ) {
+							const wsw::StringView keyView( Cmd_Argv( argNum++ ) );
+							const auto maybeKey = bindingsSystem->getKeyForName( keyView );
+							if( !maybeKey ) {
+								return;
+							}
+							actions.emplace_back( { wsw::StringView( Cmd_Argv( argNum++ ) ), *maybeKey } );
 						}
-						actions.emplace_back( { wsw::StringView( Cmd_Argv( argNum++ ) ), *maybeKey } );
+						wsw::ui::UISystem::instance()->touchActionRequest( tag, *maybeTimeout, title, desc, actions );
 					}
-					wsw::ui::UISystem::instance()->touchActionRequest( tag, *maybeTimeout, title, desc, actions );
 				}
 			}
 		}
 	}
 }
 
-static void CG_SC_OptionsStatus( const CmdArgs &cmdArgs ) {
-	if( Cmd_Argc() == 2 ) {
-		wsw::ui::UISystem::instance()->handleOptionsStatusCommand( wsw::StringView( Cmd_Argv( 1 ) ) );
+static void CG_SC_OptionsStatus( ViewState *viewState, const CmdArgs &cmdArgs ) {
+	if( viewState == getOurClientViewState() ) {
+		if( Cmd_Argc() == 2 ) {
+			wsw::ui::UISystem::instance()->handleOptionsStatusCommand( wsw::StringView( Cmd_Argv( 1 ) ) );
+		}
 	}
 }
 
-static void CG_SC_PlaySound( const CmdArgs &cmdArgs ) {
-	if( Cmd_Argc() < 2 ) {
-		return;
+static void CG_SC_PlaySound( ViewState *viewState, const CmdArgs &cmdArgs ) {
+	if( viewState == getOurClientViewState() ) {
+		if( Cmd_Argc() >= 2 ) {
+			SoundSystem::instance()->startLocalSound( Cmd_Argv( 1 ), 1.0f );
+		}
 	}
-
-	SoundSystem::instance()->startLocalSound( Cmd_Argv( 1 ), 1.0f );
 }
 
-void CG_SC_ResetFragsFeed( const CmdArgs &cmdArgs ) {
-	wsw::ui::UISystem::instance()->resetFragsFeed();
-}
-
-static void CG_SC_FragEvent( const CmdArgs &cmdArgs ) {
+static void CG_SC_FragEvent( ViewState *viewState, const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() == 4 ) {
 		unsigned args[3];
 		for( int i = 0; i < 3; ++i ) {
@@ -788,9 +803,11 @@ static void CG_SC_FragEvent( const CmdArgs &cmdArgs ) {
 					}
 					const int victimTeam = cg_entities[victim].current.team;
 					const auto victimAndTeam( std::make_pair( victimName, victimTeam ) );
-					wsw::ui::UISystem::instance()->addFragEvent( victimAndTeam, meansOfDeath, attackerAndTeam );
-					// TODO: How could it be shown for non-primary views?
-					if( attacker && attacker != victim && getPrimaryViewState()->isViewerEntity( attacker ) ) {
+					// TODO: Is it the right condition?
+					if( viewState == getPrimaryViewState() ) {
+						wsw::ui::UISystem::instance()->addFragEvent( victimAndTeam, meansOfDeath, attackerAndTeam );
+					}
+					if( attacker && attacker != victim && viewState->isViewerEntity( attacker ) ) {
 						wsw::StaticString<256> message;
 						if( cg_entities[attacker].current.team == cg_entities[victim].current.team ) {
 							if( GS_TeamBasedGametype() ) {
@@ -802,7 +819,7 @@ static void CG_SC_FragEvent( const CmdArgs &cmdArgs ) {
 							message << wsw::StringView( "Cool! You fragged " );
 						}
 						message << victimName;
-						wsw::ui::UISystem::instance()->addStatusMessage( message.asView() );
+						wsw::ui::UISystem::instance()->addStatusMessage( viewState->snapPlayerState.playerNum, message.asView() );
 					}
 				}
 			}
@@ -812,7 +829,7 @@ static void CG_SC_FragEvent( const CmdArgs &cmdArgs ) {
 
 typedef struct {
 	const char *name;
-	void ( *func )( const CmdArgs & );
+	void ( *func )( ViewState *viewState, const CmdArgs & );
 } svcmd_t;
 
 static const svcmd_t cg_svcmds[] = {
@@ -843,13 +860,13 @@ static const svcmd_t cg_svcmds[] = {
 	{ NULL }
 };
 
-void CG_GameCommand( const char *command ) {
+void CG_GameCommand( ViewState *viewState, const char *command ) {
 	static CmdArgsSplitter argsSplitter;
 	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( command ) );
 
 	for( const svcmd_t *cmd = cg_svcmds; cmd->name; cmd++ ) {
 		if( !strcmp( cmdArgs[0].data(), cmd->name ) ) {
-			cmd->func( cmdArgs );
+			cmd->func( viewState, cmdArgs );
 			return;
 		}
 	}
@@ -2436,9 +2453,9 @@ static void handlePlayerStateHitSoundEvent( unsigned event, unsigned parm, ViewS
 		}
 		if( v_showHelp.get() ) {
 			if( random() <= 0.5f ) {
-				CG_CenterPrint( "Don't shoot at members of your team!" );
+				CG_CenterPrint( viewState, "Don't shoot at members of your team!" );
 			} else {
-				CG_CenterPrint( "You are shooting at your team-mates!" );
+				CG_CenterPrint( viewState, "You are shooting at your team-mates!" );
 			}
 		}
 	}
@@ -3135,8 +3152,6 @@ static void CG_UpdatePlayerState() {
 }
 
 bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
-	int i;
-
 	assert( frame );
 
 	if( lerpframe ) {
@@ -3150,16 +3165,15 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 
 	CG_UpdatePlayerState();
 
-	ViewState *viewState = getPrimaryViewState();
-
 	static_assert( AccuracyRows::Span::extent == kNumAccuracySlots );
 	wsw::ui::UISystem::instance()->updateScoreboard( frame->scoreboardData, AccuracyRows {
-		.weak   = AccuracyRows::Span( viewState->snapPlayerState.weakAccuracy ),
-		.strong = AccuracyRows::Span( viewState->snapPlayerState.strongAccuracy ),
+		.weak   = AccuracyRows::Span( getPrimaryViewState()->snapPlayerState.weakAccuracy ),
+		.strong = AccuracyRows::Span( getPrimaryViewState()->snapPlayerState.strongAccuracy ),
 	});
 
-	for( i = 0; i < frame->numEntities; i++ )
+	for( int i = 0; i < frame->numEntities; i++ ) {
 		CG_NewPacketEntityState( &frame->parsedEntities[i & ( MAX_PARSE_ENTITIES - 1 )] );
+	}
 
 	if( lerpframe && ( memcmp( cg.oldFrame.areabits, cg.frame.areabits, cg.frame.areabytes ) == 0 ) ) {
 		cg.oldAreabits = true;
@@ -3179,14 +3193,29 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 	CG_UpdateEntities();
 	CG_CheckPredictionError();
 
-	// TODO...
-	viewState->predictFrom = 0; // force the prediction to be restarted from the new snapshot
+	// force the prediction to be restarted from the new snapshot
+	getOurClientViewState()->predictFrom = 0;
 	cg.fireEvents = true;
 
-	for( i = 0; i < cg.frame.numgamecommands; i++ ) {
-		int target = viewState->snapPlayerState.POVnum - 1;
-		if( cg.frame.gamecommands[i].all || cg.frame.gamecommands[i].targets[target >> 3] & ( 1 << ( target & 7 ) ) ) {
-			CG_GameCommand( cg.frame.gamecommandsData + cg.frame.gamecommands[i].commandOffset );
+	for( int commandIndex = 0; commandIndex < cg.frame.numgamecommands; commandIndex++ ) {
+		const auto &gameCommand = cg.frame.gamecommands[commandIndex];
+		if( gameCommand.all ) {
+			// Dispatch to each target
+			for( unsigned viewStateIndex = 0; viewStateIndex < cg.numSnapViewStates; ++viewStateIndex ) {
+				CG_GameCommand( cg.viewStates + viewStateIndex, cg.frame.gamecommandsData + gameCommand.commandOffset );
+			}
+		} else {
+			unsigned foundIndex = ~0u;
+			for( unsigned viewStateIndex = 0; viewStateIndex < cg.numSnapViewStates; ++viewStateIndex ) {
+				const int viewStateTarget = (int)cg.viewStates[viewStateIndex].snapPlayerState.POVnum - 1;
+				if( gameCommand.targets[viewStateTarget >> 3] & ( 1 << ( viewStateTarget & 7 ) ) ) {
+					foundIndex = viewStateIndex;
+					break;
+				}
+			}
+			if( foundIndex != ~0u ) {
+				CG_GameCommand( cg.viewStates + foundIndex, cg.frame.gamecommandsData + gameCommand.commandOffset );
+			}
 		}
 	}
 
@@ -5123,9 +5152,9 @@ void CG_PredictMovement() {
 	}
 }
 
-void CG_CenterPrint( const char *str ) {
+void CG_CenterPrint( ViewState *viewState, const char *str ) {
 	if( str && *str ) {
-		wsw::ui::UISystem::instance()->addStatusMessage( wsw::StringView( str ) );
+		wsw::ui::UISystem::instance()->addStatusMessage( viewState->snapPlayerState.playerNum, wsw::StringView( str ) );
 	}
 }
 
@@ -5267,6 +5296,13 @@ unsigned CG_GetOurClientViewStateIndex() {
 	const auto result = (unsigned)( getOurClientViewState() - cg.viewStates );
 	assert( result <= MAX_CLIENTS );
 	return result;
+}
+
+std::optional<unsigned> CG_GetPlayerNumForViewState( unsigned viewStateIndex ) {
+	if( viewStateIndex < cg.numSnapViewStates ) {
+		return cg.viewStates[viewStateIndex].snapPlayerState.playerNum;
+	}
+	return std::nullopt;
 }
 
 bool CG_IsViewAttachedToPlayer() {
@@ -5416,7 +5452,7 @@ void CG_Error( const char *format, ... ) {
 	Com_Error( ERR_DROP, "%s\n", msg );
 }
 
-void CG_LocalPrint( const char *format, ... ) {
+void CG_LocalPrint( ViewState *viewState, const char *format, ... ) {
 	va_list argptr;
 	char msg[GAMECHAT_STRING_SIZE];
 
@@ -5425,9 +5461,12 @@ void CG_LocalPrint( const char *format, ... ) {
 	va_end( argptr );
 
 	const wsw::StringView msgView( msg, wsw::min( (size_t)res, sizeof( msg ) ) );
-	wsw::ui::UISystem::instance()->addToMessageFeed( msgView.trim() );
+	wsw::ui::UISystem::instance()->addToMessageFeed( viewState->snapPlayerState.playerNum, msgView.trim() );
 
-	Con_PrintSilent( msg );
+	// TODO: Is it the right condition?
+	if( viewState == getPrimaryViewState() ) {
+		Con_PrintSilent( msg );
+	}
 }
 
 static void *CG_GS_Malloc( size_t size ) {
@@ -5868,7 +5907,7 @@ static void CG_RegisterConfigStrings( void ) {
 
 	CL_Cmd_ExecuteNow( va( "exec configs/client/%s.cfg silent", gs.gametypeName ) );
 
-	CG_SC_AutoRecordAction( cgs.configStrings.getAutoRecordState().value_or( wsw::StringView() ).data() );
+	CG_SC_AutoRecordAction( getOurClientViewState(), cgs.configStrings.getAutoRecordState().value_or( wsw::StringView() ).data() );
 }
 
 void CG_StartBackgroundTrack( void ) {
@@ -5903,7 +5942,7 @@ void CG_Reset( void ) {
 
 	CG_ResetItemTimers();
 
-	CG_SC_ResetFragsFeed( {} );
+	wsw::ui::UISystem::instance()->resetHudFeed();
 
 	// TODO: calling effectsSystem.clear() should be sufficient (it is not in the current codebase state)
 	cg.effectsSystem.clear();
@@ -6054,7 +6093,7 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 }
 
 void CG_Shutdown( void ) {
-	CG_SC_ResetFragsFeed( {} );
+	wsw::ui::UISystem::instance()->resetHudFeed();
 	CG_DemocamShutdown();
 	CG_UnregisterCGameCommands();
 	CG_ShutdownCrosshairs();

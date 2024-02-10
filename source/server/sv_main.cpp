@@ -3107,16 +3107,16 @@ static void SNAP_WritePlayerstateToClient( msg_t *msg, const player_state_t *ops
 }
 
 [[nodiscard]]
-static bool isValidPendingCommand( const client_t *client, const game_command_t *cmd, int64_t frameNum ) {
+static bool isValidPendingCommand( const client_t *snapTargetClient, const game_command_t *cmd, int64_t frameNum ) {
 	if( cmd->command[0] && cmd->framenum + 256 >= frameNum && cmd->framenum <= frameNum ) {
-		if( client->lastframe >= 0 && cmd->framenum > client->lastframe ) {
+		if( snapTargetClient->lastframe >= 0 && cmd->framenum > snapTargetClient->lastframe ) {
 			return true;
 		}
 	}
 	return false;
 }
 
-static void SNAP_WriteMultiPOVCommands( const ginfo_t *gi, const client_t *client, msg_t *msg, int64_t frameNum ) {
+static void SNAP_WriteMultiPOVCommands( const ginfo_t *gi, const client_t *snapTargetClient, msg_t *msg, int64_t frameNum ) {
 	int64_t positions[MAX_CLIENTS];
 	// how many clients in snapshot
 	int maxnumtargets = 0;
@@ -3124,14 +3124,14 @@ static void SNAP_WriteMultiPOVCommands( const ginfo_t *gi, const client_t *clien
 	// find the first command to send from every client
 	IteratorOverClients iteratorOverClients( { .minAcceptableState = CS_SPAWNED, .includeFakeClients = true } );
 	while( auto maybeClientAndNum = iteratorOverClients.getNextWithIndex() ) {
-		auto [cl, i] = *maybeClientAndNum;
-		if( !cl->isAHiddenClient() || ( cl == client ) ) {
-			positions[i] = cl->gameCommandCurrent - MAX_RELIABLE_COMMANDS + 1;
-			for(; positions[i] <= cl->gameCommandCurrent; positions[i]++ ) {
-				const auto *cmd = &cl->gameCommands[positions[i] & ( MAX_RELIABLE_COMMANDS - 1 )];
+		auto [client, i] = *maybeClientAndNum;
+		if( !client->isAHiddenClient() || ( client == snapTargetClient ) ) {
+			positions[i] = client->gameCommandCurrent - MAX_RELIABLE_COMMANDS + 1;
+			for(; positions[i] <= client->gameCommandCurrent; positions[i]++ ) {
+				const auto *cmd = &client->gameCommands[positions[i] & ( MAX_RELIABLE_COMMANDS - 1 )];
 				// we need to check for too new commands too, because gamecommands for the next snap are generated
 				// all the time, and we might want to create a server demo frame or something in between snaps
-				if( isValidPendingCommand( cl, cmd, frameNum ) ) {
+				if( isValidPendingCommand( snapTargetClient, cmd, frameNum ) ) {
 					break;
 				}
 			}
@@ -3151,10 +3151,10 @@ static void SNAP_WriteMultiPOVCommands( const ginfo_t *gi, const client_t *clien
 		// we find the message with the earliest framenum, and collect all recipients for that
 		iteratorOverClients.rewind();
 		while( auto maybeClientAndNum = iteratorOverClients.getNextWithIndex() ) {
-			auto [cl, i] = *maybeClientAndNum;
-			if( !cl->isAHiddenClient() || ( cl == client ) ) {
-				if( positions[i] <= cl->gameCommandCurrent ) {
-					const auto &cmd = cl->gameCommands[positions[i] & ( MAX_RELIABLE_COMMANDS - 1 )];
+			auto [client, i] = *maybeClientAndNum;
+			if( !client->isAHiddenClient() || ( client == snapTargetClient ) ) {
+				if( positions[i] <= client->gameCommandCurrent ) {
+					const auto &cmd = client->gameCommands[positions[i] & ( MAX_RELIABLE_COMMANDS - 1 )];
 
 					// If it's the same command in the same frame
 					if( pickedCmdText && !strcmp( cmd.command, pickedCmdText ) && pickedCmdFrameNum == cmd.framenum ) {
@@ -3182,7 +3182,7 @@ static void SNAP_WriteMultiPOVCommands( const ginfo_t *gi, const client_t *clien
 		}
 
 		if( !pickedCmdText ) {
-			// We haven't manage to find a command to send to at least a single client, stop at this.
+			// We haven't managed to find a command to send to at least a single client, stop at this.
 			break;
 		}
 
@@ -3214,6 +3214,8 @@ static void SNAP_WriteMultiPOVCommands( const ginfo_t *gi, const client_t *clien
 				positions[i]++;
 			}
 		}
+
+		pickedCmdText = nullptr;
 	};
 }
 
