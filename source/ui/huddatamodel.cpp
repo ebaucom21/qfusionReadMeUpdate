@@ -1241,14 +1241,21 @@ void HudPovDataModel::resetHudFeed() {
 
 	m_messageFeedModel.reset();
 	m_awardsModel.reset();
+
+	// TODO: Can we still consider resetHudName() to be valid name if we do this
+	m_nicknameUpdateCounter = 0;
 }
 
 void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
-	const bool hadActivePov = m_hasActivePov, wasPovAlive = m_isPovAlive;
-	m_hasActivePov = CG_ActiveChasePovOfViewState( m_viewStateIndex ) != std::nullopt;
-	m_isPovAlive = m_hasActivePov && CG_IsPovAlive( m_viewStateIndex );
+	const bool hadActivePov = m_hasActivePov, wasUsingChasePov = m_isUsingChasePov, wasPovAlive = m_isPovAlive;
+	m_hasActivePov    = CG_ActiveChasePovOfViewState( m_viewStateIndex ) != std::nullopt;
+	m_isUsingChasePov = m_hasActivePov && CG_IsUsingChasePov( m_viewStateIndex );
+	m_isPovAlive      = m_hasActivePov && CG_IsPovAlive( m_viewStateIndex );
 	if( wasPovAlive != m_isPovAlive ) {
 		Q_EMIT isPovAliveChanged( m_isPovAlive );
+	}
+	if( wasUsingChasePov != m_isUsingChasePov ) {
+		Q_EMIT isUsingChasePovChanged( m_isUsingChasePov );
 	}
 	if( hadActivePov != m_hasActivePov ) {
 		Q_EMIT hasActivePovChanged( m_hasActivePov );
@@ -1295,6 +1302,21 @@ void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
 	const bool isMessageFeedFadingOut = m_messageFeedModel.isFadingOut();
 	if( wasMessageFeedFadingOut != isMessageFeedFadingOut ) {
 		Q_EMIT isMessageFeedFadingOutChanged( isMessageFeedFadingOut );
+	}
+
+	if( m_playerNum < MAX_CLIENTS ) {
+		const unsigned counter = NameChangesTracker::instance()->getLastNicknameUpdateCounter( m_playerNum );
+		if( m_nicknameUpdateCounter != counter ) {
+			m_nicknameUpdateCounter = counter;
+			m_formattedNickname     = toStyledText( CG_PlayerName( m_playerNum ) );
+			Q_EMIT nicknameChanged( m_formattedNickname );
+		}
+	} else {
+		// Reset it for consistency, even if we should not use such models
+		if( !m_formattedNickname.isEmpty() ) {
+			m_formattedNickname.clear();
+			Q_EMIT nicknameChanged( m_formattedNickname );
+		}
 	}
 }
 

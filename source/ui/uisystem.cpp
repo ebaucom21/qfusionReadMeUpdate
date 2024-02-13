@@ -1560,6 +1560,8 @@ void QtUISystem::checkPropertyChanges() {
 				Q_EMIT droppedConnectionMessageChanged( QString() );
 			}
 		}
+		m_hudPovDataModel.resetHudFeed();
+		m_hudCommonDataModel.resetHudFeed();
 	}
 
 	const bool hadTeamChat = m_hasTeamChat;

@@ -763,6 +763,10 @@ const HudLayoutModel::EditorProps HudLayoutModel::kEditorPropsForKind[] {
 		.color = QColor::fromRgbF( 0.9, 0.6, 0.3 ), .allowInMiniviewHud = false,
 	},
 	EditorProps {
+		.name = "POV Nickname"_asView, .kind = PovNickname, .size = QSize( 128, 36 ),
+		.color = QColor::fromRgbF( 0.4, 0.8, 0.4 ), .allowInMiniviewHud = true,
+	},
+	EditorProps {
 		.name = "Miniview pane 1"_asView, .kind = MiniviewPane1, .size = QSize( 128, 128 ),
 		.color = QColor::fromRgbF( 0.5, 1.0, 0.6 ), .allowInMiniviewHud = false,
 	},
@@ -1159,6 +1163,7 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 		case AwardsArea: return AllowPostmatch;
 		case StatusMessage: return NoFlags;
 		case ObjectiveStatus: return NoFlags;
+		case PovNickname: return ChasePovOnly;
 		case MiniviewPane1: return NoFlags;
 		case MiniviewPane2: return NoFlags;
 		default: wsw::failWithLogicError( "unreachable" );
@@ -1181,6 +1186,7 @@ auto HudLayoutModel::getShownItemBitsForKind( Kind kind ) -> ShownItemBits {
 		case AwardsArea: return ShowAwards;
 		case StatusMessage: return NoShownItemBits;
 		case ObjectiveStatus: return NoShownItemBits;
+		case PovNickname: return NoShownItemBits;
 		// TODO: Should there be some specific bit for miniviews?
 		case MiniviewPane1: return NoShownItemBits;
 		case MiniviewPane2: return NoShownItemBits;

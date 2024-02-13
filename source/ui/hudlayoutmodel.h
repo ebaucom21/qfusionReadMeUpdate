@@ -48,6 +48,7 @@ public:
 		AwardsArea,
 		StatusMessage,
 		ObjectiveStatus,
+		PovNickname,
 		MiniviewPane1,
 		MiniviewPane2,
 	};
@@ -59,7 +60,8 @@ public:
 		TeamBasedOnly  = 0x1,
 		PovOnly        = 0x2,
 		AlivePovOnly   = 0x2 | 0x4,
-		AllowPostmatch = 0x8,
+		ChasePovOnly   = 0x8,
+		AllowPostmatch = 0x10,
 	};
 	Q_ENUM( Flags );
 

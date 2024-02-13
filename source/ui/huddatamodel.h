@@ -280,8 +280,13 @@ public:
 	Q_SIGNAL void statusMessageChanged( const QString &statusMessage );
 	Q_PROPERTY( QString statusMessage MEMBER m_formattedStatusMessage NOTIFY statusMessageChanged );
 
+	Q_SIGNAL void nicknameChanged( const QString &nickname );
+	Q_PROPERTY( QString nickname MEMBER m_formattedNickname NOTIFY nicknameChanged );
+
 	Q_SIGNAL void hasActivePovChanged( bool hasActivePov );
 	Q_PROPERTY( bool hasActivePov MEMBER m_hasActivePov NOTIFY hasActivePovChanged );
+	Q_SIGNAL void isUsingChasePovChanged( bool isUsingChasePov );
+	Q_PROPERTY( bool isUsingChasePov MEMBER m_isUsingChasePov NOTIFY isUsingChasePovChanged );
 	Q_SIGNAL void isPovAliveChanged( bool isPovAlive );
 	Q_PROPERTY( bool isPovAlive MEMBER m_isPovAlive NOTIFY isPovAliveChanged );
 
@@ -339,11 +344,15 @@ private:
 
 	unsigned m_playerNum { ~0u };
 	unsigned m_viewStateIndex { ~0u };
+	// Valid up-to-date counters are non-zero
+	unsigned m_nicknameUpdateCounter { 0 };
 
 	int64_t m_lastStatusMessageTimestamp { 0 };
 	wsw::StaticString<96> m_originalStatusMessage;
 	// TODO make toStyledText() work with arbitrary types
 	QString m_formattedStatusMessage;
+
+	QString m_formattedNickname;
 
 	int m_activeWeapon { 0 };
 	int m_activeWeaponWeakAmmo { 0 };
@@ -352,6 +361,7 @@ private:
 	int m_health { 0 }, m_armor { 0 };
 
 	bool m_hasActivePov { false };
+	bool m_isUsingChasePov { false };
 	bool m_isPovAlive { false };
 
 	bool m_hasSetInventoryModelOwnership { false };

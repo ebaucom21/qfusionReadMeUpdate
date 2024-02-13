@@ -5186,7 +5186,14 @@ std::optional<unsigned> CG_ActiveChasePovOfViewState( unsigned viewStateIndex ) 
 	return std::nullopt;
 }
 
+bool CG_IsUsingChasePov( unsigned viewStateIndex ) {
+	assert( viewStateIndex <= cg.numSnapViewStates || ( cgs.demoPlaying && viewStateIndex == MAX_CLIENTS ) );
+	const ViewState *viewState = cg.viewStates + viewStateIndex;
+	return viewState->predictedPlayerState.POVnum != viewState->predictedPlayerState.playerNum + 1;
+}
+
 bool CG_IsPovAlive( unsigned viewStateIndex ) {
+	assert( viewStateIndex <= cg.numSnapViewStates || ( cgs.demoPlaying && viewStateIndex == MAX_CLIENTS ) );
 	return !( cg.viewStates[viewStateIndex].predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_DEADPOV );
 }
 

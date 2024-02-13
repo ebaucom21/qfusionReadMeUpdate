@@ -105,17 +105,20 @@ Item {
     Component {
         id: miniviewComponent
         InGameHud {
+            id: miniviewItem
             layoutModel: Hud.commonDataModel.miniviewLayoutModel
             commonDataModel: Hud.commonDataModel
             // pov data model specified via args
 
+            // TODO: Specify blitting holes for native facilties
             Rectangle {
                 anchors.centerIn: parent
-                width: parent.width - 4
-                height: parent.height - 4
+                width: parent.width + border.width
+                height: parent.height + border.width
+                radius: border.width
                 color: "transparent"
-                border.color: "white"
-                border.width: 1
+                border.color: miniviewItem.parent === rootItem ?  Qt.rgba(1.0, 1.0, 1.0, 0.5) : Qt.rgba(0.0, 0.0, 0.0, 0.7)
+                border.width: 4
             }
         }
     }

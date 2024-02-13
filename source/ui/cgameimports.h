@@ -72,6 +72,7 @@ std::optional<wsw::StringView> CG_HudIndicatorIconPath( int );
 std::optional<wsw::StringView> CG_HudIndicatorStatusString( int );
 auto CG_GetMatchClockTime() -> std::pair<int, int>;
 std::optional<unsigned> CG_ActiveChasePovOfViewState( unsigned viewStateIndex );
+bool CG_IsUsingChasePov( unsigned viewStateIndex );
 wsw::StringView CG_PlayerName( unsigned playerNum );
 wsw::StringView CG_PlayerClan( unsigned playerClan );
 wsw::StringView CG_LocationName( unsigned location );

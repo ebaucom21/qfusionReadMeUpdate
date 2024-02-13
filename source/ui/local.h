@@ -29,6 +29,14 @@ class NameChangesTracker {
 	std::array<unsigned, 32> m_clanCounters;
 
 	static NameChangesTracker s_instance;
+
+	static void updateCounter( unsigned *counter ) {
+		( *counter )++;
+		// Fullfill assumptions that valid up-to-date counters are non-zero
+		if( !( *counter ) ) {
+			( *counter )++;
+		}
+	}
 public:
 	NameChangesTracker() noexcept {
 		// Fill by ones so an initial check for default-zero counter fields
@@ -45,8 +53,8 @@ public:
 	[[nodiscard]]
 	auto getLastClanUpdateCounter( unsigned playerNum ) const -> unsigned { return m_clanCounters[playerNum]; }
 
-	void registerNicknameUpdate( unsigned playerNum ) { m_nameCounters[playerNum]++; }
-	void registerClanUpdate( unsigned playerNum ) { m_clanCounters[playerNum]++; }
+	void registerNicknameUpdate( unsigned playerNum ) { updateCounter( &m_nameCounters[playerNum] ); }
+	void registerClanUpdate( unsigned playerNum ) { updateCounter( &m_clanCounters[playerNum] ); }
 };
 
 inline NameChangesTracker NameChangesTracker::s_instance;

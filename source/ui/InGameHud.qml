@@ -49,6 +49,18 @@ Item {
         onArrangingItemsDisabled: arrangementReset = true
     }
 
+    // Update item visibility upon switching cached miniviews to visible states
+    onVisibleChanged: {
+        if (visible) {
+            for (let i = 0; i < repeater.count; ++i) {
+                const itemLoader = repeater.itemAt(i)
+                if (itemLoader) {
+                    itemLoader.updateItemVisibility()
+                }
+            }
+        }
+    }
+
     Repeater {
         id: repeater
         model: hudField.layoutModel
@@ -108,6 +120,7 @@ Item {
             Connections {
                 target: hudField.povDataModel
                 onHasActivePovChanged: itemLoader.updateItemVisibility()
+                onIsUsingChasePovChanged: itemLoader.updateItemVisibility()
                 onIsPovAliveChanged: itemLoader.updateItemVisibility()
             }
 
@@ -154,6 +167,9 @@ Item {
                         return false
                     }
                     if (!hudField.povDataModel.hasActivePov && (flags & HudLayoutModel.PovOnly)) {
+                        return false
+                    }
+                    if (hudField.commonDataModel.isUsingChasePov && !(flags & HudLayoutModel.ChasePovOnly)) {
                         return false
                     }
                     if (!hudField.povDataModel.isPovAlive && (flags & HudLayoutModel.AlivePovOnly)) {
@@ -205,6 +221,8 @@ Item {
                     statusMessageComponent
                 } else if (kind === HudLayoutModel.ObjectiveStatus) {
                     objectiveStatusComponent
+                } else if (kind === HudLayoutModel.PovNickname) {
+                    povNicknameComponent
                 } else if (kind === HudLayoutModel.MiniviewPane1) {
                     miniviewPane1Component
                 } else if (kind === HudLayoutModel.MiniviewPane2) {
@@ -374,6 +392,16 @@ Item {
                 id: objectiveStatusComponent
                 HudObjectiveStatus {
                     commonDataModel: hudField.commonDataModel
+                }
+            }
+
+            Component {
+                id: povNicknameComponent
+                HudPovNickname {
+                    povDataModel: hudField.povDataModel
+                    isMiniview: hudField.isMiniview
+                    miniviewScale: hudField.width / rootItem.width
+                    applyOutline: hudField.parent === rootItem
                 }
             }
 

@@ -19,13 +19,6 @@ Item {
     implicitWidth: 120
     implicitHeight: 240
 
-    Rectangle {
-        anchors.fill: parent
-        color: "transparent"
-        border.color: "magenta"
-        border.width: 1
-    }
-
     Component.onCompleted: {
         console.assert(miniviewAllocator)
         applyMiniviewLayoutPass1()
