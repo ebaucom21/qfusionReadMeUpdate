@@ -59,7 +59,7 @@ public:
 
 	void spawnGrenadeBounceEffect( int entNum, int mode );
 
-	void spawnPlayerHitEffect( const float *origin, const float *dir, int damage );
+	void spawnPlayerHitEffect( const float *origin, const float *dir, int damage, unsigned povPlayerMask );
 
 	void spawnElectroboltHitEffect( const float *origin, const float *impactNormal, const float *impactDir,
 									bool spawnDecal, int ownerNum );
@@ -144,12 +144,12 @@ public:
 		m_trackedEffectsSystem.touchCorpseTrail( entNum, origin, currTime );
 	}
 
-	void updateStraightLaserBeam( int entNum, const float *from, const float *to, int64_t currTime ) {
-		m_trackedEffectsSystem.updateStraightLaserBeam( entNum, from, to, currTime );
+	void updateStraightLaserBeam( int entNum, bool usePovSlot, const float *from, const float *to, int64_t currTime, unsigned povPlayerMask = ~0u ) {
+		m_trackedEffectsSystem.updateStraightLaserBeam( entNum, usePovSlot, from, to, currTime, povPlayerMask );
 	}
 
-	void updateCurvedLaserBeam( int entNum, std::span<const vec3_t> points, int64_t currTime ) {
-		m_trackedEffectsSystem.updateCurvedLaserBeam( entNum, points, currTime );
+	void updateCurvedLaserBeam( int entNum, bool usePovSlot, std::span<const vec3_t> points, int64_t currTime, unsigned povPlayerMask = ~0u ) {
+		m_trackedEffectsSystem.updateCurvedLaserBeam( entNum, usePovSlot, points, currTime, povPlayerMask );
 	}
 
 	void spawnElectroboltBeam( const float *from, const float *to, int team );
@@ -170,7 +170,7 @@ public:
 	void clear();
 
 	void simulateFrame( int64_t currTime );
-	void submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest );
+	void submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest, unsigned povPlayerMask );
 private:
 	void startSound( const SoundSet *sound, const float *origin, float attenuation = 1.0f );
 	void startRelativeSound( const SoundSet *sound, int entNum, float attenuation = 1.0f );

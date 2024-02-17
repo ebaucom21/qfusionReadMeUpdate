@@ -906,7 +906,7 @@ void SimulatedHullsSystem::simulateFrame( int64_t currTime ) {
 	m_frameSharedOverrideColorsBuffer.clear();
 }
 
-void SimulatedHullsSystem::submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
+void SimulatedHullsSystem::submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest, unsigned povPlayerMask ) {
 	assert( currTime == m_lastTime );
 
 	// TODO: We should do that while gathering results of parallel tasks
@@ -917,27 +917,39 @@ void SimulatedHullsSystem::submitToScene( int64_t currTime, DrawSceneRequest *dr
 
 	for( FireHull *hull = m_fireHullsHead; hull; hull = hull->next ) {
 		assert( hull->spawnTime + hull->lifetime > currTime );
-		activeConcentricHulls.push_back( hull );
+		if( hull->povPlayerMask & povPlayerMask ) {
+			activeConcentricHulls.push_back( hull );
+		}
 	}
 	for( FireClusterHull *hull = m_fireClusterHullsHead; hull; hull = hull->next ) {
 		assert( hull->spawnTime + hull->lifetime > currTime );
-		activeConcentricHulls.push_back( hull );
+		if( hull->povPlayerMask & povPlayerMask ) {
+			activeConcentricHulls.push_back( hull );
+		}
 	}
 	for( BlastHull *hull = m_blastHullsHead; hull; hull = hull->next ) {
 		assert( hull->spawnTime + hull->lifetime > currTime );
-		activeConcentricHulls.push_back( hull );
+		if( hull->povPlayerMask & povPlayerMask ) {
+			activeConcentricHulls.push_back( hull );
+		}
 	}
 	for( SmokeHull *hull = m_smokeHullsHead; hull; hull = hull->next ) {
 		assert( hull->spawnTime + hull->lifetime > currTime );
-		activeRegularHulls.push_back( hull );
+		if( hull->povPlayerMask & povPlayerMask ) {
+			activeRegularHulls.push_back( hull );
+		}
 	}
 	for( WaveHull *hull = m_waveHullsHead; hull; hull = hull->next ) {
 		assert( hull->spawnTime + hull->lifetime > currTime );
-		activeRegularHulls.push_back( hull );
+		if( hull->povPlayerMask & povPlayerMask ) {
+			activeRegularHulls.push_back( hull );
+		}
 	}
 	for( ToonSmokeHull *hull = m_toonSmokeHullsHead; hull; hull = hull->next ) {
 		assert( hull->spawnTime + hull->lifetime > currTime );
-		activeKeyframedHulls.push_back( hull);
+		if( hull->povPlayerMask & povPlayerMask ) {
+			activeKeyframedHulls.push_back( hull );
+		}
 	}
 
 	for( BaseRegularSimulatedHull *__restrict hull: activeRegularHulls ) {

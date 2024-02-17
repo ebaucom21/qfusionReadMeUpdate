@@ -62,13 +62,13 @@ public:
 	void clear();
 
 	[[nodiscard]]
-	auto createCurvedBeamEffect( shader_s *material ) -> CurvedBeam *;
+	auto createCurvedBeamEffect( shader_s *material, unsigned povPlayerMask ) -> CurvedBeam *;
 	void updateCurvedBeamEffect( CurvedBeam *, const float *fromColor, const float *toColor,
 								 float width, const CurvedBeamUVMode &uvMode, std::span<const vec3_t> points );
 	void destroyCurvedBeamEffect( CurvedBeam * );
 
 	[[nodiscard]]
-	auto createStraightBeamEffect( shader_s *material ) -> StraightBeam *;
+	auto createStraightBeamEffect( shader_s *material, unsigned povPlayerMask ) -> StraightBeam *;
 	void updateStraightBeamEffect( StraightBeam *, const float *fromColor, const float *toColor,
 								   float width, float tileLength, const float *from, const float *to );
 	void destroyStraightBeamEffect( StraightBeam * );
@@ -86,8 +86,7 @@ public:
 
 	struct TracerParams {
 		struct AlignForPovParams {
-			float originRightOffset;
-			float originZOffset;
+			vec3_t offsetProjectionsOntoViewAxis;
 			unsigned povNum;
 		};
 
@@ -109,7 +108,7 @@ public:
 
 	// Returns an estimated hit time on success
 	[[nodiscard]]
-	auto spawnTracerEffect( const float *from, const float *to, TracerParams &&params ) -> std::optional<unsigned>;
+	auto spawnTracerEffect( const float *from, const float *to, unsigned povPlayerMask, TracerParams &&params ) -> std::optional<unsigned>;
 
 	struct ImpactRosetteParams {
 		shader_s *spikeMaterial { nullptr };
@@ -188,16 +187,18 @@ public:
 	void spawnSimulatedRing( SimulatedRingParams &&params );
 
 	void simulateFrame( int64_t currTime );
-	void submitToScene( int64_t currTime, DrawSceneRequest *request );
+	void submitToScene( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask );
 private:
 	struct StraightBeamEffect : public StraightBeam {
 		StraightBeamEffect *prev { nullptr }, *next { nullptr };
 		QuadPoly poly;
+		unsigned povPlayerMask { ~0u };
 	};
 
 	struct CurvedBeamEffect : public CurvedBeam {
 		CurvedBeamEffect *prev { nullptr }, *next { nullptr };
 		CurvedBeamPoly poly;
+		unsigned povPlayerMask { ~0u };
 	};
 
 	struct TransientBeamEffect {
@@ -216,6 +217,7 @@ private:
 		TracerEffect *prev { nullptr }, *next { nullptr };
 		int64_t timeoutAt;
 		int64_t selectedForSubmissionAt;
+		unsigned povPlayerMask { ~0u };
 		std::optional<TracerParams::AlignForPovParams> alignForPovParams;
 		vec3_t from;
 		vec3_t to;
@@ -373,8 +375,8 @@ private:
 	void simulateRosettes( int64_t currTime, float timeDeltaSeconds );
 	void simulateRibbons( int64_t currTime, float timeDeltaSeconds );
 
-	void submitBeams( int64_t currTime, DrawSceneRequest *request );
-	void submitTracers( int64_t currTime, DrawSceneRequest *request );
+	void submitBeams( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask );
+	void submitTracers( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask );
 	void submitRosettes( int64_t currTime, DrawSceneRequest *request );
 	void submitRibbons( int64_t currTime, DrawSceneRequest *request );
 
@@ -393,7 +395,7 @@ private:
 	wsw::HeapBasedFreelistAllocator m_straightLaserBeamsAllocator { sizeof( StraightBeamEffect ), MAX_CLIENTS * 4 };
 	wsw::HeapBasedFreelistAllocator m_curvedLaserBeamsAllocator { sizeof( CurvedBeamEffect ), MAX_CLIENTS * 4 };
 	wsw::HeapBasedFreelistAllocator m_transientBeamsAllocator { sizeof( TransientBeamEffect ), MAX_CLIENTS * 2 };
-    wsw::HeapBasedFreelistAllocator m_tracerEffectsAllocator { sizeof( TracerEffect ), MAX_CLIENTS * 4 };
+    wsw::HeapBasedFreelistAllocator m_tracerEffectsAllocator { sizeof( TracerEffect ), MAX_CLIENTS * 8 };
     wsw::HeapBasedFreelistAllocator m_impactRosetteEffectsAllocator { sizeof( ImpactRosetteEffect ), 64 };
 	wsw::HeapBasedFreelistAllocator m_ribbonEffectsAllocator { sizeof( RibbonEffect ), 32 };
 

@@ -559,8 +559,8 @@ void EffectsSystemFacade::simulateFrame( int64_t currTime ) {
 	m_trackedEffectsSystem.simulateFrame( currTime );
 }
 
-void EffectsSystemFacade::submitToScene( int64_t currTime, DrawSceneRequest *request ) {
-	m_transientEffectsSystem.submitToScene( currTime, request );
+void EffectsSystemFacade::submitToScene( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask ) {
+	m_transientEffectsSystem.submitToScene( currTime, request, povPlayerMask );
 	m_trackedEffectsSystem.submitToScene( currTime, request );
 }
 
@@ -583,7 +583,7 @@ static const vec4_t kBloodColors[] {
 	{ 1.0f, 1.0f, 1.0f, 1.0f },
 };
 
-void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage ) {
+void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage, unsigned povPlayerMask ) {
 	if( const int bloodStyle = v_bloodStyle.get() ) {
 		const int indexForPalette = wsw::clamp<int>( v_bloodPalette.get(), 0, std::size( kBloodColors ) - 1 );
 		const int baseTime        = wsw::clamp<int>( v_bloodTime.get(), 200, 400 );
@@ -600,7 +600,8 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			} else {
 				damageLevel = 4;
 			}
-			m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, damageLevel, effectColor, (unsigned)baseTime );
+			m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, damageLevel, effectColor,
+																(unsigned)baseTime, 1.0f, povPlayerMask );
 		} else {
 			unsigned numParts;
 			if( damage <= kPain1UpperInclusiveBound ) {
@@ -613,9 +614,11 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 				numParts = 5;
 			}
 			if( numParts == 1 ) {
-				m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, 1, effectColor, (unsigned)baseTime, 1.0f );
+				m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, 1, effectColor,
+																	(unsigned)baseTime, 1.0f, povPlayerMask );
 			} else {
-				m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, 1, effectColor, (unsigned)baseTime, 1.1f );
+				m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, 1, effectColor,
+																	(unsigned)baseTime, 1.1f, povPlayerMask );
 
 				// TODO: Avoid hardcoding it
 				const float offset = 18.0f;
@@ -657,13 +660,14 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 
 					const float scale = m_rng.nextFloat( 0.5f, 0.9f );
 					VectorCopy( newPartOrigin, usedOrigins[partNum - 1] );
-					m_transientEffectsSystem.spawnBleedingVolumeEffect( newPartOrigin, dir, 1, effectColor, baseTime, scale );
+					m_transientEffectsSystem.spawnBleedingVolumeEffect( newPartOrigin, dir, 1, effectColor,
+																		baseTime, scale, povPlayerMask );
 				}
 			}
 		}
 	}
 
-	m_transientEffectsSystem.spawnCartoonHitEffect( origin, dir, damage );
+	m_transientEffectsSystem.spawnCartoonHitEffect( origin, dir, damage, povPlayerMask );
 }
 
 static ParticleColorsForTeamHolder electroboltParticleColorsHolder {
@@ -2704,54 +2708,142 @@ bool EffectsSystemFacade::MultiGroupEventRateLimiter::acquirePermission( int64_t
 	return chosenLimiter->acquirePermission( timestamp, origin, params );
 }
 
+static void calcPointOffsetProjectionsOntoViewAxis( const vec3_t point, const ViewState * viewState, vec3_t projections ) {
+	vec3_t viewForward, viewRight, viewUp;
+	AngleVectors( viewState->predictedPlayerState.viewangles, viewForward, viewRight, viewUp );
+	vec3_t viewOrigin;
+	VectorCopy( viewState->predictedPlayerState.pmove.origin, viewOrigin );
+	viewOrigin[2] += viewState->predictedPlayerState.viewheight;
+	vec3_t viewOffset;
+	VectorSubtract( point, viewOrigin, viewOffset );
+	projections[0] = DotProduct( viewOffset, viewForward );
+	projections[1] = DotProduct( viewOffset, viewRight );
+	projections[2] = DotProduct( viewOffset, viewUp );
+}
+
 auto EffectsSystemFacade::spawnBulletTracer( int owner, const float *to ) -> unsigned {
+	assert( owner > 0 && owner < MAX_EDICTS );
+	assert( cg_entities[owner].serverFrame == cg.frame.serverFrame );
 
-	ViewState *viewState = getPrimaryViewState();
-	orientation_t projection;
-	CG_PModel_GetProjectionSource( owner, &projection, viewState );
+	unsigned resultTimeout = 0;
 
-	projection.origin[2] -= 10.0f;
+	const unsigned numAlts = owner > 0 && owner <= gs.maxclients ? 2 : 1;
+	// 0 = generic, 1 - pov-dependent
+	for( unsigned altNum = 0; altNum < numAlts; ++altNum ) {
+		orientation_t tagProjection;
+		ViewState *viewState = nullptr;
+		if( altNum == 0 ) {
+			CG_PModel_GetProjectionSource( owner, &tagProjection, nullptr );
+		} else {
+			viewState = getViewStateForEntity( owner );
+			if( !viewState ) {
+				break;
+			}
+			if( !CG_PModel_GetProjectionSource( owner, &tagProjection, viewState ) ) {
+				break;
+			}
+		}
 
-	const std::optional<unsigned> maybeTimeout = cg.polyEffectsSystem.spawnTracerEffect( projection.origin, to, {
-		.material           = cgs.media.shaderBulletTracer,
-		.duration           = 200,
-		.prestepDistance    = 16.0f,
-		.smoothEdgeDistance = 172.0f,
-		.width              = m_rng.nextFloat( 4.0f, 8.0f ),
-		.minLength          = m_rng.nextFloat( 80.0f, 108.0f ),
-		.distancePercentage = ( owner == (int)viewState->predictedPlayerState.POVnum ) ? 0.24f : 0.18f,
-		.programLightRadius = 72.0f,
-		.coronaLightRadius  = 108.0f,
-		.lightColor         = { 0.9f, 0.8f, 1.0f }
-	});
+		unsigned povPlayerMask;
+		std::optional<PolyEffectsSystem::TracerParams::AlignForPovParams> alignForPovParams;
+		if( altNum == 1 ) {
+			vec3_t offsetProjections;
+			calcPointOffsetProjectionsOntoViewAxis( tagProjection.origin, viewState, offsetProjections );
 
-	return maybeTimeout.value_or( 0 );
+			povPlayerMask = 1u << ( owner - 1 );
+			alignForPovParams = PolyEffectsSystem::TracerParams::AlignForPovParams {
+				.offsetProjectionsOntoViewAxis = { offsetProjections[0], offsetProjections[1], offsetProjections[2], },
+				.povNum                        = (unsigned)owner,
+			};
+		} else {
+			povPlayerMask = ~0u;
+			if( numAlts == 2 ) {
+				povPlayerMask &= ~( 1u << ( owner - 1 ) );
+			}
+		}
+
+		const std::optional<unsigned> maybeTimeout = cg.polyEffectsSystem.spawnTracerEffect( tagProjection.origin,
+																							 to, povPlayerMask, {
+			.material           = cgs.media.shaderBulletTracer,
+			.alignForPovParams  = alignForPovParams,
+			.duration           = 200,
+			.prestepDistance    = 16.0f,
+			.smoothEdgeDistance = 172.0f,
+			.width              = m_rng.nextFloat( 4.0f, 8.0f ),
+			.minLength          = m_rng.nextFloat( 80.0f, 108.0f ),
+			.distancePercentage = ( altNum == 1 ) ? 0.24f : 0.18f,
+			.programLightRadius = 72.0f,
+			.coronaLightRadius  = 108.0f,
+			.lightColor         = { 0.9f, 0.8f, 1.0f }
+		});
+
+		if( !resultTimeout && maybeTimeout ) {
+			resultTimeout = *maybeTimeout;
+		}
+	}
+
+	return resultTimeout;
 }
 
 void EffectsSystemFacade::spawnPelletTracers( int owner, std::span<const vec3_t> to, unsigned *timeoutsBuffer ) {
-	ViewState *viewState = getPrimaryViewState();
-	orientation_t projection;
-	CG_PModel_GetProjectionSource( owner, &projection, viewState );
+	assert( owner > 0 && owner < MAX_EDICTS );
+	assert( cg_entities[owner].serverFrame == cg.frame.serverFrame );
 
-	projection.origin[2] -= 10.0f;
+	unsigned numAlts = 1;
+	unsigned altMasks[2] { ~0u, ~0u };
+	orientation_t tagProjections[2];
+	std::optional<PolyEffectsSystem::TracerParams::AlignForPovParams> alignForPovParams;
 
-	for( size_t i = 0; i < to.size(); ++i ) {
-		const std::optional<unsigned> maybeTimeout = cg.polyEffectsSystem.spawnTracerEffect( projection.origin, to[i], {
-			.material                 = cgs.media.shaderPelletTracer,
-			.duration                 = 125,
-			.prestepDistance          = 16.0f,
-			.width                    = m_rng.nextFloat( 3.0f, 5.0f ),
-			.minLength                = m_rng.nextFloat( 150.0f, 250.0f ),
-			.distancePercentage       = 0.18f,
-			.color                    = { 1.0f, 0.9f, 0.8f, 1.0f },
-			.programLightRadius       = 96.0f,
-			.coronaLightRadius        = 192.0f,
-			.lightColor               = { 1.0f, 0.9f, 0.8f },
-			.lightFrameAffinityModulo = (uint8_t)to.size(),
-			.lightFrameAffinityIndex  = (uint8_t)i,
-		});
+	CG_PModel_GetProjectionSource( owner, &tagProjections[0], nullptr );
 
-		timeoutsBuffer[i] = maybeTimeout.value_or( 0u );
+	if( owner > 0 && owner <= gs.maxclients ) {
+		if( const ViewState *viewState = getViewStateForEntity( owner ) ) {
+			CG_PModel_GetProjectionSource( owner, &tagProjections[1], viewState );
+
+			vec3_t offsetProjections;
+			calcPointOffsetProjectionsOntoViewAxis( tagProjections[1].origin, viewState, offsetProjections );
+
+			alignForPovParams = PolyEffectsSystem::TracerParams::AlignForPovParams {
+				.offsetProjectionsOntoViewAxis = { offsetProjections[0], offsetProjections[1], offsetProjections[2], },
+				.povNum                        = (unsigned)owner,
+			};
+
+			const unsigned playerBit = 1u << ( owner - 1 );
+			altMasks[0]              = ~0u & ~playerBit;
+			altMasks[1]              = playerBit;
+			numAlts                  = 2;
+		}
+	}
+
+	for( size_t index = 0; index < to.size(); ++index ) {
+		unsigned resultTimeout = 0;
+
+		// 0 - generic, 1 - pov-specific
+		for( unsigned altNum = 0; altNum < numAlts; ++altNum ) {
+			const std::optional<unsigned> maybeTimeout = cg.polyEffectsSystem.spawnTracerEffect( tagProjections[altNum].origin,
+																								 to[index],
+																								 altMasks[altNum], {
+				.material                 = cgs.media.shaderPelletTracer,
+				.alignForPovParams        = altNum == 0 ? std::nullopt : alignForPovParams,
+				.duration                 = 125,
+				.prestepDistance          = 16.0f,
+				.width                    = m_rng.nextFloat( 3.0f, 5.0f ),
+				.minLength                = m_rng.nextFloat( 150.0f, 250.0f ),
+				.distancePercentage       = 0.18f,
+				.color                    = { 1.0f, 0.9f, 0.8f, 1.0f },
+				.programLightRadius       = 96.0f,
+				.coronaLightRadius        = 192.0f,
+				.lightColor               = { 1.0f, 0.9f, 0.8f },
+				.lightFrameAffinityModulo = (uint8_t)to.size(),
+				.lightFrameAffinityIndex  = (uint8_t)index,
+			});
+
+			if( !resultTimeout && maybeTimeout ) {
+				resultTimeout = *maybeTimeout;
+			}
+		}
+
+		timeoutsBuffer[index] = resultTimeout;
 	}
 }
 

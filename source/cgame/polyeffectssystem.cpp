@@ -63,11 +63,12 @@ void PolyEffectsSystem::clear() {
 	m_lastTime = 0;
 }
 
-auto PolyEffectsSystem::createCurvedBeamEffect( shader_s *material ) -> CurvedBeam * {
+auto PolyEffectsSystem::createCurvedBeamEffect( shader_s *material, unsigned povPlayerMask ) -> CurvedBeam * {
 	if( auto *mem = m_curvedLaserBeamsAllocator.allocOrNull() ) [[likely]] {
 		auto *effect = new( mem )CurvedBeamEffect;
 		wsw::link( effect, &m_curvedLaserBeamsHead );
 		effect->poly.material = material;
+		effect->povPlayerMask = povPlayerMask;
 		return effect;
 	}
 	return nullptr;
@@ -302,12 +303,13 @@ void PolyEffectsSystem::destroyCurvedBeamEffect( CurvedBeam *handle ) {
 	m_curvedLaserBeamsAllocator.free( effect );
 }
 
-auto PolyEffectsSystem::createStraightBeamEffect( shader_s *material ) -> StraightBeam * {
+auto PolyEffectsSystem::createStraightBeamEffect( shader_s *material, unsigned povPlayerMask ) -> StraightBeam * {
 	if( void *mem = m_straightLaserBeamsAllocator.allocOrNull() ) [[likely]] {
 		auto *effect = new( mem )StraightBeamEffect;
 		wsw::link( effect, &m_straightLaserBeamsHead );
 		effect->poly.material   = material;
 		effect->poly.halfExtent = 0.0f;
+		effect->povPlayerMask   = povPlayerMask;
 		return effect;
 	}
 	return nullptr;
@@ -428,8 +430,10 @@ void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float
 	wsw::link( effect, &m_transientBeamsHead );
 }
 
-auto PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, TracerParams &&params ) -> std::optional<unsigned> {
+auto PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to,
+										   unsigned povPlayerMask, TracerParams &&params ) -> std::optional<unsigned> {
 	assert( params.duration > 50 && params.prestepDistance >= 1.0f && params.width > 0.0f );
+	assert( povPlayerMask != 0 );
 
 	const float squareDistance = DistanceSquared( from, to );
 	if( squareDistance < wsw::square( params.prestepDistance ) ) [[unlikely]] {
@@ -466,6 +470,7 @@ auto PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 
 	auto *effect                 = new( mem )TracerEffect;
 	effect->timeoutAt            = m_lastTime + params.duration;
+	effect->povPlayerMask        = povPlayerMask;
 	effect->alignForPovParams    = params.alignForPovParams;
 	effect->speed                = speed;
 	effect->prestepDistance      = params.prestepDistance;
@@ -1030,9 +1035,9 @@ void PolyEffectsSystem::simulateFrame( int64_t currTime ) {
 	}
 }
 
-void PolyEffectsSystem::submitToScene( int64_t currTime, DrawSceneRequest *request ) {
-	submitBeams( currTime, request );
-	submitTracers( currTime, request );
+void PolyEffectsSystem::submitToScene( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask ) {
+	submitBeams( currTime, request, povPlayerMask );
+	submitTracers( currTime, request, povPlayerMask );
 	submitRosettes( currTime, request );
 	submitRibbons( currTime, request );
 }
@@ -1045,18 +1050,22 @@ void PolyEffectsSystem::simulateBeams( int64_t currTime, float ) {
 	}
 }
 
-void PolyEffectsSystem::submitBeams( int64_t currTime, DrawSceneRequest *request ) {
+void PolyEffectsSystem::submitBeams( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask ) {
 	assert( currTime == m_lastTime );
 
 	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead; beam; beam = beam->next ) {
-		if( beam->poly.material && beam->poly.points.size() > 1 ) [[likely]] {
-			request->addDynamicMesh( &beam->poly );
+		if( beam->povPlayerMask & povPlayerMask ) {
+			if( beam->poly.material && beam->poly.points.size() > 1 ) [[likely]] {
+				request->addDynamicMesh( &beam->poly );
+			}
 		}
 	}
 
 	for( StraightBeamEffect *beam = m_straightLaserBeamsHead; beam; beam = beam->next ) {
-		if( beam->poly.material && beam->poly.halfExtent > 1.0f ) [[likely]] {
-			request->addPoly( &beam->poly );
+		if( beam->povPlayerMask & povPlayerMask ) {
+			if( beam->poly.material && beam->poly.halfExtent > 1.0f ) [[likely]] {
+				request->addPoly( &beam->poly );
+			}
 		}
 	}
 
@@ -1147,59 +1156,56 @@ void PolyEffectsSystem::simulateTracers( int64_t currTime, float timeDeltaSecond
 		bool hasAlignedForPov = false;
 		// If we should align
 		if( const std::optional<TracerParams::AlignForPovParams> &alignForPovParams = tracer->alignForPovParams ) {
-			// TODO: This should be specified by params
 			// TODO: Make sure it's stable (check some kind of spawn ids)
-			ViewState *viewState = getPrimaryViewState();
+			if( const ViewState *viewState = getViewStateForEntity( (int)alignForPovParams->povNum ) ) {
+				// If we're really following the initial POV
+				// TODO: Detach if teleported
+				if( alignForPovParams->povNum == viewState->predictedPlayerState.POVnum ) {
+					vec3_t actualViewOrigin;
+					VectorCopy( viewState->predictedPlayerState.pmove.origin, actualViewOrigin );
+					actualViewOrigin[2] += viewState->predictedPlayerState.viewheight;
+					const float *const actualViewAngles = viewState->predictedPlayerState.viewangles;
 
-			// If we're really following the initial POV
-			if( alignForPovParams->povNum == viewState->predictedPlayerState.POVnum ) {
-				const float *const actualViewOrigin = viewState->predictedPlayerState.pmove.origin;
-				const float *const actualViewAngles = viewState->predictedPlayerState.viewangles;
+					// Pin the farthest point at it's regular origin and align the free tail towards the viewer
+					// TODO: Think of creating a separate kind of QuadPoly::AppearanceRules for this case?
+					vec3_t farthestPoint;
+					VectorMA( tracer->from, distanceOfFarthestPoint, tracer->dir, farthestPoint );
 
-				// Pin the farthest point at it's regular origin and align the free tail towards the viewer
-				// TODO: Think of creating a separate kind of QuadPoly::AppearanceRules for this case?
-				vec3_t farthestPoint;
-				VectorMA( tracer->from, distanceOfFarthestPoint, tracer->dir, farthestPoint );
+					const float squareDistanceToActualViewOrigin = DistanceSquared( farthestPoint, actualViewOrigin );
+					// If we can normalize the new direction vector
+					if( squareDistanceToActualViewOrigin > wsw::square( 0.1f ) ) [[likely]] {
+						const float rcpDistanceToActualViewOrigin = Q_RSqrt( squareDistanceToActualViewOrigin );
 
-				const float squareDistanceToActualViewOrigin = DistanceSquared( farthestPoint, actualViewOrigin );
-				// If we can normalize the new direction vector
-				if( squareDistanceToActualViewOrigin > wsw::square( 0.1f ) ) [[likely]] {
-					const float rcpDistanceToActualViewOrigin = Q_RSqrt( squareDistanceToActualViewOrigin );
+						vec3_t actualViewOriginToTracerDir;
+						VectorSubtract( farthestPoint, actualViewOrigin, actualViewOriginToTracerDir );
+						VectorScale( actualViewOriginToTracerDir, rcpDistanceToActualViewOrigin, actualViewOriginToTracerDir );
 
-					vec3_t actualViewOriginToTracerDir;
-					VectorSubtract( farthestPoint, actualViewOrigin, actualViewOriginToTracerDir );
-					VectorScale( actualViewOriginToTracerDir, rcpDistanceToActualViewOrigin, actualViewOriginToTracerDir );
+						assert( std::fabs( VectorLengthFast( tracer->dir ) - 1.0f ) < 0.1f );
+						assert( std::fabs( VectorLengthFast( actualViewOriginToTracerDir ) - 1.0f ) < 0.1f );
 
-					assert( std::fabs( VectorLengthFast( tracer->dir ) - 1.0f ) < 0.1f );
-					assert( std::fabs( VectorLengthFast( actualViewOriginToTracerDir ) - 1.0f ) < 0.1f );
+						vec3_t actualViewForward, actualViewRight, actualViewUp;
+						AngleVectors( actualViewAngles, actualViewForward, actualViewRight, actualViewUp );
 
-					// Lower the Z offset (doing that actually hides the tracer from the view)
-					// for polys that are close to the view and/or are to the side of the view.
+						vec3_t shiftedViewOrigin;
+						VectorCopy( actualViewOrigin, shiftedViewOrigin );
+						const float *axisProjections = alignForPovParams->offsetProjectionsOntoViewAxis;
+						VectorMA( shiftedViewOrigin, axisProjections[0], actualViewForward, shiftedViewOrigin );
+						VectorMA( shiftedViewOrigin, axisProjections[1], actualViewRight, shiftedViewOrigin );
+						VectorMA( shiftedViewOrigin, axisProjections[2], actualViewUp, shiftedViewOrigin );
 
-					const float viewDotFrac  = DotProduct( actualViewOriginToTracerDir, tracer->dir );
-					const float distanceFrac = Q_Sqrt( Q_Sqrt( tracer->distanceSoFar * Q_Rcp( tracer->totalDistance ) ) );
-					const float zOffsetFrac  = wsw::square( wsw::clamp( viewDotFrac * distanceFrac, 0.0f, 1.0f ) );
+						const float squareDistanceToShiftedViewOrigin = DistanceSquared( farthestPoint, shiftedViewOrigin );
+						if( squareDistanceToShiftedViewOrigin > wsw::square( 0.1f ) ) [[likely]] {
+							const float rcpDistanceToShiftedViewOrigin = Q_RSqrt( squareDistanceToShiftedViewOrigin );
 
-					vec3_t actualViewForward, actualViewRight;
-					AngleVectors( actualViewAngles, actualViewForward, actualViewRight, nullptr );
+							// Modify the poly dir
+							VectorSubtract( farthestPoint, shiftedViewOrigin, rules->dir );
+							VectorScale( rules->dir, rcpDistanceToShiftedViewOrigin, rules->dir );
 
-					vec3_t shiftedViewOrigin;
-					VectorMA( actualViewOrigin, alignForPovParams->originRightOffset, actualViewRight, shiftedViewOrigin );
-					// Applying the offsettingFrac hides the tracer from POV
-					shiftedViewOrigin[2] += zOffsetFrac * alignForPovParams->originZOffset;
+							// Modify the origin
+							VectorMA( farthestPoint, -tracer->poly.halfExtent, rules->dir, tracer->poly.origin );
 
-					const float squareDistanceToShiftedViewOrigin = DistanceSquared( farthestPoint, shiftedViewOrigin );
-					if( squareDistanceToShiftedViewOrigin > wsw::square( 0.1f ) ) [[likely]] {
-						const float rcpDistanceToShiftedViewOrigin = Q_RSqrt( squareDistanceToShiftedViewOrigin );
-
-						// Modify the poly dir
-						VectorSubtract( farthestPoint, shiftedViewOrigin, rules->dir );
-						VectorScale( rules->dir, rcpDistanceToShiftedViewOrigin, rules->dir );
-
-						// Modify the origin
-						VectorMA( farthestPoint, -tracer->poly.halfExtent, rules->dir, tracer->poly.origin );
-
-						hasAlignedForPov = true;
+							hasAlignedForPov = true;
+						}
 					}
 				}
 			}
@@ -1219,12 +1225,12 @@ void PolyEffectsSystem::simulateTracers( int64_t currTime, float timeDeltaSecond
 	}
 }
 
-void PolyEffectsSystem::submitTracers( [[maybe_unused]] int64_t currTime, DrawSceneRequest *request ) {
+void PolyEffectsSystem::submitTracers( [[maybe_unused]] int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask ) {
 	assert( currTime == m_lastTime );
 
 	for( TracerEffect *tracer = m_tracerEffectsHead; tracer; tracer = tracer->next ) {
 		// Don't submit tracers which are considered hidden on this frame
-		if( tracer->selectedForSubmissionAt == currTime ) {
+		if( ( tracer->povPlayerMask & povPlayerMask ) && tracer->selectedForSubmissionAt == currTime ) {
 			request->addPoly( &tracer->poly );
 
 			if( tracer->programLightRadius > 0.0f || tracer->coronaLightRadius > 0.0f ) {

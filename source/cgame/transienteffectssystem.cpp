@@ -683,7 +683,7 @@ void TransientEffectsSystem::spawnSmokeHull( int64_t currTime, const float *orig
 	}
 }
 
-void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const float *dir, int damage ) {
+void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const float *dir, int damage, unsigned povPlayerMask ) {
 	if( v_cartoonHitEffect.get() ) {
 		float radius = 0.0f;
 		shader_s *material = nullptr;
@@ -719,12 +719,14 @@ void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const f
 			for( unsigned i = 0; i < 3; ++i ) {
 				effect->velocity[i] = m_rng.nextFloat( -10.0f, +10.0f );
 			}
+			effect->povPlayerMask = povPlayerMask;
 		}
 	}
 }
 
 void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, const float *dir, unsigned damageLevel,
-														const float *bloodColor, unsigned duration, float scale ) {
+														const float *bloodColor, unsigned duration,
+														float scale, unsigned povPlayerMask ) {
 	if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, duration ) ) {
 		vec3_t hullOrigin;
 		constexpr float offset = -32.0f;
@@ -755,6 +757,7 @@ void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, con
 
 		const vec4_t hullColor { bloodColor[0], bloodColor[1], bloodColor[2], 0.5f };
 		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, hullColor, scale * speed, scale * speedSpreadFrac * speed );
+		hull->povPlayerMask       = povPlayerMask;
 		hull->vertexViewDotFade   = viewDotFade;
 		hull->tesselateClosestLod = tesselateClosestLod;
 		hull->minFadedOutAlpha    = 0.1f;
@@ -1280,8 +1283,8 @@ void TransientEffectsSystem::simulateFrame( int64_t currTime ) {
 	}
 }
 
-void TransientEffectsSystem::submitToScene( int64_t currTime, DrawSceneRequest *request ) {
-	submitEntityEffects( currTime, request );
+void TransientEffectsSystem::submitToScene( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask ) {
+	submitEntityEffects( currTime, request, povPlayerMask );
 	submitPolyEffects( currTime, request );
 	submitLightEffects( currTime, request );
 }
@@ -1314,21 +1317,23 @@ void TransientEffectsSystem::simulateEntityEffects( int64_t currTime, float time
 	}
 }
 
-void TransientEffectsSystem::submitEntityEffects( int64_t currTime, DrawSceneRequest *request ) {
+void TransientEffectsSystem::submitEntityEffects( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask ) {
 	// TODO: Accept as an argument?
 	const float backlerp = 1.0f - cg.lerpfrac;
 
 	for( EntityEffect *__restrict effect = m_entityEffectsHead; effect; effect = effect->next ) {
-		const auto lifetimeMillis = (unsigned)( currTime - effect->spawnTime );
-		assert( lifetimeMillis < effect->duration );
-		const float lifetimeFrac = (float)lifetimeMillis * Q_Rcp( (float)effect->duration );
+		if( effect->povPlayerMask & povPlayerMask ) {
+			const auto lifetimeMillis = (unsigned)( currTime - effect->spawnTime );
+			assert( lifetimeMillis < effect->duration );
+			const float lifetimeFrac = (float)lifetimeMillis * Q_Rcp( (float)effect->duration );
 
-		effect->entity.backlerp      = backlerp;
-		effect->entity.scale         = effect->scaleLifespan.getValueForLifetimeFrac( lifetimeFrac );
-		effect->entity.shaderRGBA[3] = (uint8_t)( 255 * effect->alphaLifespan.getValueForLifetimeFrac( lifetimeFrac ) );
-		effect->entity.shaderTime    = currTime;
+			effect->entity.backlerp      = backlerp;
+			effect->entity.scale         = effect->scaleLifespan.getValueForLifetimeFrac( lifetimeFrac );
+			effect->entity.shaderRGBA[3] = (uint8_t)( 255 * effect->alphaLifespan.getValueForLifetimeFrac( lifetimeFrac ) );
+			effect->entity.shaderTime    = currTime;
 
-		request->addEntity( &effect->entity );
+			request->addEntity( &effect->entity );
+		}
 	}
 }
 

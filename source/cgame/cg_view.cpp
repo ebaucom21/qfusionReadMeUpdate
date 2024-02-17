@@ -1274,11 +1274,17 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
 				DrawSceneRequest *const drawSceneRequest = drawSceneRequests[viewNum];
 				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
+				unsigned povPlayerMask;
+				if( viewState->predictedPlayerState.POVnum > 0 && viewState->predictedPlayerState.POVnum <= MAX_CLIENTS ) {
+					povPlayerMask = 1u << ( viewState->predictedPlayerState.POVnum - 1 );
+				} else {
+					povPlayerMask = ~0u;
+				}
 
-				cg.effectsSystem.submitToScene( cg.time, drawSceneRequest );
+				cg.effectsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
 				cg.particleSystem.submitToScene( cg.time, drawSceneRequest );
-				cg.polyEffectsSystem.submitToScene( cg.time, drawSceneRequest );
-				cg.simulatedHullsSystem.submitToScene( cg.time, drawSceneRequest );
+				cg.polyEffectsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
+				cg.simulatedHullsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
 
 				refdef_t *rd = &viewState->view.refdef;
 				AnglesToAxis( viewState->view.angles, rd->viewaxis );

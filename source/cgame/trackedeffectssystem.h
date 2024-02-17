@@ -91,8 +91,8 @@ public:
 
 	void resetEntityEffects( int entNum );
 
-	void updateStraightLaserBeam( int ownerNum, const float *from, const float *to, int64_t currTime );
-	void updateCurvedLaserBeam( int ownerNum, std::span<const vec3_t> points, int64_t currTime );
+	void updateStraightLaserBeam( int ownerNum, bool usePovSlot, const float *from, const float *to, int64_t currTime, unsigned povPlayerMask );
+	void updateCurvedLaserBeam( int ownerNum, bool usePovSlot, std::span<const vec3_t> points, int64_t currTime, unsigned povPlayerMask );
 
 	static void updateCurvedPolyTrail( const CurvedPolyTrailProps &props, const float *origin, int64_t currTime,
 									   wsw::StaticVector<Vec3, 32> *points, wsw::StaticVector<int64_t, 32> *timestamps );
@@ -164,12 +164,13 @@ private:
 
 	struct AttachedClientEffects {
 		TeleEffect *teleEffects[2] { nullptr, nullptr };
-		PolyEffectsSystem::StraightBeam *straightLaserBeam { nullptr };
-		PolyEffectsSystem::CurvedBeam *curvedLaserBeam { nullptr };
+		// There are two slots (general, POV) for each kind of beam
+		PolyEffectsSystem::StraightBeam *straightLaserBeam[2] { nullptr };
+		PolyEffectsSystem::CurvedBeam *curvedLaserBeam[2] { nullptr };
 		CurvedPolyTrail *trails[3] { nullptr, nullptr, nullptr };
-		int64_t straightLaserBeamTouchedAt { 0 }, curvedLaserBeamTouchedAt { 0 };
+		int64_t straightLaserBeamTouchedAt[2] { 0 }, curvedLaserBeamTouchedAt[2] { 0 };
 		vec4_t laserColor;
-		wsw::StaticVector<Vec3, 24 + 1> curvedLaserBeamPoints;
+		wsw::StaticVector<Vec3, 24 + 1> curvedLaserBeamPoints[2];
 	};
 
 	struct AttachedEntityEffects {

@@ -194,7 +194,7 @@ auto TrackedEffectsSystem::allocStraightPolyTrail( int entNum, shader_s *materia
 	// TODO: Reuse lingering trails?
 
 	if( void *mem = m_straightPolyTrailsAllocator.allocOrNull() ) {
-		if( auto *beam = cg.polyEffectsSystem.createStraightBeamEffect( material ) ) {
+		if( auto *beam = cg.polyEffectsSystem.createStraightBeamEffect( material, ~0u ) ) {
 			auto *const trail       = new( mem )StraightPolyTrail;
 			trail->attachedToEntNum = entNum;
 			trail->beam             = beam;
@@ -215,7 +215,7 @@ auto TrackedEffectsSystem::allocCurvedPolyTrail( int entNum, shader_s *material,
 	// TODO: Reuse lingering trails?
 
 	if( void *mem = m_curvedPolyTrailsAllocator.allocOrNull() ) {
-		if( auto *beam = cg.polyEffectsSystem.createCurvedBeamEffect( material ) ) {
+		if( auto *beam = cg.polyEffectsSystem.createCurvedBeamEffect( material, ~0u ) ) {
 			auto *const trail = new( mem )CurvedPolyTrail;
 			wsw::link( trail, &m_attachedCurvedPolyTrailsHead );
 			trail->attachedToEntNum = entNum;
@@ -1135,15 +1135,17 @@ void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
 			unlinkAndFree( effects->teleEffects[1] );
 		}
 		assert( !effects->teleEffects[0] && !effects->teleEffects[1] );
-		if( effects->curvedLaserBeam ) {
-			cg.polyEffectsSystem.destroyCurvedBeamEffect( effects->curvedLaserBeam );
-			effects->curvedLaserBeam = nullptr;
-			effects->curvedLaserBeamTouchedAt = 0;
-		}
-		if( effects->straightLaserBeam ) {
-			cg.polyEffectsSystem.destroyStraightBeamEffect( effects->straightLaserBeam );
-			effects->straightLaserBeam = nullptr;
-			effects->straightLaserBeamTouchedAt = 0;
+		for( unsigned beamSlot = 0; beamSlot < 2; ++beamSlot ) {
+			if( effects->curvedLaserBeam[beamSlot] ) {
+				cg.polyEffectsSystem.destroyCurvedBeamEffect( effects->curvedLaserBeam[beamSlot] );
+				effects->curvedLaserBeam[beamSlot]          = nullptr;
+				effects->curvedLaserBeamTouchedAt[beamSlot] = 0;
+			}
+			if( effects->straightLaserBeam[beamSlot] ) {
+				cg.polyEffectsSystem.destroyStraightBeamEffect( effects->straightLaserBeam[beamSlot] );
+				effects->straightLaserBeam[beamSlot]          = nullptr;
+				effects->straightLaserBeamTouchedAt[beamSlot] = 0;
+			}
 		}
 	}
 
@@ -1179,43 +1181,49 @@ static void getLaserColorOverlayForOwner( int ownerNum, vec4_t color ) {
 static constexpr float kLaserWidth      = 12.0f;
 static constexpr float kLaserTileLength = 64.0f;
 
-void TrackedEffectsSystem::updateStraightLaserBeam( int ownerNum, const float *from, const float *to, int64_t currTime ) {
+void TrackedEffectsSystem::updateStraightLaserBeam( int ownerNum, bool usePovSlot, const float *from, const float *to,
+													int64_t currTime, unsigned povPlayerMask ) {
 	assert( ownerNum && ownerNum <= MAX_CLIENTS );
-	AttachedClientEffects *effects = &m_attachedClientEffects[ownerNum - 1];
-	if( !effects->straightLaserBeam ) {
-		effects->straightLaserBeam = cg.polyEffectsSystem.createStraightBeamEffect( cgs.media.shaderLaserGunBeam );
-		if( effects->straightLaserBeam ) {
+	const unsigned slotNum               = usePovSlot ? 1 : 0;
+	AttachedClientEffects *const effects = &m_attachedClientEffects[ownerNum - 1];
+	if( !effects->straightLaserBeam[slotNum] ) {
+		effects->straightLaserBeam[slotNum] =
+			cg.polyEffectsSystem.createStraightBeamEffect( cgs.media.shaderLaserGunBeam, povPlayerMask );
+		if( effects->straightLaserBeam[slotNum] ) {
 			getLaserColorOverlayForOwner( ownerNum, &effects->laserColor[0] );
 		}
 	}
-	if( effects->straightLaserBeam ) {
-		effects->straightLaserBeamTouchedAt = currTime;
-		cg.polyEffectsSystem.updateStraightBeamEffect( effects->straightLaserBeam,
+	if( effects->straightLaserBeam[slotNum] ) {
+		effects->straightLaserBeamTouchedAt[slotNum] = currTime;
+		cg.polyEffectsSystem.updateStraightBeamEffect( effects->straightLaserBeam[slotNum],
 													   effects->laserColor, effects->laserColor,
 													   kLaserWidth, kLaserTileLength, from, to );
 	}
 }
 
-void TrackedEffectsSystem::updateCurvedLaserBeam( int ownerNum, std::span<const vec3_t> points, int64_t currTime ) {
+void TrackedEffectsSystem::updateCurvedLaserBeam( int ownerNum, bool usePovSlot, std::span<const vec3_t> points,
+												  int64_t currTime, unsigned povPlayerMask ) {
 	assert( ownerNum && ownerNum <= MAX_CLIENTS );
-	AttachedClientEffects *effects = &m_attachedClientEffects[ownerNum - 1];
-	if( !effects->curvedLaserBeam ) {
-		effects->curvedLaserBeam = cg.polyEffectsSystem.createCurvedBeamEffect( cgs.media.shaderLaserGunBeam );
-		if( effects->curvedLaserBeam ) {
+	const unsigned slotNum               = usePovSlot ? 1 : 0;
+	AttachedClientEffects *const effects = &m_attachedClientEffects[ownerNum - 1];
+	if( !effects->curvedLaserBeam[slotNum] ) {
+		effects->curvedLaserBeam[slotNum] =
+			cg.polyEffectsSystem.createCurvedBeamEffect( cgs.media.shaderLaserGunBeam, povPlayerMask );
+		if( effects->curvedLaserBeam[slotNum] ) {
 			getLaserColorOverlayForOwner( ownerNum, &effects->laserColor[0] );
 		}
 	}
 
-	if( effects->curvedLaserBeam ) {
-		effects->curvedLaserBeamTouchedAt = currTime;
-		effects->curvedLaserBeamPoints.clear();
+	if( effects->curvedLaserBeam[slotNum] ) {
+		effects->curvedLaserBeamTouchedAt[slotNum] = currTime;
+		effects->curvedLaserBeamPoints[slotNum].clear();
 		for( const float *point: points ) {
-			effects->curvedLaserBeamPoints.push_back( Vec3( point ) );
+			effects->curvedLaserBeamPoints[slotNum].push_back( Vec3( point ) );
 		}
 		const std::span<const vec3_t> ownedPointsSpan {
-			(const vec3_t *)effects->curvedLaserBeamPoints.data(), effects->curvedLaserBeamPoints.size()
+			(const vec3_t *)effects->curvedLaserBeamPoints[slotNum].data(), effects->curvedLaserBeamPoints[slotNum].size()
 		};
-		cg.polyEffectsSystem.updateCurvedBeamEffect( effects->curvedLaserBeam,
+		cg.polyEffectsSystem.updateCurvedBeamEffect( effects->curvedLaserBeam[slotNum],
 													 effects->laserColor, effects->laserColor,
 													 kLaserWidth, PolyEffectsSystem::UvModeTile { kLaserTileLength },
 													 ownedPointsSpan );
@@ -1314,18 +1322,19 @@ void TrackedEffectsSystem::simulateFrame( int64_t currTime ) {
 		}
 
 		PolyEffectsSystem *const polyEffectsSystem = &cg.polyEffectsSystem;
-		for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
-			AttachedClientEffects *const effects = &m_attachedClientEffects[i];
-			if( effects->curvedLaserBeam ) {
-				if( effects->curvedLaserBeamTouchedAt < currTime ) {
-					polyEffectsSystem->destroyCurvedBeamEffect( effects->curvedLaserBeam );
-					effects->curvedLaserBeam = nullptr;
+		for( AttachedClientEffects &effects: m_attachedClientEffects ) {
+			for( unsigned slotNum = 0; slotNum < 2; ++slotNum ) {
+				if( effects.curvedLaserBeam[slotNum] ) {
+					if( effects.curvedLaserBeamTouchedAt[slotNum] < currTime ) {
+						polyEffectsSystem->destroyCurvedBeamEffect( effects.curvedLaserBeam[slotNum] );
+						effects.curvedLaserBeam[slotNum] = nullptr;
+					}
 				}
-			}
-			if( effects->straightLaserBeam ) {
-				if( effects->straightLaserBeamTouchedAt < currTime ) {
-					polyEffectsSystem->destroyStraightBeamEffect( effects->straightLaserBeam );
-					effects->straightLaserBeam = nullptr;
+				if( effects.straightLaserBeam[slotNum] ) {
+					if( effects.straightLaserBeamTouchedAt[slotNum] < currTime ) {
+						polyEffectsSystem->destroyStraightBeamEffect( effects.straightLaserBeam[slotNum] );
+						effects.straightLaserBeam[slotNum] = nullptr;
+					}
 				}
 			}
 		}

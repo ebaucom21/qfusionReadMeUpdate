@@ -146,7 +146,7 @@ public:
 	void clear();
 
 	void simulateFrame( int64_t currTime );
-	void submitToScene( int64_t currTime, DrawSceneRequest *request );
+	void submitToScene( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask );
 private:
 	static constexpr unsigned kNumVerticesForSubdivLevel[5] { 12, 42, 162, 642, 2562 };
 
@@ -275,6 +275,8 @@ private:
 
 		vec4_t mins, maxs;
 		vec3_t origin;
+
+		unsigned povPlayerMask { ~0u };
 
 		unsigned lifetime { 0 };
 		// Archimedes/xy expansion activation offset
@@ -410,6 +412,8 @@ private:
 		unsigned lifetime { 0 };
 		unsigned compoundMeshKey { 0 };
 
+		unsigned povPlayerMask { ~0u };
+
 		float minFadedOutAlpha { 0.0f };
 
 		uint8_t subdivLevel { 0 };
@@ -497,6 +501,8 @@ private:
 		unsigned numLayers { 0 };
 		unsigned lifetime { 0 };
 		unsigned compoundMeshKey { 0 };
+
+		unsigned povPlayerMask { ~0u };
 
 		uint8_t subdivLevel { 0 };
 		//bool applyVertexDynLight { false }; should be re-implemented, if useful

@@ -380,7 +380,7 @@ void CG_ResetPModels( void );
 void CG_RegisterBasePModel( void );
 struct pmodelinfo_s *CG_RegisterPlayerModel( const char *filename );
 void CG_AddPModel( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *viewState );
-bool CG_PModel_GetProjectionSource( int entnum, orientation_t *tag_result, ViewState *viewState );
+bool CG_PModel_GetProjectionSource( int entnum, orientation_t *tag_result, const ViewState *viewState );
 void CG_UpdatePlayerModelEnt( centity_t *cent );
 void CG_PModel_AddAnimation( int entNum, int loweranim, int upperanim, int headanim, int channel );
 void CG_PModel_ClearEventAnimations( int entNum );

@@ -261,7 +261,7 @@ auto getViewStateForEntity( int number ) -> ViewState * {
 				return &cg.viewStates[i];
 			}
 		}
-		CG_Error( "Failed to get view state for entity %d (there are %d view states)", number, cg.numSnapViewStates );
+		return nullptr;
 	}
 	return &cg.viewStates[cg.chasedViewportIndex];
 }
@@ -1273,8 +1273,12 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 		return;
 	}
 
+	const bool usePovSlot        = isOwnerThePov && !viewState->view.thirdperson;
+	const unsigned povBit        = ownerEntNum ? 1u << ( ownerEntNum - 1 ) : 0;
+	const unsigned povPlayerMask = usePovSlot ? povBit : ( ~0u & ~povBit );
+
 	vec3_t laserOrigin, laserAngles, laserPoint;
-	if( isOwnerThePov && !viewState->view.thirdperson ) {
+	if( usePovSlot ) {
 		VectorCopy( viewState->predictedPlayerState.pmove.origin, laserOrigin );
 		laserOrigin[2] += viewState->predictedPlayerState.viewheight;
 		VectorCopy( viewState->predictedPlayerState.viewangles, laserAngles );
@@ -1346,7 +1350,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 		}
 
 		std::span<const vec3_t> pointsSpan( points, numAddedPoints );
-		cg.effectsSystem.updateCurvedLaserBeam( ownerEntNum, pointsSpan, cg.time );
+		cg.effectsSystem.updateCurvedLaserBeam( ownerEntNum, usePovSlot, pointsSpan, cg.time, povPlayerMask );
 	} else {
 		const auto range = (float)GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout;
 
@@ -1354,7 +1358,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 		// trace the beam: for tracing we use the real beam origin
 		GS_TraceLaserBeam( &trace, laserOrigin, laserAngles, range, ownerEntNum, 0, _LaserImpact );
 
-		cg.effectsSystem.updateStraightLaserBeam( ownerEntNum, projectsource.origin, trace.endpos, cg.time );
+		cg.effectsSystem.updateStraightLaserBeam( ownerEntNum, usePovSlot, projectsource.origin, trace.endpos, cg.time, povPlayerMask );
 	}
 
 	// enable continuous flash on the weapon owner
@@ -2343,17 +2347,19 @@ static void handleGunbladeBlastImpactEvent( entity_state_t *ent, int parm, bool 
 }
 
 static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted ) {
-	// TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: Just hide for POV
-	ViewState *viewState = getPrimaryViewState();
-
-	if( v_showPovBlood.get() || !viewState->isViewerEntity( ent->ownerNum ) ) {
-		vec3_t dir;
-		ByteToDir( parm, dir );
-		if( VectorCompare( dir, vec3_origin ) ) {
-			dir[2] = 1.0f;
+	unsigned povPlayerMask = ~0u;
+	if( !v_showPovBlood.get() ) {
+		if( ent->ownerNum > 0 && ent->ownerNum <= gs.maxclients ) {
+			povPlayerMask &= ~( 1u << ( ent->ownerNum - 1 ) );
 		}
-		cg.effectsSystem.spawnPlayerHitEffect( ent->origin, dir, ent->damage );
 	}
+
+	vec3_t dir;
+	ByteToDir( parm, dir );
+	if( VectorCompare( dir, vec3_origin ) ) {
+		dir[2] = 1.0f;
+	}
+	cg.effectsSystem.spawnPlayerHitEffect( ent->origin, dir, ent->damage, povPlayerMask );
 }
 
 static void handleMoverEvent( entity_state_t *ent, int parm ) {

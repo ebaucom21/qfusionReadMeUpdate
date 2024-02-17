@@ -576,7 +576,7 @@ void CG_MoveToTag( vec3_t move_origin,
 * CG_PModel_GetProjectionSource
 * It asumes the player entity is up to date
 */
-bool CG_PModel_GetProjectionSource( int entnum, orientation_t *tag_result, ViewState *viewState ) {
+bool CG_PModel_GetProjectionSource( int entnum, orientation_t *tag_result, const ViewState *viewState ) {
 	centity_t *cent;
 	pmodel_t *pmodel;
 
@@ -594,7 +594,7 @@ bool CG_PModel_GetProjectionSource( int entnum, orientation_t *tag_result, ViewS
 	}
 
 	// see if it's the view weapon
-	if( viewState->isViewerEntity( entnum ) && !viewState->view.thirdperson ) {
+	if( viewState && viewState->isViewerEntity( entnum ) && !viewState->view.thirdperson ) {
 		VectorCopy( viewState->weapon.projectionSource.origin, tag_result->origin );
 		Matrix3_Copy( viewState->weapon.projectionSource.axis, tag_result->axis );
 		return true;

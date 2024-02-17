@@ -44,9 +44,9 @@ public:
 	~TransientEffectsSystem();
 
 	void spawnExplosionHulls( const float *fireOrigin, const float *smokeOrigin, float radius = 72.0f );
-	void spawnCartoonHitEffect( const float *origin, const float *dir, int damage );
+	void spawnCartoonHitEffect( const float *origin, const float *dir, int damage, unsigned povPlayerMask );
 	void spawnBleedingVolumeEffect( const float *origin, const float *dir, unsigned damageLevel,
-									const float *bloodColor, unsigned duration, float scale = 1.0f );
+									const float *bloodColor, unsigned duration, float scale, unsigned povPlayerMask );
 	void spawnElectroboltHitEffect( const float *origin, const float *dir, const float *decalColor,
 									const float *energyColor, bool spawnDecal );
 	void spawnInstagunHitEffect( const float *origin, const float *dir, const float *decalColor,
@@ -86,12 +86,13 @@ public:
 	void clear();
 
 	void simulateFrame( int64_t currTime );
-	void submitToScene( int64_t currTime, DrawSceneRequest *request );
+	void submitToScene( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask );
 private:
 	struct EntityEffect {
 		EntityEffect *prev { nullptr }, *next { nullptr };
 		int64_t spawnTime { 0 };
 		unsigned duration { 0 };
+		unsigned povPlayerMask { ~0u };
 		float velocity[3] { 0.0f, 0.0f, 0.0f };
 		ValueLifespan scaleLifespan { .initial = 0.0f, .fadedIn = 1.0f, .fadedOut = 1.0f };
 		ValueLifespan alphaLifespan { .initial = 1.0f, .fadedIn = 1.0f, .fadedOut = 0.0f };
@@ -246,7 +247,7 @@ private:
 	void simulatePolyEffects( int64_t currTime, float timeDeltaSeconds );
 	void simulateLightEffects( int64_t currTime, float timeDeltaSeconds );
 	void simulateDelayedEffects( int64_t currTime, float timeDeltaSeconds );
-	void submitEntityEffects( int64_t currTime, DrawSceneRequest *request );
+	void submitEntityEffects( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask );
 	void submitPolyEffects( int64_t currTime, DrawSceneRequest *request );
 	void submitLightEffects( int64_t currTime, DrawSceneRequest *request );
 
