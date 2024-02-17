@@ -169,7 +169,8 @@ public:
 
 	void clear();
 
-	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest );
+	void simulateFrame( int64_t currTime );
+	void submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 private:
 	void startSound( const SoundSet *sound, const float *origin, float attenuation = 1.0f );
 	void startRelativeSound( const SoundSet *sound, int entNum, float attenuation = 1.0f );

@@ -144,6 +144,7 @@ void ParticleSystem::clear() {
 		}
 		assert( !bin.lingeringTrailsHead );
 	}
+	m_lastTime = 0;
 }
 
 void ParticleSystem::unlinkAndFree( ParticleFlock *flock ) {
@@ -923,66 +924,75 @@ static inline bool canShowForCurrentCgFrame( unsigned affinityIndex, unsigned af
 	return true;
 }
 
-void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
-	// Limit delta by sane bounds
-	const float deltaSeconds = 1e-3f * (float)wsw::clamp( (int)( currTime - m_lastTime ), 1, 33 );
-	m_lastTime = currTime;
+void ParticleSystem::simulateFrame( int64_t currTime ) {
+	if( currTime != m_lastTime ) {
+		assert( currTime > m_lastTime );
 
-	// We split simulation/rendering loops for a better instructions cache utilization
-	for( RegularFlocksBin &bin: m_regularFlockBins ) {
-		for( ParticleFlock *flock = bin.head, *nextFlock; flock; flock = nextFlock ) { nextFlock = flock->next;
-			if( currTime < flock->timeoutAt ) [[likely]] {
-				// Otherwise, the flock could be awaiting filling externally, don't modify its timeout
-				if( flock->numActivatedParticles + flock->numDelayedParticles > 0 ) [[likely]] {
-					if( flock->needsClipping ) {
-						simulate( flock, &m_rng, currTime, deltaSeconds );
-					} else {
-						simulateWithoutClipping( flock, currTime, deltaSeconds );
+		// Limit delta by sane bounds
+		const float deltaSeconds = 1e-3f * (float)wsw::clamp( (int)( currTime - m_lastTime ), 1, 33 );
+
+		// We split simulation/rendering loops for a better instructions cache utilization
+		for( RegularFlocksBin &bin: m_regularFlockBins ) {
+			for( ParticleFlock *flock = bin.head, *next; flock; flock = next ) { next = flock->next;
+				if( currTime < flock->timeoutAt ) [[likely]] {
+					// Otherwise, the flock could be awaiting filling externally, don't modify its timeout
+					if( flock->numActivatedParticles + flock->numDelayedParticles > 0 ) [[likely]] {
+						if( flock->needsClipping ) {
+							simulate( flock, &m_rng, currTime, deltaSeconds );
+						} else {
+							simulateWithoutClipping( flock, currTime, deltaSeconds );
+						}
 					}
-				}
-				if( flock->trailFlockOfParticles ) {
-					simulateParticleTrailOfParticles( flock, &m_rng, currTime, deltaSeconds );
-				}
-				if( flock->polyTrailOfParticles ) {
-					simulatePolyTrailOfParticles( flock, flock->polyTrailOfParticles, currTime );
-				}
-			} else {
-				unlinkAndFree( flock );
-			}
-		}
-	}
-
-	for( ParticleTrailBin &bin: m_trailsOfParticlesBins ) {
-		for( ParticleFlock *flock = bin.lingeringFlocksHead, *nextFlock; flock; flock = nextFlock ) { nextFlock = flock->next;
-			if( currTime < flock->timeoutAt ) [[likely]] {
-				if( flock->numActivatedParticles + flock->numDelayedParticles ) {
-					simulateWithoutClipping( flock, currTime, deltaSeconds );
+					if( flock->trailFlockOfParticles ) {
+						simulateParticleTrailOfParticles( flock, &m_rng, currTime, deltaSeconds );
+					}
+					if( flock->polyTrailOfParticles ) {
+						simulatePolyTrailOfParticles( flock, flock->polyTrailOfParticles, currTime );
+					}
 				} else {
 					unlinkAndFree( flock );
 				}
-			} else {
-				unlinkAndFree( flock );
 			}
 		}
-	}
 
-	for( PolyTrailBin &bin: m_polyTrailBins ) {
-		for( PolyTrailOfParticles *trail = bin.lingeringTrailsHead, *next; trail; trail = next ) { next = trail->next;
-			// Lingering of trails of individual particles is independent,
-			// and could even happen prior to detaching a trail,
-			// but if we reach this condition, we are sure all individual trails have finished lingering.
-			assert( trail->props.lingeringLimit > 0 && trail->props.lingeringLimit < 1000 );
-			if( currTime < trail->detachedAt + trail->props.lingeringLimit ) {
-				simulatePolyTrailOfParticles( nullptr, trail, currTime );
-			} else {
-				unlinkAndFree( trail );
+		for( ParticleTrailBin &bin: m_trailsOfParticlesBins ) {
+			for( ParticleFlock *flock = bin.lingeringFlocksHead, *next; flock; flock = next ) { next = flock->next;
+				if( currTime < flock->timeoutAt ) [[likely]] {
+					if( flock->numActivatedParticles + flock->numDelayedParticles ) {
+						simulateWithoutClipping( flock, currTime, deltaSeconds );
+					} else {
+						unlinkAndFree( flock );
+					}
+				} else {
+					unlinkAndFree( flock );
+				}
 			}
 		}
+
+		for( PolyTrailBin &bin: m_polyTrailBins ) {
+			for( PolyTrailOfParticles *trail = bin.lingeringTrailsHead, *next; trail; trail = next ) { next = trail->next;
+				// Lingering of trails of individual particles is independent,
+				// and could even happen prior to detaching a trail,
+				// but if we reach this condition, we are sure all individual trails have finished lingering.
+				assert( trail->props.lingeringLimit > 0 && trail->props.lingeringLimit < 1000 );
+				if( currTime < trail->detachedAt + trail->props.lingeringLimit ) {
+					simulatePolyTrailOfParticles( nullptr, trail, currTime );
+				} else {
+					unlinkAndFree( trail );
+				}
+			}
+		}
+
+		m_lastTime = currTime;
 	}
 
 	m_frameFlareParticles.clear();
 	m_frameFlareColorLifespans.clear();
 	m_frameFlareAppearanceRules.clear();
+}
+
+void ParticleSystem::submitToScene( [[maybe_unused]] int64_t currTime, DrawSceneRequest *request ) {
+	assert( currTime == m_lastTime );
 
 	for( RegularFlocksBin &bin: m_regularFlockBins ) {
 		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
@@ -1263,7 +1273,9 @@ static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle
 	const auto correctedDuration      = wsw::max( 1, particle.lifetime - offset );
 	const auto lifetimeSoFar          = (int)( currTime - particle.spawnTime );
 	const auto correctedLifetimeSoFar = wsw::max( 0, lifetimeSoFar - offset );
-	return (float)correctedLifetimeSoFar * Q_Rcp( (float)correctedDuration );
+	const auto result                 = (float)correctedLifetimeSoFar * Q_Rcp( (float)correctedDuration );
+	assert( result >= 0.0f && result <= 1.0f );
+	return result;
 }
 
 void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGenerator *__restrict rng,

@@ -55,9 +55,13 @@ public:
 	[[nodiscard]]
 	static auto instance() -> Frontend *;
 
+	void beginDrawingScenes();
+
 	[[nodiscard]]
 	auto createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest *;
 	void submitDrawSceneRequest( DrawSceneRequest *request );
+
+	void endDrawingScenes();
 
 	void initVolatileAssets();
 
@@ -479,7 +483,7 @@ private:
 	unsigned m_occlusionCullingFrame { 0 };
 	unsigned m_drawSceneFrame { 0 };
 
-	wsw::StaticVector<DrawSceneRequest, 1> m_drawSceneRequestHolder;
+	wsw::StaticVector<DrawSceneRequest, 16> m_drawSceneRequestsHolder;
 
 	struct DebugLine {
 		float p1[3];

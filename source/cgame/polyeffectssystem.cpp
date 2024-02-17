@@ -60,6 +60,7 @@ void PolyEffectsSystem::clear() {
 		destroyRibbonEffect( ribbon );
 	}
 	assert( !m_ribbonEffectsHead );
+	m_lastTime = 0;
 }
 
 auto PolyEffectsSystem::createCurvedBeamEffect( shader_s *material ) -> CurvedBeam * {
@@ -1014,25 +1015,53 @@ auto PolyEffectsSystem::RibbonPoly::fillMeshBuffers( const float *__restrict vie
 	return { numVertices, numIndices };
 }
 
-void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
-	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
+void PolyEffectsSystem::simulateFrame( int64_t currTime ) {
+	if( currTime != m_lastTime ) {
+		assert( currTime > m_lastTime );
+
+		const float timeDeltaSeconds = 1e-3f * std::min<float>( 33, (float)( currTime - m_lastTime ) );
+
+		simulateBeams( currTime, timeDeltaSeconds );
+		simulateTracers( currTime, timeDeltaSeconds );
+		simulateRosettes( currTime, timeDeltaSeconds );
+		simulateRibbons( currTime, timeDeltaSeconds );
+
+		m_lastTime = currTime;
+	}
+}
+
+void PolyEffectsSystem::submitToScene( int64_t currTime, DrawSceneRequest *request ) {
+	submitBeams( currTime, request );
+	submitTracers( currTime, request );
+	submitRosettes( currTime, request );
+	submitRibbons( currTime, request );
+}
+
+void PolyEffectsSystem::simulateBeams( int64_t currTime, float ) {
+	for( TransientBeamEffect *beam = m_transientBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
+		if( beam->spawnTime + beam->timeout <= currTime ) [[unlikely]] {
+			destroyTransientBeamEffect( beam );
+		}
+	}
+}
+
+void PolyEffectsSystem::submitBeams( int64_t currTime, DrawSceneRequest *request ) {
+	assert( currTime == m_lastTime );
+
+	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead; beam; beam = beam->next ) {
 		if( beam->poly.material && beam->poly.points.size() > 1 ) [[likely]] {
 			request->addDynamicMesh( &beam->poly );
 		}
 	}
 
-	for( StraightBeamEffect *beam = m_straightLaserBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
+	for( StraightBeamEffect *beam = m_straightLaserBeamsHead; beam; beam = beam->next ) {
 		if( beam->poly.material && beam->poly.halfExtent > 1.0f ) [[likely]] {
 			request->addPoly( &beam->poly );
 		}
 	}
 
-	for( TransientBeamEffect *beam = m_transientBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
-		if( beam->spawnTime + beam->timeout <= currTime ) [[unlikely]] {
-			destroyTransientBeamEffect( beam );
-			continue;
-		}
-
+	for( TransientBeamEffect *beam = m_transientBeamsHead; beam; beam = beam->next ) {
+		assert( beam->spawnTime + beam->timeout > currTime );
 		if( beam->poly.material && beam->poly.halfExtent > 1.0f ) [[likely]] {
 			const float colorLifetimeFrac = (float)( currTime - beam->spawnTime ) * Q_Rcp( (float)beam->timeout );
 
@@ -1066,16 +1095,9 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 			request->addPoly( &beam->poly );
 		}
 	}
-
-	const float timeDeltaSeconds = 1e-3f * std::min<float>( 33, (float)( currTime - m_lastTime ) );
-	simulateTracersAndSubmit( currTime, timeDeltaSeconds, request );
-	simulateRosettesAndSubmit( currTime, timeDeltaSeconds, request );
-	simulateRibbonsAndSubmit( currTime, timeDeltaSeconds, request );
-
-	m_lastTime = currTime;
 }
 
-void PolyEffectsSystem::simulateTracersAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request ) {
+void PolyEffectsSystem::simulateTracers( int64_t currTime, float timeDeltaSeconds ) {
 	for( TracerEffect *tracer = m_tracerEffectsHead, *next = nullptr; tracer; tracer = next ) { next = tracer->next;
 		if( tracer->timeoutAt <= currTime ) [[unlikely]] {
 			destroyTracerEffect( tracer );
@@ -1193,40 +1215,51 @@ void PolyEffectsSystem::simulateTracersAndSubmit( int64_t currTime, float timeDe
 
 		assert( std::fabs( VectorLengthFast( rules->dir ) - 1.0f ) < 1e-3f );
 
-		request->addPoly( &tracer->poly );
+		tracer->selectedForSubmissionAt = currTime;
+	}
+}
 
-		if( tracer->programLightRadius > 0.0f || tracer->coronaLightRadius > 0.0f ) {
-			bool shouldAddLight = true;
-			// If the light display is tied to certain frames (e.g., every 3rd one, starting from 2nd absolute)
-			if( const auto modulo = (unsigned)tracer->lightFrameAffinityModulo; modulo > 1 ) {
-				using CountType = decltype( cg.frameCount );
-				const auto frameIndexByModulo = cg.frameCount % (CountType) modulo;
-				shouldAddLight = frameIndexByModulo == (CountType)tracer->lightFrameAffinityIndex;
-			}
-			if( shouldAddLight ) {
-				float radiusFrac = 1.0f;
-				if( tracer->lightFadeInDistance > 0.0f ) {
-					if( tracer->distanceSoFar < tracer->lightFadeInDistance ) {
-						radiusFrac = tracer->distanceSoFar * Q_Rcp( tracer->lightFadeInDistance );
-					}
-				} else if( tracer->lightFadeOutDistance > 0.0f ) {
-					const float distanceLeft = tracer->totalDistance - tracer->distanceSoFar;
-					if( distanceLeft < tracer->lightFadeOutDistance ) {
-						radiusFrac = distanceLeft * Q_Rcp( tracer->lightFadeOutDistance );
-					}
+void PolyEffectsSystem::submitTracers( [[maybe_unused]] int64_t currTime, DrawSceneRequest *request ) {
+	assert( currTime == m_lastTime );
+
+	for( TracerEffect *tracer = m_tracerEffectsHead; tracer; tracer = tracer->next ) {
+		// Don't submit tracers which are considered hidden on this frame
+		if( tracer->selectedForSubmissionAt == currTime ) {
+			request->addPoly( &tracer->poly );
+
+			if( tracer->programLightRadius > 0.0f || tracer->coronaLightRadius > 0.0f ) {
+				bool shouldAddLight = true;
+				// If the light display is tied to certain frames (e.g., every 3rd one, starting from 2nd absolute)
+				if( const auto modulo = (unsigned)tracer->lightFrameAffinityModulo; modulo > 1 ) {
+					using CountType = decltype( cg.frameCount );
+					const auto frameIndexByModulo = cg.frameCount % (CountType) modulo;
+					shouldAddLight = frameIndexByModulo == (CountType)tracer->lightFrameAffinityIndex;
 				}
-				assert( radiusFrac >= 0.0f && radiusFrac < 1.01f );
-				const float programRadius = radiusFrac * tracer->programLightRadius;
-				const float coronaRadius  = radiusFrac * tracer->coronaLightRadius;
-				if( programRadius > 1.0f || coronaRadius > 1.0f ) {
-					request->addLight( tracer->poly.origin, programRadius, coronaRadius, tracer->lightColor );
+				if( shouldAddLight ) {
+					float radiusFrac = 1.0f;
+					if( tracer->lightFadeInDistance > 0.0f ) {
+						if( tracer->distanceSoFar < tracer->lightFadeInDistance ) {
+							radiusFrac = tracer->distanceSoFar * Q_Rcp( tracer->lightFadeInDistance );
+						}
+					} else if( tracer->lightFadeOutDistance > 0.0f ) {
+						const float distanceLeft = tracer->totalDistance - tracer->distanceSoFar;
+						if( distanceLeft < tracer->lightFadeOutDistance ) {
+							radiusFrac = distanceLeft * Q_Rcp( tracer->lightFadeOutDistance );
+						}
+					}
+					assert( radiusFrac >= 0.0f && radiusFrac < 1.01f );
+					const float programRadius = radiusFrac * tracer->programLightRadius;
+					const float coronaRadius  = radiusFrac * tracer->coronaLightRadius;
+					if( programRadius > 1.0f || coronaRadius > 1.0f ) {
+						request->addLight( tracer->poly.origin, programRadius, coronaRadius, tracer->lightColor );
+					}
 				}
 			}
 		}
 	}
 }
 
-void PolyEffectsSystem::simulateRosettesAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request ) {
+void PolyEffectsSystem::simulateRosettes( int64_t currTime, float timeDeltaSeconds ) {
 	for( ImpactRosetteEffect *effect = m_impactRosetteEffectsHead, *next = nullptr; effect; effect = next ) {
 		next = effect->next;
 
@@ -1274,63 +1307,76 @@ void PolyEffectsSystem::simulateRosettesAndSubmit( int64_t currTime, float timeD
 			}
 		}
 
-		if( effect->numElements ) [[likely]] {
-			request->addDynamicMesh( &effect->spikesPoly );
-			if( effect->numFlareElementsThisFrame ) {
-				request->addDynamicMesh( &effect->flarePoly );
-			}
-			if( const std::optional<LightLifespan> &lightLifespan = effect->lightLifespan ) {
-				bool shouldAddLight = false;
-				if( effect->lightFrameAffinityModulo < 2 ) {
-					shouldAddLight = true;
-				} else {
-					assert( effect->lightFrameAffinityIndex < effect->lightFrameAffinityModulo );
-					if( ( cg.frameCount % effect->lightFrameAffinityModulo ) == effect->lightFrameAffinityIndex ) {
-						shouldAddLight = true;
-					}
-				}
-				if( shouldAddLight ) {
-					const float effectLifetimeFrac = (float)( currTime - effect->spawnTime ) * Q_Rcp( (float)effect->lifetime );
-					assert( effectLifetimeFrac >= 0.0f && effectLifetimeFrac <= 1.0f );
-
-					float lightRadius = 0.0f, lightColor[3];
-					lightLifespan->getRadiusAndColorForLifetimeFrac( effectLifetimeFrac, &lightRadius, lightColor );
-
-					if( lightRadius > 1.0f ) [[likely]] {
-						effect->lastLightEmitterElementIndex = ( effect->lastLightEmitterElementIndex + 1 ) % effect->numElements;
-						const ImpactRosetteElement &element  = effect->elements[effect->lastLightEmitterElementIndex];
-
-						vec3_t lightOrigin;
-						const float endPointDistance = wsw::min( element.lengthLimit, element.desiredLength * element.lifetimeFrac );
-						// Prevent spawning the light in an obstacle
-						const float lightOriginDistance = wsw::max( 0.0f, endPointDistance - 1.0f );
-						VectorMA( element.from, lightOriginDistance, element.dir, lightOrigin );
-						request->addLight( lightOrigin, lightRadius, 0.0f, lightColor );
-					}
-				}
-			}
-		} else {
+		if( !effect->numElements ) [[unlikely]] {
 			destroyImpactRosetteEffect( effect );
 		}
 	}
 }
 
-void PolyEffectsSystem::simulateRibbonsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request ) {
+void PolyEffectsSystem::submitRosettes( int64_t currTime, DrawSceneRequest *request ) {
+	assert( currTime == m_lastTime );
+
+	for( ImpactRosetteEffect *effect = m_impactRosetteEffectsHead; effect; effect = effect->next ) {
+		assert( effect->numElements );
+		request->addDynamicMesh( &effect->spikesPoly );
+		if( effect->numFlareElementsThisFrame ) {
+			request->addDynamicMesh( &effect->flarePoly );
+		}
+		if( const std::optional<LightLifespan> &lightLifespan = effect->lightLifespan ) {
+			bool shouldAddLight = false;
+			if( effect->lightFrameAffinityModulo < 2 ) {
+				shouldAddLight = true;
+			} else {
+				assert( effect->lightFrameAffinityIndex < effect->lightFrameAffinityModulo );
+				if( ( cg.frameCount % effect->lightFrameAffinityModulo ) == effect->lightFrameAffinityIndex ) {
+					shouldAddLight = true;
+				}
+			}
+			if( shouldAddLight ) {
+				const float effectLifetimeFrac = (float)( currTime - effect->spawnTime ) * Q_Rcp( (float)effect->lifetime );
+				assert( effectLifetimeFrac >= 0.0f && effectLifetimeFrac <= 1.0f );
+
+				float lightRadius = 0.0f, lightColor[3];
+				lightLifespan->getRadiusAndColorForLifetimeFrac( effectLifetimeFrac, &lightRadius, lightColor );
+
+				if( lightRadius > 1.0f ) [[likely]] {
+					effect->lastLightEmitterElementIndex = ( effect->lastLightEmitterElementIndex + 1 ) % effect->numElements;
+					const ImpactRosetteElement &element  = effect->elements[effect->lastLightEmitterElementIndex];
+
+					vec3_t lightOrigin;
+					const float endPointDistance = wsw::min( element.lengthLimit, element.desiredLength * element.lifetimeFrac );
+					// Prevent spawning the light in an obstacle
+					const float lightOriginDistance = wsw::max( 0.0f, endPointDistance - 1.0f );
+					VectorMA( element.from, lightOriginDistance, element.dir, lightOrigin );
+					request->addLight( lightOrigin, lightRadius, 0.0f, lightColor );
+				}
+			}
+		}
+	}
+}
+
+void PolyEffectsSystem::simulateRibbons( int64_t currTime, float timeDeltaSeconds ) {
 	for( RibbonEffect *ribbon = m_ribbonEffectsHead, *next = nullptr; ribbon; ribbon = next ) { next = ribbon->next;
 		if( ribbon->spawnTime + ribbon->lifetime <= currTime ) [[unlikely]] {
 			destroyRibbonEffect( ribbon );
-			continue;
-		}
-
-		const int64_t startSimulationAt = ribbon->spawnTime + ribbon->simulationDelay;
-		if( startSimulationAt <= currTime ) [[likely]] {
-			const int64_t stopMovingAt = startSimulationAt + ribbon->movementDuration;
-			// Hacks: currently, the simulation is the same as movement simulation
-			// After stopping moving, we can use the "frozen" state of an object.
-			if( currTime < stopMovingAt ) {
-				simulateRibbon( ribbon, timeDeltaSeconds );
+		} else {
+			const int64_t startSimulationAt = ribbon->spawnTime + ribbon->simulationDelay;
+			if( startSimulationAt <= currTime ) [[likely]] {
+				const int64_t stopMovingAt = startSimulationAt + ribbon->movementDuration;
+				// Hacks: currently, the simulation is the same as movement simulation
+				// After stopping moving, we can use the "frozen" state of an object.
+				if( currTime < stopMovingAt ) {
+					simulateRibbon( ribbon, timeDeltaSeconds );
+				}
 			}
+		}
+	}
+}
 
+void PolyEffectsSystem::submitRibbons( int64_t currTime, DrawSceneRequest *request ) {
+	for( RibbonEffect *ribbon = m_ribbonEffectsHead; ribbon; ribbon = ribbon->next ) {
+		const int64_t startSimulationAt = ribbon->spawnTime + ribbon->simulationDelay;
+		if( startSimulationAt <= currTime ) {
 			if( DistanceSquared( ribbon->poly.cullMins, ribbon->poly.cullMaxs ) > wsw::square( 1.0f ) ) [[likely]] {
 				assert( ribbon->lifetime > ribbon->simulationDelay );
 				const int64_t lifetimeSoFar  = currTime - startSimulationAt;

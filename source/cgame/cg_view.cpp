@@ -1161,6 +1161,11 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 			R_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorBlack, cgs.shaderWhite );
 
+			cg.effectsSystem.clear();
+			cg.particleSystem.clear();
+			cg.polyEffectsSystem.clear();
+			cg.simulatedHullsSystem.clear();
+
 			SoundSystem::instance()->updateListener( vec3_origin, vec3_origin, axis_identity );
 		} else {
 			// bring up the game menu after reconnecting
@@ -1230,6 +1235,10 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				numDisplayedViewStates = cg.tileMiniviewViewStateIndices.size();
 			}
 
+			// TODO: Use the same DrawSceneRequest instance but modify POV-specific data
+			DrawSceneRequest *drawSceneRequests[MAX_CLIENTS + 1];
+			BeginDrawingScenes();
+
 			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
 				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
 				const Rect viewport      = viewRects[viewNum];
@@ -1245,23 +1254,31 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 				CG_CalcViewWeapon( &viewState->weapon, viewState );
 
-				if( viewNum == 0 ) {
-					CG_FireEvents( false );
-				}
-
 				DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( viewState->view.refdef );
 
 				CG_AddEntities( drawSceneRequest, viewState );
 				CG_AddViewWeapon( &viewState->weapon, drawSceneRequest, viewState );
 
-				// TODO: Separate simulation and submission
-				if( viewNum == 0 ) {
-					cg.effectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
-					// Run the particle system last (don't submit flocks that could be invalidated by the effect system this frame)
-					cg.particleSystem.runFrame( cg.time, drawSceneRequest );
-					cg.polyEffectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
-					cg.simulatedHullsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
-				}
+				drawSceneRequests[viewNum] = drawSceneRequest;
+			}
+
+			CG_FireEvents( false );
+
+			// Make sure all possible effects in this frame are submitted prior to simulation
+			// (A simulation timestamp of an effect must match its submission timestamp).
+			cg.effectsSystem.simulateFrame( cg.time );
+			cg.particleSystem.simulateFrame( cg.time );
+			cg.polyEffectsSystem.simulateFrame( cg.time );
+			cg.simulatedHullsSystem.simulateFrame( cg.time );
+
+			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
+				DrawSceneRequest *const drawSceneRequest = drawSceneRequests[viewNum];
+				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
+
+				cg.effectsSystem.submitToScene( cg.time, drawSceneRequest );
+				cg.particleSystem.submitToScene( cg.time, drawSceneRequest );
+				cg.polyEffectsSystem.submitToScene( cg.time, drawSceneRequest );
+				cg.simulatedHullsSystem.submitToScene( cg.time, drawSceneRequest );
 
 				refdef_t *rd = &viewState->view.refdef;
 				AnglesToAxis( viewState->view.angles, rd->viewaxis );
@@ -1282,6 +1299,8 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 				CG_ResetTemporaryBoneposesCache(); // clear for next frame
 			}
+
+			EndDrawingScenes();
 
 			CG_AddLocalSounds();
 

@@ -55,6 +55,8 @@ void TrackedEffectsSystem::clear() {
 
 	unlinkAndFreeItemsInList( m_teleEffectsHead );
 	assert( !m_teleEffectsHead );
+
+	m_lastTime = 0;
 }
 
 template <typename Effect>
@@ -1225,89 +1227,118 @@ static inline void copyWithAlphaScale( const float *from, float *to, float alpha
 	to[3] *= alpha;
 }
 
-void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
-	// Collect orphans.
+void TrackedEffectsSystem::simulateFrame( int64_t currTime ) {
+	if( currTime != m_lastTime ) {
+		assert( currTime > m_lastTime );
+		// Collect orphans.
 
-	// The actual drawing of trails is performed by the particle system.
-	for( ParticleTrail *trail = m_attachedParticleTrailsHead, *nextTrail = nullptr; trail; trail = nextTrail ) {
-		nextTrail = trail->next;
-		if( trail->touchedAt != currTime ) [[unlikely]] {
-			makeParticleTrailLingering( trail );
+		// The actual drawing of trails is performed by the particle system.
+		for( ParticleTrail *trail = m_attachedParticleTrailsHead, *next = nullptr; trail; trail = next ) {
+			next = trail->next;
+			if( trail->touchedAt != currTime ) [[unlikely]] {
+				makeParticleTrailLingering( trail );
+			}
 		}
+
+		for( ParticleTrail *trail = m_lingeringParticleTrailsHead, *next = nullptr; trail; trail = next ) {
+			next = trail->next;
+			if( trail->particleFlock->numActivatedParticles && trail->linger ) {
+				// Prevent an automatic disposal of the flock
+				trail->particleFlock->timeoutAt = std::numeric_limits<int64_t>::max();
+			} else {
+				unlinkAndFree( trail );
+			}
+		}
+
+		// The actual drawing of polys is performed by the poly effects system
+
+		for( StraightPolyTrail *trail = m_attachedStraightPolyTrailsHead, *next = nullptr; trail; trail = next ) {
+			next = trail->next;
+			if( trail->touchedAt != currTime ) [[unlikely]] {
+				tryMakingStraightPolyTrailLingering( trail );
+			}
+		}
+
+		for( CurvedPolyTrail *trail = m_attachedCurvedPolyTrailsHead, *next = nullptr; trail; trail = next ) {
+			next = trail->next;
+			if( trail->touchedAt != currTime ) [[unlikely]] {
+				tryMakingCurvedPolyTrailLingering( trail );
+			}
+		}
+
+		for( StraightPolyTrail *trail = m_lingeringStraightPolyTrailsHead, *next = nullptr; trail; trail = next ) {
+			next = trail->next;
+			const int64_t lingeringTime  = currTime - trail->touchedAt;
+			const int64_t lingeringLimit = trail->props->lingeringLimit;
+			assert( lingeringLimit > 0 && lingeringLimit < 1000 );
+			if( lingeringTime < lingeringLimit ) [[likely]] {
+				const float lingeringFrac = (float)lingeringTime * Q_Rcp( (float)lingeringLimit );
+				vec4_t fadingOutFromColor, fadingOutToColor;
+				copyWithAlphaScale( trail->props->fromColor, fadingOutFromColor, 1.0f - lingeringFrac );
+				copyWithAlphaScale( trail->props->toColor, fadingOutToColor, 1.0f - lingeringFrac );
+				cg.polyEffectsSystem.updateStraightBeamEffect( trail->beam, fadingOutFromColor, fadingOutToColor,
+															   trail->lastWidth, trail->props->tileLength,
+															   trail->lastFrom, trail->lastTo );
+			} else {
+				unlinkAndFree( trail );
+			}
+		}
+
+		for( CurvedPolyTrail *trail = m_lingeringCurvedPolyTrailsHead, *next = nullptr; trail; trail = next ) {
+			next = trail->next;
+			const int64_t lingeringTime  = currTime - trail->touchedAt;
+			const int64_t lingeringLimit = trail->props->lingeringLimit;
+			assert( lingeringLimit > 0 && lingeringLimit < 1000 );
+			if( lingeringTime < lingeringLimit && trail->points.size() > 1 ) {
+				// Update the lingering trail as usual.
+				// Submit the last known position as the current one.
+				// This allows trails to shrink naturally.
+				updateCurvedPolyTrail( *trail->props, trail->points.back().Data(), currTime, &trail->points, &trail->timestamps );
+				const float lingeringFrac = (float)lingeringTime * Q_Rcp( (float)lingeringLimit );
+				vec4_t fadingOutFromColor, fadingOutToColor;
+				copyWithAlphaScale( trail->props->fromColor, fadingOutFromColor, 1.0f - lingeringFrac );
+				copyWithAlphaScale( trail->props->toColor, fadingOutToColor, 1.0f - lingeringFrac );
+				cg.polyEffectsSystem.updateCurvedBeamEffect( trail->beam, fadingOutFromColor, fadingOutToColor,
+															 trail->props->width, PolyEffectsSystem::UvModeFit {},
+															 trail->lastPointsSpan );
+			} else {
+				unlinkAndFree( trail );
+			}
+		}
+
+		for( TeleEffect *effect = m_teleEffectsHead, *next = nullptr; effect; effect = next ) {
+			next = effect->next;
+			if( effect->spawnTime + effect->lifetime <= currTime ) [[unlikely]] {
+				unlinkAndFree( effect );
+			}
+		}
+
+		PolyEffectsSystem *const polyEffectsSystem = &cg.polyEffectsSystem;
+		for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
+			AttachedClientEffects *const effects = &m_attachedClientEffects[i];
+			if( effects->curvedLaserBeam ) {
+				if( effects->curvedLaserBeamTouchedAt < currTime ) {
+					polyEffectsSystem->destroyCurvedBeamEffect( effects->curvedLaserBeam );
+					effects->curvedLaserBeam = nullptr;
+				}
+			}
+			if( effects->straightLaserBeam ) {
+				if( effects->straightLaserBeamTouchedAt < currTime ) {
+					polyEffectsSystem->destroyStraightBeamEffect( effects->straightLaserBeam );
+					effects->straightLaserBeam = nullptr;
+				}
+			}
+		}
+
+		m_lastTime = currTime;
 	}
+}
 
-	for( ParticleTrail *trail = m_lingeringParticleTrailsHead, *nextTrail = nullptr; trail; trail = nextTrail ) {
-		nextTrail = trail->next;
-		if( trail->particleFlock->numActivatedParticles && trail->linger ) {
-			// Prevent an automatic disposal of the flock
-			trail->particleFlock->timeoutAt = std::numeric_limits<int64_t>::max();
-		} else {
-			unlinkAndFree( trail );
-		}
-	}
+void TrackedEffectsSystem::submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
+	assert( currTime == m_lastTime );
 
-	// The actual drawing of polys is performed by the poly effects system
-
-	for( StraightPolyTrail *trail = m_attachedStraightPolyTrailsHead, *nextTrail = nullptr; trail; trail = nextTrail ) {
-		nextTrail = trail->next;
-		if( trail->touchedAt != currTime ) [[unlikely]] {
-			tryMakingStraightPolyTrailLingering( trail );
-		}
-	}
-
-	for( CurvedPolyTrail *trail = m_attachedCurvedPolyTrailsHead, *nextTrail = nullptr; trail; trail = nextTrail ) {
-		nextTrail = trail->next;
-		if( trail->touchedAt != currTime ) [[unlikely]] {
-			tryMakingCurvedPolyTrailLingering( trail );
-		}
-	}
-
-	for( StraightPolyTrail *trail = m_lingeringStraightPolyTrailsHead, *nextTrail = nullptr; trail; trail = nextTrail ) {
-		nextTrail = trail->next;
-		const int64_t lingeringTime  = currTime - trail->touchedAt;
-		const int64_t lingeringLimit = trail->props->lingeringLimit;
-		assert( lingeringLimit > 0 && lingeringLimit < 1000 );
-		if( lingeringTime < lingeringLimit ) [[likely]] {
-			const float lingeringFrac = (float)lingeringTime * Q_Rcp( (float)lingeringLimit );
-			vec4_t fadingOutFromColor, fadingOutToColor;
-			copyWithAlphaScale( trail->props->fromColor, fadingOutFromColor, 1.0f - lingeringFrac );
-			copyWithAlphaScale( trail->props->toColor, fadingOutToColor, 1.0f - lingeringFrac );
-			cg.polyEffectsSystem.updateStraightBeamEffect( trail->beam, fadingOutFromColor, fadingOutToColor,
-														   trail->lastWidth, trail->props->tileLength,
-														   trail->lastFrom, trail->lastTo );
-		} else {
-			unlinkAndFree( trail );
-		}
-	}
-
-	for( CurvedPolyTrail *trail = m_lingeringCurvedPolyTrailsHead, *nextTrail = nullptr; trail; trail = nextTrail ) {
-		nextTrail = trail->next;
-		const int64_t lingeringTime  = currTime - trail->touchedAt;
-		const int64_t lingeringLimit = trail->props->lingeringLimit;
-		assert( lingeringLimit > 0 && lingeringLimit < 1000 );
-		if( lingeringTime < lingeringLimit && trail->points.size() > 1 ) {
-			// Update the lingering trail as usual.
-			// Submit the last known position as the current one.
-			// This allows trails to shrink naturally.
-			updateCurvedPolyTrail( *trail->props, trail->points.back().Data(), currTime, &trail->points, &trail->timestamps );
-			const float lingeringFrac = (float)lingeringTime * Q_Rcp( (float)lingeringLimit );
-			vec4_t fadingOutFromColor, fadingOutToColor;
-			copyWithAlphaScale( trail->props->fromColor, fadingOutFromColor, 1.0f - lingeringFrac );
-			copyWithAlphaScale( trail->props->toColor, fadingOutToColor, 1.0f - lingeringFrac );
-			cg.polyEffectsSystem.updateCurvedBeamEffect( trail->beam, fadingOutFromColor, fadingOutToColor,
-														 trail->props->width, PolyEffectsSystem::UvModeFit {},
-														 trail->lastPointsSpan );
-		} else {
-			unlinkAndFree( trail );
-		}
-	}
-
-	for( TeleEffect *effect = m_teleEffectsHead, *nextEffect = nullptr; effect; effect = nextEffect ) {
-		nextEffect = effect->next;
-		if( effect->spawnTime + effect->lifetime <= currTime ) [[unlikely]] {
-			unlinkAndFree( effect );
-			continue;
-		}
+	for( TeleEffect *effect = m_teleEffectsHead; effect; effect = effect->next ) {
+		assert( effect->spawnTime + effect->lifetime > currTime );
 
 		const float lifetimeFrac  = (float)( currTime - effect->spawnTime ) * Q_Rcp( (float)effect->lifetime );
 		assert( lifetimeFrac >= 0.0f && lifetimeFrac <= 1.0f );
@@ -1337,22 +1368,5 @@ void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 
 		CG_SetBoneposesForTemporaryEntity( &entity );
 		drawSceneRequest->addEntity( &entity );
-	}
-
-	PolyEffectsSystem *const polyEffectsSystem = &cg.polyEffectsSystem;
-	for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
-		AttachedClientEffects *const effects = &m_attachedClientEffects[i];
-		if( effects->curvedLaserBeam ) {
-			if( effects->curvedLaserBeamTouchedAt < currTime ) {
-				polyEffectsSystem->destroyCurvedBeamEffect( effects->curvedLaserBeam );
-				effects->curvedLaserBeam = nullptr;
-			}
-		}
-		if( effects->straightLaserBeam ) {
-			if( effects->straightLaserBeamTouchedAt < currTime ) {
-				polyEffectsSystem->destroyStraightBeamEffect( effects->straightLaserBeam );
-				effects->straightLaserBeam = nullptr;
-			}
-		}
 	}
 }

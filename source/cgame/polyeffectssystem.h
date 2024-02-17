@@ -187,7 +187,8 @@ public:
 
 	void spawnSimulatedRing( SimulatedRingParams &&params );
 
-	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
+	void simulateFrame( int64_t currTime );
+	void submitToScene( int64_t currTime, DrawSceneRequest *request );
 private:
 	struct StraightBeamEffect : public StraightBeam {
 		StraightBeamEffect *prev { nullptr }, *next { nullptr };
@@ -214,6 +215,7 @@ private:
 	struct TracerEffect {
 		TracerEffect *prev { nullptr }, *next { nullptr };
 		int64_t timeoutAt;
+		int64_t selectedForSubmissionAt;
 		std::optional<TracerParams::AlignForPovParams> alignForPovParams;
 		vec3_t from;
 		vec3_t to;
@@ -366,9 +368,15 @@ private:
 	void destroyImpactRosetteEffect( ImpactRosetteEffect *effect );
 	void destroyRibbonEffect( RibbonEffect *effect );
 
-	void simulateTracersAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
-	void simulateRosettesAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
-	void simulateRibbonsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+	void simulateBeams( int64_t currTime, float timeDeltaSeconds );
+	void simulateTracers( int64_t currTime, float timeDeltaSeconds );
+	void simulateRosettes( int64_t currTime, float timeDeltaSeconds );
+	void simulateRibbons( int64_t currTime, float timeDeltaSeconds );
+
+	void submitBeams( int64_t currTime, DrawSceneRequest *request );
+	void submitTracers( int64_t currTime, DrawSceneRequest *request );
+	void submitRosettes( int64_t currTime, DrawSceneRequest *request );
+	void submitRibbons( int64_t currTime, DrawSceneRequest *request );
 
 	void simulateRibbon( RibbonEffect *ribbon, float timeDeltaSeconds );
 

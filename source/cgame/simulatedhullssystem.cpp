@@ -315,8 +315,9 @@ SimulatedHullsSystem::SimulatedHullsSystem() {
 	// TODO: Use the same instance for all effect subsystems
 	m_rng.setSeed( dwordSeed );
 
-	m_storageOfSubmittedMeshOrderDesignators.reserve( kMaxMeshesPerHull * kMaxHullsWithLayers );
-	m_storageOfSubmittedMeshPtrs.reserve( kMaxMeshesPerHull * kMaxHullsWithLayers );
+	// TODO: Lift the number of possible miniviews/draw scene requests to the top scope
+	m_storageOfSubmittedMeshOrderDesignators.reserve( 16 * kMaxMeshesPerHull * kMaxHullsWithLayers );
+	m_storageOfSubmittedMeshPtrs.reserve( 16 * kMaxMeshesPerHull * kMaxHullsWithLayers );
 
 	// TODO: Take care of exception-safety
 	while( !m_freeShapeLists.full() ) {
@@ -359,6 +360,7 @@ void SimulatedHullsSystem::clear() {
 	for( WaveHull *hull = m_waveHullsHead, *nextHull; hull; hull = nextHull ) { nextHull = hull->next;
 		unlinkAndFreeWaveHull( hull );
 	}
+	m_lastTime = 0;
 }
 
 void SimulatedHullsSystem::unlinkAndFreeSmokeHull( SmokeHull *hull ) {
@@ -848,64 +850,95 @@ auto SimulatedHullsSystem::buildMatchingHullPairs( const BaseKeyframedHull **too
 	return numMatchedPairs;
 }
 
-void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
-	// Limit the time step
-	const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
+void SimulatedHullsSystem::simulateFrame( int64_t currTime ) {
+	if( currTime != m_lastTime ) {
+		assert( currTime > m_lastTime );
+
+		// Limit the time step
+		const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
+
+		for( FireHull *hull = m_fireHullsHead, *next = nullptr; hull; hull = next ) { next = hull->next;
+			if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+				hull->simulate( currTime, timeDeltaSeconds, &m_rng );
+			} else {
+				unlinkAndFreeFireHull( hull );
+			}
+		}
+		for( FireClusterHull *hull = m_fireClusterHullsHead, *next = nullptr; hull; hull = next ) { next = hull->next;
+			if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+				hull->simulate( currTime, timeDeltaSeconds, &m_rng );
+			} else {
+				unlinkAndFreeFireClusterHull( hull );
+			}
+		}
+		for( BlastHull *hull = m_blastHullsHead, *next = nullptr; hull; hull = next ) { next = hull->next;
+			if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+				hull->simulate( currTime, timeDeltaSeconds, &m_rng );
+			} else {
+				unlinkAndFreeBlastHull( hull );
+			}
+		}
+		for( SmokeHull *hull = m_smokeHullsHead, *next = nullptr; hull; hull = next ) { next = hull->next;
+			if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+				hull->simulate( currTime, timeDeltaSeconds, &m_rng );
+			} else {
+				unlinkAndFreeSmokeHull( hull );
+			}
+		}
+		for( WaveHull *hull = m_waveHullsHead, *next = nullptr; hull; hull = next ) { next = hull->next;
+			if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+				hull->simulate( currTime, timeDeltaSeconds, &m_rng );
+			} else {
+				unlinkAndFreeWaveHull( hull );
+			}
+		}
+		for( ToonSmokeHull *hull = m_toonSmokeHullsHead, *next = nullptr; hull; hull = next ) { next = hull->next;
+			if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+				hull->simulate( currTime, timeDeltaSeconds );
+			} else {
+				unlinkAndFreeToonSmokeHull( hull );
+			}
+		}
+
+		m_lastTime = currTime;
+	}
+
+	m_frameSharedOverrideColorsBuffer.clear();
+}
+
+void SimulatedHullsSystem::submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
+	assert( currTime == m_lastTime );
+
+	// TODO: We should do that while gathering results of parallel tasks
 
 	wsw::StaticVector<BaseRegularSimulatedHull *, kMaxRegularHulls> activeRegularHulls;
 	wsw::StaticVector<BaseConcentricSimulatedHull *, kMaxConcentricHulls> activeConcentricHulls;
 	wsw::StaticVector<BaseKeyframedHull *, kMaxKeyframedHulls> activeKeyframedHulls;
 
-	for( FireHull *hull = m_fireHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
-			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
-			activeConcentricHulls.push_back( hull );
-		} else {
-			unlinkAndFreeFireHull( hull );
-		}
+	for( FireHull *hull = m_fireHullsHead; hull; hull = hull->next ) {
+		assert( hull->spawnTime + hull->lifetime > currTime );
+		activeConcentricHulls.push_back( hull );
 	}
-	for( FireClusterHull *hull = m_fireClusterHullsHead, *next = nullptr; hull; hull = next ) { next = hull->next;
-		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
-			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
-			activeConcentricHulls.push_back( hull );
-		} else {
-			unlinkAndFreeFireClusterHull( hull );
-		}
+	for( FireClusterHull *hull = m_fireClusterHullsHead; hull; hull = hull->next ) {
+		assert( hull->spawnTime + hull->lifetime > currTime );
+		activeConcentricHulls.push_back( hull );
 	}
-	for( BlastHull *hull = m_blastHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
-			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
-			activeConcentricHulls.push_back( hull );
-		} else {
-			unlinkAndFreeBlastHull( hull );
-		}
+	for( BlastHull *hull = m_blastHullsHead; hull; hull = hull->next ) {
+		assert( hull->spawnTime + hull->lifetime > currTime );
+		activeConcentricHulls.push_back( hull );
 	}
-	for( SmokeHull *hull = m_smokeHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
-			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
-			activeRegularHulls.push_back( hull );
-		} else {
-			unlinkAndFreeSmokeHull( hull );
-		}
+	for( SmokeHull *hull = m_smokeHullsHead; hull; hull = hull->next ) {
+		assert( hull->spawnTime + hull->lifetime > currTime );
+		activeRegularHulls.push_back( hull );
 	}
-	for( WaveHull *hull = m_waveHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
-			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
-			activeRegularHulls.push_back( hull );
-		} else {
-			unlinkAndFreeWaveHull( hull );
-		}
+	for( WaveHull *hull = m_waveHullsHead; hull; hull = hull->next ) {
+		assert( hull->spawnTime + hull->lifetime > currTime );
+		activeRegularHulls.push_back( hull );
 	}
-	for( ToonSmokeHull *hull = m_toonSmokeHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
-			hull->simulate( currTime, timeDeltaSeconds );
-			activeKeyframedHulls.push_back( hull);
-		} else {
-			unlinkAndFreeToonSmokeHull( hull );
-		}
+	for( ToonSmokeHull *hull = m_toonSmokeHullsHead; hull; hull = hull->next ) {
+		assert( hull->spawnTime + hull->lifetime > currTime );
+		activeKeyframedHulls.push_back( hull);
 	}
-
-	m_frameSharedOverrideColorsBuffer.clear();
 
 	for( BaseRegularSimulatedHull *__restrict hull: activeRegularHulls ) {
 		const SolidAppearanceRules *solidAppearanceRules = nullptr;
@@ -1344,8 +1377,6 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 
 		++concentricHullIndex;
 	}
-
-	m_lastTime = currTime;
 }
 
 void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime, float timeDeltaSeconds,

@@ -376,7 +376,7 @@ bool CG_SkeletalPoseGetAttachment( orientation_t *orient, cgs_skeleton_t *skel,
 //
 //========================================================================
 
-#define TBC_Block_Size      1024
+#define TBC_Block_Size      1024 * 1024
 static int TBC_Size;
 
 bonepose_t *TBC;        //Temporary Boneposes Cache

@@ -145,7 +145,8 @@ public:
 
 	void clear();
 
-	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
+	void simulateFrame( int64_t currTime );
+	void submitToScene( int64_t currTime, DrawSceneRequest *request );
 private:
 	static constexpr unsigned kNumVerticesForSubdivLevel[5] { 12, 42, 162, 642, 2562 };
 

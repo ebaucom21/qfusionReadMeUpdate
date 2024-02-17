@@ -511,8 +511,10 @@ struct DynamicMesh {
 								  uint16_t *__restrict destIndices ) const -> std::pair<unsigned, unsigned> = 0;
 };
 
+void BeginDrawingScenes();
 DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef );
 void SubmitDrawSceneRequest( DrawSceneRequest *request );
+void EndDrawingScenes();
 
 class Texture;
 

@@ -729,12 +729,20 @@ void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsAr
 	}
 }
 
+void BeginDrawingScenes() {
+	wsw::ref::Frontend::instance()->beginDrawingScenes();
+}
+
 DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef ) {
 	return wsw::ref::Frontend::instance()->createDrawSceneRequest( refdef );
 }
 
 void SubmitDrawSceneRequest( DrawSceneRequest *request ) {
 	wsw::ref::Frontend::instance()->submitDrawSceneRequest( request );
+}
+
+void EndDrawingScenes() {
+	wsw::ref::Frontend::instance()->endDrawingScenes();
 }
 
 bool R_SurfPotentiallyFragmented( const msurface_t *surf ) {

@@ -88,17 +88,20 @@ auto Frontend::getFogForSphere( const StateForCamera *stateForCamera, const vec3
 	return getFogForBounds( stateForCamera, mins, maxs );
 }
 
-auto Frontend::createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest * {
-	R_ClearSkeletalCache();
+void Frontend::beginDrawingScenes() {
+}
 
-	assert( m_drawSceneRequestHolder.empty() );
-	return new( m_drawSceneRequestHolder.unsafe_grow_back() )DrawSceneRequest( refdef );
+auto Frontend::createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest * {
+	return new( m_drawSceneRequestsHolder.unsafe_grow_back() )DrawSceneRequest( refdef );
 }
 
 void Frontend::submitDrawSceneRequest( DrawSceneRequest *request ) {
-	assert( request == m_drawSceneRequestHolder.data() );
+	R_ClearSkeletalCache();
 	renderScene( request, &request->m_refdef );
-	m_drawSceneRequestHolder.clear();
+}
+
+void Frontend::endDrawingScenes() {
+	m_drawSceneRequestsHolder.clear();
 }
 
 Frontend::Frontend() {

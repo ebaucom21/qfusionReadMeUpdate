@@ -554,9 +554,14 @@ void EffectsSystemFacade::clear() {
 	m_trackedEffectsSystem.clear();
 }
 
-void EffectsSystemFacade::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
-	m_transientEffectsSystem.simulateFrameAndSubmit( currTime, request );
-	m_trackedEffectsSystem.simulateFrameAndSubmit( currTime, request );
+void EffectsSystemFacade::simulateFrame( int64_t currTime ) {
+	m_transientEffectsSystem.simulateFrame( currTime );
+	m_trackedEffectsSystem.simulateFrame( currTime );
+}
+
+void EffectsSystemFacade::submitToScene( int64_t currTime, DrawSceneRequest *request ) {
+	m_transientEffectsSystem.submitToScene( currTime, request );
+	m_trackedEffectsSystem.submitToScene( currTime, request );
 }
 
 void EffectsSystemFacade::spawnGrenadeBounceEffect( int entNum, int mode ) {

@@ -99,7 +99,8 @@ public:
 
 	void clear();
 
-	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest );
+	void simulateFrame( int64_t currTime );
+	void submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 private:
 	struct ParticleTrail {
 		ParticleTrail *prev { nullptr }, *next { nullptr };

@@ -57,6 +57,8 @@ void TransientEffectsSystem::clear() {
 		unlinkAndFreeDelayedEffect( effect );
 	}
 	assert( !m_delayedEffectsHead );
+
+	m_lastTime = 0;
 }
 
 #define asByteColor( r, g, b, a ) {  \
@@ -1244,67 +1246,82 @@ void TransientEffectsSystem::unlinkAndFreeDelayedEffect( DelayedEffect *effect )
 	m_delayedEffectsAllocator.free( effect );
 }
 
-void TransientEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
-	// Can't be computed in a constructor due to initialization order issues
-	// TODO: This should get changed once we get rid of most globals
-	if( m_cachedSmokeBulgeMasksBuffer.empty() ) [[unlikely]] {
-		float floatMaskBuffer[kCachedSmokeBulgeMaskSize];
-		std::fill( floatMaskBuffer + kCachedSmokeBulgeMaskSize, floatMaskBuffer + kCachedSmokeBulgeMaskSize, 0.0f );
+void TransientEffectsSystem::simulateFrame( int64_t currTime ) {
+	if( currTime != m_lastTime ) {
+		assert( currTime > m_lastTime );
 
-		m_cachedSmokeBulgeMasksBuffer.reserve( kCachedSmokeBulgeMaskSize * kNumCachedSmokeBulgeMasks );
+		// Can't be computed in a constructor due to initialization order issues
+		// TODO: This should get changed once we get rid of most globals
+		if( m_cachedSmokeBulgeMasksBuffer.empty() ) [[unlikely]] {
+			float floatMaskBuffer[kCachedSmokeBulgeMaskSize];
+			std::fill( floatMaskBuffer + kCachedSmokeBulgeMaskSize, floatMaskBuffer + kCachedSmokeBulgeMaskSize, 0.0f );
 
-		for ( unsigned i = 0; i < kNumCachedSmokeBulgeMasks; ++i ) {
-			cg.simulatedHullsSystem.calcSmokeBulgeSpeedMask( floatMaskBuffer, kCachedSmokeBulgeSubdivLevel, 7 );
-			for( unsigned vertexNum = 0; vertexNum < kCachedSmokeBulgeMaskSize; ++vertexNum ) {
-				m_cachedSmokeBulgeMasksBuffer.push_back( (uint8_t)( 255.0f * floatMaskBuffer[vertexNum] ) );
+			m_cachedSmokeBulgeMasksBuffer.reserve( kCachedSmokeBulgeMaskSize * kNumCachedSmokeBulgeMasks );
+
+			for ( unsigned i = 0; i < kNumCachedSmokeBulgeMasks; ++i ) {
+				cg.simulatedHullsSystem.calcSmokeBulgeSpeedMask( floatMaskBuffer, kCachedSmokeBulgeSubdivLevel, 7 );
+				for( unsigned vertexNum = 0; vertexNum < kCachedSmokeBulgeMaskSize; ++vertexNum ) {
+					m_cachedSmokeBulgeMasksBuffer.push_back( (uint8_t)( 255.0f * floatMaskBuffer[vertexNum] ) );
+				}
 			}
+
+			m_cachedSmokeBulgeMasksBuffer.shrink_to_fit();
 		}
 
-		m_cachedSmokeBulgeMasksBuffer.shrink_to_fit();
+		// Limit the time step
+		const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
+
+		simulateDelayedEffects( currTime, timeDeltaSeconds );
+		simulateEntityEffects( currTime, timeDeltaSeconds );
+		simulatePolyEffects( currTime, timeDeltaSeconds );
+		simulateLightEffects( currTime, timeDeltaSeconds );
+
+		m_lastTime = currTime;
 	}
-
-	// Limit the time step
-	const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
-
-	simulateDelayedEffects( currTime, timeDeltaSeconds );
-	simulateEntityEffectsAndSubmit( currTime, timeDeltaSeconds, request );
-	simulatePolyEffectsAndSubmit( currTime, timeDeltaSeconds, request );
-	simulateLightEffectsAndSubmit( currTime, timeDeltaSeconds, request );
-
-	m_lastTime = currTime;
 }
 
-void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds,
-															 DrawSceneRequest *request ) {
+void TransientEffectsSystem::submitToScene( int64_t currTime, DrawSceneRequest *request ) {
+	submitEntityEffects( currTime, request );
+	submitPolyEffects( currTime, request );
+	submitLightEffects( currTime, request );
+}
+
+void TransientEffectsSystem::simulateEntityEffects( int64_t currTime, float timeDeltaSeconds ) {
 	const model_s *const dashModel = cgs.media.modDash;
-	const float backlerp = 1.0f - cg.lerpfrac;
 
-	EntityEffect *nextEffect = nullptr;
-	for( EntityEffect *__restrict effect = m_entityEffectsHead; effect; effect = nextEffect ) {
-		nextEffect = effect->next;
-
+	for( EntityEffect *__restrict effect = m_entityEffectsHead, *next; effect; effect = next ) { next = effect->next;
+		bool doneWithThisEffect = false;
 		if( effect->spawnTime + effect->duration <= currTime ) [[unlikely]] {
 			unlinkAndFreeEntityEffect( effect );
-			continue;
+			doneWithThisEffect = true;
 		}
-
-		// Dash model hacks
-		if( effect->entity.model == dashModel ) [[unlikely]] {
-			float *const zScale = effect->entity.axis + ( 2 * 3 ) + 2;
-			*zScale -= 4.0f * timeDeltaSeconds;
-			if( *zScale < 0.01f ) {
-				unlinkAndFreeEntityEffect( effect );
-				continue;
+		if( !doneWithThisEffect ) [[likely]] {
+			// Dash model hacks
+			if( effect->entity.model == dashModel ) [[unlikely]] {
+				float *const zScale = effect->entity.axis + ( 2 * 3 ) + 2;
+				*zScale -= 4.0f * timeDeltaSeconds;
+				if( *zScale < 0.01f ) {
+					unlinkAndFreeEntityEffect( effect );
+					doneWithThisEffect = true;
+				}
+			}
+			if( !doneWithThisEffect ) [[likely]] {
+				vec3_t moveVec;
+				VectorScale( effect->velocity, timeDeltaSeconds, moveVec );
+				VectorAdd( effect->entity.origin, moveVec, effect->entity.origin );
 			}
 		}
+	}
+}
 
+void TransientEffectsSystem::submitEntityEffects( int64_t currTime, DrawSceneRequest *request ) {
+	// TODO: Accept as an argument?
+	const float backlerp = 1.0f - cg.lerpfrac;
+
+	for( EntityEffect *__restrict effect = m_entityEffectsHead; effect; effect = effect->next ) {
 		const auto lifetimeMillis = (unsigned)( currTime - effect->spawnTime );
 		assert( lifetimeMillis < effect->duration );
 		const float lifetimeFrac = (float)lifetimeMillis * Q_Rcp( (float)effect->duration );
-
-		vec3_t moveVec;
-		VectorScale( effect->velocity, timeDeltaSeconds, moveVec );
-		VectorAdd( effect->entity.origin, moveVec, effect->entity.origin );
 
 		effect->entity.backlerp      = backlerp;
 		effect->entity.scale         = effect->scaleLifespan.getValueForLifetimeFrac( lifetimeFrac );
@@ -1315,22 +1332,20 @@ void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, f
 	}
 }
 
-void TransientEffectsSystem::simulatePolyEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds,
-														   DrawSceneRequest *request ) {
-
-	PolyEffect *nextEffect = nullptr;
-	for( PolyEffect *__restrict effect = m_polyEffectsHead; effect; effect = nextEffect ) {
-		nextEffect = effect->next;
-
+void TransientEffectsSystem::simulatePolyEffects( int64_t currTime, float timeDeltaSeconds ) {
+	for( PolyEffect *__restrict effect = m_polyEffectsHead, *next; effect; effect = next ) { next = effect->next;
 		if( effect->spawnTime + effect->duration <= currTime ) [[unlikely]] {
 			unlinkAndFreePolyEffect( effect );
-			continue;
+		} else {
+			vec3_t moveVec;
+			VectorScale( effect->velocity, timeDeltaSeconds, moveVec );
+			VectorAdd( effect->poly.origin, moveVec, effect->poly.origin );
 		}
+	}
+}
 
-		vec3_t moveVec;
-		VectorScale( effect->velocity, timeDeltaSeconds, moveVec );
-		VectorAdd( effect->poly.origin, moveVec, effect->poly.origin );
-
+void TransientEffectsSystem::submitPolyEffects( int64_t currTime, DrawSceneRequest *request ) {
+	for( PolyEffect *__restrict effect = m_polyEffectsHead; effect; effect = effect->next ) {
 		const auto lifetimeMillis = (unsigned)( currTime - effect->spawnTime );
 		assert( lifetimeMillis < effect->duration );
 		const float lifetimeFrac = (float)lifetimeMillis * Q_Rcp( (float)effect->duration );
@@ -1352,17 +1367,16 @@ void TransientEffectsSystem::simulatePolyEffectsAndSubmit( int64_t currTime, flo
 	}
 }
 
-void TransientEffectsSystem::simulateLightEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds,
-															DrawSceneRequest *request ) {
-	LightEffect *nextEffect = nullptr;
-	for( LightEffect *__restrict effect = m_lightEffectsHead; effect; effect = nextEffect ) {
-		nextEffect = effect->next;
-
+void TransientEffectsSystem::simulateLightEffects( int64_t currTime, float timeDeltaSeconds ) {
+	for( LightEffect *effect = m_lightEffectsHead, *next; effect; effect = next ) { next = effect->next;
 		if( effect->spawnTime + effect->duration <= currTime ) [[unlikely]] {
 			unlinkAndFreeLightEffect( effect );
-			continue;
 		}
+	}
+}
 
+void TransientEffectsSystem::submitLightEffects( int64_t currTime, DrawSceneRequest *request ) {
+	for( LightEffect *effect = m_lightEffectsHead; effect; effect = effect->next ) {
 		const float lifetimeFrac = (float)( currTime - effect->spawnTime ) * Q_Rcp( (float)effect->duration );
 
 		float radius, color[3];
@@ -1377,8 +1391,7 @@ void TransientEffectsSystem::simulateLightEffectsAndSubmit( int64_t currTime, fl
 }
 
 void TransientEffectsSystem::simulateDelayedEffects( int64_t currTime, float timeDeltaSeconds ) {
-	DelayedEffect *nextEffect = nullptr;
-	for( DelayedEffect *effect = m_delayedEffectsHead; effect; effect = nextEffect ) { nextEffect = effect->next;
+	for( DelayedEffect *effect = m_delayedEffectsHead, *next; effect; effect = next ) { next = effect->next;
 		bool isSpawningPossible = true;
 		if( effect->simulation == DelayedEffect::SimulateMovement ) {
 			// TODO: Normalize angles each step?

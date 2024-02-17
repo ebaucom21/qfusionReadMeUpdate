@@ -352,7 +352,8 @@ public:
 
 	void destroyTrailFlock( ParticleFlock *flock ) { unlinkAndFree( flock ); }
 
-	void runFrame( int64_t currTime, DrawSceneRequest *drawSceneRequest );
+	void simulateFrame( int64_t currTime );
+	void submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 };
 
 #endif

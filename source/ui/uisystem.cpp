@@ -1397,7 +1397,9 @@ void QtUISystem::drawBackgroundMapIfNeeded() {
 	std::tie( rdf.scissor_x, rdf.scissor_y ) = std::make_pair( 0, 0 );
 	std::tie( rdf.scissor_width, rdf.scissor_height ) = widthAndHeight;
 
+	BeginDrawingScenes();
 	SubmitDrawSceneRequest( CreateDrawSceneRequest( rdf ) );
+	EndDrawingScenes();
 }
 
 void QtUISystem::beginRegistration() {

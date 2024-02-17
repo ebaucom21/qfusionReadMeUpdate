@@ -85,7 +85,8 @@ public:
 
 	void clear();
 
-	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
+	void simulateFrame( int64_t currTime );
+	void submitToScene( int64_t currTime, DrawSceneRequest *request );
 private:
 	struct EntityEffect {
 		EntityEffect *prev { nullptr }, *next { nullptr };
@@ -241,10 +242,13 @@ private:
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );
 
-	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
-	void simulatePolyEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
-	void simulateLightEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+	void simulateEntityEffects( int64_t currTime, float timeDeltaSeconds );
+	void simulatePolyEffects( int64_t currTime, float timeDeltaSeconds );
+	void simulateLightEffects( int64_t currTime, float timeDeltaSeconds );
 	void simulateDelayedEffects( int64_t currTime, float timeDeltaSeconds );
+	void submitEntityEffects( int64_t currTime, DrawSceneRequest *request );
+	void submitPolyEffects( int64_t currTime, DrawSceneRequest *request );
+	void submitLightEffects( int64_t currTime, DrawSceneRequest *request );
 
 	void spawnDelayedEffect( DelayedEffect *effect );
 
