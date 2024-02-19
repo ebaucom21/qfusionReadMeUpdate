@@ -294,8 +294,8 @@ auto getRegularCrosshairFiles() -> const wsw::StringSpanStorage<unsigned, unsign
 [[nodiscard]]
 auto getStrongCrosshairFiles() -> const wsw::StringSpanStorage<unsigned, unsigned> &;
 
-static constexpr wsw::StringView kRegularCrosshairsDirName { "/gfx/hud/crosshairs/regular" };
-static constexpr wsw::StringView kStrongCrosshairsDirName { "/gfx/hud/crosshairs/strong" };
+static constexpr wsw::StringView kRegularCrosshairsDirName { "gfx/hud/crosshairs/regular" };
+static constexpr wsw::StringView kStrongCrosshairsDirName { "gfx/hud/crosshairs/strong" };
 
 template <typename Container, typename Appendable = wsw::StringView>
 static void makeCrosshairFilePath( Container *container, const wsw::StringView &prefix, const wsw::StringView &fileName ) {
