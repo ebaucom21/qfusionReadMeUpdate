@@ -570,7 +570,7 @@ private:
 
 	static void initPersistentPart();
 	static void registerFonts();
-	static void registerFontFlavors( const wsw::StringView &prefix, std::span<const char *> suffixes );
+	static void registerFontFlavorsFromDirectory( const wsw::StringView &shortDirectoryName );
 	static void registerFont( const wsw::StringView &path );
 	static void registerCustomQmlTypes();
 	static void retrieveVideoModes();
@@ -738,38 +738,61 @@ void QtUISystem::registerCustomQmlTypes() {
 	qmlRegisterSingletonType( QUrl( "qrc:///UI.qml" ), uri, 2, 6, "UI" );
 }
 
-static const char *kUbuntuFontSuffixes[] {
-	"-B", "-BI", "-C", "-L", "-LI", "-M", "-MI", "-R", "-RI", "-Th"
-};
+void QtUISystem::registerFontFlavorsFromDirectory( const wsw::StringView &shortDirectoryName ) {
+	uiDebug() << "Registering UI font flavors from" << shortDirectoryName << "directory";
 
-static const char *kPlexSansFontSuffixes[] {
-	"-Bold", "-BoldItalic", "-ExtraLight", "-ExtraLightItalic", "-Italic", "-Light", "-LightItalic", "-Medium",
-	"-MediumItalic", "-Regular", "-SemiBold", "-SemiBoldItalic", "-Text", "-TextItalic", "-Thin", "-ThinItalic"
-};
+	wsw::StaticString<MAX_QPATH> path;
+	path << "fonts/ui/"_asView << shortDirectoryName;
 
-void QtUISystem::registerFontFlavors( const wsw::StringView &prefix, std::span<const char *> suffixes ) {
-	wsw::StaticString<64> path;
-	path << "fonts/"_asView << prefix;
-	const auto pathPrefixLen = path.length();
-	for( const char *suffix: suffixes ) {
-		path.erase( pathPrefixLen );
-		path.append( wsw::StringView( suffix ) );
-		path.append( ".ttf"_asView );
-		registerFont( path.asView() );
+	wsw::fs::SearchResultHolder searchResultHolder;
+	if( auto maybeCallResult = searchResultHolder.findDirFiles( path.asView(), ".ttf"_asView ) ) {
+		if( maybeCallResult->getNumFiles() > 0 ) {
+			// Sanity check: make sure they have a common prefix of at least one character
+			// TODO: Allow iterating over slices, like [1:], so we don't need optional for the initially chosen prefix
+			std::optional<char> prevPrefix;
+			for( const wsw::StringView &fileName: *maybeCallResult ) {
+				assert( !fileName.empty() );
+				if( prevPrefix ) {
+					if( prevPrefix != std::optional( fileName.front() ) ) {
+						uiWarning() << "*.ttf files in"_asView << path << "do not have a minimal common prefix";
+						break;
+					}
+				} else {
+					prevPrefix = fileName.front();
+				}
+			}
+
+			path.push_back( '/' );
+			const auto dirPathLength = path.length();
+			// It must be iterable again
+			for( const wsw::StringView &fileName: *maybeCallResult ) {
+				path.erase( dirPathLength );
+				path << fileName;
+				registerFont( path.asView() );
+			}
+		} else {
+			wsw::StaticString<256> message;
+			message << "Failed to find *.ttf files in"_asView << path;
+			wsw::failWithRuntimeError( message.data() );
+		}
+	} else {
+		wsw::StaticString<256> message;
+		message << "Failed to enumerate files in"_asView << path;
+		wsw::failWithRuntimeError( message.data() );
 	}
 }
 
 void QtUISystem::registerFonts() {
 	QFontDatabase::removeAllApplicationFonts();
 
-	registerFontFlavors( "Ubuntu"_asView, kUbuntuFontSuffixes );
-	registerFontFlavors( "IBMPlexSans"_asView, kPlexSansFontSuffixes );
+	registerFontFlavorsFromDirectory( "regular"_asView );
+	registerFontFlavorsFromDirectory( "heading"_asView );
 
-	registerFont( "fonts/NotoSansSymbols2-Regular.ttf"_asView );
+	registerFontFlavorsFromDirectory( "symbols"_asView );
 
 	// See the related to s_emojiFontFamily remark
 #ifndef _WIN32
-	registerFont( "fonts/NotoColorEmoji.ttf"_asView );
+	registerFontFlavorsFromDirectory( "emoji"_asView );
 #endif
 
 	QFont font( "Ubuntu", 12 );
@@ -778,6 +801,8 @@ void QtUISystem::registerFonts() {
 }
 
 void QtUISystem::registerFont( const wsw::StringView &path ) {
+	uiDebug() << "Registering UI font" << path;
+
 	if( auto handle = wsw::fs::openAsReadHandle( path ) ) {
 		const size_t size = handle->getInitialFileSize();
 		QByteArray data( (int)size, Qt::Uninitialized );
