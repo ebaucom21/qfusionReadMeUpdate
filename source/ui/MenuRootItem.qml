@@ -45,13 +45,6 @@ Item {
         }
 
         Loader {
-            id: demoPlaybackMenuLoader
-            active: UI.ui.isShowingDemoPlaybackMenu
-            anchors.fill: parent
-            sourceComponent: DemoPlaybackMenu {}
-        }
-
-        Loader {
             id: inGameMenuLoader
             active: UI.ui.isShowingInGameMenu
             anchors.fill: parent
@@ -62,6 +55,13 @@ Item {
             active: UI.ui.isShowingScoreboard
             anchors.fill: parent
             sourceComponent: ScoreboardScreen {}
+        }
+
+        Loader {
+            id: demoPlaybackMenuLoader
+            active: UI.ui.isShowingDemoPlaybackMenu
+            anchors.fill: parent
+            sourceComponent: DemoPlaybackMenu {}
         }
     }
 
