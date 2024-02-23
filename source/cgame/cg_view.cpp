@@ -189,7 +189,17 @@ static void CG_DemoFreeFly_Cmd_f( const CmdArgs &cmdArgs ) {
 		cg.isDemoCamFree = !cg.isDemoCamFree;
 	}
 
-	VectorClear( cg.demoFreeCamVelocity );
+	if( cg.isDemoCamFree ) {
+		// Inherit position/angles from the previously followed POV
+		const player_state_t &oldPlayerState = getPrimaryViewState()->predictedPlayerState;
+		VectorCopy( oldPlayerState.pmove.origin, cg.demoFreeCamOrigin );
+		cg.demoFreeCamOrigin[2] += oldPlayerState.viewheight;
+		VectorCopy( oldPlayerState.viewangles, cg.demoFreeCamAngles );
+		// CAUTION: Modifying view angles of the our own "physical" client (this is harmless though)
+		VectorCopy( oldPlayerState.viewangles, cl.viewangles );
+		VectorClear( cg.demoFreeCamVelocity );
+		VectorClear( cg.demoFreeCamDeltaAngles );
+	}
 }
 
 static void CG_CamSwitch_Cmd_f( const CmdArgs & ) {
