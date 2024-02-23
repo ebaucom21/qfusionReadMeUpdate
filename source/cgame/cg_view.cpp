@@ -946,7 +946,7 @@ static void CG_UpdateChaseCam() {
 	}
 }
 
-static void CG_SetupViewDef( cg_viewdef_t *view, int type, ViewState *viewState, int viewportX, int viewportY, int viewportWidth, int viewportHeight ) {
+static void CG_SetupViewDef( cg_viewdef_t *view, int type, bool thirdperson, ViewState *viewState, const Rect &viewport ) {
 	memset( view, 0, sizeof( cg_viewdef_t ) );
 
 	//
@@ -958,14 +958,8 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, ViewState *viewState,
 	if( view->type == VIEWDEF_PLAYERVIEW ) {
 		view->POVent = viewState->snapPlayerState.POVnum;
 
-		view->draw2D = true;
-
-		// set up third-person
-		if( cg.chaseMode == CAM_THIRDPERSON ) {
-			view->thirdperson = true;
-		} else {
-			view->thirdperson = v_thirdPerson.get();
-		}
+		view->draw2D      = true;
+		view->thirdperson = thirdperson;
 
 		if( cg_entities[view->POVent].serverFrame != cg.frame.serverFrame ) {
 			view->thirdperson = false;
@@ -1016,7 +1010,7 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, ViewState *viewState,
 
 			CG_ViewSmoothPredictedSteps( view->origin, viewState ); // smooth out stair climbing
 
-			if( v_viewBob.get() && !v_thirdPerson.get() ) {
+			if( v_viewBob.get() && !view->thirdperson ) {
 				// TODO: Is fall kick applied to non-predicted views?
 				view->origin[2] += CG_ViewSmoothFallKick( viewState ) * 6.5f;
 			}
@@ -1063,16 +1057,16 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, ViewState *viewState,
 	Matrix3_FromAngles( view->angles, view->axis );
 
 	// view rectangle size
-	view->refdef.x              = viewportX;
-	view->refdef.y              = viewportY;
-	view->refdef.width          = viewportWidth;
-	view->refdef.height         = viewportHeight;
+	view->refdef.x              = viewport.x;
+	view->refdef.y              = viewport.y;
+	view->refdef.width          = viewport.width;
+	view->refdef.height         = viewport.height;
 	view->refdef.time           = cg.time;
 	view->refdef.areabits       = cg.frame.areabits;
-	view->refdef.scissor_x      = viewportX;
-	view->refdef.scissor_y      = viewportY;
-	view->refdef.scissor_width  = viewportWidth;
-	view->refdef.scissor_height = viewportHeight;
+	view->refdef.scissor_x      = viewport.x;
+	view->refdef.scissor_y      = viewport.y;
+	view->refdef.scissor_width  = viewport.width;
+	view->refdef.scissor_height = viewport.height;
 
 	view->refdef.fov_y = CalcFov( view->refdef.fov_x, view->refdef.width, view->refdef.height );
 
@@ -1253,12 +1247,21 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
 				const Rect viewport      = viewRects[viewNum];
 
-				int viewDefType = VIEWDEF_PLAYERVIEW;
-				if( viewState == getPrimaryViewState() && cg.isDemoCamFree ) {
-					viewDefType = VIEWDEF_CAMERA;
+				int viewDefType  = VIEWDEF_PLAYERVIEW;
+				bool thirdperson = false;
+				if( viewState == getPrimaryViewState() ) {
+					if( cgs.demoPlaying && cg.isDemoCamFree ) {
+						viewDefType = VIEWDEF_CAMERA;
+					} else {
+						if( cg.chaseMode == CAM_INEYES ) {
+							thirdperson = v_thirdPerson.get();
+						} else if( cg.chaseMode == CAM_THIRDPERSON ) {
+							thirdperson = true;
+						}
+					}
 				}
 
-				CG_SetupViewDef( &viewState->view, viewDefType, viewState, viewport.x, viewport.y, viewport.width, viewport.height );
+				CG_SetupViewDef( &viewState->view, viewDefType, thirdperson, viewState, viewport );
 
 				CG_LerpEntities( viewState );  // interpolate packet entities positions
 
