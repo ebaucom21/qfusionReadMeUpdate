@@ -14,6 +14,7 @@ Item {
     property var povDataModel
 
     property var miniviewAllocator
+    property bool isATileElement
 
     // Miniviews can't allocate miniviews
     readonly property bool isMiniview: !miniviewAllocator
@@ -40,8 +41,6 @@ Item {
 
     readonly property real healthFrac: 0.01 * Math.min(100.0, Math.max(0, hudField.povDataModel.health))
     readonly property real armorFrac: 0.01 * Math.min(100.0, hudField.povDataModel.armor)
-
-    clip: isMiniview
 
     Connections {
         target: layoutModel
@@ -401,7 +400,7 @@ Item {
                     povDataModel: hudField.povDataModel
                     isMiniview: hudField.isMiniview
                     miniviewScale: hudField.width / rootItem.width
-                    applyOutline: hudField.parent === rootItem
+                    applyOutline: hudField.isATileElement
                 }
             }
 

@@ -1167,6 +1167,22 @@ void HudCommonDataModel::updateMiniviewData( int64_t currTime ) {
 		Q_EMIT miniviewLayoutChangedPass1();
 		Q_EMIT miniviewLayoutChangedPass2();
 	}
+
+	int highlightedMiniviewIndex         = -1;
+	const unsigned primaryViewStateIndex = CG_GetPrimaryViewStateIndex();
+	for( int index = 0; index < (int)std::size( m_miniviewDataModels ); ++index ) {
+		if( !m_miniviewDataModels[index].hasValidViewStateIndex() ) {
+			break;
+		}
+		if( m_miniviewDataModels[index].getViewStateIndex() == primaryViewStateIndex ) {
+			highlightedMiniviewIndex = index;
+			break;
+		}
+	}
+	if( m_highlightedMiniviewIndex != highlightedMiniviewIndex ) {
+		m_highlightedMiniviewIndex = highlightedMiniviewIndex;
+		Q_EMIT highlightedMiniviewIndexChanged( highlightedMiniviewIndex );
+	}
 }
 
 void HudCommonDataModel::updateScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {

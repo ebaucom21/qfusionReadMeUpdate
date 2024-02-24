@@ -432,8 +432,8 @@ public:
 	Q_SIGNAL void hasLocationsChanged( bool hasLocations );
 	Q_PROPERTY( bool hasLocations MEMBER m_hasLocations NOTIFY hasLocationsChanged );
 
-	enum MiniviewDisplay { MiniviewFixed, MiniviewPane1, MiniviewPane2 };
-	Q_ENUM( MiniviewDisplay );
+	Q_SIGNAL void highlightedMiniviewIndexChanged( int highlightedMiniviewIndex );
+	Q_PROPERTY( int highlightedMiniviewIndex MEMBER m_highlightedMiniviewIndex NOTIFY highlightedMiniviewIndexChanged );
 
 	// For wtf gametype
 	static constexpr unsigned kMaxMiniviews = 12;
@@ -587,6 +587,8 @@ private:
 	wsw::StaticVector<HudControlledMiniviewEntry, kMaxMiniviews> m_hudControlledMinviewsForPane[2];
 
 	HudPovDataModel m_miniviewDataModels[kMaxMiniviews];
+
+	int m_highlightedMiniviewIndex { -1 };
 
 	bool m_isInWarmupState { false };
 	bool m_isInPostmatchState { false };

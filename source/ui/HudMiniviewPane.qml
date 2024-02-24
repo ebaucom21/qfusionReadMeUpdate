@@ -79,7 +79,8 @@ Item {
         const miniviewIndices = commonDataModel.getMiniviewIndicesForPane(paneNumber)
         for (const miniviewIndex of miniviewIndices) {
             if (!oldMiniviewIndices.includes(miniviewIndex)) {
-                const view = miniviewAllocator.take(miniviewIndex)
+                const view         = miniviewAllocator.take(miniviewIndex)
+                view.miniviewIndex = miniviewIndex
                 oldMiniviewIndices.push(miniviewIndex)
                 oldMiniviews.push(view)
             }

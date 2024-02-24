@@ -74,12 +74,13 @@ Item {
             const view = take(miniviewIndex)
             oldMiniviewIndices.push(miniviewIndex)
             oldMiniviews.push(view)
-            const position = Hud.commonDataModel.getFixedMiniviewPositionForIndex(miniviewIndex)
-            view.x         = position.x
-            view.y         = position.y
-            view.width     = position.width
-            view.height    = position.height
-            view.parent    = rootItem
+            const position     = Hud.commonDataModel.getFixedMiniviewPositionForIndex(miniviewIndex)
+            view.x             = position.x
+            view.y             = position.y
+            view.width         = position.width
+            view.height        = position.height
+            view.parent        = rootItem
+            view.miniviewIndex = miniviewIndex
         }
 
         console.assert(miniviewIndices.length === oldMiniviewIndices.length)
@@ -87,7 +88,8 @@ Item {
     }
 
     function recycle(view, miniviewIndex) {
-        view.parent = null
+        view.parent        = null
+        view.miniviewIndex = -1
         instantiatedMiniviewHuds[miniviewIndex] = view
     }
 
@@ -104,21 +106,34 @@ Item {
 
     Component {
         id: miniviewComponent
-        InGameHud {
-            id: miniviewItem
-            layoutModel: Hud.commonDataModel.miniviewLayoutModel
-            commonDataModel: Hud.commonDataModel
-            // pov data model specified via args
 
-            // TODO: Specify blitting holes for native facilties
+        Item {
+            id: miniviewItem
+            property int miniviewIndex: -1
+
+            // It gets specified via construction args
+            property alias povDataModel: actualHudField.povDataModel
+            property alias isATileElement: actualHudField.isATileElement
+
+            InGameHud {
+                id: actualHudField
+                anchors.fill: parent
+                layoutModel: Hud.commonDataModel.miniviewLayoutModel
+                commonDataModel: Hud.commonDataModel
+                isATileElement: miniviewItem.parent === rootItem
+                clip: true
+            }
+
             Rectangle {
-                anchors.centerIn: parent
-                width: parent.width + border.width
-                height: parent.height + border.width
-                radius: border.width
                 color: "transparent"
-                border.color: miniviewItem.parent === rootItem ?  Qt.rgba(1.0, 1.0, 1.0, 0.5) : Qt.rgba(0.0, 0.0, 0.0, 0.7)
-                border.width: 4
+                anchors.centerIn: parent
+                width: parent.width + (isATileElement ? 2.0 * border.width : border.width)
+                height: parent.height + (isATileElement ? 2.0 * border.width : border.width)
+                radius: border.width
+                border.color: !isATileElement ? Qt.rgba(0.0, 0.0, 0.0, 0.7) :
+                                ((miniviewIndex === Hud.commonDataModel.highlightedMiniviewIndex) ?
+                                    Material.accent : Qt.rgba(0.5, 0.5, 0.5, 1.0))
+                border.width: isATileElement ? 3 : 4
             }
         }
     }
