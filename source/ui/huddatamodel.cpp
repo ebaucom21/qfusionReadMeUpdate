@@ -11,8 +11,27 @@
 
 using wsw::operator""_asView;
 
+// TODO: Should we use "hud_" prefix?
+
 static StringConfigVar v_regularHud { "cg_regularHud"_asView, { .byDefault = "default"_asView, .flags = CVAR_ARCHIVE } };
 static StringConfigVar v_miniviewHud { "cg_miniviewHud"_asView, { .byDefault = "default"_asView, .flags = CVAR_ARCHIVE } };
+
+static IntConfigVar v_allowedNumRowsForMiniviewPane[2] {
+	{ "hud_allowedNumRowsForMiniviewPane1"_asView, { .byDefault = 4, .min = inclusive( 1 ), .max = exclusive( 100 ), .flags = CVAR_ARCHIVE } },
+	{ "hud_allowedNumRowsForMiniviewPane2"_asView, { .byDefault = 4, .min = inclusive( 1 ), .max = exclusive( 100 ), .flags = CVAR_ARCHIVE } },
+};
+static IntConfigVar v_preferredNumRowsForMiniviewPane[2] {
+	{ "hud_preferredNumRowsForMiniviewPane1"_asView, { .byDefault = 3, .min = inclusive( 1 ), .max = exclusive( 100 ), .flags = CVAR_ARCHIVE } },
+	{ "hud_preferredNumRowsForMiniviewPane2"_asView, { .byDefault = 3, .min = inclusive( 1 ), .max = exclusive( 100 ), .flags = CVAR_ARCHIVE } },
+};
+static IntConfigVar v_allowedNumColumnsForMiniviewPane[2] {
+	{ "hud_allowedNumColumnsForMiniviewPane1"_asView, { .byDefault = 2, .min = inclusive( 1 ), .max = exclusive( 100 ), .flags = CVAR_ARCHIVE } },
+	{ "hud_allowedNumColumnsForMiniviewPane2"_asView, { .byDefault = 2, .min = inclusive( 1 ), .max = exclusive( 100 ), .flags = CVAR_ARCHIVE } },
+};
+static IntConfigVar v_preferredNumColumnsForMiniviewPane[2] {
+	{ "hud_preferredNumColumnsForMiniviewPane1"_asView, { .byDefault = 1, .min = inclusive( 1 ), .max = exclusive( 100 ), .flags = CVAR_ARCHIVE } },
+	{ "hud_preferredNumColumnsForMiniviewPane2"_asView, { .byDefault = 1, .min = inclusive( 1 ), .max = exclusive( 100 ), .flags = CVAR_ARCHIVE } },
+};
 
 namespace wsw::ui {
 
@@ -808,6 +827,26 @@ auto HudCommonDataModel::getMiniviewIndicesForPane( int paneNum ) const -> QVari
 		result.append( entry.indexOfModel );
 	}
 	return result;
+}
+
+auto HudCommonDataModel::getAllowedNumRowsForMiniviewPane( int paneNum ) const -> int {
+	assert( paneNum == 1 || paneNum == 2 );
+	return v_allowedNumRowsForMiniviewPane[paneNum - 1].get();
+}
+
+auto HudCommonDataModel::getAllowedNumColumnsForMiniviewPane( int paneNum ) const -> int {
+	assert( paneNum == 1 || paneNum == 2 );
+	return v_allowedNumColumnsForMiniviewPane[paneNum - 1].get();
+}
+
+auto HudCommonDataModel::getPreferredNumRowsForMiniviewPane( int paneNum ) const -> int {
+	assert( paneNum == 1 || paneNum == 2 );
+	return v_preferredNumRowsForMiniviewPane[paneNum - 1].get();
+}
+
+auto HudCommonDataModel::getPreferredNumColumnsForMiniviewPane( int paneNum ) const -> int {
+	assert( paneNum == 1 || paneNum == 2 );
+	return v_preferredNumColumnsForMiniviewPane[paneNum - 1].get();
 }
 
 auto HudCommonDataModel::getViewStateIndexForMiniviewModelIndex( int miniviewModelIndex ) const -> unsigned {

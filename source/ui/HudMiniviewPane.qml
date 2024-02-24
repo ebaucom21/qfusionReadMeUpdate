@@ -13,14 +13,15 @@ Item {
     property var oldMiniviews: []
     property var oldMiniviewIndices: []
 
+    readonly property var padding: 2
+
     width: implicitWidth
     height: implicitHeight
 
-    implicitWidth: 120
-    implicitHeight: 240
-
     Component.onCompleted: {
         console.assert(miniviewAllocator)
+        implicitWidth = 2 * padding
+        implicitHeight = 2 * padding
         applyMiniviewLayoutPass1()
         applyMiniviewLayoutPass2()
     }
@@ -48,7 +49,9 @@ Item {
         onHudControlledMiniviewItemsRetrievalRequested: {
             if (root.visible) {
                 for (let i = 0; i < oldMiniviews.length; ++i) {
-                    Hud.ui.supplyHudControlledMiniviewItemAndModelIndex(oldMiniviews[i], oldMiniviewIndices[i])
+                    if (oldMiniviews[i].parent) {
+                        Hud.ui.supplyHudControlledMiniviewItemAndModelIndex(oldMiniviews[i], oldMiniviewIndices[i])
+                    }
                 }
             }
         }
@@ -89,20 +92,55 @@ Item {
         console.assert(miniviewIndices.length === oldMiniviewIndices.length)
         console.assert(miniviewIndices.length === oldMiniviews.length)
 
-        // Recalculate bounds
-        const itemWidth   = 320
-        const itemHeight  = 240
-        root.implicitWidth  = itemWidth
-        root.implicitHeight = itemHeight * miniviewIndices.length
+        const preferredNumRows    = commonDataModel.getPreferredNumRowsForMiniviewPane(paneNumber)
+        const preferredNumColumns = commonDataModel.getPreferredNumColumnsForMiniviewPane(paneNumber)
 
-        let accumHeight = 0
-        for (const view of oldMiniviews) {
-            view.x      = 0
-            view.y      = accumHeight
-            view.width  = itemWidth
-            view.height = itemHeight
-            view.parent = root
-            accumHeight += itemHeight
+        let allowedNumRows    = commonDataModel.getAllowedNumRowsForMiniviewPane(paneNumber)
+        let allowedNumColumns = commonDataModel.getAllowedNumColumnsForMiniviewPane(paneNumber)
+
+        let chosenNumRows    = allowedNumRows
+        let chosenNumColumns = allowedNumColumns
+        // If preferred values are feasible
+        if (preferredNumRows <= allowedNumRows && preferredNumColumns <= allowedNumColumns) {
+            // If we can lay out all items using preferred values
+            if (oldMiniviews.length <= preferredNumRows * preferredNumColumns) {
+                chosenNumRows    = preferredNumRows
+                chosenNumColumns = preferredNumColumns
+            }
         }
+
+        console.assert(chosenNumRows > 0 && chosenNumColumns > 0)
+
+        let chosenItemWidth  = 240
+        let chosenItemHeight = 160
+        const spacing        = 8
+
+        let accumHeight   = 0
+        let maxAccumWidth = 0
+        let currViewIndex = 0
+        for (let rowNum = 0; rowNum < chosenNumRows && currViewIndex < oldMiniviews.length; ++rowNum) {
+            let accumWidth = 0
+            for (let columnNum = 0; columnNum < chosenNumColumns && currViewIndex < oldMiniviews.length; ++columnNum) {
+                const view  = oldMiniviews[currViewIndex]
+                currViewIndex++
+                view.x      = accumWidth + padding
+                view.y      = accumHeight + padding
+                view.width  = chosenItemWidth
+                view.height = chosenItemHeight
+                view.parent = root
+                accumWidth += chosenItemWidth
+                if (columnNum + 1 < chosenNumColumns) {
+                    accumWidth += spacing
+                }
+            }
+            maxAccumWidth = Math.max(accumWidth, maxAccumWidth)
+            accumHeight += chosenItemHeight
+            if (rowNum + 1 < chosenNumRows) {
+                accumHeight += spacing
+            }
+        }
+
+        root.implicitWidth  = maxAccumWidth + 2 * padding
+        root.implicitHeight = accumHeight + 2 * padding
     }
 }

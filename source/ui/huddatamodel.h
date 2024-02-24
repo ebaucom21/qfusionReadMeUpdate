@@ -445,6 +445,11 @@ public:
 	Q_INVOKABLE QVariant getFixedPositionMiniviewIndices() const;
 	Q_INVOKABLE QVariant getMiniviewIndicesForPane( int paneNum ) const;
 
+	Q_INVOKABLE int getAllowedNumRowsForMiniviewPane( int paneNum ) const;
+	Q_INVOKABLE int getAllowedNumColumnsForMiniviewPane( int paneNum ) const;
+	Q_INVOKABLE int getPreferredNumRowsForMiniviewPane( int paneNum ) const;
+	Q_INVOKABLE int getPreferredNumColumnsForMiniviewPane( int paneNum ) const;
+
 	[[nodiscard]]
 	auto getViewStateIndexForMiniviewModelIndex( int miniviewModelIndex ) const -> unsigned;
 
