@@ -235,12 +235,14 @@ bool CG_ChaseStep( int step ) {
 			if( ( !cgs.demoPlaying || !cg.isDemoCamFree ) && cg.chaseMode != CAM_TILED ) {
 				const std::optional<unsigned> existingIndex = CG_FindChaseableViewportForPlayernum( cg.chasedPlayerNum );
 
-				std::optional<std::pair<unsigned, unsigned>> chosenIndexAndPlayerNum;
+				std::optional<unsigned> chosenPlayerNum;
 
 				// the POV was lost, find the closer one (may go up or down, but who cares)
 				// TODO: Is it going to happen for new MV code?
 				if( existingIndex == std::nullopt ) {
-					chosenIndexAndPlayerNum = CG_FindMultiviewPovToChase();
+					if( const auto maybeIndexAndPlayerNum = CG_FindMultiviewPovToChase() ) {
+						chosenPlayerNum = maybeIndexAndPlayerNum->second;
+					}
 				} else {
 					int testedViewStateIndex = (int)existingIndex.value_or( std::numeric_limits<unsigned>::max() );
 					for( int i = 0; i < cg.frame.numplayers; i++ ) {
@@ -261,17 +263,15 @@ bool CG_ChaseStep( int step ) {
 					if( testedViewStateIndex != existingIndex ) {
 						const ViewState &chosenViewState = cg.viewStates[testedViewStateIndex];
 						assert( chosenViewState.canBeAMultiviewChaseTarget() );
-						chosenIndexAndPlayerNum = { testedViewStateIndex, chosenViewState.predictedPlayerState.playerNum };
+						chosenPlayerNum = chosenViewState.predictedPlayerState.playerNum;
 					}
 				}
 
-				if( !chosenIndexAndPlayerNum ) {
+				if( !chosenPlayerNum ) {
 					return false;
 				}
 
-				cg.chasedViewportIndex = chosenIndexAndPlayerNum->first;
-				cg.chasedPlayerNum     = chosenIndexAndPlayerNum->second;
-				assert( cg.chasedViewportIndex < cg.numSnapViewStates );
+				cg.pendingChasedPlayerNum = chosenPlayerNum;
 				return true;
 			}
 		}

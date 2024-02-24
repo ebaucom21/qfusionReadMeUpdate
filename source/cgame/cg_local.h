@@ -609,6 +609,7 @@ typedef struct cg_state_s {
 	unsigned ourClientViewportIndex;
 	unsigned chasedPlayerNum;
 	unsigned chasedViewportIndex;
+	std::optional<unsigned> pendingChasedPlayerNum;
 
 	int chaseMode;
 	int64_t chaseSwitchTimestamp;

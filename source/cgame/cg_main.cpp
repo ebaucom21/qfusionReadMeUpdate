@@ -3023,10 +3023,12 @@ static void CG_UpdatePlayerState() {
 		cg.chasedViewportIndex = cg.ourClientViewportIndex;
 		cg.chasedPlayerNum     = cgs.playerNum;
 	} else {
+		const unsigned requestedPlayerNum = cg.pendingChasedPlayerNum.value_or( cg.chasedPlayerNum );
 		// Check whether we have lost the pov.
 		// Update the viewport index for pov in case if it's changed.
-		if( const std::optional<unsigned> maybeIndex = CG_FindChaseableViewportForPlayernum( cg.chasedPlayerNum ) ) {
+		if( const std::optional<unsigned> maybeIndex = CG_FindChaseableViewportForPlayernum( requestedPlayerNum ) ) {
 			cg.chasedViewportIndex = *maybeIndex;
+			cg.chasedPlayerNum     = requestedPlayerNum;
 		} else if( const std::optional<std::pair<unsigned, unsigned>> maybePlayerNumAndIndex = CG_FindMultiviewPovToChase() ) {
 			cg.chasedViewportIndex = maybePlayerNumAndIndex->first;
 			cg.chasedPlayerNum     = maybePlayerNumAndIndex->second;
@@ -3036,6 +3038,8 @@ static void CG_UpdatePlayerState() {
 			cg.chasedPlayerNum     = cgs.playerNum;
 		}
 	}
+
+	cg.pendingChasedPlayerNum = std::nullopt;
 
 	cg.hudControlledMiniviewViewStateIndicesForPane[0].clear();
 	cg.hudControlledMiniviewViewStateIndicesForPane[1].clear();
