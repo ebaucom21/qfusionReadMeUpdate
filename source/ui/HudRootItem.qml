@@ -107,13 +107,28 @@ Item {
     Component {
         id: miniviewComponent
 
-        Item {
+        MouseArea {
             id: miniviewItem
+            hoverEnabled: isATileElement
+            enabled: isATileElement
             property int miniviewIndex: -1
+            // FIXME It gets stuck in "containsMouse" state upon click and chase mode switching
+            property bool hackyContainsMouse
+
+            onParentChanged: {
+                if (!parent) {
+                    hackyContainsMouse = false
+                }
+            }
+            onPositionChanged: hackyContainsMouse = true
+            onEntered: hackyContainsMouse = true
+            onExited: hackyContainsMouse = false
 
             // It gets specified via construction args
             property alias povDataModel: actualHudField.povDataModel
             property alias isATileElement: actualHudField.isATileElement
+
+            onClicked: Hud.ui.switchToPlayerNum(Hud.commonDataModel.getMiniviewPlayerNumForIndex(miniviewIndex))
 
             InGameHud {
                 id: actualHudField
@@ -131,9 +146,10 @@ Item {
                 height: parent.height + (isATileElement ? 2.0 * border.width : border.width)
                 radius: border.width
                 border.color: !isATileElement ? Qt.rgba(0.0, 0.0, 0.0, 0.7) :
-                                ((miniviewIndex === Hud.commonDataModel.highlightedMiniviewIndex) ?
+                                ((miniviewIndex === Hud.commonDataModel.highlightedMiniviewIndex || miniviewItem.hackyContainsMouse) ?
                                     Material.accent : Qt.rgba(0.5, 0.5, 0.5, 1.0))
                 border.width: isATileElement ? 3 : 4
+                Behavior on border.color { ColorAnimation { duration: 100 } }
             }
         }
     }

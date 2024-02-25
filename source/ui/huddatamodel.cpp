@@ -801,6 +801,11 @@ auto HudCommonDataModel::getMiniviewModelForIndex( int indexOfModel ) -> QObject
 	return &m_miniviewDataModels[indexOfModel];
 }
 
+auto HudCommonDataModel::getMiniviewPlayerNumForIndex( int indexOfModel ) -> QVariant {
+	assert( (size_t)indexOfModel < std::size( m_miniviewDataModels ) );
+	return m_miniviewDataModels[indexOfModel].getPlayerNum().value();
+}
+
 auto HudCommonDataModel::getFixedMiniviewPositionForIndex( int indexOfModel ) const -> QVariant {
 	for( const FixedPositionMinivewEntry &entry: m_fixedPositionMinviews ) {
 		if( entry.indexOfModel == indexOfModel ) {

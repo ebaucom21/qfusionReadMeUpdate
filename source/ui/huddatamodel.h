@@ -441,6 +441,7 @@ public:
 	Q_SIGNAL void miniviewLayoutChangedPass1();
 	Q_SIGNAL void miniviewLayoutChangedPass2();
 	Q_INVOKABLE QObject *getMiniviewModelForIndex( int index );
+	Q_INVOKABLE QVariant getMiniviewPlayerNumForIndex( int index );
 	Q_INVOKABLE QVariant getFixedMiniviewPositionForIndex( int indexOfModel ) const;
 	Q_INVOKABLE QVariant getFixedPositionMiniviewIndices() const;
 	Q_INVOKABLE QVariant getMiniviewIndicesForPane( int paneNum ) const;

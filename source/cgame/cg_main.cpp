@@ -3186,6 +3186,13 @@ static void CG_UpdatePlayerState() {
 				cg.tileMiniviewViewStateIndices.end(), indices.begin(), indices.end() );
 		}
 	}
+
+	if( cg.hasPendingSwitchFromTiledMode ) {
+		if( cg.chaseMode == CAM_TILED ) {
+			CG_SwitchChaseCamMode();
+		}
+		cg.hasPendingSwitchFromTiledMode = false;
+	}
 }
 
 bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
@@ -5482,10 +5489,24 @@ void CG_MessageMode2( const CmdArgs & ) {
 
 // Only covers the demo playback case, otherwise the UI grabs it first on its own
 bool CG_GrabsMouseMovement() {
+	if( cg.chaseMode == CAM_TILED ) {
+		return false;
+	}
 	if( cgs.demoPlaying ) {
 		return cg.isDemoCamFree;
 	}
 	return true;
+}
+
+bool CG_UsesTiledView() {
+	return cg.chaseMode == CAM_TILED;
+}
+
+void CG_SwitchToPlayerNum( unsigned playerNum ) {
+	assert( cg.chaseMode == CAM_TILED );
+	assert( playerNum >= 0 && playerNum < gs.maxclients );
+	cg.pendingChasedPlayerNum        = playerNum;
+	cg.hasPendingSwitchFromTiledMode = true;
 }
 
 void CG_Error( const char *format, ... ) {

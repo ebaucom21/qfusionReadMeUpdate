@@ -77,6 +77,9 @@ wsw::StringView CG_PlayerName( unsigned playerNum );
 wsw::StringView CG_PlayerClan( unsigned playerClan );
 wsw::StringView CG_LocationName( unsigned location );
 
+bool CG_UsesTiledView();
+void CG_SwitchToPlayerNum( unsigned playerNum );
+
 class BoolConfigVar;
 extern BoolConfigVar v_showChasers;
 

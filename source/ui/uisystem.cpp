@@ -306,6 +306,8 @@ public:
 	Q_INVOKABLE void joinAlpha();
 	Q_INVOKABLE void joinBeta();
 
+	Q_INVOKABLE void switchToPlayerNum( int playerNum );
+
 	Q_SIGNAL void canSpectateChanged( bool canSpectate );
 	Q_PROPERTY( bool canSpectate MEMBER m_canSpectate NOTIFY canSpectateChanged );
 
@@ -665,7 +667,7 @@ private:
 	auto getPressedKeyboardModifiers() const -> Qt::KeyboardModifiers;
 
 	[[nodiscard]]
-	auto getTargetWindowForKeyboardInput() -> QQuickWindow *;
+	auto getTargetWindowsForKeyboardInput( QQuickWindow *targetWindows[2] ) -> unsigned;
 
 	void drawBackgroundMapIfNeeded();
 
@@ -1365,7 +1367,7 @@ void QtUISystem::drawSelfInMainContext() {
 		m_nativelyDrawnOverlayHeap.pop_back();
 	}
 
-	if( m_activeMenuMask ) {
+	if( m_activeMenuMask || CG_UsesTiledView() ) {
 		R_Set2DMode( true );
 		vec4_t color = { 1.0f, 1.0f, 1.0f, 1.0f };
 		// TODO: Check why CL_BeginRegistration()/CL_EndRegistration() never gets called
@@ -1745,8 +1747,11 @@ void QtUISystem::checkPropertyChanges() {
 }
 
 bool QtUISystem::handleMouseMovement( float frameTime, int dx, int dy ) {
-	// Mouse handling is only available for the main menu
-	if( !m_activeMenuMask || !m_menuSandbox ) {
+	if( !m_menuSandbox ) {
+		return false;
+	}
+
+	if( !m_activeMenuMask && !CG_UsesTiledView() ) {
 		return false;
 	}
 
@@ -1775,9 +1780,20 @@ bool QtUISystem::handleMouseMovement( float frameTime, int dx, int dy ) {
 		Q_clamp( m_mouseXY[i], 0, bounds[i] );
 	}
 
-	QPointF point( m_mouseXY[0], m_mouseXY[1] );
-	QMouseEvent event( QEvent::MouseMove, point, Qt::NoButton, getPressedMouseButtons(), getPressedKeyboardModifiers() );
-	QCoreApplication::sendEvent( m_menuSandbox->m_window.get(), &event );
+	wsw::StaticVector<QQuickWindow *, 2> targetWindows;
+	targetWindows.push_back( m_menuSandbox->m_window.get() );
+	if( m_hudSandbox ) {
+		targetWindows.push_back( m_hudSandbox->m_window.get() );
+	}
+
+	const QPointF point( m_mouseXY[0], m_mouseXY[1] );
+	const Qt::MouseButtons mouseButtons   = getPressedMouseButtons();
+	const Qt::KeyboardModifiers modifiers = getPressedKeyboardModifiers();
+	for( QQuickWindow *targetWindow : targetWindows ) {
+		QMouseEvent event( QEvent::MouseMove, point, Qt::NoButton, mouseButtons, modifiers );
+		QCoreApplication::sendEvent( targetWindow, &event );
+	}
+
 	return true;
 }
 
@@ -1827,16 +1843,21 @@ void QtUISystem::handleEscapeKey() {
 	}
 
 	if( !didSpecialHandling ) {
-		if( QQuickWindow *const targetWindow = getTargetWindowForKeyboardInput() ) {
-			QKeyEvent keyEvent( QEvent::KeyPress, Qt::Key_Escape, getPressedKeyboardModifiers() );
-			QCoreApplication::sendEvent( targetWindow, &keyEvent );
+		QQuickWindow *targetWindows[2] { nullptr, nullptr };
+		if( const unsigned numTargetWindows = getTargetWindowsForKeyboardInput( targetWindows ) ) {
+			const Qt::KeyboardModifiers modifiers = getPressedKeyboardModifiers();
+			for( unsigned i = 0; i < numTargetWindows; ++i ) {
+				QKeyEvent keyEvent( QEvent::KeyPress, Qt::Key_Escape, modifiers );
+				QCoreApplication::sendEvent( targetWindows[i], &keyEvent );
+			}
 		}
 	}
 }
 
 bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
-	QQuickWindow *const targetWindow = getTargetWindowForKeyboardInput();
-	if( !targetWindow ) {
+	QQuickWindow *targetWindows[2] { nullptr, nullptr };
+	const unsigned numTargetWindows = getTargetWindowsForKeyboardInput( targetWindows );
+	if( !numTargetWindows ) {
 		if( keyDown ) {
 			return m_actionRequestsModel.handleKeyEvent( quakeKey );
 		}
@@ -1844,10 +1865,21 @@ bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
 	}
 
 	[[maybe_unused]]
-	bool isTargetingDemoPlaybackMenu = false;
-	if( m_menuSandbox && targetWindow == m_menuSandbox->m_window.get() ) {
-		if( m_activeMenuMask & DemoPlaybackMenu ) {
-			isTargetingDemoPlaybackMenu = true;
+	bool propagateToCGameIfNotAccepted = false;
+	if( m_menuSandbox ) {
+		if( QQuickWindow *window = m_menuSandbox->m_window.get(); window == targetWindows[0] || window == targetWindows[1] ) {
+			if( m_activeMenuMask & DemoPlaybackMenu ) {
+				propagateToCGameIfNotAccepted = true;
+			}
+		}
+	}
+	if( !propagateToCGameIfNotAccepted ) {
+		if( m_hudSandbox ) {
+			if( QQuickWindow *window = m_hudSandbox->m_window.get(); window == targetWindows[0] || window == targetWindows[1] ) {
+				if( CG_UsesTiledView() ) {
+					propagateToCGameIfNotAccepted = true;
+				}
+			}
 		}
 	}
 
@@ -1861,32 +1893,43 @@ bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
 	}
 
 	if( mouseButton != Qt::NoButton ) {
-		QPointF point( m_mouseXY[0], m_mouseXY[1] );
-		QEvent::Type eventType = keyDown ? QEvent::MouseButtonPress : QEvent::MouseButtonRelease;
-		QMouseEvent event( eventType, point, mouseButton, getPressedMouseButtons(), getPressedKeyboardModifiers() );
-		const bool sent = QCoreApplication::sendEvent( m_menuSandbox->m_window.get(), &event );
-		// Allow propagation of events to the cgame view switching logic
-		// if the mouse event was not handled by the player bar
-		if( sent && isTargetingDemoPlaybackMenu ) {
-			return event.isAccepted();
+		bool hasAccepted = false;
+		const QPointF point( m_mouseXY[0], m_mouseXY[1] );
+		const QEvent::Type eventType          = keyDown ? QEvent::MouseButtonPress : QEvent::MouseButtonRelease;
+		const Qt::MouseButtons mouseButtons   = getPressedMouseButtons();
+		const Qt::KeyboardModifiers modifiers = getPressedKeyboardModifiers();
+		for( unsigned i = 0; i < numTargetWindows; ++i ) {
+			QMouseEvent event( eventType, point, mouseButton, mouseButtons, modifiers );
+			const bool sent = QCoreApplication::sendEvent( targetWindows[i], &event );
+			// Allow propagation of events to the cgame view switching logic
+			// if the mouse event was not handled by the player bar or the tiled view selector
+			if( sent && propagateToCGameIfNotAccepted ) {
+				hasAccepted |= event.isAccepted();
+			}
+		}
+		if( propagateToCGameIfNotAccepted ) {
+			return hasAccepted;
 		}
 		return true;
 	}
 
 	// To allow propagation of events to the cgame view switching logic,
 	// don't handle other keys when the demo playback menu is on.
-	if( isTargetingDemoPlaybackMenu ) {
+	if( propagateToCGameIfNotAccepted ) {
 		return false;
 	}
 
-	const auto maybeQtKey = convertQuakeKeyToQtKey( quakeKey );
+	const std::optional<Qt::Key> maybeQtKey = convertQuakeKeyToQtKey( quakeKey );
 	if( !maybeQtKey ) {
 		return true;
 	}
 
-	const auto type = keyDown ? QEvent::KeyPress : QEvent::KeyRelease;
-	QKeyEvent keyEvent( type, *maybeQtKey, getPressedKeyboardModifiers() );
-	QCoreApplication::sendEvent( targetWindow, &keyEvent );
+	const Qt::KeyboardModifiers modifiers = getPressedKeyboardModifiers();
+	for( unsigned i = 0; i < numTargetWindows; ++i ) {
+		const QEvent::Type type = keyDown ? QEvent::KeyPress : QEvent::KeyRelease;
+		QKeyEvent keyEvent( type, *maybeQtKey, modifiers );
+		QCoreApplication::sendEvent( targetWindows[i], &keyEvent );
+	}
 	return true;
 }
 
@@ -1894,18 +1937,22 @@ bool QtUISystem::handleCharEvent( int ch ) {
 	if( !isAPrintableChar( ch ) ) {
 		return true;
 	}
-	QQuickWindow *const targetWindow = getTargetWindowForKeyboardInput();
-	if( !targetWindow ) {
+
+	QQuickWindow *targetWindows[2] { nullptr, nullptr };
+	const unsigned numTargetWindows = getTargetWindowsForKeyboardInput( targetWindows );
+	if( !numTargetWindows ) {
 		return false;
 	}
 
-	const auto modifiers = getPressedKeyboardModifiers();
-	// The plain cast of `ch` to Qt::Key seems to be correct in this case
-	// (all printable characters seem to map 1-1 to Qt key codes)
-	QKeyEvent pressEvent( QEvent::KeyPress, (Qt::Key)ch, modifiers, s_charStrings[ch] );
-	QCoreApplication::sendEvent( targetWindow, &pressEvent );
-	QKeyEvent releaseEvent( QEvent::KeyRelease, (Qt::Key)ch, modifiers );
-	QCoreApplication::sendEvent( targetWindow, &releaseEvent );
+	const Qt::KeyboardModifiers modifiers = getPressedKeyboardModifiers();
+	for( unsigned i = 0; i < numTargetWindows; ++i ) {
+		// The plain cast of `ch` to Qt::Key seems to be correct in this case
+		// (all printable characters seem to map 1-1 to Qt key codes)
+		QKeyEvent pressEvent( QEvent::KeyPress, (Qt::Key)ch, modifiers, s_charStrings[ch] );
+		QCoreApplication::sendEvent( targetWindows[i], &pressEvent );
+		QKeyEvent releaseEvent( QEvent::KeyRelease, (Qt::Key)ch, modifiers );
+		QCoreApplication::sendEvent( targetWindows[i], &releaseEvent );
+	}
 	return true;
 }
 
@@ -1941,19 +1988,29 @@ auto QtUISystem::getPressedKeyboardModifiers() const -> Qt::KeyboardModifiers {
 	return result;
 }
 
-auto QtUISystem::getTargetWindowForKeyboardInput() -> QQuickWindow * {
+auto QtUISystem::getTargetWindowsForKeyboardInput( QQuickWindow *targetWindows[2] ) -> unsigned {
+	unsigned result     = 0;
+	bool addedHudWindow = false;
 	if( m_activeMenuMask ) {
 		if( m_menuSandbox ) {
-			return m_menuSandbox->m_window.get();
+			targetWindows[result++] = m_menuSandbox->m_window.get();
 		}
 	} else {
 		if( m_hudSandbox ) {
 			if( m_isShowingChatPopup || m_isShowingTeamChatPopup ) {
-				return m_hudSandbox->m_window.get();
+				targetWindows[result++] = m_hudSandbox->m_window.get();
+				addedHudWindow = true;
 			}
 		}
 	}
-	return nullptr;
+	if( m_hudSandbox && !addedHudWindow ) {
+		if( CG_UsesTiledView() && ( !m_activeMenuMask || ( m_activeMenuMask & DemoPlaybackMenu ) ) ) {
+			if( !addedHudWindow ) {
+				targetWindows[result++] = m_hudSandbox->m_window.get();
+			}
+		}
+	}
+	return result;
 }
 
 auto QtUISystem::convertQuakeKeyToQtKey( int quakeKey ) const -> std::optional<Qt::Key> {
@@ -2243,6 +2300,10 @@ void QtUISystem::callVote( const QByteArray &name, const QByteArray &value, bool
 	command << ' ' << wsw::StringView( value.data(), (unsigned)value.size() );
 	command << '\n';
 	CL_Cbuf_AppendCommand( command.data() );
+}
+
+void QtUISystem::switchToPlayerNum( int playerNum ) {
+	CG_SwitchToPlayerNum( (unsigned)playerNum );
 }
 
 auto QtUISystem::colorFromRgbString( const QString &string ) const -> QVariant {
