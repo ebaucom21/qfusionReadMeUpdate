@@ -37,7 +37,10 @@ public:
 
 	virtual void refresh() = 0;
 
-	virtual void drawSelfInMainContext() = 0;
+	virtual void drawBackgroundMapIfNeeded() = 0;
+	virtual void drawMenuPartInMainContext() = 0;
+	virtual void drawHudPartInMainContext() = 0;
+	virtual void drawCursorInMainContext() = 0;
 
 	virtual void beginRegistration() = 0;
 	virtual void endRegistration() = 0;

@@ -1098,7 +1098,8 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, bool thirdperson, Vie
 	}
 }
 
-void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t serverTime, unsigned extrapolationTime ) {
+bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t serverTime, unsigned extrapolationTime ) {
+	bool hasRenderedTheMenu = false;
 
 	// update time
 	cg.realTime      = realTime;
@@ -1210,7 +1211,8 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			unsigned numDisplayedViewStates = 0;
 
 			// TODO: Should we stay in tiled mode for the single pov?
-			if( cg.chaseMode != CAM_TILED || cg.tileMiniviewViewStateIndices.empty() ) {
+			const bool shouldUseNonTiledMode = cg.chaseMode != CAM_TILED || cg.tileMiniviewViewStateIndices.empty();
+			if( shouldUseNonTiledMode ) {
 				if( const int size = std::round( v_viewSize.get() ); size < 100 ) {
 					// Round to a multiple of 2
 					const int regionWidth  = ( ( cgs.vidWidth * size ) / 100 ) & ( ~1 );
@@ -1317,6 +1319,11 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				CG_Draw2D( viewState );
 
 				CG_ResetTemporaryBoneposesCache(); // clear for next frame
+
+				if( viewNum == 0 && shouldUseNonTiledMode ) {
+					RF_Set2DScissor( 0, 0, cgs.vidWidth, cgs.vidHeight );
+					wsw::ui::UISystem::instance()->drawMenuPartInMainContext();
+				}
 			}
 
 			EndDrawingScenes();
@@ -1327,8 +1334,12 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 			const ViewState *primaryViewState = getPrimaryViewState();
 			SoundSystem::instance()->updateListener( primaryViewState->view.origin, primaryViewState->view.velocity, primaryViewState->view.axis );
+
+			hasRenderedTheMenu = numDisplayedViewStates > 0 && shouldUseNonTiledMode;
 		}
 	}
+
+	return hasRenderedTheMenu;
 }
 
 void CG_LoadingString( const char *str ) {

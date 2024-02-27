@@ -129,7 +129,10 @@ class QtUISystem : public QObject, public UISystem {
 public:
 	void refresh() override;
 
-	void drawSelfInMainContext() override;
+	void drawBackgroundMapIfNeeded() override;
+	void drawMenuPartInMainContext() override;
+	void drawHudPartInMainContext() override;
+	void drawCursorInMainContext() override;
 
 	void beginRegistration() override;
 	void endRegistration() override;
@@ -458,7 +461,7 @@ private:
 	static inline const QString s_emojiFontFamily { "Segoe UI Emoji" };
 #endif
 
-	int64_t m_lastDrawFrameTimestamp { 0 };
+	int64_t m_lastDrawMenuPartTimestamp { 0 };
 
 	// Shared for sandbox instances (it is a shared context as well)
 	std::unique_ptr<QOpenGLContext> m_externalContext;
@@ -668,8 +671,6 @@ private:
 
 	[[nodiscard]]
 	auto getTargetWindowsForKeyboardInput( QQuickWindow *targetWindows[2] ) -> unsigned;
-
-	void drawBackgroundMapIfNeeded();
 
 	[[nodiscard]]
 	auto convertQuakeKeyToQtKey( int quakeKey ) const -> std::optional<Qt::Key>;
@@ -1148,76 +1149,72 @@ void QtUISystem::leaveUIRenderingMode() {
 	}
 }
 
-void QtUISystem::drawSelfInMainContext() {
-	if( !m_menuSandbox ) {
-		return;
-	}
+void QtUISystem::drawMenuPartInMainContext() {
+	if( m_menuSandbox && m_menuSandbox->m_hasValidFboContent ) {
+		// TODO: All of this ties natively drawn items to the menu part
 
-	drawBackgroundMapIfNeeded();
+		const int64_t timestamp = getFrameTimestamp();
+		const int64_t delta = wsw::min( (int64_t)33, timestamp - m_lastDrawMenuPartTimestamp );
+		m_lastDrawMenuPartTimestamp = timestamp;
 
-	// Make deeper items get evicted first from a max-heap
-	const auto cmp = []( const NativelyDrawn *lhs, const NativelyDrawn *rhs ) {
-		return lhs->m_nativeZ > rhs->m_nativeZ;
-	};
+		// Ask Qml subscribers for actual values
 
-	const int64_t timestamp = getFrameTimestamp();
-	const int64_t delta = wsw::min( (int64_t)33, timestamp - m_lastDrawFrameTimestamp );
-	m_lastDrawFrameTimestamp = timestamp;
+		m_nativelyDrawnItems.clear();
+		m_occludersOfNativelyDrawnItems.clear();
 
-	// Ask Qml subscribers for actual values
+		Q_EMIT nativelyDrawnItemsOccludersRetrievalRequested();
+		Q_EMIT nativelyDrawnItemsRetrievalRequested();
 
-	m_nativelyDrawnItems.clear();
-	m_occludersOfNativelyDrawnItems.clear();
+		m_nativelyDrawnOverlayHeap.clear();
+		m_nativelyDrawnUnderlayHeap.clear();
 
-	Q_EMIT nativelyDrawnItemsOccludersRetrievalRequested();
-	Q_EMIT nativelyDrawnItemsRetrievalRequested();
+		// Make deeper items get evicted first from a max-heap
+		const auto cmp = []( const NativelyDrawn *lhs, const NativelyDrawn *rhs ) {
+			return lhs->m_nativeZ > rhs->m_nativeZ;
+		};
 
-	m_nativelyDrawnOverlayHeap.clear();
-	m_nativelyDrawnUnderlayHeap.clear();
+		for( NativelyDrawn *nativelyDrawn : m_nativelyDrawnItems ) {
+			const QQuickItem *item = nativelyDrawn->m_selfAsItem;
+			assert( item );
 
-	for( NativelyDrawn *nativelyDrawn : m_nativelyDrawnItems ) {
-		const QQuickItem *item = nativelyDrawn->m_selfAsItem;
-		assert( item );
-
-		if( item->isVisible() ) {
-			if( nativelyDrawn->m_nativeZ < 0 ) {
-				m_nativelyDrawnUnderlayHeap.push_back( nativelyDrawn );
-				std::push_heap( m_nativelyDrawnUnderlayHeap.begin(), m_nativelyDrawnUnderlayHeap.end(), cmp );
-			} else {
-				// Don't draw natively drawn items on top of occluders.
-				// TODO: We either draw everything or draw nothing, a proper clipping/
-				// fragmented drawing would be a correct solution.
-				// Still, this the current approach produces acceptable results.
-				bool occluded = false;
-				const QRectF itemBounds( item->mapRectToScene( item->boundingRect() ) );
-				for( const QRectF &bounds: m_occludersOfNativelyDrawnItems ) {
-					if( bounds.intersects( itemBounds ) ) {
-						occluded = true;
-						break;
+			if( item->isVisible() ) {
+				if( nativelyDrawn->m_nativeZ < 0 ) {
+					m_nativelyDrawnUnderlayHeap.push_back( nativelyDrawn );
+					std::push_heap( m_nativelyDrawnUnderlayHeap.begin(), m_nativelyDrawnUnderlayHeap.end(), cmp );
+				} else {
+					// Don't draw natively drawn items on top of occluders.
+					// TODO: We either draw everything or draw nothing, a proper clipping/
+					// fragmented drawing would be a correct solution.
+					// Still, this the current approach produces acceptable results.
+					bool occluded = false;
+					const QRectF itemBounds( item->mapRectToScene( item->boundingRect() ) );
+					for( const QRectF &bounds: m_occludersOfNativelyDrawnItems ) {
+						if( bounds.intersects( itemBounds ) ) {
+							occluded = true;
+							break;
+						}
 					}
-				}
-				if( !occluded ) {
-					m_nativelyDrawnOverlayHeap.push_back( nativelyDrawn );
-					std::push_heap( m_nativelyDrawnOverlayHeap.begin(), m_nativelyDrawnOverlayHeap.end(), cmp );
+					if( !occluded ) {
+						m_nativelyDrawnOverlayHeap.push_back( nativelyDrawn );
+						std::push_heap( m_nativelyDrawnOverlayHeap.begin(), m_nativelyDrawnOverlayHeap.end(), cmp );
+					}
 				}
 			}
 		}
-	}
 
-	// This is quite inefficient as we switch rendering modes for different kinds of items.
-	// Unfortunately this is mandatory for maintaining the desired Z order.
-	// Considering the low number of items of this kind the performance impact should be negligible.
+		// This is quite inefficient as we switch rendering modes for different kinds of items.
+		// Unfortunately this is mandatory for maintaining the desired Z order.
+		// Considering the low number of items of this kind the performance impact should be negligible.
 
-	while( !m_nativelyDrawnUnderlayHeap.empty() ) {
-		std::pop_heap( m_nativelyDrawnUnderlayHeap.begin(), m_nativelyDrawnUnderlayHeap.end(), cmp );
-		m_nativelyDrawnUnderlayHeap.back()->drawSelfNatively( timestamp, delta );
-		m_nativelyDrawnUnderlayHeap.pop_back();
-	}
+		while( !m_nativelyDrawnUnderlayHeap.empty() ) {
+			std::pop_heap( m_nativelyDrawnUnderlayHeap.begin(), m_nativelyDrawnUnderlayHeap.end(), cmp );
+			m_nativelyDrawnUnderlayHeap.back()->drawSelfNatively( timestamp, delta );
+			m_nativelyDrawnUnderlayHeap.pop_back();
+		}
 
-	NativelyDrawn::recycleResourcesInMainContext();
+		NativelyDrawn::recycleResourcesInMainContext();
 
-	// Don't blit initial FBO content
-	if( m_menuSandbox->m_hasValidFboContent ) {
+		// Don't blit initial FBO content
 		if( m_activeMenuMask || m_isShowingScoreboard ) {
 			const QSize size( m_menuSandbox->m_window->size() );
 			shader_s *const material = R_WrapMenuTextureHandleInMaterial( m_menuSandbox->m_framebufferObject->texture() );
@@ -1225,7 +1222,16 @@ void QtUISystem::drawSelfInMainContext() {
 			R_DrawStretchPic( 0, 0, size.width(), size.height(), 0.0f, 1.0f, 1.0f, 0.0f, colorWhite, material );
 			R_Set2DMode( false );
 		}
+
+		while( !m_nativelyDrawnOverlayHeap.empty() ) {
+			std::pop_heap( m_nativelyDrawnOverlayHeap.begin(), m_nativelyDrawnOverlayHeap.end(), cmp );
+			m_nativelyDrawnOverlayHeap.back()->drawSelfNatively( timestamp, delta );
+			m_nativelyDrawnOverlayHeap.pop_back();
+		}
 	}
+}
+
+void QtUISystem::drawHudPartInMainContext() {
 	if( m_hudSandbox && m_hudSandbox->m_hasValidFboContent ) {
 		if( m_isShowingHud || m_isShowingChatPopup || m_isShowingTeamChatPopup || m_isShowingActionRequests ) {
 			shader_s *const material = R_WrapHudTextureHandleInMaterial( m_hudSandbox->m_framebufferObject->texture() );
@@ -1361,12 +1367,10 @@ void QtUISystem::drawSelfInMainContext() {
 		}
 	}
 
-	while( !m_nativelyDrawnOverlayHeap.empty() ) {
-		std::pop_heap( m_nativelyDrawnOverlayHeap.begin(), m_nativelyDrawnOverlayHeap.end(), cmp );
-		m_nativelyDrawnOverlayHeap.back()->drawSelfNatively( timestamp, delta );
-		m_nativelyDrawnOverlayHeap.pop_back();
-	}
 
+}
+
+void QtUISystem::drawCursorInMainContext() {
 	if( m_activeMenuMask || CG_UsesTiledView() ) {
 		R_Set2DMode( true );
 		vec4_t color = { 1.0f, 1.0f, 1.0f, 1.0f };

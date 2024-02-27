@@ -290,11 +290,12 @@ bool CL_GameModule_NewSnapshot( int pendingSnapshot ) {
 	return false;
 }
 
-void CL_GameModule_RenderView() {
+bool CL_GameModule_RenderView() {
 	if( cge && cls.cgameActive ) {
 		unsigned extrapolationTime = cl_extrapolate->integer && !cls.demoPlayer.playing ? cl_extrapolationTime->integer : 0;
-		CG_RenderView( cls.frametime, cls.realFrameTime, cls.realtime, cl.serverTime, extrapolationTime );
+		return CG_RenderView( cls.frametime, cls.realFrameTime, cls.realtime, cl.serverTime, extrapolationTime );
 	}
+	return false;
 }
 
 void CL_GameModule_InputFrame( int64_t inputTimestamp, int keyboardDeltaMillis, float mouseDeltaMillis ) {
@@ -1474,17 +1475,7 @@ void SCR_ShutDownConsoleMedia( void ) {
 }
 
 static void SCR_RenderView( bool timedemo ) {
-	if( timedemo ) {
-		if( !cl.timedemo.startTime ) {
-			cl.timedemo.startTime = Sys_Milliseconds();
-		}
-		cl.timedemo.frames++;
-	}
 
-	// frame is not valid until we load the CM data
-	if( cl.cms != NULL ) {
-		CL_GameModule_RenderView();
-	}
 }
 
 void SCR_UpdateScreen( void ) {
@@ -1534,18 +1525,38 @@ void SCR_UpdateScreen( void ) {
 
 	RF_BeginFrame( forceclear, forcevsync, timedemo );
 
+	// TODO: This should not belong to the UI module, let client manage it!
+	uiSystem->drawBackgroundMapIfNeeded();
+
+	// CGame may render the menu on its own above the primary view but beneath miniviews
+	bool hasHandledTheMenuRendering = false;
 	if( canRenderView ) {
-		SCR_RenderView( timedemo );
+		if( timedemo ) {
+			if( !cl.timedemo.startTime ) {
+				cl.timedemo.startTime = Sys_Milliseconds();
+			}
+			cl.timedemo.frames++;
+		}
+
+		// frame is not valid until we load the CM data
+		if( cl.cms ) {
+			hasHandledTheMenuRendering = CL_GameModule_RenderView();
+		}
 	}
 
 	R_Set2DMode( true );
 	RF_Set2DScissor( 0, 0, viddef.width, viddef.height );
 
+	if( !hasHandledTheMenuRendering ) {
+		uiSystem->drawMenuPartInMainContext();
+	}
+
+	uiSystem->drawHudPartInMainContext();
+	uiSystem->drawCursorInMainContext();
+
 	if( canDrawConsoleNotify ) {
 		Con_DrawNotify( viddef.width, viddef.height );
 	}
-
-	uiSystem->drawSelfInMainContext();
 
 	if( canDrawDebugGraph ) {
 		SCR_DrawDebugGraph();
