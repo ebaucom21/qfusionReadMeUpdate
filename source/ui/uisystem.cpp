@@ -164,6 +164,9 @@ public:
 	void setScoreboardShown( bool shown ) override;
 
 	[[nodiscard]]
+	bool isShowingModalMenu() const override;
+
+	[[nodiscard]]
 	bool suggestsUsingVSync() const override;
 
 	void toggleChatPopup() override;
@@ -191,9 +194,6 @@ public:
 	void notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour rectonnectBehaviour, ConnectionDropStage dropStage );
 
 	Q_INVOKABLE void stopReactingToDroppedConnection() { m_pendingReconnectBehaviour = std::nullopt; }
-
-	[[nodiscard]]
-	bool isShown() const override;
 
 	void dispatchShuttingDown() override { Q_EMIT shuttingDown(); }
 	auto retrieveNumberOfHudMiniviewPanes() -> unsigned override;
@@ -2526,9 +2526,9 @@ void QtUISystem::launchLocalServer( const QByteArray &gametype, const QByteArray
 	CL_Cbuf_AppendCommand( command.data() );
 }
 
-bool QtUISystem::isShown() const {
+bool QtUISystem::isShowingModalMenu() const {
 	if( m_menuSandbox ) {
-		return ( m_activeMenuMask || m_isShowingScoreboard || m_isShowingChatPopup || m_isShowingTeamChatPopup );
+		return ( m_activeMenuMask & ( InGameMenu | MainMenu ) ) != 0;
 	}
 	return false;
 }

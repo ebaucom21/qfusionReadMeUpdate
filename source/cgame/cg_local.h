@@ -709,7 +709,6 @@ void CG_LoadingString( const char *str );
 bool CG_LoadingItemName( const char *str );
 
 void CG_CheckSharedCrosshairState( bool initial );
-void CG_DrawCrosshair( ViewState *viewState );
 
 void CG_ClearPointedNum( ViewState *viewState );
 
@@ -718,7 +717,6 @@ void CG_ClearPointedNum( ViewState *viewState );
 //
 void CG_ScoresOn_f( const CmdArgs & );
 void CG_ScoresOff_f( const CmdArgs & );
-bool CG_IsScoreboardShown();
 
 void CG_MessageMode( const CmdArgs & );
 void CG_MessageMode2( const CmdArgs & );

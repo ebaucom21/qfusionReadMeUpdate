@@ -72,6 +72,9 @@ public:
 	virtual bool isShowingScoreboard() const = 0;
 
 	[[nodiscard]]
+	virtual bool isShowingModalMenu() const = 0;
+
+	[[nodiscard]]
 	virtual bool suggestsUsingVSync() const = 0;
 
 	virtual void toggleChatPopup() = 0;
@@ -104,9 +107,6 @@ public:
 	virtual void addStatusMessage( unsigned playerNum, const wsw::StringView &message ) = 0;
 
 	virtual void notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour reconnectBehaviour, ConnectionDropStage dropStage ) = 0;
-
-	[[nodiscard]]
-	virtual bool isShown() const = 0;
 
 	virtual void dispatchShuttingDown() = 0;
 

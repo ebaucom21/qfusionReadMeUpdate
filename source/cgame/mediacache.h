@@ -306,9 +306,13 @@ static void makeCrosshairFilePath( Container *container, const wsw::StringView &
 	container->append( Appendable( ".svg", 4 ) );
 }
 
+// TODO: Use something else for indication of using the miniview bin?
+
 [[nodiscard]]
-auto getRegularCrosshairMaterial( const wsw::StringView &name, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>>;
+auto getRegularCrosshairMaterial( const wsw::StringView &name, bool isForMiniview, unsigned size )
+	-> std::optional<std::tuple<shader_s *, unsigned, unsigned>>;
 [[nodiscard]]
-auto getStrongCrosshairMaterial( const wsw::StringView &name, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>>;
+auto getStrongCrosshairMaterial( const wsw::StringView &name, bool isForMiniview, unsigned size )
+	-> std::optional<std::tuple<shader_s *, unsigned, unsigned>>;
 
 #endif

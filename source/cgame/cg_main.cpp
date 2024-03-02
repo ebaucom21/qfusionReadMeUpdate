@@ -5465,10 +5465,6 @@ wsw::StringView CG_PlayerClan( unsigned playerNum ) {
 	return wsw::StringView( cgs.clientInfo[playerNum].clan );
 }
 
-bool CG_IsScoreboardShown() {
-	return wsw::ui::UISystem::instance()->isShowingScoreboard();
-}
-
 void CG_ScoresOn_f( const CmdArgs & ) {
 	wsw::ui::UISystem::instance()->setScoreboardShown( true );
 }

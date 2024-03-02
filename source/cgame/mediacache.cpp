@@ -172,16 +172,19 @@ protected:
 
 	mutable wsw::StringSpanStorage<unsigned, unsigned> m_knownImageFiles;
 	struct CacheEntry {
-		shader_s *material { nullptr };
-		unsigned cachedRequestedSize { 0 };
-		std::pair<unsigned, unsigned> cachedActualSize { 0, 0 };
+		struct Bin {
+			shader_s *material { nullptr };
+			unsigned cachedRequestedSize { 0 };
+			std::pair<unsigned, unsigned> cachedActualSize { 0, 0 };
+		} bins[2];
 	};
 	mutable wsw::StaticVector<CacheEntry, 16> m_cacheEntries;
 public:
 	explicit CrosshairMaterialCache( const wsw::StringView &pathPrefix ) noexcept : m_pathPrefix( pathPrefix ) {}
 
 	[[nodiscard]]
-	auto getMaterialForNameAndSize( const wsw::StringView &name, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
+	auto getMaterial( const wsw::StringView &name, bool isForMiniview, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
+		assert( !name.empty() && size > 1u );
 		CacheEntry *foundEntry = nullptr;
 		// TODO: Isn't this design fragile?
 		assert( m_cacheEntries.size() == m_knownImageFiles.size() );
@@ -192,7 +195,8 @@ public:
 			}
 		}
 		if( foundEntry ) {
-			if( foundEntry->cachedRequestedSize != size ) {
+			CacheEntry::Bin *const bin = &foundEntry->bins[isForMiniview ? 1 : 0];
+			if( foundEntry->bins[isForMiniview].cachedRequestedSize != size ) {
 				wsw::StaticString<256> filePath;
 				makeCrosshairFilePath( &filePath, m_pathPrefix, name );
 				ImageOptions options {
@@ -201,14 +205,14 @@ public:
 					.fitSizeForCrispness = true,
 					.useOutlineEffect    = true,
 				};
-				R_UpdateExplicitlyManaged2DMaterialImage( foundEntry->material, filePath.data(), options );
-				foundEntry->cachedRequestedSize = size;
-				if( foundEntry->material ) {
-					foundEntry->cachedActualSize = R_GetShaderDimensions( foundEntry->material ).value();
+				R_UpdateExplicitlyManaged2DMaterialImage( bin->material, filePath.data(), options );
+				bin->cachedRequestedSize = size;
+				if( bin->material ) {
+					bin->cachedActualSize = R_GetShaderDimensions( bin->material ).value();
 				}
 			}
-			if( foundEntry->material ) {
-				return std::make_tuple( foundEntry->material, foundEntry->cachedActualSize.first, foundEntry->cachedActualSize.second );
+			if( bin->material ) {
+				return std::make_tuple( bin->material, bin->cachedActualSize.first, bin->cachedActualSize.second );
 			}
 		}
 		return std::nullopt;
@@ -244,14 +248,19 @@ public:
 		assert( m_cacheEntries.empty() );
 		for( unsigned i = 0, maxEntries = getFileSpans().size(); i < maxEntries; ++i ) {
 			m_cacheEntries.emplace_back( CacheEntry {
-				.material = R_CreateExplicitlyManaged2DMaterial()
+				.bins = {
+					CacheEntry::Bin { .material = R_CreateExplicitlyManaged2DMaterial() },
+					CacheEntry::Bin { .material = R_CreateExplicitlyManaged2DMaterial() },
+				},
 			});
 		}
 	}
 
 	void destroyMaterials() {
 		for( CacheEntry &entry: m_cacheEntries ) {
-			R_ReleaseExplicitlyManaged2DMaterial( entry.material );
+			for( CacheEntry::Bin &bin: entry.bins ) {
+				R_ReleaseExplicitlyManaged2DMaterial( bin.material );
+			}
 		}
 		m_cacheEntries.clear();
 	}
@@ -268,12 +277,14 @@ auto getStrongCrosshairFiles() -> const wsw::StringSpanStorage<unsigned, unsigne
 	return g_strongCrosshairsMaterialCache.getFileSpans();
 }
 
-auto getRegularCrosshairMaterial( const wsw::StringView &name, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
-	return g_regularCrosshairsMaterialCache.getMaterialForNameAndSize( name, size );
+auto getRegularCrosshairMaterial( const wsw::StringView &name, bool isForMiniview, unsigned size )
+	-> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
+	return g_regularCrosshairsMaterialCache.getMaterial( name, isForMiniview, size );
 }
 
-auto getStrongCrosshairMaterial( const wsw::StringView &name, unsigned size ) -> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
-	return g_strongCrosshairsMaterialCache.getMaterialForNameAndSize( name, size );
+auto getStrongCrosshairMaterial( const wsw::StringView &name, bool isForMiniview, unsigned size )
+	-> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
+	return g_strongCrosshairsMaterialCache.getMaterial( name, isForMiniview, size );
 }
 
 void CG_InitCrosshairs() {

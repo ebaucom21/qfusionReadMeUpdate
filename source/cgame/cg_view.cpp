@@ -1431,7 +1431,9 @@ void CG_ClearPointedNum( ViewState *viewState ) {
 }
 
 static void CG_UpdatePointedNum( ViewState *viewState ) {
-	if( CG_IsScoreboardShown() || viewState->view.thirdperson || viewState->view.type != VIEWDEF_PLAYERVIEW || !v_showPointedPlayer.get() ) {
+	const auto *uiSystem = wsw::ui::UISystem::instance();
+	if( uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard() || viewState->view.thirdperson ||
+		viewState->view.type != VIEWDEF_PLAYERVIEW || !v_showPointedPlayer.get() ) {
 		CG_ClearPointedNum( viewState );
 	} else {
 		if( viewState->predictedPlayerState.stats[STAT_POINTED_PLAYER] ) {
@@ -1586,7 +1588,7 @@ static void drawPlayerBars( qfontface_s *font, int requestedX, int requestedY, c
 	}
 }
 
-static void drawNamesAndBeacons( ViewState *viewState ) {
+static void drawNamesAndBeacons( ViewState *viewState, std::optional<float> miniviewScale ) {
 	const int showNamesValue           = v_showPlayerNames.get();
 	const int showTeamInfoValue        = v_showTeamInfo.get();
 	const int showPointedPlayerValue   = v_showPointedPlayer.get();
@@ -1647,7 +1649,7 @@ static void drawNamesAndBeacons( ViewState *viewState ) {
 			vec3_t dir;
 			VectorSubtract( drawOrigin, viewState->view.origin, dir );
 
-			if( DotProduct( dir, &viewState->view.axis[AXIS_FORWARD] ) > 0.0f ) {
+			if( const float viewDot = DotProduct( dir, &viewState->view.axis[AXIS_FORWARD] ); viewDot > 0.0f ) {
 				// find the 3d point in 2d screen
 				// TODO: Project on demand, use some kind of cache
 				vec2_t tmpCoords { 0.0f, 0.0f };
@@ -1674,11 +1676,14 @@ static void drawNamesAndBeacons( ViewState *viewState ) {
 								if( cent->current.number != viewState->pointedNum ) {
 									const float fadeFrac = ( v_showPlayerNames_zfar.get() - dist ) / ( v_showPlayerNames_zfar.get() * 0.25f );
 									nameAlpha = v_showPlayerNames_alpha.get() * wsw::clamp( fadeFrac, 0.0f, 1.0f );
+									if( miniviewScale != std::nullopt ) {
+										nameAlpha *= viewDot * viewDot;
+									}
 								} else {
 									const float fadeFrac = (float)( viewState->pointRemoveTime - cg.time ) / 150.0f;
 									nameAlpha = wsw::clamp( fadeFrac, 0.0f, 1.0f );
 								}
-								if( nameAlpha > 0.0f ) {
+								if( nameAlpha > 0.001f ) {
 									// Do the expensive trace test last
 									if( trace.passes() ) {
 										// We fully rely on scissor test for clipping names out.
@@ -1721,7 +1726,7 @@ static void drawNamesAndBeacons( ViewState *viewState ) {
 		CG_TeamColor( viewState->predictedPlayerState.stats[STAT_TEAM], color );
 		for( int i = 0; i < gs.maxclients; ++i ) {
 			if( shouldDrawTeamBeacon[i] ) {
-				const int picSize = 18 * cgs.vidHeight / 600;
+				const int picSize = ( miniviewScale != std::nullopt ? 12 : 18 ) * cgs.vidHeight / 600;
 				assert( refdef.width > picSize && refdef.height > picSize );
 				const int picX = wsw::clamp( savedCoords[i][0] - picSize / 2, refdef.x, refdef.x + refdef.width - picSize );
 				const int picY = wsw::clamp( savedCoords[i][1] - picSize / 2, refdef.y, refdef.y + refdef.height - picSize );
@@ -1737,7 +1742,8 @@ static void drawNamesAndBeacons( ViewState *viewState ) {
 	}
 
 	if( hasNamesToDraw ) {
-		qfontface_s *const font = cgs.fontSystemMedium;
+		// That's all we can do for now
+		qfontface_s *const font = miniviewScale != std::nullopt ? cgs.fontSystemSmall : cgs.fontSystemMedium;
 		for( int i = 0; i < gs.maxclients; ++i ) {
 			const vec4_t color { 1.0f, 1.0f, 1.0f, playerNameAlphaValues[i] };
 			const int requestedX = savedCoords[i][0];
@@ -1780,7 +1786,7 @@ void CG_CheckSharedCrosshairState( bool initial ) {
 	}
 }
 
-static void drawCrosshair( int weapon, int fireMode, const ViewState *viewState ) {
+static void drawCrosshair( int weapon, int fireMode, std::optional<float> miniviewScale, const ViewState *viewState ) {
 	const UnsignedConfigVar *sizeVar;
 	const ColorConfigVar *colorVar;
 	const StringConfigVar *nameVar;
@@ -1800,10 +1806,14 @@ static void drawCrosshair( int weapon, int fireMode, const ViewState *viewState 
 
 	std::optional<std::tuple<shader_s *, unsigned, unsigned>> materialAndDimensions;
 	if( const wsw::StringView name = nameVar->get(); !name.empty() ) {
+		// Note: We use a fixed downscale factor as changing image size is very expensive and everything relies on caching
+		const unsigned sizeVarValue = sizeVar->get();
+		const bool isForMiniview    = miniviewScale != std::nullopt;
+		const unsigned chosenSize   = isForMiniview ? ( 2 * sizeVarValue / 3 ) : sizeVarValue;
 		if( fireMode == FIRE_MODE_STRONG ) {
-			materialAndDimensions = getStrongCrosshairMaterial( name, sizeVar->get() );
+			materialAndDimensions = getStrongCrosshairMaterial( name, isForMiniview, chosenSize );
 		} else {
-			materialAndDimensions = getRegularCrosshairMaterial( name, sizeVar->get() );
+			materialAndDimensions = getRegularCrosshairMaterial( name, isForMiniview, chosenSize );
 		}
 	}
 
@@ -1834,7 +1844,7 @@ static void drawCrosshair( int weapon, int fireMode, const ViewState *viewState 
 	}
 }
 
-void CG_DrawCrosshair( ViewState *viewState ) {
+static void CG_DrawCrosshair( ViewState *viewState, std::optional<float> miniviewScale ) {
 	const player_state_t *playerState;
 	if( viewState->view.playerPrediction ) {
 		playerState = &viewState->predictFromPlayerState;
@@ -1844,9 +1854,9 @@ void CG_DrawCrosshair( ViewState *viewState ) {
 	if( const auto weapon = playerState->stats[STAT_WEAPON] ) {
 		if( const auto *const firedef = GS_FiredefForPlayerState( playerState, weapon ) ) {
 			if( firedef->fire_mode == FIRE_MODE_STRONG ) {
-				::drawCrosshair( weapon, FIRE_MODE_STRONG, viewState );
+				::drawCrosshair( weapon, FIRE_MODE_STRONG, miniviewScale, viewState );
 			}
-			::drawCrosshair( weapon, FIRE_MODE_WEAK, viewState );
+			::drawCrosshair( weapon, FIRE_MODE_WEAK, miniviewScale, viewState );
 		}
 	}
 }
@@ -1858,14 +1868,42 @@ void CG_Draw2D( ViewState *viewState ) {
 		// TODO: Does it mean we can just turn blends locally off?
 		CG_SCRDrawViewBlend( viewState );
 
+		[[maybe_unused]] const auto thisViewStateIndex = (unsigned)( viewState - cg.viewStates );
 		if( v_showHud.get() ) {
-			if( !CG_IsScoreboardShown() ) {
-				drawNamesAndBeacons( viewState );
+			bool shouldDrawNamesBeaconsAndCrosshair = true;
+			const auto *const uiSystem = wsw::ui::UISystem::instance();
+			if( uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard() ) {
+				shouldDrawNamesBeaconsAndCrosshair = false;
+				if( cg.chaseMode != CAM_TILED && cg.numSnapViewStates > 0 ) {
+					for( const auto &viewIndicesForPane: cg.hudControlledMiniviewViewStateIndicesForPane ) {
+						for( const unsigned viewIndex: viewIndicesForPane ) {
+							if( viewIndex == thisViewStateIndex ) {
+								shouldDrawNamesBeaconsAndCrosshair = true;
+								break;
+							}
+						}
+					}
+				}
 			}
-			if( !wsw::ui::UISystem::instance()->isShown() ) {
-				const auto viewStateIndex = (unsigned)( viewState - cg.viewStates );
-				if( CG_ActiveChasePovOfViewState( viewStateIndex ) != std::nullopt && CG_IsPovAlive( viewStateIndex ) ) {
-					CG_DrawCrosshair( viewState );
+
+
+			if( shouldDrawNamesBeaconsAndCrosshair ) {
+				bool isAMiniview = false;
+				std::optional<float> miniviewScale;
+				if( cg.chaseMode == CAM_TILED && !cg.tileMiniviewViewStateIndices.empty() ) {
+					isAMiniview = true;
+				} else if( getPrimaryViewState() != viewState ) {
+					isAMiniview = true;
+				}
+				if( isAMiniview ) {
+					miniviewScale = wsw::min( (float)rd.width / (float)cgs.vidWidth, (float)rd.height / (float)cgs.vidHeight );
+				}
+
+				drawNamesAndBeacons( viewState, miniviewScale );
+				if( CG_ActiveChasePovOfViewState( thisViewStateIndex ) != std::nullopt ) {
+					if( CG_IsPovAlive( thisViewStateIndex ) ) {
+						CG_DrawCrosshair( viewState, miniviewScale );
+					}
 				}
 			}
 		}
