@@ -13,6 +13,10 @@ Item {
     property var oldMiniviews: []
     property var oldMiniviewIndices: []
 
+    readonly property bool suppressShowingTileHuds: Hud.ui.isShowingScoreboard || Hud.ui.isShowingInGameMenu || Hud.ui.isShowingMainMenu
+
+    onSuppressShowingTileHudsChanged: updateVisibilityOfTileHuds()
+
     Window.onWindowChanged: {
         if (Window.window) {
             Window.window.requestActivate()
@@ -85,17 +89,28 @@ Item {
 
         console.assert(miniviewIndices.length === oldMiniviewIndices.length)
         console.assert(miniviewIndices.length === oldMiniviews.length)
+
+        updateVisibilityOfTileHuds()
+    }
+
+    function updateVisibilityOfTileHuds() {
+        for (const view of oldMiniviews) {
+            // It seems like there is some conflict with the visible property, so we modify opacity. TODO wtf?
+            view.opacity = rootItem.suppressShowingTileHuds ? 0.0 : 1.0
+        }
     }
 
     function recycle(view, miniviewIndex) {
         view.parent        = null
         view.miniviewIndex = -1
+        view.opacity       = 0.0
         instantiatedMiniviewHuds[miniviewIndex] = view
     }
 
     function take(miniviewIndex) {
         const maybeExistingView = instantiatedMiniviewHuds[miniviewIndex]
         if (maybeExistingView) {
+            maybeExistingView.opacity = 1.0
             return maybeExistingView
         }
         const model = Hud.commonDataModel.getMiniviewModelForIndex(miniviewIndex)
@@ -109,8 +124,8 @@ Item {
 
         MouseArea {
             id: miniviewItem
-            hoverEnabled: isATileElement
-            enabled: isATileElement
+            hoverEnabled: isATileElement && !rootItem.suppressShowingTileHuds
+            enabled: isATileElement && !rootItem.suppressShowingTileHuds
             property int miniviewIndex: -1
             // FIXME It gets stuck in "containsMouse" state upon click and chase mode switching
             property bool hackyContainsMouse

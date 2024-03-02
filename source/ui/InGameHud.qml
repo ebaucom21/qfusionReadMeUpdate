@@ -51,11 +51,20 @@ Item {
     // Update item visibility upon switching cached miniviews to visible states
     onVisibleChanged: {
         if (visible) {
-            for (let i = 0; i < repeater.count; ++i) {
-                const itemLoader = repeater.itemAt(i)
-                if (itemLoader) {
-                    itemLoader.updateItemVisibility()
-                }
+            dispatchUpdatingItemVisibility()
+        }
+    }
+    onParentChanged: {
+        if (parent && visible) {
+            dispatchUpdatingItemVisibility()
+        }
+    }
+
+    function dispatchUpdatingItemVisibility() {
+        for (let i = 0; i < repeater.count; ++i) {
+            const itemLoader = repeater.itemAt(i)
+            if (itemLoader) {
+                itemLoader.updateItemVisibility()
             }
         }
     }
