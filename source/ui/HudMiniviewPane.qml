@@ -31,8 +31,8 @@ Item {
     Connections {
         target: Hud.ui
         onDisplayedHudItemsRetrievalRequested: {
-            if (oldMiniviews.length) {
-                Hud.ui.supplyDisplayedHudItemAndMargin(root, 4.0)
+            for (const miniview of oldMiniviews) {
+                Hud.ui.supplyDisplayedHudItemAndMargin(miniview, 4.0)
             }
         }
         onHudMiniviewPanesRetrievalRequested: {
@@ -47,11 +47,9 @@ Item {
             }
         }
         onHudControlledMiniviewItemsRetrievalRequested: {
-            if (root.visible) {
-                for (let i = 0; i < oldMiniviews.length; ++i) {
-                    if (oldMiniviews[i].parent) {
-                        Hud.ui.supplyHudControlledMiniviewItemAndModelIndex(oldMiniviews[i], oldMiniviewIndices[i])
-                    }
+            for (let i = 0; i < oldMiniviews.length; ++i) {
+                if (oldMiniviews[i].parent && oldMiniviews[i].visible) {
+                    Hud.ui.supplyHudControlledMiniviewItemAndModelIndex(oldMiniviews[i], oldMiniviewIndices[i])
                 }
             }
         }
@@ -61,6 +59,21 @@ Item {
         target: commonDataModel
         onMiniviewLayoutChangedPass1: applyMiniviewLayoutPass1()
         onMiniviewLayoutChangedPass2: applyMiniviewLayoutPass2()
+    }
+
+    function delegatedUpdateVisibility() {
+        if (parent) {
+            console.assert(parent instanceof HudLayoutItem)
+            if (parent.shouldBeVisibleIfNotOccluded()) {
+                for (const miniview of oldMiniviews) {
+                    miniview.visible = !Hud.ui.isHudItemOccluded(miniview)
+                }
+            } else {
+                for (const miniview of oldMiniviews) {
+                    miniview.visible = false
+                }
+            }
+        }
     }
 
     function applyMiniviewLayoutPass1() {
@@ -142,5 +155,7 @@ Item {
 
         root.implicitWidth  = maxAccumWidth + 2 * padding
         root.implicitHeight = accumHeight + 2 * padding
+
+        delegatedUpdateVisibility()
     }
 }

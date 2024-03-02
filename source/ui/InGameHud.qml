@@ -183,11 +183,16 @@ Item {
             }
 
             function updateItemVisibility() {
-                if (shouldBeVisibleIfNotOccluded()) {
-                    // Put the expensive test last
-                    item.visible = !Hud.ui.isHudItemOccluded(item)
+                const delegatedUpdateVisibility = item["delegatedUpdateVisibility"]
+                if (delegatedUpdateVisibility) {
+                    delegatedUpdateVisibility()
                 } else {
-                    item.visible = false
+                    if (shouldBeVisibleIfNotOccluded()) {
+                        // Put the expensive test last
+                        item.visible = !Hud.ui.isHudItemOccluded(item)
+                    } else {
+                        item.visible = false
+                    }
                 }
             }
 
