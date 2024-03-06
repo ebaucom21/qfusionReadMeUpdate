@@ -223,39 +223,22 @@ auto HudLayoutModel::makeFilePath( wsw::StaticString<MAX_QPATH> *buffer,
 	return buffer->asView();
 }
 
-static const wsw::StringView kItem( "Item"_asView );
-static const wsw::StringView kSelf( "Self"_asView );
-static const wsw::StringView kOther( "Other"_asView );
 static const wsw::StringView kKind( "Kind"_asView );
+static const wsw::StringView kAnchoredTo( "AnchoredTo"_asView );
+static const wsw::StringView kSelfAnchors( "SelfAnchors"_asView );
+static const wsw::StringView kOtherAnchors( "OtherAnchors"_asView );
 
-static const wsw::StringView *const kOrderedKeywords[] { &kItem, &kSelf, &kOther, &kKind };
+static const wsw::StringView *const kOrderedKeywords[] { &kKind, &kAnchoredTo, &kSelfAnchors, &kOtherAnchors };
+
+static const wsw::StringView kField( "Field"_asView );
 
 bool HudEditorLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 	if( m_entries.size() >= 32 ) {
 		wsw::failWithLogicError( "Too many entries, this shouldn't happen" );
 	}
 
-	// Prune toolbox-attached items. This requires remapping indices.
-	alignas( 16 ) std::array<int, 32> entryIndexToFileIndex {};
-	entryIndexToFileIndex.fill( 0 );
-
-	constexpr int kMinFileItemIndex = 1;
-	int remappedIndicesCounter = kMinFileItemIndex;
-	for( unsigned i = 0; i < m_entries.size(); ++i ) {
-		const Entry &entry = m_entries[i];
-		// Disallow serializing dragged items
-		if( entry.displayedAnchorItem ) {
-			return false;
-		}
-		// Don't serialize toolbox-attached items
-		if( entry.realAnchorItem.isToolbox() ) {
-			continue;
-		}
-		entryIndexToFileIndex[i] = remappedIndicesCounter++;
-	}
-
-	// Disallow serializing empty huds
-	if( remappedIndicesCounter == kMinFileItemIndex ) {
+	if( m_entries.empty() ) {
+		uiWarning() << "Cannot serialize an empty HUD";
 		return false;
 	}
 
@@ -266,33 +249,19 @@ bool HudEditorLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 	// `<<` throws on overflow
 	try {
 		buffer.clear();
-		for( unsigned i = 0; i < m_entries.size(); ++i ) {
-			// Remap the entry index
-			if( const int entryFileIndex = entryIndexToFileIndex[i] ) {
-				const Entry &entry = m_entries[i];
-
-				// Remap the anchor item index
-				int anchorItemFileIndex = -1;
-				assert( !entry.realAnchorItem.isToolbox() );
-				assert( !entry.realAnchorItem.isField() || entry.realAnchorItem.toRawValue() == -1 );
-				if( entry.realAnchorItem.isOtherItem() ) {
-					const int anchorItemIndex = entry.realAnchorItem.toItemIndex();
-					assert( entryIndexToFileIndex[anchorItemIndex] );
-					anchorItemFileIndex = entryIndexToFileIndex[anchorItemIndex];
+		for( const Entry &entry: m_entries ) {
+			if( !entry.realAnchorItem.isToolbox() ) {
+				buffer << kKind << ' ' << wsw::StringView( kindMeta.valueToKey( entry.kind ) ) << ' ';
+				buffer << kAnchoredTo << ' ';
+				if( entry.realAnchorItem.isField() ) {
+					buffer << kField << ' ';
+				} else {
+					buffer << wsw::StringView( kindMeta.valueToKey( m_entries[entry.realAnchorItem.toItemIndex()].kind ) ) << ' ';
 				}
-
-				assert( entryFileIndex && anchorItemFileIndex );
-				assert( entryFileIndex != anchorItemFileIndex );
-
 				writeAnchor( &selfAnchorsString, entry.selfAnchors );
 				writeAnchor( &otherAnchorsString, entry.anchorItemAnchors );
-
-				buffer << entryFileIndex << ' ';
-				buffer << kItem << ' ' << anchorItemFileIndex << ' ';
-				buffer << kSelf << ' ' << selfAnchorsString << ' ';
-				buffer << kOther << ' ' << otherAnchorsString << ' ';
-				buffer << kKind << ' ' << wsw::StringView( kindMeta.valueToKey( entry.kind ) ) << ' ';
-				buffer << "\r\n"_asView;
+				buffer << kSelfAnchors << ' ' << selfAnchorsString << ' ';
+				buffer << kOtherAnchors << ' ' << otherAnchorsString << "\r\n"_asView;
 			}
 		}
 		return true;
@@ -392,70 +361,88 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 	wsw::Vector<FileEntry> entries;
 	wsw::StringSplitter lineSplitter( data );
 	while( const auto maybeNextLine = lineSplitter.getNext( kNewlineChars ) ) {
-		auto maybeEntryAndIndex = parseEntry( *maybeNextLine );
-		if( !maybeEntryAndIndex ) {
+		if( std::optional<FileEntry> maybeEntry = parseEntry( *maybeNextLine ) ) {
+			entries.push_back( *maybeEntry );
+		} else {
+			uiWarning() << "Failed to parse" << *maybeNextLine;
 			return std::nullopt;
 		}
-		auto &&[entry, index] = std::move( *maybeEntryAndIndex );
-		if( index != entries.size() + 1 ) {
-			return std::nullopt;
-		}
-		entries.push_back( entry );
 	}
 
-	// Validate kinds
 	const QMetaEnum metaKinds( QMetaEnum::fromType<Kind>() );
-	std::array<bool, 32> presentKinds;
-	assert( presentKinds.size() > (size_t)metaKinds.keyCount() );
-	presentKinds.fill( false );
+	assert( metaKinds.keyCount() <= 32 );
+
+	[[maybe_unused]] const auto isAValidKindValue = [&]( int kindValue ) -> bool {
+		return kindValue > 0 && kindValue < 32 && metaKinds.valueToKey( kindValue ) != nullptr;
+	};
+
+	// Validate self-kinds
+	unsigned presentKindsMask = 0;
 	for( const FileEntry &entry: entries ) {
-		const int kind = entry.kind;
-		if( kind && (unsigned)kind < (unsigned)presentKinds.max_size() ) {
-			if( metaKinds.valueToKey( kind ) != nullptr ) {
-				if( m_flavor == Miniview ) {
-					const EditorProps &props = kEditorPropsForKind[kind - 1];
-					assert( props.kind == kind );
-					if( !props.allowInMiniviewHud ) {
-						uiWarning() << "An element of kind" << props.name << "is disallowed in miniview HUDs";
-						return std::nullopt;
-					}
-				}
-				if( !presentKinds[kind] ) {
-					presentKinds[kind] = true;
-					continue;
-				}
+		const int kind = entry.selfKind;
+		// Must be valid in parsed entries
+		assert( isAValidKindValue( kind ) );
+
+		const EditorProps &props = kEditorPropsForKind[kind - 1];
+		if( m_flavor == Miniview ) {
+			assert( props.kind == kind );
+			if( !props.allowInMiniviewHud ) {
+				uiWarning() << "An element of kind" << props.name << "is disallowed in miniview HUDs";
+				return std::nullopt;
 			}
 		}
-		return std::nullopt;
+
+		const unsigned kindBit = 1u << kind;
+		if( presentKindsMask & kindBit ) {
+			uiWarning() << "An element of kind" << props.name << "appears multiple times";
+			return std::nullopt;
+		}
+
+		presentKindsMask |= kindBit;
+	}
+
+	// Validate other item kinds
+	for( const FileEntry &entry: entries ) {
+		if( entry.otherKind ) {
+			assert( isAValidKindValue( *entry.otherKind ) );
+			if( !( presentKindsMask & ( 1u << *entry.otherKind ) ) ) {
+				const EditorProps &selfProps = kEditorPropsForKind[entry.selfKind - 1];
+				const EditorProps &otherProps = kEditorPropsForKind[*entry.otherKind - 1];
+				uiWarning() << "An element of kind" << selfProps.name << "is anchored to an item"
+					<< otherProps.name << "which is not present in this HUD";
+				return std::nullopt;
+			}
+		}
 	}
 
 	// Reject illegal anchors
 	// TODO: Check mutual intersections of items (this requires applying a layout manually)
 	// TODO: Check indirect anchor loops (graph cycles)
-	for( unsigned i = 0; i < entries.size(); ++i ) {
-		const FileEntry &entry = entries[i];
-		const AnchorPair *validAnchorsBegin = std::begin( kMatchingItemAndFieldAnchorPairs );
-		const AnchorPair *validAnchorsEnd = std::end( kMatchingItemAndFieldAnchorPairs );
+	for( const FileEntry &entry: entries ) {
+		[[maybe_unused]] const AnchorPair *validAnchorsBegin = nullptr;
+		[[maybe_unused]] const AnchorPair *validAnchorsEnd   = nullptr;
+		[[maybe_unused]] const EditorProps &selfProps        = kEditorPropsForKind[entry.selfKind - 1];
 		// Disallow non-existing anchor items
-		if( entry.anchorItem.isOtherItem() ) {
-			const int itemIndex = entry.anchorItem.toItemIndex();
-			if( (unsigned)itemIndex >= (unsigned)entries.size() ) {
+		if( entry.otherKind ) {
+			if( entry.selfKind == *entry.otherKind ) {
+				uiWarning() << "An element of kind" << selfProps.name << "is anchored to itself";
 				return std::nullopt;
 			}
-			// Disallow anchoring to self
-			if( itemIndex == (int)i ) {
-				return std::nullopt;
-			}
+			const auto it = std::find_if( entries.begin(), entries.end(), [&]( const FileEntry &e ) {
+				return e.selfKind == *entry.otherKind;
+			});
+			assert( it != entries.end() );
 			// Try detecting direct (1-1) anchor loops'
-			const auto anchorItemAnchorItem = entries[itemIndex].anchorItem;
-			if( anchorItemAnchorItem.isOtherItem() && anchorItemAnchorItem.toItemIndex() == (int)i ) {
+			if( it->otherKind == std::optional( entry.selfKind ) ) {
+				const EditorProps &otherProps = kEditorPropsForKind[*entry.otherKind - 1];
+				uiWarning() << "An element of kind" << selfProps.name << "is in a direct anchoring loop with" << otherProps.name;
 				return std::nullopt;
 			}
 			validAnchorsBegin = std::begin( kMatchingItemAndItemAnchorPairs );
 			validAnchorsEnd = std::end( kMatchingItemAndItemAnchorPairs );
-		} else if( entry.anchorItem.isToolbox() ) {
-			// Protect against loading toolbox stuff from files
-			return std::nullopt;
+		} else {
+			validAnchorsBegin = std::begin( kMatchingItemAndFieldAnchorPairs );
+			validAnchorsEnd   = std::end( kMatchingItemAndFieldAnchorPairs );
 		}
 		bool hasValidAnchorPair = false;
 		for( const AnchorPair *it = validAnchorsBegin; it != validAnchorsEnd; ++it ) {
@@ -465,6 +452,7 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 			}
 		}
 		if( !hasValidAnchorPair ) {
+			uiWarning() << "Anchors of the element of kind" << selfProps.name << "are invalid/disallowed";
 			return std::nullopt;
 		}
 	}
@@ -472,61 +460,71 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 	return entries;
 }
 
-auto HudLayoutModel::parseEntry( const wsw::StringView &line ) -> std::optional<std::pair<FileEntry, unsigned>> {
-	wsw::StringSplitter splitter( line );
-	std::optional<int> values[2];
+auto HudLayoutModel::parseEntry( const wsw::StringView &line ) -> std::optional<FileEntry> {
 	std::optional<int> anchors[2];
-	std::optional<Kind> kind;
+	std::optional<Kind> selfKind;
+	std::optional<Kind> otherKind;
 
 	unsigned lastTokenNum = 0;
-	while( const auto maybeNextTokenAndNum = splitter.getNextWithNum() ) {
+	wsw::StringSplitter splitter( line );
+	while( const std::optional<std::pair<wsw::StringView, unsigned>> maybeNextTokenAndNum = splitter.getNextWithNum() ) {
 		const auto [token, num] = *maybeNextTokenAndNum;
 		lastTokenNum = num;
 		if( num % 2 ) {
-			const unsigned keywordIndex = num / 2;
-			if( keywordIndex >= std::size( kOrderedKeywords ) ) {
-				return std::nullopt;
-			}
-			if( !kOrderedKeywords[keywordIndex]->equalsIgnoreCase( token ) ) {
-				return std::nullopt;
-			}
-		} else {
-			const unsigned valueIndex = num / 2;
-			if( valueIndex < 2 ) {
-				if( const auto maybeValue = wsw::toNum<int>( token ) ) {
-					values[valueIndex] = maybeValue;
+			if( num == 1 ) {
+				if( const std::optional<Kind> maybeKind = parseKind( token ) ) {
+					selfKind = maybeKind;
 				} else {
+					uiWarning() << "Failed to parse the token" << token << "as" << kKind;
 					return std::nullopt;
 				}
-			} else if( valueIndex >= 2 && valueIndex <= 3 ) {
-				if( const auto maybeAnchors = parseAnchors( token ) ) {
-					anchors[valueIndex - 2] = maybeAnchors;
+			} else if( num == 3 ) {
+				if( const std::optional<Kind> maybeKind = parseKind( token ) ) {
+					otherKind = maybeKind;
 				} else {
-					return std::nullopt;
+					if( !kField.equalsIgnoreCase( token ) ) {
+						uiWarning() << "Failed to parse the token" << token << "as" << kAnchoredTo << "kind";
+						return std::nullopt;
+					}
 				}
-			} else if( valueIndex == 4 ) {
-				if( const auto maybeKind = parseKind( token ) ) {
-					kind = maybeKind;
+			} else if( num == 5 || num == 7 ) {
+				const unsigned anchorValueIndex = ( num / 2 ) - 2;
+				assert( anchorValueIndex == 0 || anchorValueIndex == 1 );
+				if( const std::optional<int> maybeAnchors = parseAnchors( token ) ) {
+					anchors[anchorValueIndex] = maybeAnchors;
 				} else {
+					uiWarning() << "Failed to parse the token" << token << "as" << ( num == 5 ? kSelfAnchors : kOtherAnchors );
 					return std::nullopt;
 				}
 			} else {
+				uiWarning() << "Too many tokens in the line";
+				return std::nullopt;
+			}
+		} else {
+			// 0, 2, 4, 6
+			const unsigned keywordIndex = num / 2;
+			if( keywordIndex >= std::size( kOrderedKeywords ) ) {
+				uiWarning() << "Too many tokens in the line";
+				return std::nullopt;
+			}
+			if( !kOrderedKeywords[keywordIndex]->equalsIgnoreCase( token ) ) {
+				uiWarning() << "A token" << token << "does not match the expected keyword";
 				return std::nullopt;
 			}
 		}
 	}
 
-	if( lastTokenNum == 2 * std::size( kOrderedKeywords ) ) {
-		FileEntry entry {
-			.kind = kind.value(),
-			.selfAnchors = anchors[0].value(),
+	if( lastTokenNum + 1 == 2 * std::size( kOrderedKeywords ) ) {
+		return FileEntry {
+			.selfKind     = selfKind.value(),
+			.selfAnchors  = anchors[0].value(),
 			.otherAnchors = anchors[1].value(),
-			.anchorItem = AnchorItem( values[1].value() ),
+			.otherKind    = otherKind,
 		};
-		return std::make_pair( entry, values[0].value() );
+	} else {
+		uiWarning() << "Insufficient number of tokens in the line";
+		return std::nullopt;
 	}
-
-	return std::nullopt;
 }
 
 auto HudLayoutModel::parseAnchors( const wsw::StringView &token ) -> std::optional<int> {
@@ -658,15 +656,22 @@ bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 
 	wsw::Vector<Entry> entries;
 	for( FileEntry &fileEntry: fileEntries ) {
-		const auto &props = kEditorPropsForKind[fileEntry.kind - 1];
-		assert( fileEntry.kind == props.kind );
+		const auto &props = kEditorPropsForKind[fileEntry.selfKind - 1];
+		assert( fileEntry.selfKind == props.kind );
 		assert( m_flavor != Miniview || props.allowInMiniviewHud );
 		Entry entry;
-		entry.kind = fileEntry.kind;
+		entry.kind = fileEntry.selfKind;
 		entry.selfAnchors = fileEntry.selfAnchors;
 		entry.anchorItemAnchors = fileEntry.otherAnchors;
-		assert( !fileEntry.anchorItem.isToolbox() );
-		entry.realAnchorItem = fileEntry.anchorItem;
+		if( fileEntry.otherKind ) {
+			const auto it = std::find_if( fileEntries.begin(), fileEntries.end(), [&]( const FileEntry &e ) {
+				return e.selfKind == *fileEntry.otherKind;
+			});
+			assert( it != fileEntries.end() );
+			entry.realAnchorItem = AnchorItem::forItem( (unsigned)( it - fileEntries.begin() ) );
+		} else {
+			entry.realAnchorItem = AnchorItem::forField();
+		}
 		entry.rectangle.setSize( props.size );
 		entry.color = props.color;
 		entry.name = props.name;
@@ -1277,27 +1282,34 @@ bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 
 	// Items are linked by index, not by kind.
 	// The sorting breaks original indices, hence we have to retranslate anchor item indices upon sorting.
-	// TODO: Specify kinds in file data?
+	// Note that this is not related to the serialized form where we link by kind.
 	assert( fileEntries.size() <= (size_t)metaKinds.keyCount() );
 	auto *kindsForOriginalIndices = (Kind *)alloca( sizeof( Kind ) * fileEntries.size() );
 
 	for( const FileEntry &fileEntry: fileEntries ) {
-		assert( fileEntry.kind && fileEntry.kind < std::size( kEditorPropsForKind ) + 1 );
+		assert( fileEntry.selfKind && fileEntry.selfKind < std::size( kEditorPropsForKind ) + 1 );
+		AnchorItem anchorItem = AnchorItem::forToolbox();
+		if( fileEntry.otherKind ) {
+			const auto it = std::find_if( fileEntries.begin(), fileEntries.end(), [&]( const FileEntry &e ) {
+				return e.selfKind == *fileEntry.otherKind;
+			});
+			assert( it != fileEntries.end() );
+			anchorItem = AnchorItem::forItem( (unsigned)( it - fileEntries.begin() ) );
+		}
 		m_entries.emplace_back( Entry {
-			.kind            = fileEntry.kind,
+			.kind            = fileEntry.selfKind,
 			.selfAnchors     = fileEntry.selfAnchors,
 			.otherAnchors    = fileEntry.otherAnchors,
-			.anchorItem      = fileEntry.anchorItem,
+			.anchorItem      = anchorItem,
 		});
 
-		const auto kind = (unsigned)fileEntry.kind;
+		const auto kind = (unsigned)fileEntry.selfKind;
 		assert( kind && kind < 32 );
 		assert( metaKinds.valueToKey( kind ) );
 		assert( !( presentKindsMask & ( 1u << kind ) ) );
 		presentKindsMask |= ( 1u << kind );
-		// TODO: zipWithIndex
-		const auto index = std::addressof( fileEntry ) - fileEntries.data();
-		kindsForOriginalIndices[index] = fileEntry.kind;
+		const auto index = m_entries.size() - 1;
+		kindsForOriginalIndices[index] = fileEntry.selfKind;
 	}
 
 	// Add hidden entries for non-present kinds

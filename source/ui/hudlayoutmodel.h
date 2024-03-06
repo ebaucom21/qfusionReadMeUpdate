@@ -124,10 +124,11 @@ protected:
 	};
 
 	struct FileEntry {
-		Kind kind;
+		Kind selfKind;
 		int selfAnchors;
 		int otherAnchors;
-		AnchorItem anchorItem;
+		// Nullopt if it's the field
+		std::optional<Kind> otherKind;
 	};
 
 	struct AnchorPair {
@@ -167,7 +168,7 @@ protected:
 	auto deserialize( const wsw::StringView &data ) -> std::optional<wsw::Vector<FileEntry>>;
 
 	[[nodiscard]]
-	auto parseEntry( const wsw::StringView &line ) -> std::optional<std::pair<FileEntry, unsigned>>;
+	auto parseEntry( const wsw::StringView &line ) -> std::optional<FileEntry>;
 
 	[[nodiscard]]
 	virtual bool acceptDeserializedEntries( wsw::Vector<FileEntry> &&entries ) = 0;
