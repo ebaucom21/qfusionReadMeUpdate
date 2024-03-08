@@ -848,6 +848,7 @@ auto Frontend::drawPortalSurfaceSide( StateForCamera *stateForPrimaryCamera, por
 
 	refdef_t newRefdef = stateForPrimaryCamera->refdef;
 	newRefdef.rdflags &= ~( RDF_UNDERWATER | RDF_CROSSINGWATER );
+	// Note: Inheritting RDF_NOBSPOCCLUSIONCULLING
 
 	renderFlagsToAdd   |= RF_CLIPPLANE;
 	renderFlagsToClear |= RF_SOFT_PARTICLES;

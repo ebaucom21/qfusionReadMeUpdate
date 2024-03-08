@@ -108,15 +108,18 @@ auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
 	// Cull world leaves by the primary frustum
 	const std::span<const unsigned> visibleLeaves = collectVisibleWorldLeaves( stateForCamera );
 
-	// TODO: Can run in parallel with leaves collection
-	// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
-	const std::span<const SortedOccluder> visibleOccluders = collectVisibleOccluders( stateForCamera );
-	// Build frusta of occluders, while performing some additional frusta pruning
-	const std::span<const Frustum> occluderFrusta = buildFrustaOfOccluders( stateForCamera, visibleOccluders );
+	std::span<const Frustum> occluderFrusta;
+	if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
+		// TODO: Can run in parallel with leaves collection
+		// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
+		const std::span<const SortedOccluder> visibleOccluders = collectVisibleOccluders( stateForCamera );
+		// Build frusta of occluders, while performing some additional frusta pruning
+		occluderFrusta = buildFrustaOfOccluders( stateForCamera, visibleOccluders );
+	}
 
 	std::span<const unsigned> nonOccludedLeaves;
 	std::span<const unsigned> partiallyOccludedLeaves;
-	if( occluderFrusta.empty() ) {
+	if( occluderFrusta.empty() || ( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
 		// No "good enough" occluders found.
 		// Just mark every surface that falls into the primary frustum visible in this case.
 		markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans );
@@ -620,11 +623,6 @@ auto Frontend::collectVisibleOccluders( StateForCamera *stateForCamera ) -> std:
 
 auto Frontend::buildFrustaOfOccluders( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 	-> std::span<const Frustum> {
-	// Put the check here so it does not get replicated for every arch
-	if( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) {
-		return { stateForCamera->occluderFrusta, 0 };
-	}
-
 	return ( this->*m_buildFrustaOfOccludersArchMethod )( stateForCamera, sortedOccluders );
 }
 

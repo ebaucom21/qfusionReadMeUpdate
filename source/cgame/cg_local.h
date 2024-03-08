@@ -702,7 +702,6 @@ void CG_Predict_TouchTriggers( pmove_t *pm, const vec3_t previous_origin );
 //
 // cg_screen.c
 //
-void CG_Draw2D( ViewState *viewState );
 void CG_CenterPrint( ViewState *viewState, const char *str );
 
 void CG_LoadingString( const char *str );

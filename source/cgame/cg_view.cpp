@@ -743,7 +743,7 @@ int CG_SkyPortal( ViewState *viewState ) {
 	return 0;
 }
 
-static int CG_RenderFlags( ViewState *viewState ) {
+static int CG_RenderFlags( ViewState *viewState, bool isMiniview ) {
 	int rdflags = 0;
 
 	// set the RDF_UNDERWATER and RDF_CROSSINGWATER bitflags
@@ -773,6 +773,10 @@ static int CG_RenderFlags( ViewState *viewState ) {
 	}
 
 	rdflags |= CG_SkyPortal( viewState );
+
+	if( isMiniview ) {
+		rdflags |= RDF_NOBSPOCCLUSIONCULLING;
+	}
 
 	return rdflags;
 }
@@ -1098,6 +1102,10 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, bool thirdperson, Vie
 	}
 }
 
+static void CG_DrawCrosshair( ViewState *viewState, std::optional<float> miniviewScale );
+static void drawNamesAndBeacons( ViewState *viewState, std::optional<float> miniviewScale );
+static void CG_SCRDrawViewBlend( ViewState *viewState );
+
 bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t serverTime, unsigned extrapolationTime ) {
 	bool hasRenderedTheMenu = false;
 
@@ -1269,6 +1277,20 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 				CG_CalcViewWeapon( &viewState->weapon, viewState );
 
+				refdef_t *rd = &viewState->view.refdef;
+				AnglesToAxis( viewState->view.angles, rd->viewaxis );
+
+				const bool isMiniview = viewNum != 0 || !shouldUseNonTiledMode;
+				rd->rdflags = CG_RenderFlags( viewState, isMiniview );
+
+				// warp if underwater
+				if( rd->rdflags & RDF_UNDERWATER ) {
+					const float phase = rd->time * 0.001f * 0.6f * M_TWOPI;
+					const float v = 0.015f * ( std::sin( phase ) - 1.0f ) + 1.0f;
+					rd->fov_x *= v;
+					rd->fov_y *= v;
+				}
+
 				DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( viewState->view.refdef );
 
 				CG_AddEntities( drawSceneRequest, viewState );
@@ -1286,6 +1308,10 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			cg.polyEffectsSystem.simulateFrame( cg.time );
 			cg.simulatedHullsSystem.simulateFrame( cg.time );
 
+			const auto *const uiSystem             = wsw::ui::UISystem::instance();
+			const bool shouldCheckDrawingUnderMenu = uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard();
+			const bool shouldDrawHuds              = v_showHud.get();
+			const bool shouldDraw2D                = v_draw2D.get();
 			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
 				DrawSceneRequest *const drawSceneRequest = drawSceneRequests[viewNum];
 				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
@@ -1301,22 +1327,45 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				cg.polyEffectsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
 				cg.simulatedHullsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
 
-				refdef_t *rd = &viewState->view.refdef;
-				AnglesToAxis( viewState->view.angles, rd->viewaxis );
-
-				rd->rdflags = CG_RenderFlags( viewState );
-
-				// warp if underwater
-				if( rd->rdflags & RDF_UNDERWATER ) {
-					const float phase = rd->time * 0.001f * 0.6f * M_TWOPI;
-					const float v = 0.015f * ( std::sin( phase ) - 1.0f ) + 1.0f;
-					rd->fov_x *= v;
-					rd->fov_y *= v;
-				}
-
 				SubmitDrawSceneRequest( drawSceneRequest );
 
-				CG_Draw2D( viewState );
+				if( shouldDraw2D && viewState->view.draw2D ) {
+					bool drawGfx = true;
+					if( shouldCheckDrawingUnderMenu ) {
+						drawGfx = false;
+						if( cg.chaseMode != CAM_TILED && cg.numSnapViewStates > 0 ) {
+							// Check if its a HUD-hosted miniview
+							for( const auto &indices: cg.hudControlledMiniviewViewStateIndicesForPane ) {
+								if( std::find( indices.begin(), indices.end(), viewStateIndices[viewNum] ) != indices.end() ) {
+									drawGfx = true;
+									break;
+								}
+							}
+						}
+					}
+					bool drawCrosshair = false;
+					if( CG_ActiveChasePovOfViewState( viewStateIndices[viewNum] ) != std::nullopt ) {
+						if( CG_IsPovAlive( viewStateIndices[viewNum] ) ) {
+							drawCrosshair = true;
+						}
+					}
+
+					const refdef_t &rd = viewState->view.refdef;
+					RF_Set2DScissor( rd.x, rd.y, rd.width, rd.height );
+
+					if( shouldDrawHuds ) {
+						if( drawGfx ) {
+							std::optional<float> miniviewScale;
+							if( viewNum != 0 || !shouldUseNonTiledMode ) {
+								miniviewScale = wsw::min( (float)rd.width / (float)cgs.vidWidth, (float)rd.height / (float)cgs.vidHeight );
+							}
+							drawNamesAndBeacons( viewState, miniviewScale );
+							if( drawCrosshair ) {
+								CG_DrawCrosshair( viewState, miniviewScale );
+							}
+						}
+					}
+				}
 
 				CG_ResetTemporaryBoneposesCache(); // clear for next frame
 
@@ -1857,55 +1906,6 @@ static void CG_DrawCrosshair( ViewState *viewState, std::optional<float> minivie
 				::drawCrosshair( weapon, FIRE_MODE_STRONG, miniviewScale, viewState );
 			}
 			::drawCrosshair( weapon, FIRE_MODE_WEAK, miniviewScale, viewState );
-		}
-	}
-}
-
-void CG_Draw2D( ViewState *viewState ) {
-	if( v_draw2D.get() && viewState->view.draw2D ) {
-		const refdef_t &rd = viewState->view.refdef;
-		RF_Set2DScissor( rd.x, rd.y, rd.width, rd.height );
-		// TODO: Does it mean we can just turn blends locally off?
-		CG_SCRDrawViewBlend( viewState );
-
-		[[maybe_unused]] const auto thisViewStateIndex = (unsigned)( viewState - cg.viewStates );
-		if( v_showHud.get() ) {
-			bool shouldDrawNamesBeaconsAndCrosshair = true;
-			const auto *const uiSystem = wsw::ui::UISystem::instance();
-			if( uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard() ) {
-				shouldDrawNamesBeaconsAndCrosshair = false;
-				if( cg.chaseMode != CAM_TILED && cg.numSnapViewStates > 0 ) {
-					for( const auto &viewIndicesForPane: cg.hudControlledMiniviewViewStateIndicesForPane ) {
-						for( const unsigned viewIndex: viewIndicesForPane ) {
-							if( viewIndex == thisViewStateIndex ) {
-								shouldDrawNamesBeaconsAndCrosshair = true;
-								break;
-							}
-						}
-					}
-				}
-			}
-
-
-			if( shouldDrawNamesBeaconsAndCrosshair ) {
-				bool isAMiniview = false;
-				std::optional<float> miniviewScale;
-				if( cg.chaseMode == CAM_TILED && !cg.tileMiniviewViewStateIndices.empty() ) {
-					isAMiniview = true;
-				} else if( getPrimaryViewState() != viewState ) {
-					isAMiniview = true;
-				}
-				if( isAMiniview ) {
-					miniviewScale = wsw::min( (float)rd.width / (float)cgs.vidWidth, (float)rd.height / (float)cgs.vidHeight );
-				}
-
-				drawNamesAndBeacons( viewState, miniviewScale );
-				if( CG_ActiveChasePovOfViewState( thisViewStateIndex ) != std::nullopt ) {
-					if( CG_IsPovAlive( thisViewStateIndex ) ) {
-						CG_DrawCrosshair( viewState, miniviewScale );
-					}
-				}
-			}
 		}
 	}
 }

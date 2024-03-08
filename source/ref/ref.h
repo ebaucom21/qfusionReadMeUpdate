@@ -53,14 +53,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define RF_NOCOLORWRITE         0x1000
 
 // refdef flags
-#define RDF_UNDERWATER          0x1     // warp the screen as apropriate
-#define RDF_NOWORLDMODEL        0x2     // used for player configuration screen
-#define RDF_OLDAREABITS         0x4     // forces R_MarkLeaves if not set
-#define RDF_PORTALINVIEW        0x8     // cull entities using vis too because pvs\areabits are merged serverside
-#define RDF_SKYPORTALINVIEW     0x10    // draw skyportal instead of regular sky
-#define RDF_WORLDOUTLINES       0x40    // draw cell outlines for world surfaces
-#define RDF_CROSSINGWATER       0x80    // potentially crossing water surface
-#define RDF_USEORTHO            0x100   // use orthographic projection
+#define RDF_UNDERWATER              0x1     // warp the screen as apropriate
+#define RDF_NOWORLDMODEL            0x2     // used for player configuration screen
+#define RDF_OLDAREABITS             0x4     // forces R_MarkLeaves if not set
+#define RDF_PORTALINVIEW            0x8     // cull entities using vis too because pvs\areabits are merged serverside
+#define RDF_SKYPORTALINVIEW         0x10    // draw skyportal instead of regular sky
+#define RDF_WORLDOUTLINES           0x40    // draw cell outlines for world surfaces
+#define RDF_CROSSINGWATER           0x80    // potentially crossing water surface
+#define RDF_USEORTHO                0x100   // use orthographic projection
+#define RDF_NOBSPOCCLUSIONCULLING   0x200
 
 // skm flags
 #define SKM_ATTACHMENT_BONE     1
