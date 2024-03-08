@@ -174,6 +174,8 @@ protected:
 	virtual bool acceptDeserializedEntries( wsw::Vector<FileEntry> &&entries ) = 0;
 
 	[[nodiscard]]
+	auto parseVersion( const wsw::StringView &line ) -> std::optional<unsigned>;
+	[[nodiscard]]
 	auto parseHorizontalAnchors( const wsw::StringView &keyword ) -> std::optional<int>;
 	[[nodiscard]]
 	auto parseVerticalAnchors( const wsw::StringView &keyword ) -> std::optional<int>;

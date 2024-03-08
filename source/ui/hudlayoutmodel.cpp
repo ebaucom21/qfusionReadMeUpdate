@@ -232,6 +232,9 @@ static const wsw::StringView *const kOrderedKeywords[] { &kKind, &kAnchoredTo, &
 
 static const wsw::StringView kField( "Field"_asView );
 
+static const wsw::StringView kVersionToken( "Version"_asView );
+static const unsigned kCurrentHudVersion = 1;
+
 bool HudEditorLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 	if( m_entries.size() >= 32 ) {
 		wsw::failWithLogicError( "Too many entries, this shouldn't happen" );
@@ -249,6 +252,7 @@ bool HudEditorLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 	// `<<` throws on overflow
 	try {
 		buffer.clear();
+		buffer << kVersionToken << ' ' << kCurrentHudVersion << "\r\n"_asView;
 		for( const Entry &entry: m_entries ) {
 			if( !entry.realAnchorItem.isToolbox() ) {
 				buffer << kKind << ' ' << wsw::StringView( kindMeta.valueToKey( entry.kind ) ) << ' ';
@@ -360,13 +364,36 @@ static const wsw::CharLookup kNewlineChars( "\r\n"_asView );
 auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional<wsw::Vector<FileEntry>> {
 	wsw::Vector<FileEntry> entries;
 	wsw::StringSplitter lineSplitter( data );
+	std::optional<unsigned> parsedVersion;
 	while( const auto maybeNextLine = lineSplitter.getNext( kNewlineChars ) ) {
-		if( std::optional<FileEntry> maybeEntry = parseEntry( *maybeNextLine ) ) {
-			entries.push_back( *maybeEntry );
+		if( parsedVersion ) {
+			// TODO: Dispatch by version if multiple versions are supported
+			if( std::optional<FileEntry> maybeEntry = parseEntry( *maybeNextLine ) ) {
+				entries.push_back( *maybeEntry );
+			} else {
+				uiWarning() << "Failed to parse expected entry line" << *maybeNextLine;
+				return std::nullopt;
+			}
 		} else {
-			uiWarning() << "Failed to parse" << *maybeNextLine;
-			return std::nullopt;
+			parsedVersion = parseVersion( *maybeNextLine );
+			if( !parsedVersion ) {
+				uiWarning() << "Failed to parse expected version line" << *maybeNextLine;
+				return std::nullopt;
+			}
+			if( parsedVersion != std::optional( kCurrentHudVersion ) ) {
+				uiWarning() << "Unsupported HUD file version" << *parsedVersion;
+				return std::nullopt;
+			}
 		}
+	}
+
+	if( !parsedVersion ) {
+		uiWarning() << "Has not managed to find the HUD file version";
+		return std::nullopt;
+	}
+	if( entries.empty() ) {
+		uiWarning() << "Has not managed to collect HUD item entries";
+		return std::nullopt;
 	}
 
 	const QMetaEnum metaKinds( QMetaEnum::fromType<Kind>() );
@@ -525,6 +552,27 @@ auto HudLayoutModel::parseEntry( const wsw::StringView &line ) -> std::optional<
 		uiWarning() << "Insufficient number of tokens in the line";
 		return std::nullopt;
 	}
+}
+
+auto HudLayoutModel::parseVersion( const wsw::StringView &line ) -> std::optional<unsigned> {
+	std::optional<unsigned> result;
+	wsw::StringSplitter splitter( line );
+	while( const auto maybeTokenAndNum = splitter.getNextWithNum() ) {
+		const auto [token, num] = *maybeTokenAndNum;
+		if( num == 0 ) {
+			if( !token.equalsIgnoreCase( kVersionToken ) ) {
+				return std::nullopt;
+			}
+		} else if( num == 1 ) {
+			result = wsw::toNum<unsigned>( token );
+			if( !result ) {
+				return std::nullopt;
+			}
+		} else {
+			return std::nullopt;
+		}
+	}
+	return result;
 }
 
 auto HudLayoutModel::parseAnchors( const wsw::StringView &token ) -> std::optional<int> {
