@@ -33,7 +33,6 @@ struct ServersideClientBase {
 	int m_ping;
 	int m_health;
 	int m_frags;
-	int m_snapHintFlags;
 	player_state_t ps;
 
 	ServersideClientBase() {
@@ -41,7 +40,7 @@ struct ServersideClientBase {
 	}
 
 	void resetShared() {
-		m_ping = m_health = m_frags = m_snapHintFlags = 0;
+		m_ping = m_health = m_frags = 0;
 		memset( &ps, 0, sizeof( ps ) );
 	}
 };

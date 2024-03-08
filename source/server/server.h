@@ -190,11 +190,6 @@ typedef struct client_entities_s {
 	entity_state_t *entities;           // [num_entities]
 } client_entities_t;
 
-typedef struct fatvis_s {
-	vec_t *skyorg;
-	uint8_t pvs[MAX_MAP_LEAFS / 8];
-} fatvis_t;
-
 extern cvar_t *sv_ip;
 extern cvar_t *sv_port;
 
@@ -295,7 +290,7 @@ void SV_ClientResetCommandBuffers( client_t *client );
 void SV_ClientCloseDownload( client_t *client );
 
 void SV_WriteFrameSnapToClient( client_t *client, msg_t *msg );
-void SV_BuildClientFrameSnap( client_t *client, int snapHintFlags );
+void SV_BuildClientFrameSnap( client_t *client );
 
 void SV_InitGameProgs( void );
 void SV_ShutdownGameProgs( void );

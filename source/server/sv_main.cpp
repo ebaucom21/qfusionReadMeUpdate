@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/gs_public.h"
 
 #include <variant>
+#include <span>
 
 using wsw::operator""_asView;
 
@@ -84,8 +85,6 @@ static struct {
 	purelist_t *purelist;               // pure file support
 
 	cmodel_state_t *cms;                // passed to CM-functions
-
-	fatvis_t fatvis;
 
 	char *motd;
 } svs;
@@ -234,11 +233,6 @@ static cvar_t *sv_MOTDFile;
 static cvar_t *sv_MOTDString;
 
 static cvar_t *sv_demodir;
-
-static cvar_t *sv_snap_aggressive_sound_culling;
-static cvar_t *sv_snap_raycast_players_culling;
-static cvar_t *sv_snap_aggressive_fov_culling;
-static cvar_t *sv_snap_shadow_events_data;
 
 static game_export_t *ge;
 
@@ -1635,11 +1629,6 @@ void SV_Init() {
 
 	svc.autoUpdateMinute = ::rand() % 60;
 
-	sv_snap_aggressive_sound_culling = Cvar_Get( SNAP_VAR_CULL_SOUND_WITH_PVS , "0", CVAR_SERVERINFO | CVAR_ARCHIVE );
-	sv_snap_raycast_players_culling = Cvar_Get( SNAP_VAR_USE_RAYCAST_CULLING, "1", CVAR_SERVERINFO | CVAR_ARCHIVE );
-	sv_snap_aggressive_fov_culling = Cvar_Get( SNAP_VAR_USE_VIEWDIR_CULLING, "0", CVAR_SERVERINFO | CVAR_ARCHIVE );
-	sv_snap_shadow_events_data = Cvar_Get( SNAP_VAR_SHADOW_EVENTS_DATA, "1", CVAR_SERVERINFO | CVAR_ARCHIVE );
-
 	Com_Printf( "Game running at %i fps. Server transmit at %i pps\n", sv_fps->integer, sv_pps->integer );
 
 	SV_InitInfoServers();
@@ -2935,7 +2924,7 @@ void SV_WriteFrameSnapToClient( client_t *client, msg_t *msg ) {
 								 &svs.client_entities, 0, NULL, NULL );
 }
 
-void SV_BuildClientFrameSnap( client_t *client, int snapHintFlags ) {
+void SV_BuildClientFrameSnap( client_t *client ) {
 	vec_t *skyorg = NULL, origin[3];
 
 	if( auto maybeSkyBoxString = sv.configStrings.getSkyBox() ) {
@@ -2956,11 +2945,8 @@ void SV_BuildClientFrameSnap( client_t *client, int snapHintFlags ) {
 		scoreboardData = ge->GetScoreboardDataForDemo();
 	}
 
-	svs.fatvis.skyorg = skyorg;     // HACK HACK HACK
-	SNAP_BuildClientFrameSnap( svs.cms, &sv.gi, sv.framenum, svs.gametime, &svs.fatvis,
-							   client, ge->GetGameState(), scoreboardData,
-							   &svs.client_entities, snapHintFlags );
-	svs.fatvis.skyorg = NULL;
+	SNAP_BuildClientFrameSnap( svs.cms, &sv.gi, sv.framenum, svs.gametime, skyorg,
+							   client, ge->GetGameState(), scoreboardData, &svs.client_entities );
 }
 
 static bool SV_SendClientDatagram( client_t *client ) {
@@ -2970,25 +2956,9 @@ static bool SV_SendClientDatagram( client_t *client ) {
 
 	SV_AddReliableCommandsToMessage( client, &tmpMessage );
 
-	// Set snap hint flags to client-specific flags set by the game module
-	int snapHintFlags = client->edict->r.client->m_snapHintFlags;
-	// Add server global snap hint flags
-	if( sv_snap_aggressive_sound_culling->integer ) {
-		snapHintFlags |= SNAP_HINT_CULL_SOUND_WITH_PVS;
-	}
-	if( sv_snap_raycast_players_culling->integer ) {
-		snapHintFlags |= SNAP_HINT_USE_RAYCAST_CULLING;
-	}
-	if( sv_snap_aggressive_fov_culling->integer ) {
-		snapHintFlags |= SNAP_HINT_USE_VIEW_DIR_CULLING;
-	}
-	if( sv_snap_shadow_events_data->integer ) {
-		snapHintFlags |= SNAP_HINT_SHADOW_EVENTS_DATA;
-	}
-
 	// send over all the relevant entity_state_t
 	// and the player_state_t
-	SV_BuildClientFrameSnap( client, snapHintFlags );
+	SV_BuildClientFrameSnap( client );
 
 	SV_WriteFrameSnapToClient( client, &tmpMessage );
 
@@ -3330,17 +3300,6 @@ void SNAP_WriteFrameSnapToClient( const ginfo_t *gi, client_t *client, msg_t *ms
 	client->lastSentFrameNum = frameNum;
 }
 
-/*
-* SNAP_FatPVS
-*
-* The client will interpolate the view position,
-* so we can't use a single PVS point
-*/
-static void SNAP_FatPVS( cmodel_state_t *cms, const vec3_t org, uint8_t *fatpvs ) {
-	memset( fatpvs, 0, CM_ClusterRowSize( cms ) );
-	CM_MergePVS( cms, org, fatpvs );
-}
-
 static bool SNAP_BitsCullEntity( const cmodel_state_t *cms, const edict_t *ent, const uint8_t *bits, int max_clusters ) {
 	// too many leafs for individual check, go by headnode
 	if( ent->r.num_clusters == -1 ) {
@@ -3361,65 +3320,38 @@ static bool SNAP_BitsCullEntity( const cmodel_state_t *cms, const edict_t *ent, 
 	return true;    // not visible/audible
 }
 
-static bool SNAP_ViewDirCullEntity( const edict_t *clent, const edict_t *ent ) {
-	vec3_t viewDir;
-	AngleVectors( clent->s.angles, viewDir, nullptr, nullptr );
-
-	vec3_t toEntDir;
-	VectorSubtract( ent->s.origin, clent->s.origin, toEntDir );
-	return DotProduct( toEntDir, viewDir ) < 0;
-}
-
 class SnapEntNumsList {
-	int nums[MAX_EDICTS];
-	bool added[MAX_EDICTS];
-	int numEnts { 0 };
-	int maxNumSoFar { 0 };
-	bool isSorted { false };
+	mutable int m_nums[MAX_EDICTS];
+	bool m_added[MAX_EDICTS];
+	mutable unsigned m_numEnts { 0 };
+	int m_maxNumSoFar { 0 };
+	mutable bool m_isSorted { false };
 public:
 	SnapEntNumsList() {
-		memset( added, 0, sizeof( added ) );
+		std::memset( m_added, 0, sizeof( m_added ) );
 	}
 
-	// TODO: Span
-	[[nodiscard]] const int *begin() const { assert( isSorted ); return nums; }
-	[[nodiscard]] const int *end() const { assert( isSorted ); return nums + numEnts; }
-
-	void AddEntNum( int num );
-
-	void Sort();
-};
-
-void SnapEntNumsList::AddEntNum( int entNum ) {
-	assert( !isSorted );
-
-	if( entNum >= MAX_EDICTS ) {
-		return;
-	}
-	// silent ignore of overflood
-	if( numEnts >= MAX_EDICTS ) {
-		return;
+	void addEntNum( int entNum ) {
+		m_added[entNum] = true;
+		m_maxNumSoFar   = wsw::max( entNum, m_maxNumSoFar );
 	}
 
-	added[entNum] = true;
-	// Should be a CMOV
-	maxNumSoFar = wsw::max( entNum, maxNumSoFar );
-}
-
-void SnapEntNumsList::Sort()  {
-	assert( !isSorted );
-	numEnts = 0;
-
-	// avoid adding world to the list by all costs
-	for( int i = 1; i <= maxNumSoFar; i++ ) {
-		if( added[i] ) {
-			nums[numEnts++] = i;
+	[[nodiscard]]
+	auto sortedNums() const -> std::span<const int> {
+		if( !m_isSorted ) {
+			m_isSorted = true;
+			assert( m_numEnts == 0 );
+			// avoid adding world to the list by all costs
+			for( int num = 1; num <= m_maxNumSoFar; num++ ) {
+				if( m_added[num] ) {
+					m_nums[m_numEnts++] = num;
+				}
+			}
+			assert( std::is_sorted( m_nums, m_nums + m_numEnts ) );
 		}
+		return { m_nums, m_nums + m_numEnts };
 	}
-
-	assert( std::is_sorted( nums, nums + numEnts ) );
-	isSorted = true;
-}
+};
 
 static bool SNAP_SnapCullSoundEntity( const cmodel_state_t *cms, const edict_t *ent, const vec3_t listener_origin, float attenuation ) {
 	if( attenuation == 0.0f ) {
@@ -3448,250 +3380,170 @@ static inline bool SNAP_IsSoundCullOnlyEntity( const edict_t *ent ) {
 	return !ent->s.modelindex && !ent->s.events[0] && !ent->s.light && !ent->s.effects;
 }
 
-static bool SNAP_SnapCullEntity( const cmodel_state_t *cms, const edict_t *ent,
-								 const edict_t *clent, client_snapshot_t *frame,
-								 vec3_t vieworg, uint8_t *fatpvs, int snapHintFlags ) {
+enum class CullResult {
+	DefinitelyCulled,
+	ShouldCheckBits,
+	DefinitelyKept,
+};
+
+static CullResult SNAP_SnapCullEntity( const cmodel_state_t *cms, const edict_t *ent, const edict_t *clent, const vec3_t vieworg ) {
 	// filters: this entity has been disabled for comunication
 	if( ent->r.svflags & SVF_NOCLIENT ) {
-		return true;
-	}
-
-	// send all entities
-	if( frame->allentities ) {
-		return false;
+		return CullResult::DefinitelyCulled;
 	}
 
 	// we have decided to transmit (almost) everything for spectators
 	if( clent->r.client->ps.stats[STAT_REALTEAM] == TEAM_SPECTATOR ) {
-		return false;
+		return CullResult::DefinitelyKept;
 	}
 
 	// filters: transmit only to clients in the same team as this entity
 	// broadcasting is less important than team specifics
 	if( ( ent->r.svflags & SVF_ONLYTEAM ) && ( clent && ent->s.team != clent->s.team ) ) {
-		return true;
+		return CullResult::DefinitelyCulled;
 	}
 
 	// send only to owner
 	if( ( ent->r.svflags & SVF_ONLYOWNER ) && ( clent && ent->s.ownerNum != clent->s.number ) ) {
-		return true;
+		return CullResult::DefinitelyCulled;
 	}
 
 	if( ent->r.svflags & SVF_BROADCAST ) { // send to everyone
-		return false;
+		return CullResult::DefinitelyKept;
 	}
 
 	if( ( ent->r.svflags & SVF_FORCETEAM ) && ( clent && ent->s.team == clent->s.team ) ) {
-		return false;
+		return CullResult::DefinitelyKept;
 	}
 
 	if( ent->r.areanum < 0 ) {
-		return true;
+		return CullResult::DefinitelyCulled;
 	}
 
-	const uint8_t *areabits;
-	if( frame->clientarea >= 0 ) {
-		// this is the same as CM_AreasConnected but portal's visibility included
-		areabits = frame->areabits + frame->clientarea * CM_AreaRowSize( cms );
-		if( !( areabits[ent->r.areanum >> 3] & ( 1 << ( ent->r.areanum & 7 ) ) ) ) {
-			// doors can legally straddle two areas, so we may need to check another one
-			if( ent->r.areanum2 < 0 || !( areabits[ent->r.areanum2 >> 3] & ( 1 << ( ent->r.areanum2 & 7 ) ) ) ) {
-				return true; // blocked by a door
+	if( SNAP_IsSoundCullOnlyEntity( ent ) ) {
+		if( SNAP_SnapCullSoundEntity( cms, ent, vieworg, ent->s.attenuation ) ) {
+			return CullResult::DefinitelyCulled;
+		}
+		return CullResult::DefinitelyKept;
+	}
+
+	// If an entity has active sounds/events
+	if( ent->s.events[0] || ent->s.sound ) {
+		// If the sound is audible, always keep it
+		if( !SNAP_SnapCullSoundEntity( cms, ent, vieworg, ent->s.attenuation ) ) {
+			return CullResult::DefinitelyKept;
+		}
+		// Otherwise, fall back to visibility checks
+		// (e.g. if we can't hear sounds of a player anyway, check whether the player is visible)
+		return CullResult::ShouldCheckBits;
+	}
+
+	return CullResult::ShouldCheckBits;
+}
+
+static bool SNAP_SnapCullEntityForMultiPovs( const cmodel_state_t *cms, const edict_t *ent,
+											 const edict_t **povEntities, const vec3_t *viewOrigins,
+											 unsigned numPovEntities, const uint8_t *fatpvs ) {
+	assert( numPovEntities > 0 && numPovEntities < MAX_CLIENTS );
+	CullResult bestCullResult = CullResult::DefinitelyCulled;
+	static_assert( CullResult::DefinitelyCulled < CullResult::ShouldCheckBits );
+	static_assert( CullResult::ShouldCheckBits < CullResult::DefinitelyKept );
+	for( unsigned povNum = 0; povNum < numPovEntities; ++povNum ) {
+		const CullResult cullResult = SNAP_SnapCullEntity( cms, ent, povEntities[povNum], viewOrigins[povNum] );
+		if( bestCullResult < cullResult ) {
+			bestCullResult = cullResult;
+			if( cullResult == CullResult::DefinitelyKept ) {
+				break;
 			}
 		}
 	}
-
-	const bool snd_cull_only = SNAP_IsSoundCullOnlyEntity( ent );
-	const bool snd_use_pvs = ( snapHintFlags & SNAP_HINT_CULL_SOUND_WITH_PVS ) != 0;
-	// const bool use_raycasting = ( snapHintFlags & SNAP_HINT_USE_RAYCAST_CULLING ) != 0;
-	const bool use_viewdir_culling = ( snapHintFlags & SNAP_HINT_USE_VIEW_DIR_CULLING ) != 0;
-	// const bool shadow_real_events_data = ( snapHintFlags & SNAP_HINT_SHADOW_EVENTS_DATA ) != 0;
-
-	if( snd_use_pvs ) {
-		// Don't even bother about calling SnapCullSoundEntity() except the entity has only a sound to transmit
-		if( snd_cull_only ) {
-			if( SNAP_SnapCullSoundEntity( cms, ent, vieworg, ent->s.attenuation ) ) {
-				return true;
-			}
+	bool isCulled = true;
+	if( bestCullResult == CullResult::DefinitelyKept ) {
+		isCulled = false;
+	} else if( bestCullResult == CullResult::ShouldCheckBits ) {
+		if( !SNAP_BitsCullEntity( cms, ent, fatpvs, ent->r.num_clusters ) ) {
+			isCulled = false;
 		}
-
-		// Force PVS culling in all other cases
-		if( SNAP_BitsCullEntity( cms, ent, fatpvs, ent->r.num_clusters ) ) {
-			return true;
-		}
-
-		// Don't test sounds by raycasting
-		if( snd_cull_only ) {
-			return false;
-		}
-
-		// Check whether there is sound-like info to transfer
-		if( ent->s.sound || ent->s.events[0] ) {
-			// If sound attenuation is not sufficient to cutoff the entity
-			if( !SNAP_SnapCullSoundEntity( cms, ent, vieworg, ent->s.attenuation ) ) {
-				/*
-				if( shadow_real_events_data ) {
-					// If the entity would have been culled if there were no events
-					if( !( ent->r.svflags & SVF_TRANSMITORIGIN2 ) ) {
-						// TODO: Check whether it can be visually culled, cache this check result
-					}
-				}*/
-				return false;
-			}
-		}
-
-		// Don't try doing additional culling for beams
-		if( ent->r.svflags & SVF_TRANSMITORIGIN2 ) {
-			return false;
-		}
-
-		/*
-		if( use_raycasting && SnapVisTable::Instance()->TryCullingByCastingRays( clent, vieworg, ent ) ) {
-			return true;
-		}*/
-
-		if( use_viewdir_culling && SNAP_ViewDirCullEntity( clent, ent ) ) {
-			return true;
-		}
-
-		return false;
 	}
-
-	bool snd_culled = true;
-
-	// PVS culling alone may not be used on pure sounds, entities with
-	// events and regular entities emitting sounds, unless being explicitly specified
-	if( snd_cull_only || ent->s.events[0] || ent->s.sound ) {
-		snd_culled = SNAP_SnapCullSoundEntity( cms, ent, vieworg, ent->s.attenuation );
-	}
-
-	// If there is nothing else to transmit aside a sound and the sound has been culled by distance.
-	if( snd_cull_only && snd_culled ) {
-		return true;
-	}
-
-	// If sound attenuation is not sufficient to cutoff the entity
-	if( !snd_culled ) {
-		/*
-		if( shadow_real_events_data ) {
-			// If the entity would have been culled if there were no events
-			if( !( ent->r.svflags & SVF_TRANSMITORIGIN2 ) ) {
-				// TODO: Check whether it can be visually culled, cache this check result
-			}
-		}*/
-		return false;
-	}
-
-	if( SNAP_BitsCullEntity( cms, ent, fatpvs, ent->r.num_clusters ) ) {
-		return true;
-	}
-
-	// Don't try doing additional culling for beams
-	if( ent->r.svflags & SVF_TRANSMITORIGIN2 ) {
-		return false;
-	}
-
-	/*
-	if( use_raycasting && SnapVisTable::Instance()->TryCullingByCastingRays( clent, vieworg, ent ) ) {
-		return true;
-	}*/
-
-	if( use_viewdir_culling && SNAP_ViewDirCullEntity( clent, ent ) ) {
-		return true;
-	}
-
-	return false;
+	return isCulled;
 }
 
 static void SNAP_BuildSnapEntitiesList( cmodel_state_t *cms, ginfo_t *gi,
-										edict_t *clent, vec3_t vieworg, vec3_t skyorg,
-										uint8_t *fatpvs, client_snapshot_t *frame,
-										SnapEntNumsList &list, int snapHintFlags ) {
-	int clientarea;
-	int clusternum;
+										const edict_t **povEntities, unsigned numPovEntities,
+										const float *skyPortalPovOrigin,
+										client_snapshot_t *frame, SnapEntNumsList &list ) {
+	// TODO: Get rid of areas?
+	frame->areabytes  = CM_AreaRowSize( cms ) * CM_NumAreas( cms );
+	frame->clientarea = -1;
+	std::memset( frame->areabits, 255, frame->areabytes );
 
-	// find the client's PVS
-	if( frame->allentities ) {
-		clientarea = -1;
-		clusternum = -1;
-	} else {
-		const int leafnum = CM_PointLeafnum( cms, vieworg );
-		clusternum = CM_LeafCluster( cms, leafnum );
-		clientarea = CM_LeafArea( cms, leafnum );
-	}
+	// TODO: Should we allocate on stack THAT much?
+	[[maybe_unused]] vec3_t viewOrigins[MAX_CLIENTS];
+	[[maybe_unused]] uint8_t fatpvs[MAX_MAP_LEAFS / 8];
+	[[maybe_unused]] int8_t earlyCullingResults[MAX_EDICTS];
 
-	frame->clientarea = clientarea;
-	frame->areabytes  = CM_WriteAreaBits( cms, frame->areabits );
-
-	bool handledOutsideTheWorldCase = false;
-	if( clent ) {
-		SNAP_FatPVS( cms, vieworg, fatpvs );
-
-		// if the client is outside of the world, don't send him any entity (excepting himself)
-		if( !frame->allentities && clusternum == -1 ) {
-			const int entNum = NUM_FOR_EDICT( clent );
-			if( clent->s.number != entNum ) {
-				Com_Printf( "FIXING CLENT->S.NUMBER: %i %i!!!\n", clent->s.number, entNum );
-				clent->s.number = entNum;
+	if( !frame->allentities ) {
+		assert( numPovEntities > 0 );
+		std::memset( earlyCullingResults, 0, gi->num_edicts );
+		for( unsigned povNum = 0; povNum < numPovEntities; ++povNum ) {
+			const edict_t *povEnt = povEntities[povNum];
+			VectorCopy( povEnt->s.origin, viewOrigins[povNum] );
+			viewOrigins[povNum][2] += povEnt->r.client->ps.viewheight;
+			if( povNum == 0 ) {
+				std::memset( fatpvs, 0, CM_ClusterRowSize( cms ) );
 			}
-
-			// FIXME we should send all the entities who's POV we are sending if frame->multipov
-			list.AddEntNum( entNum );
-			handledOutsideTheWorldCase = true;
+			CM_MergePVS( cms, viewOrigins[povNum], fatpvs );
 		}
-	}
-
-	if( !handledOutsideTheWorldCase ) {
-		// no need of merging when we are sending the whole level
-		if( !frame->allentities && clientarea >= 0 ) {
-			// make a pass checking for sky portal and portal entities and merge PVS in case of finding any
-			if( skyorg ) {
-				CM_MergeVisSets( cms, skyorg, fatpvs, frame->areabits + clientarea * CM_AreaRowSize( cms ) );
-			}
-
-			for( int entNum = 1; entNum < gi->num_edicts; entNum++ ) {
-				edict_t *const ent = EDICT_NUM( entNum );
-				if( ent->r.svflags & SVF_PORTAL ) {
-					// merge visibility sets if portal
-					if( !SNAP_SnapCullEntity( cms, ent, clent, frame, vieworg, fatpvs, snapHintFlags ) ) {
-						// TODO: This condition should be outer
-						if( !VectorCompare( ent->s.origin, ent->s.origin2 ) ) {
-							CM_MergeVisSets( cms, ent->s.origin2, fatpvs, frame->areabits + clientarea * CM_AreaRowSize( cms ) );
-						}
-					}
+		if( skyPortalPovOrigin ) {
+			CM_MergePVS( cms, skyPortalPovOrigin, fatpvs );
+		}
+		for( int entNum = 1; entNum < gi->num_edicts; entNum++ ) {
+			edict_t *const ent = EDICT_NUM( entNum );
+			// If it's a portal with a different target origin
+			if( ( ent->r.svflags & SVF_PORTAL ) && !VectorCompare( ent->s.origin, ent->s.origin2 ) ) {
+				const bool isCulled = SNAP_SnapCullEntityForMultiPovs( cms, ent, povEntities, viewOrigins, numPovEntities, fatpvs );
+				earlyCullingResults[entNum] = isCulled ? 1 : -1;
+				if( !isCulled ) {
+					CM_MergePVS( cms, ent->s.origin2, fatpvs );
 				}
 			}
 		}
+	}
 
-		// add the entities to the list
-		for( int entNum = 1; entNum < gi->num_edicts; entNum++ ) {
-			edict_t *const ent = EDICT_NUM( entNum );
+	// add the entities to the list
+	for( int entNum = 1; entNum < gi->num_edicts; entNum++ ) {
+		edict_t *const ent = EDICT_NUM( entNum );
 
-			// fix number if broken
-			if( ent->s.number != entNum ) {
-				Com_Printf( "FIXING ENT->S.NUMBER: %i %i!!!\n", ent->s.number, entNum );
-				ent->s.number = entNum;
-			}
+		// fix number if broken
+		if( ent->s.number != entNum ) {
+			Com_Printf( "FIXING ENT->S.NUMBER: %i %i!!!\n", ent->s.number, entNum );
+			ent->s.number = entNum;
+		}
 
-			bool shouldAdd = true;
-			// always add the client entity, even if SVF_NOCLIENT
-			if( ent != clent ) {
-				if( SNAP_SnapCullEntity( cms, ent, clent, frame, vieworg, fatpvs, snapHintFlags ) ) {
+		bool shouldAdd = true;
+		if( !frame->allentities ) {
+			// If it's not in the list of povs
+			if( std::find( povEntities, povEntities + numPovEntities, ent ) == povEntities + numPovEntities ) {
+				if( earlyCullingResults[entNum] == 0 ) [[likely]] {
+					if( SNAP_SnapCullEntityForMultiPovs( cms, ent, povEntities, viewOrigins, numPovEntities, fatpvs ) ) {
+						shouldAdd = false;
+					}
+				} else if( earlyCullingResults[entNum] > 0 ) {
 					shouldAdd = false;
 				}
 			}
+		}
 
-			if( shouldAdd ) {
-				list.AddEntNum( entNum );
+		if( shouldAdd ) {
+			list.addEntNum( entNum );
 
-				if( ent->r.svflags & SVF_FORCEOWNER ) {
-					// make sure owner number is valid too
-					if( ent->s.ownerNum > 0 && ent->s.ownerNum < gi->num_edicts ) {
-						list.AddEntNum( ent->s.ownerNum );
-					} else {
-						Com_Printf( "FIXING ENT->S.OWNERNUM: %i %i!!!\n", ent->s.type, ent->s.ownerNum );
-						ent->s.ownerNum = 0;
-					}
+			if( ent->r.svflags & SVF_FORCEOWNER ) {
+				// make sure owner number is valid too
+				if( ent->s.ownerNum > 0 && ent->s.ownerNum < gi->num_edicts ) {
+					list.addEntNum( ent->s.ownerNum );
+				} else {
+					Com_Printf( "FIXING ENT->S.OWNERNUM: %i %i!!!\n", ent->s.type, ent->s.ownerNum );
+					ent->s.ownerNum = 0;
 				}
 			}
 		}
@@ -3705,10 +3557,10 @@ static void SNAP_BuildSnapEntitiesList( cmodel_state_t *cms, ginfo_t *gi,
 * copies off the playerstat and areabits.
 */
 void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameNum,
-								int64_t timeStamp, fatvis_t *fatvis, client_t *client,
+								int64_t timeStamp, const float *skyPortalPovOrigin, client_t *client,
 								const game_state_t *gameState,
 								const ReplicatedScoreboardData *scoreboardData,
-								client_entities_t *client_entities, int snapHintFlags ) {
+								client_entities_t *client_entities ) {
 	assert( gameState );
 	assert( scoreboardData );
 
@@ -3718,23 +3570,19 @@ void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameN
 		return;     // not in game yet
 	}
 
-	vec3_t org;
-	if( clent ) {
-		VectorCopy( clent->s.origin, org );
-		org[2] += clent->r.client->ps.viewheight;
-	} else {
-		assert( client->mv );
-		VectorClear( org );
-	}
-
 	// this is the frame we are creating
 	client_snapshot_t *frame = &client->snapShots[frameNum & UPDATE_MASK];
 	frame->sentTimeStamp = timeStamp;
 	frame->UcmdExecuted = client->UcmdExecuted;
 
 	if( client->mv ) {
-		frame->multipov    = true;
-		frame->allentities = true;
+		if( clent ) {
+			frame->multipov    = true;
+			frame->allentities = false;
+		} else {
+			frame->multipov    = true;
+			frame->allentities = true;
+		}
 	} else {
 		frame->multipov    = false;
 		frame->allentities = false;
@@ -3776,25 +3624,56 @@ void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameN
 		frame->ps_size = frame->numplayers;
 	}
 
+	const edict_t *povEntities[MAX_CLIENTS];
+	unsigned numPovEntities = 0;
+
 	if( frame->multipov ) {
 		int numplayers = 0;
-		for( int i = 0; i < gi->max_clients; i++ ) {
-			const edict_t *ent = EDICT_NUM( i + 1 );
-			if( ( clent == ent ) || ( ent->r.inuse && ent->r.client && !( ent->r.svflags & SVF_NOCLIENT ) ) ) {
+		for( int clientNum = 0; clientNum < gi->max_clients; clientNum++ ) {
+			const edict_t *ent = EDICT_NUM( clientNum + 1 );
+			bool isAcceptable  = false;
+			if( clent == ent ) {
+				isAcceptable = true;
+			} else {
+				bool couldBeAcceptable = false;
+				if( clent ) {
+					if( clent->s.team == TEAM_SPECTATOR ) {
+						// Try writing everybody in-game (non-specs) to specs
+						couldBeAcceptable = ent->s.team != TEAM_SPECTATOR;
+					} else if( clent->s.team != TEAM_PLAYERS ) {
+						if( clent->s.team == ent->s.team ) {
+							// Try writing teammates to team players
+							couldBeAcceptable = ent->s.team != TEAM_SPECTATOR;
+						}
+					}
+				} else {
+					// Try writing everybody connected including specs to demo
+					couldBeAcceptable = true;
+				}
+				if( couldBeAcceptable ) {
+					if( ent->r.inuse && ent->r.client && !( ent->r.svflags & SVF_NOCLIENT ) ) {
+						isAcceptable = true;
+					}
+				}
+			}
+			if( isAcceptable ) {
 				frame->ps[numplayers] = ent->r.client->ps;
-				frame->ps[numplayers].playerNum = i;
+				frame->ps[numplayers].playerNum = clientNum;
+				povEntities[numPovEntities] = ent;
+				numPovEntities++;
 				numplayers++;
 			}
 		}
 	} else {
-		frame->ps[0] = clent->r.client->ps;
+		frame->ps[0]            = clent->r.client->ps;
 		frame->ps[0].playerNum = NUM_FOR_EDICT( clent ) - 1;
+		povEntities[0] = clent;
+		numPovEntities = 1;
 	}
 
 	// build up the list of visible entities
-	SnapEntNumsList sortedEntNumsList;
-	SNAP_BuildSnapEntitiesList( cms, gi, clent, org, fatvis->skyorg, fatvis->pvs, frame, sortedEntNumsList, snapHintFlags );
-	sortedEntNumsList.Sort();
+	SnapEntNumsList entNumsList;
+	SNAP_BuildSnapEntitiesList( cms, gi, povEntities, numPovEntities, skyPortalPovOrigin, frame, entNumsList );
 
 	// store current match state information
 	frame->gameState = *gameState;
@@ -3832,7 +3711,7 @@ void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameN
 	frame->num_entities = 0;
 	frame->first_entity = (int)nextEntities;
 
-	for( const int entNum : sortedEntNumsList ) {
+	for( const int entNum : entNumsList.sortedNums() ) {
 		// add it to the circular client_entities array
 		const edict_t *ent    = EDICT_NUM( entNum );
 		entity_state_t *state = &client_entities->entities[nextEntities % client_entities->num_entities];
@@ -4677,7 +4556,7 @@ void SV_Demo_WriteSnap() {
 		uint8_t msg_buffer[MAX_MSGLEN];
 		MSG_Init( &msg, msg_buffer, sizeof( msg_buffer ) );
 
-		SV_BuildClientFrameSnap( &svs.demo.client, 0 );
+		SV_BuildClientFrameSnap( &svs.demo.client );
 
 		SV_WriteFrameSnapToClient( &svs.demo.client, &msg );
 
