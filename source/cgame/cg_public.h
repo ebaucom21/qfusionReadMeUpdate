@@ -101,4 +101,9 @@ void CG_AddViewAngles( vec3_t viewAngles );
 void CG_AddMovement( vec3_t movement );
 void CG_MouseMove( int mx, int my );
 
+struct CmdArgs;
+void CG_OptionsStatus( const CmdArgs &cmdArgs );
+void CG_ReloadOptions( const CmdArgs &cmdArgs );
+void CG_ReloadCommands( const CmdArgs &cmdArgs );
+
 #endif

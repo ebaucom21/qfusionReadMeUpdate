@@ -168,15 +168,16 @@ void GametypeOptionsModel::reload() {
 			if( isAvailable() ) {
 				CL_Cbuf_AppendCommand( command );
 			} else {
-				uiWarning() << "Has" << command << "while no option entries are defined";
+				uiWarning() << "Has" << command << "command while no option entries are defined";
 			}
 		}
 	}
 
-	endResetModel();
 	if( const bool available = isAvailable(); available != wasAvailable ) {
 		Q_EMIT availableChanged( available );
 	}
+
+	endResetModel();
 }
 
 static const QString kLoadouts( "Loadouts" );

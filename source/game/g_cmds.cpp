@@ -1264,6 +1264,7 @@ static void Cmd_Whois_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 static void Cmd_Upstate_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	G_UpdatePlayerMatchMsg( ent, true );
 	G_SetPlayerHelpMessage( ent, ent->r.client->helpmessage, true );
+	GAME_IMPORT.ServerCmd( ent, "reloadoptions" );
 }
 
 //===========================================================

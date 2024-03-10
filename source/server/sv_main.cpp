@@ -310,6 +310,65 @@ static void PF_GameCmd( const edict_t *ent, const char *cmd ) {
 	}
 }
 
+static void PF_ServerCmd( const edict_t *ent, const char *cmd ) {
+	if( cmd && cmd[0] ) {
+		static CmdArgsSplitter splitter;
+		const CmdArgs args           = splitter.exec( wsw::StringView( cmd ) );
+		bool hasPassedValidation     = false;
+		constexpr unsigned maxLength = MAX_STRING_CHARS;
+		bool isAllowedCommand        = false;
+		// TODO: Use explicit separate calls instead of putting the filter in this narrow interface?
+		// TODO: There should be better/generic facilities to notify of gametype change/restart
+		for( const wsw::StringView &view: { "optionsstatus"_asView, "reloadoptions"_asView, "reloadcommands"_asView } ) {
+			if( view.equalsIgnoreCase( args[0] ) ) {
+				isAllowedCommand = true;
+				break;
+			}
+		}
+		if( isAllowedCommand ) {
+			hasPassedValidation = true;
+			// join back
+			size_t totalLength = 0;
+			for( unsigned i = 0; i < args.size(); ++i ) {
+				totalLength += args[0].length() + 3;
+				if( totalLength >= maxLength ) {
+					hasPassedValidation = false;
+					break;
+				}
+			}
+		}
+		if( hasPassedValidation ) {
+			wsw::StaticString<MAX_STRING_CHARS> buffer;
+			for( unsigned i = 0; i < args.size(); ++i ) {
+				if( i == 0 ) {
+					buffer << args[i];
+				} else {
+					buffer << '"' << args[i] << '"';
+				}
+				if( i + 1 != args.size() ) {
+					buffer << ' ';
+				}
+			}
+			if( !ent ) {
+				for( int clientNum = 0; clientNum < sv_maxclients->integer; ++clientNum ) {
+					if( client_t *client = svs.clients + clientNum; client->state >= CS_SPAWNED ) {
+						SV_AddServerCommand( client, buffer.asView() );
+					}
+				}
+			} else {
+				const int entNum = NUM_FOR_EDICT( ent );
+				if( entNum >= 1 && entNum <= sv_maxclients->integer ) {
+					if( client_t *client = svs.clients + ( entNum - 1 ); client->state >= CS_SPAWNED ) {
+						SV_AddServerCommand( client, buffer.asView() );
+					}
+				}
+			}
+		} else {
+			Com_Error( ERR_DROP, "Failed to validate game-sent server command %s", cmd );
+		}
+	}
+}
+
 static void PF_dprint( const char *msg ) {
 	if( !msg ) {
 		return;
@@ -582,6 +641,7 @@ void SV_InitGameProgs() {
 	import.Print = PF_dprint;
 	import.Error = PF_error;
 	import.GameCmd = PF_GameCmd;
+	import.ServerCmd = PF_ServerCmd;
 
 	// These wrappers should eventually be gone, once the game is statically linked.
 	// For now we can just reduce the related clutter by using lambdas.

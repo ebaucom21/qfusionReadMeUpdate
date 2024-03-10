@@ -334,8 +334,9 @@ struct ChatMessage {
 void CL_Init( void );
 void CL_Quit( void );
 
-void CL_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionQueryFunc = nullptr );
+void CL_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionQueryFunc = nullptr, const char *tag = nullptr );
 void CL_Cmd_Unregister( const wsw::StringView &name );
+void CL_Cmd_UnregisterByTag( const wsw::StringView &name );
 
 bool CL_Cmd_Exists( const wsw::StringView &name );
 

@@ -3472,6 +3472,24 @@ static void CL_CvarInfoRequest_f( const CmdArgs &cmdArgs ) {
 	}
 }
 
+static void CL_OptionsStatus_f( const CmdArgs &cmdArgs ) {
+	if( cge ) {
+		CG_OptionsStatus( cmdArgs );
+	}
+}
+
+static void CL_ReloadOptions_f( const CmdArgs &cmdArgs ) {
+	if( cge ) {
+		CG_ReloadOptions( cmdArgs );
+	}
+}
+
+static void CL_ReloadCommands_f( const CmdArgs &cmdArgs ) {
+	if( cge ) {
+		CG_ReloadCommands( cmdArgs );
+	}
+}
+
 static void CL_UpdateConfigString( int idx, const char *s ) {
 	if( s ) {
 		if( cl_debug_serverCmd->integer && ( cls.state >= CA_ACTIVE || cls.demoPlayer.playing ) ) {
@@ -3586,6 +3604,11 @@ static svcmd_t svcmds[] =
 		{ "initdownload", CL_InitDownload_f },
 		{ "multiview", CL_Multiview_f },
 		{ "cvarinfo", CL_CvarInfoRequest_f },
+		// UI expects these commands to be reliable
+		{ "optionsstatus", CL_OptionsStatus_f },
+		// TODO: There should be better/generic facilities to notify of gametype change/restart
+		{ "reloadoptions", CL_ReloadOptions_f },
+		{ "reloadcommands", CL_ReloadCommands_f },
 
 		{ NULL, NULL }
 	};
@@ -5774,15 +5797,21 @@ public:
 	}
 
 	[[maybe_unused]]
-	bool registerCommandWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc,
-										CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc ) {
-		assert( queryFunc && executionFunc );
+	bool registerCommandExt( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc, const char *tag ) {
+		assert( ( queryFunc && executionFunc ) || tag );
 		checkCallingThread();
 		if( CmdSystem::registerCommand( name, cmdFunc ) ) {
 			const CmdEntry *cmdEntry = m_cmdEntries.findByName( wsw::HashedStringView( name ) );
-			// Let the map key reside in the cmdEntry memory block
-			m_completionEntries[cmdEntry->m_nameAndHash] = CompletionEntry { queryFunc, executionFunc };
+			if( queryFunc ) {
+				// Let the map key reside in the cmdEntry memory block
+				m_completionEntries[cmdEntry->m_nameAndHash] = CompletionEntry { queryFunc, executionFunc };
+			}
+			if( tag ) {
+				m_namesForTags.emplace_back( std::make_pair( wsw::StringView( tag ), cmdEntry->m_nameAndHash ) );
+			}
 			return true;
+		} else {
+			assert( findTagsEntryByCmdName( wsw::HashedStringView( name ) ) == m_namesForTags.end() );
 		}
 		return false;
 	}
@@ -5790,9 +5819,16 @@ public:
 	bool registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) override {
 		checkCallingThread();
 		if( CmdSystem::registerCommand( name, cmdFunc ) ) {
+			const wsw::HashedStringView hashedNameView( name );
 			// The method resets/overrides all callbacks, if any. This means removing completion callbacks.
-			m_completionEntries.erase( wsw::HashedStringView( name ) );
+			m_completionEntries.erase( hashedNameView );
+			if( auto it = findTagsEntryByCmdName( hashedNameView ); it != m_namesForTags.end() ) {
+				m_namesForTags.erase( it );
+				assert( findTagsEntryByCmdName( hashedNameView ) == m_namesForTags.end() );
+			}
 			return true;
+		} else {
+			assert( findTagsEntryByCmdName( wsw::HashedStringView( name ) ) == m_namesForTags.end() );
 		}
 		return false;
 	}
@@ -5802,8 +5838,27 @@ public:
 		// Prevent use-after-free by removing the entry first
 		if( const CmdEntry *cmdEntry = m_cmdEntries.findByName( wsw::HashedStringView( name ) ) ) {
 			m_completionEntries.erase( cmdEntry->m_nameAndHash );
+			if( auto it = findTagsEntryByCmdName( cmdEntry->m_nameAndHash ); it != m_namesForTags.end() ) {
+				m_namesForTags.erase( it );
+				assert( findTagsEntryByCmdName( cmdEntry->m_nameAndHash ) == m_namesForTags.end() );
+			}
+		} else {
+			assert( findTagsEntryByCmdName( cmdEntry->m_nameAndHash ) == m_namesForTags.end() );
 		}
 		return CmdSystem::unregisterCommand( name );
+	}
+
+	void unregisterCommandsByTag( const wsw::StringView &tag ) {
+		for( size_t tagEntryNum = 0; tagEntryNum < m_namesForTags.size(); ) {
+			if( m_namesForTags[tagEntryNum].first.equalsIgnoreCase( tag ) ) {
+				CmdSystem::unregisterCommand( m_namesForTags[tagEntryNum].second );
+				// Swap with the last and remove last
+				std::swap( m_namesForTags[tagEntryNum], m_namesForTags.back() );
+				m_namesForTags.pop_back();
+			} else {
+				++tagEntryNum;
+			}
+		}
 	}
 
 	[[nodiscard]]
@@ -5826,9 +5881,17 @@ public:
 				FS_Printf( file, "aliasa %s \"%s\"\r\n", entry->m_nameAndHash.data(), entry->m_text.data() );
 			}
 		}
-
 	}
 private:
+	[[nodiscard]]
+	auto findTagsEntryByCmdName( const wsw::HashedStringView &cmdName )
+		-> wsw::Vector<std::pair<wsw::StringView, wsw::HashedStringView>>::iterator {
+		const auto cmp = [&]( const std::pair<wsw::StringView, wsw::HashedStringView> &entry ) {
+			return entry.second.equalsIgnoreCase( cmdName );
+		};
+		return std::find_if( m_namesForTags.begin(), m_namesForTags.end(), cmp );
+	}
+
 	template <typename Entry, unsigned N>
 	[[nodiscard]]
 	auto getPossibleCompletions( const wsw::StringView &partial,
@@ -5883,6 +5946,9 @@ private:
 	};
 
 	std::unordered_map<wsw::HashedStringView, CompletionEntry> m_completionEntries;
+	// A band-aid workaround for lack of tags in the base facilities
+	// Tags are assumed to have 'static lifetime
+	wsw::Vector<std::pair<wsw::StringView, wsw::HashedStringView>> m_namesForTags;
 };
 
 static SingletonHolder<CLCmdSystem> g_clCmdSystemHolder;
@@ -5938,10 +6004,11 @@ void CL_RunCompletionFuncSync( const wsw::StringView &, unsigned requestId, cons
 	Con_AcceptCompletionResult( requestId, queryFunc( partial ) );
 }
 
-void CL_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionQueryFunc ) {
+void CL_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionQueryFunc, const char *tag ) {
 	if( completionQueryFunc ) {
-		g_clCmdSystemHolder.instance()->registerCommandWithCompletion( name, cmdFunc, completionQueryFunc,
-																	   CL_RunCompletionFuncSync );
+		g_clCmdSystemHolder.instance()->registerCommandExt( name, cmdFunc, completionQueryFunc, CL_RunCompletionFuncSync, tag );
+	} else if( tag ) {
+		g_clCmdSystemHolder.instance()->registerCommandExt( name, cmdFunc, nullptr, nullptr, tag );
 	} else {
 		g_clCmdSystemHolder.instance()->registerCommand( name, cmdFunc );
 	}
@@ -5951,13 +6018,17 @@ void CL_Cmd_Unregister( const wsw::StringView &name ) {
 	g_clCmdSystemHolder.instance()->unregisterCommand( name );
 }
 
+void CL_Cmd_UnregisterByTag( const wsw::StringView &tag ) {
+	g_clCmdSystemHolder.instance()->unregisterCommandsByTag( tag );
+}
+
 void CL_Cmd_SubmitCompletionRequest( const wsw::StringView &name, unsigned requestId, const wsw::StringView &partial ) {
 	g_clCmdSystemHolder.instance()->submitCompletionRequest( name, requestId, partial );
 }
 
 void CL_RegisterCmdWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc,
 								   CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc ) {
-	g_clCmdSystemHolder.instance()->registerCommandWithCompletion( name, cmdFunc, queryFunc, executionFunc );
+	g_clCmdSystemHolder.instance()->registerCommandExt( name, cmdFunc, queryFunc, executionFunc, nullptr );
 }
 
 void CL_Cmd_WriteAliases( int file ) {

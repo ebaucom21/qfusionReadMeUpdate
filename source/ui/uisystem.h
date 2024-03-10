@@ -95,6 +95,8 @@ public:
 
 	virtual void handleOptionsStatusCommand( const wsw::StringView &status ) = 0;
 
+	virtual void reloadOptions() = 0;
+
 	virtual void resetHudFeed() = 0;
 	virtual void addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
 							   unsigned meansOfDeath,

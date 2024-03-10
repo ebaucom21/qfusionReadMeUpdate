@@ -213,7 +213,14 @@ Rectangle {
                 target: root
                 onCanShowLoadoutsChanged: {
                     if (!root.canShowLoadouts) {
-                        stackView.pop()
+                        // We have to destroy it forcefully so the model does not get accessed in illegal state during transition
+                        // Save local references to vars on stack
+                        // TODO: Can't we figure out something better
+                        const sv = stackView
+                        const tb = tabBar
+                        sv.pop(null, StackView.Immediate)
+                        // replace the entire stack
+                        sv.replace(null, tb.model[0]["component"])
                     }
                 }
             }

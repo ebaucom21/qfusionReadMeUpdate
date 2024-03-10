@@ -179,6 +179,8 @@ public:
 
 	void handleOptionsStatusCommand( const wsw::StringView &status ) override;
 
+	void reloadOptions() override;
+
 	void resetHudFeed() override;
 
 	void addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
@@ -1552,9 +1554,7 @@ void QtUISystem::checkPropertyChanges() {
 			} else {
 				setActiveMenuMask( InGameMenu );
 			}
-			m_callvotesModel.reload();
-			m_scoreboardModel.reload();
-			m_gametypeOptionsModel.reload();
+			reloadOptions();
 		} else if( actualClientState >= CA_GETTING_TICKET && actualClientState <= CA_LOADING ) {
 			setActiveMenuMask( ConnectionScreen );
 		}
@@ -2428,6 +2428,13 @@ void QtUISystem::touchActionRequest( const wsw::StringView &tag, unsigned int ti
 
 void QtUISystem::handleOptionsStatusCommand( const wsw::StringView &status ) {
 	m_gametypeOptionsModel.handleOptionsStatusCommand( status );
+}
+
+void QtUISystem::reloadOptions() {
+	// TODO: Make these calls non-destructive (don't reset models unless its really needeed)
+	m_callvotesModel.reload();
+	m_scoreboardModel.reload();
+	m_gametypeOptionsModel.reload();
 }
 
 void QtUISystem::resetHudFeed() {

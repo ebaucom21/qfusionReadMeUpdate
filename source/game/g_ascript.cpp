@@ -1719,6 +1719,21 @@ static void objectGameClient_execGameCommand( asstring_t *msg, Client *self ) {
 	trap_GameCmd( PLAYERENT( playerNum ), msg->buffer );
 }
 
+static void objectGameClient_execServerCommand( asstring_t *msg, Client *self ) {
+	int playerNum;
+
+	if( !msg ) {
+		return;
+	}
+
+	playerNum = objectGameClient_PlayerNum( self );
+	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+		return;
+	}
+
+	GAME_IMPORT.ServerCmd( PLAYERENT( playerNum ), msg->buffer );
+}
+
 static void objectGameClient_setHUDStat( int stat, int value, Client *self ) {
 	if( !ISGAMETYPESTAT( stat ) ) {
 		if( stat > 0 && stat < GS_GAMETYPE_STATS_START ) {
@@ -1967,6 +1982,7 @@ static const asMethod_t gameclient_Methods[] =
 	{ ASLIB_FUNCTION_DECL( void, addAward, ( const String &in ) ), asFUNCTION( objectGameClient_addAward ), asCALL_CDECL_OBJLAST },
 	{ ASLIB_FUNCTION_DECL( void, addMetaAward, ( const String &in ) ), asFUNCTION( objectGameClient_addMetaAward ), asCALL_CDECL_OBJLAST },
 	{ ASLIB_FUNCTION_DECL( void, execGameCommand, ( const String &in ) ), asFUNCTION( objectGameClient_execGameCommand ), asCALL_CDECL_OBJLAST },
+	{ ASLIB_FUNCTION_DECL( void, execServerCommand, ( const String &in ) ), asFUNCTION( objectGameClient_execServerCommand ), asCALL_CDECL_OBJLAST },
 	{ ASLIB_FUNCTION_DECL( void, setHUDStat, ( int stat, int value ) ), asFUNCTION( objectGameClient_setHUDStat ), asCALL_CDECL_OBJLAST },
 	{ ASLIB_FUNCTION_DECL( int, getHUDStat, ( int stat ) const ), asFUNCTION( objectGameClient_getHUDStat ), asCALL_CDECL_OBJLAST },
 	{ ASLIB_FUNCTION_DECL( void, set_pmoveFeatures, ( uint bitmask ) ), asFUNCTION( objectGameClient_setPMoveFeatures ), asCALL_CDECL_OBJLAST },

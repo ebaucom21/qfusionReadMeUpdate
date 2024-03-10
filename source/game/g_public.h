@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    89
+#define GAME_API_VERSION    90
 
 //===============================================================
 
@@ -96,7 +96,11 @@ typedef struct {
 #endif
 
 	// server commands sent to clients
+	// Note: These commands are unreliable (the order is guaranteed to be preserved
+	// but commands may be legitimately dropped due to server time adjustments on clients)
 	void ( *GameCmd )( const edict_t *ent, const char *cmd );
+	// reliable server commands sent to clients
+	void ( *ServerCmd )( const edict_t *ent, const char *cmd );
 
 	// config strings hold all the index strings,
 	// and misc data like audio track and gridsize.

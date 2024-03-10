@@ -492,6 +492,9 @@ void G_Match_LaunchState( int matchState ) {
 			gs.gameState.stats[GAMESTAT_MATCHDURATION] = (int64_t)( fabs( g_warmup_timelimit->value * 60 ) * 1000 );
 			gs.gameState.stats[GAMESTAT_MATCHSTART] = game.serverTime;
 
+			// Force clients to reload their UI options (assumes that respective config strings are already updated)
+			GAME_IMPORT.ServerCmd( nullptr, "reloadoptions" );
+
 			break;
 		}
 

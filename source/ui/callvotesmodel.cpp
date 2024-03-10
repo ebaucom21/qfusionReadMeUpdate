@@ -176,7 +176,6 @@ void CallvotesModelProxy::reload() {
 		m_options.clear();
 		m_groupDataStorage.clear();
 		uiError() << wsw::StringView( maybeError->data() );
-		abort();
 	}
 
 	m_regularModel.endReloading();

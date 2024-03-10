@@ -499,7 +499,6 @@ typedef struct {
 	bool demoPlaying;
 	bool demoTutorial;
 	bool pure;
-	bool gameMenuRequested;
 	int gameProtocol;
 	char demoExtension[MAX_QPATH];
 	unsigned snapFrameTime;
@@ -512,8 +511,6 @@ typedef struct {
 	//
 	wsw::ConfigStringStorage configStrings;
 	wsw::ConfigStringStorage baseConfigStrings;
-
-	bool hasGametypeMenu;
 
 	char weaponModels[WEAP_TOTAL][MAX_QPATH];
 	int numWeaponModels;

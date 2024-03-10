@@ -901,7 +901,12 @@ void G_InitLevel( char *mapname, char *entities, int entstrlen, int64_t levelTim
 	}
 
 	ClientCommandsHandler::shutdown();
+	for( i = 0; i < MAX_HELPMESSAGES; i++ ) {
+		trap_ConfigString( CS_GAMECOMMANDS + i, "" );
+	}
+
 	ClientCommandsHandler::init();
+
 	G_MapLocations_Init();
 	G_SpawnQueue_Init();
 	G_Teams_Init();
@@ -925,6 +930,13 @@ void G_InitLevel( char *mapname, char *entities, int entstrlen, int64_t levelTim
 	// initialize game subsystems which require entities initialized
 	//
 
+	// Clear dangling gametype-specific stats
+	for( i = 0; i < gs.maxclients; ++i ) {
+		if( Client *client = game.edicts[i + 1].r.client ) {
+			std::fill( client->ps.stats + GS_GAMETYPE_STATS_START, client->ps.stats + GS_GAMETYPE_STATS_END, 0 );
+		}
+	}
+
 	// call gametype specific
 	GT_asCallSpawn();
 
@@ -936,6 +948,9 @@ void G_InitLevel( char *mapname, char *entities, int entstrlen, int64_t levelTim
 	G_Match_LaunchState( MATCH_STATE_WARMUP );
 
 	G_asGarbageCollect( true );
+
+	GAME_IMPORT.ServerCmd( nullptr, "reloadcommands" );
+	GAME_IMPORT.ServerCmd( nullptr, "reloadoptions" );
 }
 
 void G_ResetLevel( void ) {
@@ -955,6 +970,8 @@ void G_ResetLevel( void ) {
 
 	// call map specific
 	G_asCallMapInit();
+
+	GAME_IMPORT.ServerCmd( nullptr, "reloadoptions" );
 }
 
 bool G_RespawnLevel( void ) {

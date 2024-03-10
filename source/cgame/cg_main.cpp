@@ -425,11 +425,8 @@ void CG_ConfigString( int i, const wsw::StringView &string ) {
 	} else if( i >= CS_PLAYERINFOS && i < CS_PLAYERINFOS + MAX_CLIENTS ) {
 		CG_LoadClientInfo( i - CS_PLAYERINFOS, string );
 	} else if( i >= CS_GAMECOMMANDS && i < CS_GAMECOMMANDS + MAX_GAMECOMMANDS ) {
-		if( !cgs.demoPlaying ) {
+		if( !string.empty() && !cgs.demoPlaying ) {
 			CL_Cmd_Register( wsw::StringView( string ), NULL );
-			if( string.equalsIgnoreCase( "gametypemenu"_asView ) ) {
-				cgs.hasGametypeMenu = true;
-			}
 		}
 	} else if( i >= CS_WEAPONDEFS && i < CS_WEAPONDEFS + MAX_WEAPONDEFS ) {
 		CG_OverrideWeapondef( i - CS_WEAPONDEFS, string.data() );
@@ -766,14 +763,6 @@ static void CG_SC_ActionRequest( ViewState *viewState, const CmdArgs &cmdArgs ) 
 	}
 }
 
-static void CG_SC_OptionsStatus( ViewState *viewState, const CmdArgs &cmdArgs ) {
-	if( viewState == getOurClientViewState() ) {
-		if( Cmd_Argc() == 2 ) {
-			wsw::ui::UISystem::instance()->handleOptionsStatusCommand( wsw::StringView( Cmd_Argv( 1 ) ) );
-		}
-	}
-}
-
 static void CG_SC_PlaySound( ViewState *viewState, const CmdArgs &cmdArgs ) {
 	if( viewState == getOurClientViewState() ) {
 		if( Cmd_Argc() >= 2 ) {
@@ -857,7 +846,6 @@ static const svcmd_t cg_svcmds[] = {
 	{ "aw", CG_SC_AddAward },
 	{ "arq", CG_SC_ActionRequest },
 	{ "ply", CG_SC_PlaySound },
-	{ "optionsstatus", CG_SC_OptionsStatus },
 
 	{ NULL }
 };
@@ -874,6 +862,24 @@ void CG_GameCommand( ViewState *viewState, const char *command ) {
 	}
 
 	cgNotice() << "Unknown game command" << cmdArgs[0];
+}
+
+void CG_OptionsStatus( const CmdArgs &cmdArgs ) {
+	wsw::ui::UISystem::instance()->handleOptionsStatusCommand( cmdArgs[1] );
+}
+
+void CG_ReloadOptions( const CmdArgs & ) {
+	// We have to reload commands first
+	// as the UI system checks whether specific commands are actually available and enqueues needed commands immediately
+	CG_ReloadCommands( {} );
+	wsw::ui::UISystem::instance()->reloadOptions();
+}
+
+void CG_ReloadCommands( const CmdArgs & ) {
+	// We have to invalidate commands explicitly,
+	// otherwise old commands keep staying registered while being actually invalid, and that breaks the UI assumptions.
+	CG_UnregisterCGameCommands();
+	CG_RegisterCGameCommands();
 }
 
 void CG_UseItem( const char *name ) {
@@ -998,7 +1004,7 @@ void CG_RegisterCGameCommands( void ) {
 				continue;
 			}
 
-			CL_Cmd_Register( name, NULL );
+			CL_Cmd_Register( name, nullptr, nullptr, "game" );
 		}
 	}
 
@@ -1014,29 +1020,7 @@ void CG_RegisterCGameCommands( void ) {
 void CG_UnregisterCGameCommands( void ) {
 	if( !cgs.demoPlaying ) {
 		// remove game commands
-		for( unsigned i = 0; i < MAX_GAMECOMMANDS; i++ ) {
-			const auto maybeName = cgs.configStrings.getGameCommand( i );
-			if( !maybeName ) {
-				continue;
-			}
-
-			const auto name = *maybeName;
-			// check for local command overrides so we don't try
-			// to unregister them twice
-			const cgcmd_t *cmd;
-			for( cmd = cgcmds; cmd->name; cmd++ ) {
-				if( !Q_stricmp( cmd->name, name.data() ) ) {
-					break;
-				}
-			}
-			if( cmd->name ) {
-				continue;
-			}
-
-			CL_Cmd_Unregister( name );
-		}
-
-		cgs.hasGametypeMenu = false;
+		CL_Cmd_UnregisterByTag( "game"_asView );
 	}
 
 	// remove local commands
@@ -6111,9 +6095,6 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 	// game protocol number
 	cgs.gameProtocol = protocol;
 	cgs.snapFrameTime = snapFrameTime;
-
-	cgs.hasGametypeMenu = false; // this will update as soon as we receive configstrings
-	cgs.gameMenuRequested = !gameStart;
 
 	cgs.fullclipShaderNum = CM_ShaderrefForName( cl.cms, "textures/common/fullclip" );
 

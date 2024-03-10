@@ -1181,17 +1181,6 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 			SoundSystem::instance()->updateListener( vec3_origin, vec3_origin, axis_identity );
 		} else {
-			// bring up the game menu after reconnecting
-			if( !cgs.demoPlaying ) {
-				if( !cgs.gameMenuRequested ) {
-					CL_Cmd_ExecuteNow( "gamemenu\n" );
-					/*
-					if( ISREALSPECTATOR( viewState ) && !cg.firstFrame ) {
-					}*/
-					cgs.gameMenuRequested = true;
-				}
-			}
-
 			if( cg.motd && ( cg.time > cg.motd_time ) ) {
 				Q_free( cg.motd );
 				cg.motd = NULL;
