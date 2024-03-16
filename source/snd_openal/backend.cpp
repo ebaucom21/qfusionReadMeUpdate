@@ -600,7 +600,7 @@ void Backend::unlinkAndFree( SoundSet *soundSet ) {
 	m_soundSetsAllocator.free( soundSet );
 }
 
-auto Backend::getBufferForPlayback( const SoundSet *soundSet, bool forceStereo ) -> std::optional<std::pair<ALuint, unsigned>> {
+auto Backend::getBufferForPlayback( const SoundSet *soundSet, bool preferStereo ) -> std::optional<std::pair<ALuint, unsigned>> {
 	if( soundSet ) {
 		if( !soundSet->isLoaded ) {
 			if( soundSet->hasFailedLoading ) {
@@ -613,18 +613,23 @@ auto Backend::getBufferForPlayback( const SoundSet *soundSet, bool forceStereo )
 			}
 			assert( soundSet->isLoaded );
 		}
-		const auto numBuffers = soundSet->numBuffers;
+		const unsigned numBuffers = soundSet->numBuffers;
 		assert( numBuffers > 0 );
-		const auto index      = ( numBuffers < 2 ) ? 0 : m_rng.nextBounded( numBuffers );
-		const ALuint *buffers = soundSet->buffers;
-		if( forceStereo ) {
-			buffers = soundSet->stereoBuffers;
-			if( !buffers[index] ) {
-				return std::nullopt;
+		const unsigned index = ( numBuffers < 2 ) ? 0 : m_rng.nextBounded( numBuffers );
+		ALuint chosenBuffer;
+		if( preferStereo ) {
+			chosenBuffer = soundSet->stereoBuffers[index];
+			// Looks like it is originally a mono sound
+			if( !chosenBuffer ) {
+				[[maybe_unused]] const ALuint *const end = soundSet->stereoBuffers + soundSet->numBuffers;
+				assert( std::find_if( soundSet->stereoBuffers, end, []( ALuint b ) { return b != 0; } ) == end );
+				chosenBuffer = soundSet->buffers[index];
 			}
+		} else {
+			chosenBuffer = soundSet->buffers[index];
 		}
-		assert( alIsBuffer( buffers[index] ) );
-		return std::make_pair( buffers[index], index );
+		assert( alIsBuffer( chosenBuffer ) );
+		return std::make_pair( chosenBuffer, index );
 	}
 	return std::nullopt;
 }

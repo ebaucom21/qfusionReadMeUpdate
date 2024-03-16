@@ -62,7 +62,7 @@ private:
 	auto uploadBufferData( const wsw::StringView &logFilePath, const snd_info_t &info, const void *data ) -> ALuint;
 
 	[[nodiscard]]
-	auto getBufferForPlayback( const SoundSet *soundSet, bool forceStereo = false ) -> std::optional<std::pair<ALuint, unsigned>>;
+	auto getBufferForPlayback( const SoundSet *soundSet, bool preferStereo = false ) -> std::optional<std::pair<ALuint, unsigned>>;
 	[[nodiscard]]
 	auto getPitchForPlayback( const SoundSet *soundSet ) -> float;
 
