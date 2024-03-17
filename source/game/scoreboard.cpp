@@ -52,10 +52,10 @@ void Scoreboard::checkPlayerNum( unsigned playerNum ) const {
 }
 
 void Scoreboard::checkSlot( unsigned slot, ColumnKind expectedKind ) const {
-	if( !slot || slot >= m_columnKinds.size() + 1 ) {
+	if( slot >= m_kindsOfCustomSlots.size() ) {
 		wsw::failWithLogicError( "Illegal column slot" );
 	}
-	if( m_columnKinds[slot - 1] != expectedKind ) {
+	if( m_kindsOfCustomSlots[slot] != expectedKind ) {
 		wsw::failWithLogicError( "Illegal column kind" );
 	}
 }
@@ -132,15 +132,21 @@ void Scoreboard::beginDefiningSchema() {
 
 	m_titleSpanColumnsLeft = 0u;
 
-	m_columnKinds.clear();
-	m_columnKinds.push_back( Nickname );
+	m_columnAssetsStorage.clear();
 	m_columnTitlesStorage.clear();
-	m_columnTitlesStorage.add( kNameTitle );
+
+	m_columnKinds.clear();
 	m_titleColumnSpans.clear();
+
+	m_columnKinds.push_back( Nickname );
+	m_columnTitlesStorage.add( kNameTitle );
 	m_titleColumnSpans.push_back( 1 );
+
 	m_columnKinds.push_back( Clan );
 	m_columnTitlesStorage.add( kClanTitle );
 	m_titleColumnSpans.push_back( 1 );
+
+	m_kindsOfCustomSlots.clear();
 }
 
 auto Scoreboard::registerAsset( const wsw::StringView &path ) -> unsigned {
@@ -177,6 +183,8 @@ void Scoreboard::endDefiningSchema() {
 	m_columnTitlesStorage.add( kPlaceholder );
 	m_titleColumnSpans.push_back( 1 );
 
+	assert( m_kindsOfCustomSlots.empty() );
+
 	assert( m_columnKinds.size() == m_titleColumnSpans.size() );
 	assert( m_columnKinds.size() == m_columnTitlesStorage.size() );
 	wsw::StaticString<1024> schemaBuffer;
@@ -200,11 +208,18 @@ void Scoreboard::endDefiningSchema() {
 				m_pingSlot = slotCounter;
 			} else if( kind == Status ) {
 				m_statusSlot = slotCounter;
+			} else {
+				m_kindsOfCustomSlots.push_back( kind );
 			}
-			schemaBuffer << slotCounter++;
+			schemaBuffer << slotCounter;
+			slotCounter++;
 		}
+
 		schemaBuffer << ' ' << m_titleColumnSpans[i] << ' ';
 	}
+
+	// Five columns are builtin, other columns have custom slots
+	assert( m_kindsOfCustomSlots.size() + 5 == m_columnKinds.size() );
 
 	for( const wsw::StringView &asset: m_columnAssetsStorage ) {
 		assetsBuffer << asset << ' ';
@@ -212,11 +227,6 @@ void Scoreboard::endDefiningSchema() {
 
 	trap_ConfigString( CS_SCOREBOARD_SCHEMA, schemaBuffer.data() );
 	trap_ConfigString( CS_SCOREBOARD_ASSETS, assetsBuffer.data() );
-
-	m_columnTitlesStorage.clear();
-	m_columnTitlesStorage.shrink_to_fit();
-	m_columnAssetsStorage.clear();
-	m_columnAssetsStorage.shrink_to_fit();
 }
 
 void Scoreboard::beginUpdating() {
@@ -230,7 +240,6 @@ void Scoreboard::setPlayerIcon( const Client *client, unsigned slot, unsigned ic
 	expectState( Update );
 	checkPlayerNum( playerNum );
 	checkSlot( slot, Icon );
-	slot = slot - 1;
 	if( icon && icon > m_columnAssetsStorage.size() ) {
 		wsw::failWithLogicError( "Icon index is out of bounds" );
 	}
@@ -242,7 +251,6 @@ void Scoreboard::setPlayerNumber( const Client *client, unsigned slot, int numbe
 	expectState( Update );
 	checkPlayerNum( playerNum );
 	checkSlot( slot, Number );
-	slot = slot - 1;
 	// Saturate values out-of-range
 	using Limits = std::numeric_limits<int16_t>;
 	const auto value = (int16_t)wsw::clamp( number, (int)Limits::min(), (int)Limits::max() );
@@ -254,7 +262,6 @@ void Scoreboard::setPlayerGlyph( const Client *client, unsigned slot, unsigned c
 	expectState( Update );
 	checkPlayerNum( playerNum );
 	checkSlot( slot, Glyph );
-	slot = slot - 1;
 	if( codePoint > (unsigned)std::numeric_limits<uint16_t>::max() ) {
 		wsw::failWithLogicError( "Illegal code point (malformed or out of the Unicode BMP)" );
 	}

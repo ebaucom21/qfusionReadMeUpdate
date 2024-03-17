@@ -20,7 +20,7 @@ class Scoreboard : public wsw::ScoreboardShared {
 
 	wsw::StaticVector<ColumnKind, kMaxColumns> m_columnKinds;
 	wsw::StaticVector<unsigned, kMaxColumns> m_titleColumnSpans;
-	// These storages are dynamic contrary to the client-side code (we shrink to fit after schema setup)
+	wsw::StaticVector<unsigned, kMaxColumns> m_kindsOfCustomSlots;
 	wsw::StringSpanStorage<uint8_t, uint8_t> m_columnTitlesStorage;
 	wsw::StringSpanStorage<uint8_t, uint8_t> m_columnAssetsStorage;
 
