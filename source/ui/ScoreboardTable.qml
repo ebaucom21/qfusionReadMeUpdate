@@ -10,6 +10,7 @@ TableView {
     rowSpacing: 0
     reuseItems: false
     interactive: false
+
     contentHeight: rowHeight * rows
     implicitHeight: rowHeight * rows
 
@@ -21,6 +22,7 @@ TableView {
     property bool mixedTeamsMode: false
 
     property real baseCellWidth
+    property real nameCellWidth
     property real clanCellWidth
 
     readonly property real rowHeight: 36
@@ -59,14 +61,12 @@ TableView {
         readonly property bool shouldBeDisplayedAsIcon: (kind === Scoreboard.Icon) || (isColumnStatusOne && value < 32)
         readonly property real valueOpacity: isGhosting ? 0.5 : 1.0
 
-        // Table width can be zero while loading via Loader
-        implicitWidth: kind === Scoreboard.Nickname ?
-                       (tableView.width ?
-                           tableView.width - clanCellWidth - (tableView.columns - 2) * baseCellWidth :
-                           baseCellWidth) :
-                       (kind === Scoreboard.Clan ? clanCellWidth : baseCellWidth)
+        implicitWidth: Math.max(1,
+            kind === Scoreboard.Nickname ? nameCellWidth :
+                (kind === Scoreboard.Clan ? clanCellWidth : (isCompact ? 0.67 * baseCellWidth : baseCellWidth)))
 
         implicitHeight: rowHeight
+        onImplicitWidthChanged: forceLayoutTimer.start()
         onImplicitHeightChanged: forceLayoutTimer.start()
         onHeightChanged: forceLayoutTimer.start()
 

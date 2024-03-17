@@ -13,7 +13,42 @@ Rectangle {
     readonly property real baseCellWidth: 64
     readonly property real clanCellWidth: 96
 
+    // TODO: Should it rather vary depending of number of columns?
     readonly property real tableWidth: 600
+
+    property real nameCellWidth
+
+    Component.onCompleted: updateCellParams()
+    Connections {
+        target: UI.scoreboard
+        onSchemaChanged: updateCellParams()
+    }
+
+    function updateCellParams() {
+        const columnsCount  = UI.scoreboard.getColumnsCount()
+        let accumWidth      = clanCellWidth
+        let cellsLeftInSpan = 0
+        for (let i = 2; i < columnsCount; ++i) {
+            if (cellsLeftInSpan > 0) {
+                console.assert(UI.scoreboard.getTitleColumnSpan(i) <= 1)
+                accumWidth += 0.67 * baseCellWidth
+            } else {
+                const span = UI.scoreboard.getTitleColumnSpan(i)
+                if (span > 1) {
+                    cellsLeftInSpan = span
+                    accumWidth += 0.67 * baseCellWidth
+                } else {
+                    accumWidth += baseCellWidth
+                }
+            }
+            // Harmless if negative
+            cellsLeftInSpan--;
+        }
+        // TODO: Is this check redundant?
+        if (nameCellWidth !== tableWidth - accumWidth) {
+            nameCellWidth = tableWidth - accumWidth
+        }
+    }
 
     // A column layout could have been more apporpriate but it lacks hoirzontal center offset properties
 
@@ -100,6 +135,7 @@ Rectangle {
             model: UI.scoreboardPlayersModel
             baseColor: Qt.lighter(Material.background)
             baseCellWidth: root.baseCellWidth
+            nameCellWidth: root.nameCellWidth
             clanCellWidth: root.clanCellWidth
         }
     }
@@ -113,6 +149,7 @@ Rectangle {
                 model: UI.scoreboardAlphaModel
                 baseColor: Qt.darker(UI.hudCommonDataModel.alphaColor)
                 baseCellWidth: root.baseCellWidth
+                nameCellWidth: root.nameCellWidth
                 clanCellWidth: root.clanCellWidth
             }
             ScoreboardTeamPane {
@@ -120,6 +157,7 @@ Rectangle {
                 model: UI.scoreboardBetaModel
                 baseColor: Qt.darker(UI.hudCommonDataModel.betaColor)
                 baseCellWidth: root.baseCellWidth
+                nameCellWidth: root.nameCellWidth
                 clanCellWidth: root.clanCellWidth
             }
         }
@@ -135,6 +173,7 @@ Rectangle {
                 model: UI.scoreboardAlphaModel
                 baseColor: Qt.darker(UI.hudCommonDataModel.alphaColor)
                 baseCellWidth: root.baseCellWidth
+                nameCellWidth: root.nameCellWidth
                 clanCellWidth: root.clanCellWidth
             }
             ScoreboardTeamPane {
@@ -143,6 +182,7 @@ Rectangle {
                 displayHeader: false
                 baseColor: Qt.darker(UI.hudCommonDataModel.betaColor)
                 baseCellWidth: root.baseCellWidth
+                nameCellWidth: root.nameCellWidth
                 clanCellWidth: root.clanCellWidth
             }
         }
@@ -158,6 +198,7 @@ Rectangle {
             baseAlphaColor: Qt.darker(UI.hudCommonDataModel.alphaColor)
             baseBetaColor: Qt.darker(UI.hudCommonDataModel.betaColor)
             baseCellWidth: root.baseCellWidth
+            nameCellWidth: root.nameCellWidth
             clanCellWidth: root.clanCellWidth
         }
     }

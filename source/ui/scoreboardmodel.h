@@ -29,6 +29,7 @@ class ScoreboardTeamModel : public QAbstractTableModel, ScoreboardShared {
 	enum Role {
 		Kind = Qt::UserRole + 1,
 		Value,
+		IsCompact,
 		IsGhosting
 	};
 
@@ -171,6 +172,8 @@ public:
 	Q_INVOKABLE bool isMixedListRowAlpha( int row ) const;
 	[[nodiscard]]
 	Q_INVOKABLE int getColumnsCount() const { return m_scoreboard.getColumnsCount(); }
+
+	Q_SIGNAL void schemaChanged();
 
 	Q_SIGNAL void layoutChanged( Layout layout );
 	Q_PROPERTY( Layout layout MEMBER m_layout NOTIFY layoutChanged );

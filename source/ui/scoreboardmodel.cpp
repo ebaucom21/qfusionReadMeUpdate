@@ -68,7 +68,7 @@ auto ScoreboardTeamModel::columnCount( const QModelIndex & ) const -> int {
 }
 
 auto ScoreboardTeamModel::roleNames() const -> QHash<int, QByteArray> {
-	return { { Kind, "kind" }, { Value, "value" }, { IsGhosting, "isGhosting" } };
+	return { { Kind, "kind" }, { Value, "value" }, { IsCompact, "isCompact" }, { IsGhosting, "isGhosting" } };
 }
 
 auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const -> QVariant {
@@ -91,6 +91,21 @@ auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const 
 	const auto playerIndex = indices[m_teamListIndex][row];
 	if( role == IsGhosting ) {
 		return scb.isPlayerGhosting( playerIndex );
+	}
+	if( role == IsCompact ) {
+		unsigned columnsLeftInCurrentSpan = 0;
+		for( unsigned testedColumn = 0; testedColumn <= column; testedColumn++ ) {
+			if( testedColumn == column ) {
+				return columnsLeftInCurrentSpan || scb.getTitleColumnSpan( testedColumn ) > 1;
+			} else {
+				if( const unsigned span = scb.getTitleColumnSpan( testedColumn ); span > 1 ) {
+					columnsLeftInCurrentSpan = span;
+				}
+				if( columnsLeftInCurrentSpan ) {
+					columnsLeftInCurrentSpan--;
+				}
+			}
+		}
 	}
 	if( role != Value ) {
 		return QVariant();
@@ -169,6 +184,7 @@ auto ScoreboardAccuracyData::asQmlArray() const -> QJsonArray {
 
 void ScoreboardModelProxy::reload() {
 	m_scoreboard.reload();
+	Q_EMIT schemaChanged();
 }
 
 auto ScoreboardModelProxy::getColumnKind( int column ) const -> int {

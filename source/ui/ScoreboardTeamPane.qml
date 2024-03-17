@@ -10,6 +10,7 @@ Item {
 
     property bool displayHeader: true
     property real baseCellWidth
+    property real nameCellWidth
     property real clanCellWidth
     property color baseColor
 
@@ -22,7 +23,6 @@ Item {
     implicitHeight: activeItem ? activeItem.implicitHeight + (header.status === Loader.Ready ? 40 : 0) : 0
 
     readonly property var activeItem: (front.status === Loader.Ready) ? front.item : back.item
-    readonly property int columnsCount: UI.scoreboard.getColumnsCount()
 
     Loader {
         id: header
@@ -46,9 +46,10 @@ Item {
                         readonly property int kind: UI.scoreboard.getColumnKind(index)
                         readonly property bool isTextual: kind == Scoreboard.Nickname || kind === Scoreboard.Clan
                         readonly property int span: UI.scoreboard.getTitleColumnSpan(index)
-                        width: (kind === Scoreboard.Nickname) ?
-                                   root.width - clanCellWidth - baseCellWidth * (columnsCount - 2) :
-                                   (kind === Scoreboard.Clan ? clanCellWidth : span * baseCellWidth)
+                        width:
+                            (kind === Scoreboard.Nickname) ? nameCellWidth :
+                                (kind === Scoreboard.Clan ? clanCellWidth :
+                                    (span > 1 ? 0.67 : 1.0) * span * baseCellWidth)
                         leftPadding: isTextual ? 4 : 0
                         bottomPadding: 4
                         height: 40
@@ -81,6 +82,7 @@ Item {
             baseBetaColor: root.baseBetaColor
             mixedTeamsMode: root.mixedTeamsMode
             baseCellWidth: root.baseCellWidth
+            nameCellWidth: root.nameCellWidth
             clanCellWidth: root.clanCellWidth
         }
     }
