@@ -1517,7 +1517,7 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode, ViewState 
 	}
 
 	// add animation to the view weapon model
-	if( viewState->isViewerEntity( entNum ) && !viewState->view.thirdperson ) {
+	if( viewState && viewState->isViewerEntity( entNum ) && !viewState->view.thirdperson ) {
 		CG_ViewWeapon_StartAnimationEvent( fireMode == FIRE_MODE_STRONG ? WEAPMODEL_ATTACK_STRONG : WEAPMODEL_ATTACK_WEAK, viewState );
 	}
 }
@@ -1772,11 +1772,12 @@ void CG_ReleaseAnnouncerEvents( void ) {
 }
 
 void CG_Event_Fall( entity_state_t *state, int parm ) {
-	// TODO: What view state should we check
-	ViewState *viewState = getViewStateForEntity( state->number );
-	if( viewState->isViewerEntity( state->number ) ) {
+	ViewState *const viewState = getViewStateForEntity( state->number );
+	if( viewState && viewState->isViewerEntity( state->number ) ) {
 		if( viewState->snapPlayerState.pmove.pm_type != PM_NORMAL ) {
-			CG_SexedSound( state->number, CHAN_AUTO, "*fall_0", v_volumePlayers.get(), state->attenuation );
+			if( !viewState->mutePovSounds ) {
+				CG_SexedSound( state->number, CHAN_AUTO, "*fall_0", v_volumePlayers.get(), state->attenuation );
+			}
 			return;
 		}
 
@@ -1812,7 +1813,7 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 		vec3_t start, end;
 		trace_t trace;
 
-		if( viewState->isViewerEntity( state->number ) ) {
+		if( viewState && viewState->isViewerEntity( state->number ) ) {
 			VectorCopy( viewState->predictedPlayerState.pmove.origin, start );
 		} else {
 			VectorCopy( state->origin, start );
@@ -2001,7 +2002,7 @@ static void handleWeaponActivateEvent( entity_state_t *ent, int parm, bool predi
 	const int weapon     = ( parm >> 1 ) & 0x3f;
 	const int fireMode   = ( parm & 0x1 ) ? FIRE_MODE_STRONG : FIRE_MODE_WEAK;
 	ViewState *viewState = getViewStateForEntity( ent->number );
-	bool viewer          = viewState->isViewerEntity( ent->number );
+	const bool viewer    = viewState && viewState->isViewerEntity( ent->number );
 
 	CG_PModel_AddAnimation( ent->number, 0, TORSO_WEAPON_SWITCHIN, 0, EVENT_CHANNEL );
 
@@ -2011,19 +2012,25 @@ static void handleWeaponActivateEvent( entity_state_t *ent, int parm, bool predi
 			cg_entities[ent->number].current.effects |= EF_STRONG_WEAPON;
 		}
 
-		CG_ViewWeapon_RefreshAnimation( &viewState->weapon, viewState );
+		if( viewState ) {
+			CG_ViewWeapon_RefreshAnimation( &viewState->weapon, viewState );
+		}
 	}
 
 	if( viewer && viewState == getOurClientViewState() ) {
 		viewState->predictedWeaponSwitch = 0;
 	}
 
-	if( !viewState->mutePovSounds ) {
-		if( viewer ) {
-			SoundSystem::instance()->startGlobalSound( cgs.media.sndWeaponUp, CHAN_AUTO, v_volumeEffects.get() );
-		} else {
-			SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUp, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
+	if( viewState ) {
+		if( !viewState->mutePovSounds ) {
+			if( viewer ) {
+				SoundSystem::instance()->startGlobalSound( cgs.media.sndWeaponUp, CHAN_AUTO, v_volumeEffects.get() );
+			} else {
+				SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUp, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
+			}
 		}
+	} else {
+		SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUp, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 	}
 }
 
@@ -2059,10 +2066,12 @@ static void handleFireWeaponEvent( entity_state_t *ent, int parm, bool predicted
 	}
 
 	ViewState *const viewState = getViewStateForEntity( ent->number );
-	CG_FireWeaponEvent( ent->number, weapon, fireMode, viewState );
+	// Supply the primary view state for playing sounds of players without respective view state
+	CG_FireWeaponEvent( ent->number, weapon, fireMode, viewState ? viewState : getPrimaryViewState() );
 
 	// riotgun bullets, electrobolt and instagun beams are predicted when the weapon is fired
 	if( predicted ) {
+		assert( viewState );
 		vec3_t origin, dir;
 
 		if( ( weapon == WEAP_ELECTROBOLT && fireMode == FIRE_MODE_STRONG ) || weapon == WEAP_INSTAGUN ) {
@@ -2210,10 +2219,11 @@ static void handlePlayerRespawnEvent( entity_state_t *ent, int parm, bool predic
 	SoundSystem::instance()->startFixedSound( cgs.media.sndPlayerRespawn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 
 	if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
-		ViewState *const viewState = getViewStateForEntity( ent->ownerNum );
-		CG_ResetKickAngles( viewState );
-		CG_ResetColorBlend( viewState );
-		CG_ResetDamageIndicator( viewState );
+		if( ViewState *const viewState = getViewStateForEntity( ent->ownerNum ) ) {
+			CG_ResetKickAngles( viewState );
+			CG_ResetColorBlend( viewState );
+			CG_ResetDamageIndicator( viewState );
+		}
 
 		cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_IN] = cg.time;
 		VectorCopy( ent->origin, cg_entities[ent->ownerNum].teleportedTo );

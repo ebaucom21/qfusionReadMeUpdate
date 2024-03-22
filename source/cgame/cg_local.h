@@ -644,6 +644,7 @@ extern cg_state_t cg;
 auto getPrimaryViewState() -> ViewState *;
 [[nodiscard]]
 auto getOurClientViewState() -> ViewState *;
+// The results may be legitimately nullable (multipov snaps do not imply that all players are included)
 [[nodiscard]]
 auto getViewStateForEntity( int number ) -> ViewState *;
 

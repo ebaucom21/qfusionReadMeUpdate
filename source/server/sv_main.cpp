@@ -3648,47 +3648,10 @@ void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameN
 		frame->allentities = false;
 	}
 
-	// areaportals matrix
-	int numareas = CM_NumAreas( cms );
-	if( frame->numareas < numareas ) {
-		frame->numareas = numareas;
-
-		numareas *= CM_AreaRowSize( cms );
-		if( frame->areabits ) {
-			Q_free( frame->areabits );
-			frame->areabits = nullptr;
-		}
-		frame->areabits = (uint8_t*)Q_malloc( numareas );
-	}
-
-	// grab the current player_state_t
-	if( frame->multipov ) {
-		frame->numplayers = 0;
-		for( int i = 0; i < gi->max_clients; i++ ) {
-			edict_t *ent = EDICT_NUM( i + 1 );
-			if( ( clent == ent ) || ( ent->r.inuse && ent->r.client && !( ent->r.svflags & SVF_NOCLIENT ) ) ) {
-				frame->numplayers++;
-			}
-		}
-	} else {
-		frame->numplayers = 1;
-	}
-
-	if( frame->ps_size < frame->numplayers ) {
-		if( frame->ps ) {
-			Q_free( frame->ps );
-			frame->ps = nullptr;
-		}
-
-		frame->ps = ( player_state_t* )Q_malloc( sizeof( player_state_t ) * frame->numplayers );
-		frame->ps_size = frame->numplayers;
-	}
-
 	const edict_t *povEntities[MAX_CLIENTS];
 	unsigned numPovEntities = 0;
 
 	if( frame->multipov ) {
-		int numplayers = 0;
 		for( int clientNum = 0; clientNum < gi->max_clients; clientNum++ ) {
 			const edict_t *ent = EDICT_NUM( clientNum + 1 );
 			bool isAcceptable  = false;
@@ -3717,18 +3680,50 @@ void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameN
 				}
 			}
 			if( isAcceptable ) {
-				frame->ps[numplayers] = ent->r.client->ps;
-				frame->ps[numplayers].playerNum = clientNum;
 				povEntities[numPovEntities] = ent;
 				numPovEntities++;
-				numplayers++;
 			}
 		}
 	} else {
-		frame->ps[0]            = clent->r.client->ps;
-		frame->ps[0].playerNum = NUM_FOR_EDICT( clent ) - 1;
 		povEntities[0] = clent;
 		numPovEntities = 1;
+	}
+
+	// areaportals matrix
+	int numareas = CM_NumAreas( cms );
+	if( frame->numareas < numareas ) {
+		frame->numareas = numareas;
+
+		numareas *= CM_AreaRowSize( cms );
+		if( frame->areabits ) {
+			Q_free( frame->areabits );
+			frame->areabits = nullptr;
+		}
+		frame->areabits = (uint8_t*)Q_malloc( numareas );
+	}
+
+	if( frame->ps_size < numPovEntities ) {
+		if( frame->ps ) {
+			Q_free( frame->ps );
+			frame->ps = nullptr;
+		}
+
+		frame->ps = ( player_state_t* )Q_malloc( sizeof( player_state_t ) * numPovEntities );
+		frame->ps_size = (int)numPovEntities;
+	}
+
+	if( frame->multipov ) {
+		frame->numplayers = 0;
+		for( unsigned povIndex = 0; povIndex < numPovEntities; ++povIndex ) {
+			const edict_t *ent = povEntities[povIndex];
+			frame->ps[frame->numplayers] = ent->r.client->ps;
+			frame->ps[frame->numplayers].playerNum = ent->s.number - 1;
+			frame->numplayers++;
+		}
+	} else {
+		frame->ps[0]           = clent->r.client->ps;
+		frame->ps[0].playerNum = NUM_FOR_EDICT( clent ) - 1;
+		frame->numplayers      = 1;
 	}
 
 	// build up the list of visible entities
