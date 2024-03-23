@@ -900,13 +900,16 @@ public:
 
 	void add( Value value ) {
 		m_total++;
+		const Value tailValue = m_values[m_tail];
 		m_values[m_head] = value;
 		m_head = ( m_head + 1 ) % ( N + 1 );
-		m_queueSum -= m_values[m_tail];
 		m_tail = ( m_tail + 1 ) % ( N + 1 );
+		m_queueSum -= tailValue;
 		m_queueSum += value;
 	}
 
+	[[nodiscard]]
+	auto hasSufficentNumberOfSamples() const -> uint64_t { return m_total >= N; }
 	[[nodiscard]]
 	auto avg() const -> Value { return (Value)( m_queueSum / N ); }
 };

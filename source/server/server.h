@@ -141,10 +141,11 @@ typedef struct client_s {
 	int64_t lastSentFrameNum;  // for knowing which was last frame we sent
 
 	int frame_latency[LATENCY_COUNTS];
-	int ping;
 	edict_t *edict;                 // EDICT_NUM(clientnum+1)
 	char name[MAX_INFO_VALUE];      // extracted from userinfo, high bits masked
 	char session[HTTP_CLIENT_SESSION_SIZE];  // session id for HTTP requests
+
+	MovingAverage<31, int64_t> packetPings;
 
 	client_snapshot_t snapShots[UPDATE_BACKUP]; // updates can be delta'd from here
 

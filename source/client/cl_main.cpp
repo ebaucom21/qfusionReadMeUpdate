@@ -2056,6 +2056,7 @@ void CL_ClearState( void ) {
 	cls.gametime = 0;
 	cls.lastPacketSentTime = 0;
 	cls.lastPacketReceivedTime = 0;
+	cls.lastReceivedRealServerTime = 0;
 
 	if( cls.wakelock ) {
 		Sys_ReleaseWakeLock( cls.wakelock );
@@ -3713,6 +3714,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 				}
 				cls.reliableAcknowledge = MSG_ReadUintBase128( msg );
 				cls.ucmdAcknowledged = MSG_ReadUintBase128( msg );
+				cls.lastReceivedRealServerTime = MSG_ReadIntBase128( msg );
 				if( cl_debug_serverCmd->integer & 4 ) {
 					const char *format = "svc_clcack:reliable cmd ack:%" PRIi64 " ucmdack:%" PRIi64 "\n";
 					Com_Printf( format, cls.reliableAcknowledge, cls.ucmdAcknowledged );
@@ -5439,6 +5441,7 @@ void CL_SendMessagesToServer( bool sendNow ) {
 			if( !cls.reliable ) {
 				MSG_WriteUint8( &message, clc_svcack );
 				MSG_WriteIntBase128( &message, cls.lastExecutedServerCommand );
+				MSG_WriteIntBase128( &message, cls.lastReceivedRealServerTime );
 			}
 			//write up the clc commands
 			CL_UpdateClientCommandsToServer( &message );
@@ -5451,6 +5454,7 @@ void CL_SendMessagesToServer( bool sendNow ) {
 		if( !cls.reliable ) {
 			MSG_WriteUint8( &message, clc_svcack );
 			MSG_WriteIntBase128( &message, cls.lastExecutedServerCommand );
+			MSG_WriteIntBase128( &message, cls.lastReceivedRealServerTime );
 		}
 		// send a userinfo update if needed
 		if( userinfo_modified ) {

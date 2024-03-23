@@ -304,6 +304,10 @@ typedef struct {
 	int64_t lastPacketSentTime;
 	int64_t lastPacketReceivedTime;
 
+	// forwarded to server for ping calculation
+	// in order to keep compatibility with info servers, we have opted to pass this along with *ack subcommands
+	int64_t lastReceivedRealServerTime;
+
 	// pure list
 	bool sv_pure;
 	bool pure_restart;

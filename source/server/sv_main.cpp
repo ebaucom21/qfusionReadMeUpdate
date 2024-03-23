@@ -814,25 +814,19 @@ void SV_InitGameProgs() {
 static void SV_CalcPings() {
 	IteratorOverClients iteratorOverClients( { .minAcceptableState = CS_SPAWNED, .includeFakeClients = false } );
 	while( client_t *const client = iteratorOverClients.getNext() ) {
-		unsigned total = 0;
-		unsigned count = 0;
-		unsigned best  = std::numeric_limits<unsigned>::max();
-		for( const int latency : client->frame_latency ) {
-			if( latency > 0 ) {
-				best = wsw::min<unsigned>( latency, best );
-				total += latency;
-				count++;
+		if( client->packetPings.hasSufficentNumberOfSamples() ) [[likely]] {
+			const auto newPingValue = (int)wsw::clamp<int64_t>( client->packetPings.avg(), 1, 999 );
+			if( client->edict->r.client->m_ping > 0 ) {
+				// Hide tiny fluctuations
+				if( std::abs( client->edict->r.client->m_ping - newPingValue ) > 1 ) {
+					client->edict->r.client->m_ping = newPingValue;
+				}
+			} else {
+				client->edict->r.client->m_ping = newPingValue;
 			}
-		}
-
-		if( count ) {
-			client->ping = (int)( best + ( total / count ) ) / 2;
 		} else {
-			client->ping = 0;
+			client->edict->r.client->m_ping = 999;
 		}
-
-		// let the game dll know about the ping
-		client->edict->r.client->m_ping = client->ping;
 	}
 }
 
@@ -2524,11 +2518,9 @@ static void SV_ParseMoveCommand( client_t *client, msg_t *msg ) {
 		if( client->state != CS_SPAWNED ) {
 			client->lastframe = -1;
 		} else {
-			// calc ping
 			if( lastframe != client->lastframe ) {
 				client->lastframe = lastframe;
 				if( client->lastframe > 0 ) {
-					// FIXME: Medar: ping is in gametime, should be in realtime
 					//client->frame_latency[client->lastframe&(LATENCY_COUNTS-1)] = svs.gametime - (client->frames[client->lastframe & UPDATE_MASK].sentTimeStamp;
 					// this is more accurate. A little bit hackish, but more accurate
 					client->frame_latency[client->lastframe & ( LATENCY_COUNTS - 1 )] =
@@ -2585,6 +2577,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 					return;
 				}
 				client->reliableAcknowledge = cmdNum;
+				client->packetPings.add( svs.realtime - MSG_ReadIntBase128( msg ) - svc.snapFrameTime / 2 );
 			} break;
 			case clc_clientcommand: {
 				cmdNum = 0;
@@ -2908,6 +2901,7 @@ void SV_InitClientMessage( client_t *client, msg_t *msg, uint8_t *data, size_t s
 		MSG_WriteUint8( msg, svc_clcack );
 		MSG_WriteUintBase128( msg, client->clientCommandExecuted );
 		MSG_WriteUintBase128( msg, client->UcmdReceived ); // acknowledge the last ucmd
+		MSG_WriteIntBase128( msg, svs.realtime );
 	}
 }
 
@@ -3929,7 +3923,7 @@ static char *SV_LongInfoString( bool fullStatus ) {
 		iteratorOverClients.rewind();
 		while( const client_t *client = iteratorOverClients.getNext() ) {
 			Q_snprintfz( tempstr, sizeof( tempstr ), "%i %i \"%s\" %i\n",
-						 client->edict->r.client->m_frags, client->ping, client->name, client->edict->s.team );
+						 client->edict->r.client->m_frags, client->edict->r.client->m_ping, client->name, client->edict->s.team );
 			tempstrLength = strlen( tempstr );
 			if( statusLength + tempstrLength >= sizeof( status ) ) {
 				break; // can't hold any more
