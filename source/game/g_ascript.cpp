@@ -2014,7 +2014,7 @@ static const asProperty_t gameclient_Properties[] =
 {
 	{ ASLIB_PROPERTY_DECL( Stats, stats ), ASLIB_FOFFSET( Client, stats ) },
 	{ ASLIB_PROPERTY_DECL( const bool, connecting ), ASLIB_FOFFSET( Client, connecting ) },
-	{ ASLIB_PROPERTY_DECL( const bool, multiview ), ASLIB_FOFFSET( Client, multiview ) },
+	{ ASLIB_PROPERTY_DECL( const bool, multiview ), ASLIB_FOFFSET( Client, m_multiview ) },
 	{ ASLIB_PROPERTY_DECL( int, team ), ASLIB_FOFFSET( Client, team ) },
 	{ ASLIB_PROPERTY_DECL( const int, hand ), ASLIB_FOFFSET( Client, hand ) },
 	{ ASLIB_PROPERTY_DECL( const bool, isOperator ), ASLIB_FOFFSET( Client, isoperator ) },

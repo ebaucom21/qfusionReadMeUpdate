@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    90
+#define GAME_API_VERSION    91
 
 //===============================================================
 
@@ -33,6 +33,7 @@ struct ServersideClientBase {
 	int m_ping;
 	int m_health;
 	int m_frags;
+	bool m_multiview;
 	player_state_t ps;
 
 	ServersideClientBase() {
@@ -41,6 +42,7 @@ struct ServersideClientBase {
 
 	void resetShared() {
 		m_ping = m_health = m_frags = 0;
+		m_multiview = false;
 		memset( &ps, 0, sizeof( ps ) );
 	}
 };
@@ -226,7 +228,6 @@ typedef struct {
 	bool ( *ClientConnect )( edict_t *ent, char *userinfo, bool fakeClient );
 	void ( *ClientBegin )( edict_t *ent );
 	void ( *ClientUserinfoChanged )( edict_t *ent, char *userinfo );
-	bool ( *ClientMultiviewChanged )( edict_t *ent, bool multiview );
 	void ( *ClientDisconnect )( edict_t *ent, const char *reason );
 	void ( *ClientCommand )( edict_t *ent, uint64_t clientCommandNum, const CmdArgs & );
 	void ( *ClientThink )( edict_t *ent, usercmd_t *cmd, int timeDelta );

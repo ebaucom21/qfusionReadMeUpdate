@@ -50,6 +50,7 @@ static BoolConfigVar v_showMiss( "cg_showMiss"_asView, { .byDefault = false } );
 [[maybe_unused]] static StringConfigVar v_clan( "clan"_asView, { .byDefault = wsw::StringView(), .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
 [[maybe_unused]] static IntConfigVar v_movementStyle( "cg_movementStyle"_asView, { .byDefault = 1, .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
 [[maybe_unused]] static BoolConfigVar v_noAutohop( "cg_noAutohop"_asView, { .byDefault = false, .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
+[[maybe_unused]] static BoolConfigVar v_multiview( "cg_multiview"_asView, { .byDefault = true, .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
 
 IntConfigVar v_hand( "hand"_asView, { .byDefault = 0, .flags = CVAR_USERINFO | CVAR_ARCHIVE } );
 

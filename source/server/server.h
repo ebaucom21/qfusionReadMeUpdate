@@ -115,7 +115,6 @@ typedef struct client_s {
 	int64_t userinfoLatchTimeout;
 
 	bool reliable;                  // no need for acks, connection is reliable
-	bool mv;                        // send multiview data to the client
 
 	wsw::StaticString<MAX_STRING_CHARS> reliableCommands[MAX_RELIABLE_COMMANDS];
 	int64_t reliableSequence;      // last added reliable message, not necesarily sent or acknowledged yet

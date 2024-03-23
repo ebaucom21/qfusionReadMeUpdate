@@ -34,6 +34,7 @@ static const wsw::HashedStringView kInfoKeyClan( "clan"_asHView );
 static const wsw::HashedStringView kInfoKeyHand( "hand"_asHView );
 static const wsw::HashedStringView kInfoKeyHandicap( "handicap"_asHView );
 static const wsw::HashedStringView kInfoKeyNoAutoHop( "cg_noAutoHop"_asHView );
+static const wsw::HashedStringView kInfoKeyMultiview( "cg_multiview"_asHView );
 static const wsw::HashedStringView kInfoKeyMovementStyle( "cg_movementStyle"_asHView );
 static const wsw::HashedStringView kInfoKeyMMSession( "cl_mm_session"_asHView );
 static const wsw::HashedStringView kInfoKeySkin( "skin"_asHView );
@@ -118,7 +119,6 @@ void Client::reset() {
 	mm_session = Uuid_ZeroUuid();
 
 	connecting = false;
-	multiview = false;
 
 	Vector4Clear( color );
 	team = 0;
@@ -1094,6 +1094,14 @@ void Client::handleUserInfoChanges() {
 		}
 	}
 
+	if( const auto maybeMultiviewString = m_userInfo.get( kInfoKeyMultiview ) ) {
+		if( const auto maybeNum = wsw::toNum<int>( *maybeMultiviewString ); maybeNum && *maybeNum ) {
+			m_multiview = true;
+		} else {
+			m_multiview = false;
+		}
+	}
+
 	/*
 	if( const auto maybeSessionString = m_userInfo.get( kInfoKeyMMSession ) ) {
 		if( const auto maybeUuid = Uuid_FromString( *maybeSessionString ) ) {
@@ -1671,17 +1679,6 @@ void G_ClientEndSnapFrame( edict_t *ent ) {
 	if( !G_ISGHOSTING( ent ) ) {
 		VectorCopy( ent->velocity, ent->s.origin2 );
 	}
-}
-
-/*
-* ClientMultiviewChanged
-* This will be called when client tries to change multiview mode
-* Mode change can be disallowed by returning false
-*/
-bool ClientMultiviewChanged( edict_t *ent, bool multiview ) {
-	ent->r.client->multiview = multiview == true;
-
-	return true;
 }
 
 void G_ClientThink( edict_t *ent ) {

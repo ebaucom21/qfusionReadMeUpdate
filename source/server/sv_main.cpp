@@ -100,7 +100,6 @@ static struct {
 	wsw::ConfigStringStorage configStrings;
 
 	entity_state_t baselines[MAX_EDICTS];
-	int num_mv_clients;     // current number, <= sv_maxmvclients
 
 	//
 	// global variables shared between game and server
@@ -116,7 +115,6 @@ static struct {
 		configStrings.clear();
 
 		memset( &baselines, 0, sizeof( baselines ) );
-		num_mv_clients = 0;
 		memset( &gi, 0, sizeof( gi ) );
 	}
 } sv;
@@ -194,7 +192,6 @@ cvar_t *sv_uploads_demos_baseurl;
 static cvar_t *sv_pure;
 
 cvar_t *sv_maxclients;
-static cvar_t *sv_maxmvclients;
 
 #ifdef HTTP_SUPPORT
 cvar_t *sv_http;
@@ -1481,15 +1478,6 @@ void SV_Map( const char *level, bool devmap ) {
 			svs.clients[i].state = CS_CONNECTING;
 		}
 
-		// limit number of connected multiview clients
-		if( svs.clients[i].mv ) {
-			if( sv.num_mv_clients < sv_maxmvclients->integer ) {
-				sv.num_mv_clients++;
-			} else {
-				svs.clients[i].mv = false;
-			}
-		}
-
 		svs.clients[i].lastframe = -1;
 		memset( svs.clients[i].gameCommands, 0, sizeof( svs.clients[i].gameCommands ) );
 	}
@@ -1624,7 +1612,6 @@ void SV_Init() {
 	sv_defaultmap =         Cvar_Get( "sv_defaultmap", "wdm1", CVAR_ARCHIVE );
 	sv_reconnectlimit =     Cvar_Get( "sv_reconnectlimit", "3", CVAR_ARCHIVE );
 	sv_maxclients =         Cvar_Get( "sv_maxclients", "16", CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_LATCH );
-	sv_maxmvclients =       Cvar_Get( "sv_maxmvclients", "4", CVAR_ARCHIVE | CVAR_SERVERINFO );
 
 	Cvar_Get( "sv_modmanifest", "", CVAR_READONLY );
 	Cvar_ForceSet( "sv_modmanifest", "" );
@@ -1905,11 +1892,6 @@ void SV_DropClient( client_t *drop, ReconnectBehaviour reconnectBehaviour, const
 
 	if( drop->download.name ) {
 		SV_ClientCloseDownload( drop );
-	}
-
-	if( drop->mv ) {
-		sv.num_mv_clients--;
-		drop->mv = false;
 	}
 
 	drop->state = CS_ZOMBIE;    // become free in a few seconds
@@ -2394,31 +2376,6 @@ static void HandleClientCommand_NoDelta( client_t *client, const CmdArgs & ) {
 	client->lastframe     = -1; // jal : I'm not sure about this. Seems like it's missing but...
 }
 
-static void HandleClientCommand_Multiview( client_t *client, const CmdArgs &cmdArgs ) {
-	const bool mv = ( atoi( Cmd_Argv( 1 ) ) != 0 );
-	if( client->mv == mv ) {
-		return;
-	}
-
-	if( !ge->ClientMultiviewChanged( client->edict, mv ) ) {
-		return;
-	}
-
-	if( mv ) {
-		if( sv.num_mv_clients < sv_maxmvclients->integer ) {
-			client->mv = true;
-			sv.num_mv_clients++;
-		} else {
-			SV_AddGameCommand( client, "pr \"Can't multiview: maximum number of allowed multiview clients reached.\"" );
-			return;
-		}
-	} else {
-		assert( sv.num_mv_clients );
-		client->mv = false;
-		sv.num_mv_clients--;
-	}
-}
-
 typedef struct {
 	const char *name;
 	void ( *func )( client_t *client, const CmdArgs &cmdArgs );
@@ -2435,8 +2392,6 @@ static ucmd_t ucmds[] =
 		{ "usri",      HandleClientCommand_Userinfo },
 
 		{ "nodelta",   HandleClientCommand_NoDelta },
-
-		{ "multiview", HandleClientCommand_Multiview },
 
 		// issued by hand at client consoles
 		{ "info",     HandleClientCommand_Info },
@@ -3635,17 +3590,12 @@ void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameN
 	frame->sentTimeStamp = timeStamp;
 	frame->UcmdExecuted = client->UcmdExecuted;
 
-	if( client->mv ) {
-		if( clent ) {
-			frame->multipov    = true;
-			frame->allentities = false;
-		} else {
-			frame->multipov    = true;
-			frame->allentities = true;
-		}
-	} else {
-		frame->multipov    = false;
+	if( clent ) {
 		frame->allentities = false;
+		frame->multipov    = clent->r.client->m_multiview;
+	} else {
+		frame->multipov    = true;
+		frame->allentities = true;
 	}
 
 	const edict_t *povEntities[MAX_CLIENTS];
@@ -4627,7 +4577,6 @@ void SV_Demo_WriteSnap() {
 static void SV_Demo_InitClient() {
 	memset( &svs.demo.client, 0, sizeof( svs.demo.client ) );
 
-	svs.demo.client.mv       = true;
 	svs.demo.client.reliable = true;
 
 	svs.demo.client.reliableAcknowledge = 0;

@@ -852,7 +852,6 @@ void G_Client_InactivityRemove( Client *client, int64_t inactivityMillis );
 void G_ClientRespawn( edict_t *self, bool ghost );
 void G_ClientClearStats( edict_t *ent );
 void G_GhostClient( edict_t *self );
-bool ClientMultiviewChanged( edict_t *ent, bool multiview );
 void ClientThink( edict_t *ent, usercmd_t *cmd, int timeDelta );
 void G_ClientThink( edict_t *ent );
 void G_CheckClientRespawnClick( edict_t *ent );
@@ -1150,7 +1149,6 @@ struct Client : public ServersideClientBase {
 	mm_uuid_t mm_session;
 
 	bool connecting;
-	bool multiview;
 
 	byte_vec4_t color;
 	int team;
