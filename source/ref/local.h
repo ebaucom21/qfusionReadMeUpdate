@@ -1144,6 +1144,7 @@ void        Mod_StripLODSuffix( char *name );
 #define RF_SOFT_PARTICLES       RF_BIT( 9 )
 #define RF_PORTAL_CAPTURE       RF_BIT( 10 )
 #define RF_SHADOWMAPVIEW_RGB    RF_BIT( 11 )
+#define RF_DRAWBRIGHT           RF_BIT( 12 )
 
 #define RF_CUBEMAPVIEW          ( RF_ENVVIEW )
 #define RF_NONVIEWERREF         ( RF_PORTALVIEW | RF_MIRRORVIEW | RF_ENVVIEW | RF_SHADOWMAPVIEW )

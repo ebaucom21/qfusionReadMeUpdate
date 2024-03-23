@@ -743,7 +743,7 @@ int CG_SkyPortal( ViewState *viewState ) {
 	return 0;
 }
 
-static int CG_RenderFlags( ViewState *viewState, bool isMiniview ) {
+static int CG_RenderFlags( ViewState *viewState, bool isMiniview, bool isUsingTiledMode ) {
 	int rdflags = 0;
 
 	// set the RDF_UNDERWATER and RDF_CROSSINGWATER bitflags
@@ -774,8 +774,13 @@ static int CG_RenderFlags( ViewState *viewState, bool isMiniview ) {
 
 	rdflags |= CG_SkyPortal( viewState );
 
-	if( isMiniview ) {
+	if( isMiniview && !isUsingTiledMode ) {
 		rdflags |= RDF_NOBSPOCCLUSIONCULLING;
+	} else {
+		const auto *const uiSystem = wsw::ui::UISystem::instance();
+		if( uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard() ) {
+			rdflags |= RDF_DRAWBRIGHT;
+		}
 	}
 
 	return rdflags;
@@ -1270,7 +1275,7 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				AnglesToAxis( viewState->view.angles, rd->viewaxis );
 
 				const bool isMiniview = viewNum != 0 || !shouldUseNonTiledMode;
-				rd->rdflags = CG_RenderFlags( viewState, isMiniview );
+				rd->rdflags = CG_RenderFlags( viewState, isMiniview, !shouldUseNonTiledMode );
 
 				// warp if underwater
 				if( rd->rdflags & RDF_UNDERWATER ) {

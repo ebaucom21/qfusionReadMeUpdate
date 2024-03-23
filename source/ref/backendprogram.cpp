@@ -28,7 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define FTABLE_CLAMP( x ) ( ( (int)( ( x ) * FTABLE_SIZE ) & ( FTABLE_SIZE - 1 ) ) )
 #define FTABLE_EVALUATE( table, x ) ( ( table )[FTABLE_CLAMP( fmod( x, 1.0 ) )] )
 
-#define DRAWFLAT() ( ( rb.currentModelType == mod_brush ) && ( rb.renderFlags & RF_DRAWFLAT ) && !( rb.currentShader->flags & SHADER_NODRAWFLAT ) )
+#define DRAWFLAT() ( ( rb.currentModelType == mod_brush ) && ( rb.renderFlags & ( RF_DRAWFLAT | RF_DRAWBRIGHT ) ) && !( rb.currentShader->flags & SHADER_NODRAWFLAT ) )
 
 enum {
 	BUILTIN_GLSLPASS_FOG,
@@ -1059,7 +1059,11 @@ static void RB_RenderMeshGLSL_Material( const FrontendToBackendShared *fsh, cons
 
 		// r_drawflat
 		if( programFeatures & GLSL_SHADER_COMMON_DRAWFLAT ) {
-			RP_UpdateDrawFlatUniforms( program, rsh.wallColor, rsh.floorColor );
+			if( rb.renderFlags & RF_DRAWBRIGHT ) [[unlikely]] {
+				RP_UpdateDrawFlatUniforms( program, colorWhite, colorWhite );
+			} else {
+				RP_UpdateDrawFlatUniforms( program, rsh.wallColor, rsh.floorColor );
+			}
 		}
 
 		RB_DrawElementsReal( &rb.drawElements );
@@ -1402,7 +1406,11 @@ static void RB_RenderMeshGLSL_Q3AShader( const FrontendToBackendShared *fsh, con
 
 		// r_drawflat
 		if( programFeatures & GLSL_SHADER_COMMON_DRAWFLAT ) {
-			RP_UpdateDrawFlatUniforms( program, rsh.wallColor, rsh.floorColor );
+			if( rb.renderFlags & RF_DRAWBRIGHT ) [[unlikely]] {
+				RP_UpdateDrawFlatUniforms( program, colorWhite, colorWhite );
+			} else {
+				RP_UpdateDrawFlatUniforms( program, rsh.wallColor, rsh.floorColor );
+			}
 		}
 
 		/*

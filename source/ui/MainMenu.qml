@@ -26,8 +26,15 @@ Item {
         }
     }
 
+    Rectangle {
+        visible: !UI.ui.isClientDisconnected
+        anchors.fill: parent
+        color: UI.ui.colorWithAlpha(Material.background, UI.ui.fullscreenOverlayOpacity)
+    }
+
     RadialGradient {
         id: radialGradient
+        visible: UI.ui.isClientDisconnected
         anchors.fill: parent
         horizontalRadius: parent.width
         // Stretches it vertically making it almost a column in the expanded state
@@ -40,7 +47,7 @@ Item {
             GradientStop {
                 position: 1.00
 	            // The gradient makes it look denser so the base value is slightly lower
-                color: UI.ui.colorWithAlpha(Qt.darker(Material.backgroundColor, 1.2), UI.ui.fullscreenOverlayOpacity - 0.05)
+                color: UI.ui.colorWithAlpha(Qt.darker(Material.backgroundColor, 1.2), UI.ui.fullscreenOverlayOpacity - 0.10)
             }
         }
     }

@@ -455,6 +455,10 @@ auto Frontend::setupStateForCamera( CameraStateGroup stateGroup, const refdef_t 
 		stateForCamera->renderFlags |= RF_DRAWFLAT;
 	}
 
+	if( fd->rdflags & RDF_DRAWBRIGHT ) {
+		stateForCamera->renderFlags |= RF_DRAWBRIGHT;
+	}
+
 	if( overrideParams ) {
 		stateForCamera->renderFlags |= overrideParams->renderFlagsToAdd;
 		stateForCamera->renderFlags &= ~overrideParams->renderFlagsToClear;
