@@ -6,6 +6,7 @@ QtObject {
     readonly property var ui: __ui
     readonly property var serverListModel: __serverListModel
     readonly property var hudCommonDataModel: __hudCommonDataModel
+    readonly property var hudPovDataModel: __hudPovDataModel
     readonly property var regularHudEditorModel: __regularHudEditorModel
     readonly property var miniviewHudEditorModel: __miniviewHudEditorModel
     readonly property var keysAndBindings: __keysAndBindings

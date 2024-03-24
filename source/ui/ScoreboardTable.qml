@@ -59,6 +59,8 @@ TableView {
         readonly property bool isColumnStatusOne: kind === Scoreboard.Status
         readonly property bool isDisplayingGlyph: (kind === Scoreboard.Glyph) || (isColumnStatusOne && value >= 32)
         readonly property bool shouldBeDisplayedAsIcon: (kind === Scoreboard.Icon) || (isColumnStatusOne && value < 32)
+        readonly property bool isPovNickname: (kind === Scoreboard.Nickname)
+            && UI.hudPovDataModel.hasActivePov && UI.hudPovDataModel.nickname === value
         readonly property real valueOpacity: isGhosting ? 0.5 : 1.0
 
         implicitWidth: Math.max(1,
@@ -71,6 +73,7 @@ TableView {
         onHeightChanged: forceLayoutTimer.start()
 
         Rectangle {
+            id: cellBackground
             anchors.fill: parent
             visible: !isColumnStatusOne
             opacity: 0.7
@@ -84,6 +87,7 @@ TableView {
             verticalAlignment: Qt.AlignVCenter
             horizontalAlignment: isColumnTextual ? Qt.AlignLeft : Qt.AlignHCenter
             padding: 4
+            leftPadding: isPovNickname ? 12 : 4
             text: value
             textFormat: Text.StyledText
             font.family: ((kind !== Scoreboard.Glyph && kind !== Scoreboard.Status) || value < 256) ?
@@ -96,12 +100,29 @@ TableView {
         }
 
         Loader {
-            active: value && shouldBeDisplayedAsIcon
-            anchors.centerIn: parent
-            width: 20
-            height: 20
+            active: (shouldBeDisplayedAsIcon && value) || isPovNickname
+            // Anchors should not be conditionally assigned using regular bindings in general.
+            // We do not change column kinds upon creation, so this works and saves instantiating redundant items/states
+            anchors.left: isPovNickname ? parent.left : undefined
+            anchors.horizontalCenter: isPovNickname ? undefined : parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
+            sourceComponent: isPovNickname ? povMarkComponent : imageComponent
+        }
 
-            sourceComponent: Image {
+        Component {
+            id: povMarkComponent
+            Rectangle {
+                anchors.left: parent.left
+                height: tableDelegate.height
+                width: 8
+                radius: 1
+                color: Qt.lighter(cellBackground.color, 1.1)
+            }
+        }
+
+        Component {
+            id: imageComponent
+            Image {
                 opacity: valueOpacity
                 mipmap: true
                 width: 20
