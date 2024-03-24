@@ -191,7 +191,7 @@ auto MuteFilter::handleMessage( const ChatMessage &message ) -> std::optional<Me
 
 bool RespectHandler::skipStatsForClient( const edict_s *ent ) const {
 	const auto &entry = m_entries[ENTNUM( ent ) - 1];
-	return entry.hasViolatedCodex || entry.hasIgnoredCodex;
+	return entry.m_hasViolatedCodex || entry.m_hasIgnoredCodex;
 }
 
 void RespectHandler::addToReportStats( const edict_s *ent, RespectStats *reported ) {
@@ -222,7 +222,7 @@ bool IgnoreFilter::ignores( const edict_s *target, const edict_s *source ) const
 
 RespectHandler::RespectHandler() {
 	for( int i = 0; i < MAX_CLIENTS; ++i ) {
-		m_entries[i].ent = game.edicts + i + 1;
+		m_entries[i].m_ent = game.edicts + i + 1;
 	}
 	reset();
 }
@@ -260,11 +260,6 @@ auto RespectHandler::handleMessage( const ChatMessage &message ) -> std::optiona
 		return std::nullopt;
 	}
 
-	// Allow public chatting in timeouts
-	if( GS_MatchPaused() ) {
-		return std::nullopt;
-	}
-
 	const auto matchState = GS_MatchState();
 	// Ignore until countdown
 	if( matchState < MATCH_STATE_COUNTDOWN ) {
@@ -278,24 +273,23 @@ auto RespectHandler::handleMessage( const ChatMessage &message ) -> std::optiona
 }
 
 void RespectHandler::ClientEntry::reset() {
-	warnedAt = 0;
-	firstJoinedGameAt = 0;
-	std::fill( std::begin( firstSaidAt ), std::end( firstSaidAt ), 0 );
-	std::fill( std::begin( lastSaidAt ), std::end( lastSaidAt ), 0 );
-	std::fill( std::begin( numSaidTokens ), std::end( numSaidTokens ), 0 );
-	saidBefore = false;
-	saidAfter = false;
-	hasTakenCountdownHint = false;
-	hasTakenStartHint = false;
-	hasTakenLastStartHint = false;
-	hasTakenFinalHint = false;
-	hasIgnoredCodex = false;
-	hasViolatedCodex = false;
+	m_warnedAt = 0;
+	m_joinedMidGameAt = 0;
+	std::fill( std::begin( m_lastSaidAt ), std::end( m_lastSaidAt ), 0 );
+	std::fill( std::begin( m_numSaidTokens ), std::end( m_numSaidTokens ), 0 );
+	m_hasCompletedMatchStartAction = false;
+	m_hasCompletedMatchEndAction = false;
+	m_hasTakenCountdownHint = false;
+	m_hasTakenStartHint = false;
+	m_hasTakenSecondStartHint = false;
+	m_hasTakenFinalHint = false;
+	m_hasIgnoredCodex = false;
+	m_hasViolatedCodex = false;
 }
 
 bool RespectHandler::ClientEntry::handleMessage( const ChatMessage &message ) {
 	// If has already violated or ignored the Codex
-	if( hasViolatedCodex || hasIgnoredCodex ) {
+	if( m_hasViolatedCodex || m_hasIgnoredCodex ) {
 		return false;
 	}
 
@@ -306,78 +300,91 @@ bool RespectHandler::ClientEntry::handleMessage( const ChatMessage &message ) {
 	}
 
 	// Skip messages from spectators unless being post-match.
-	if( matchState < MATCH_STATE_POSTMATCH && ( ent->s.team == TEAM_SPECTATOR ) ) {
+	if( matchState < MATCH_STATE_POSTMATCH && ( m_ent->s.team == TEAM_SPECTATOR ) ) {
 		return false;
 	}
 
-	// Now check for RnS tokens...
-	wsw::StaticString<MAX_CHAT_BYTES> text( message.text );
-	// TODO: Make checkForTokens accept a StringView argument
-	if( checkForTokens( text.data() ) ) {
+	if( processMessageAsRespectTokensOnlyMessage( message.text ) ) {
 		return false;
 	}
 
 	// Skip further tests for spectators (we might have saved post-match tokens that could be important)
-	if( ent->s.team == TEAM_SPECTATOR ) {
+	if( m_ent->s.team == TEAM_SPECTATOR ) {
+		return false;
+	}
+	// Allow chatting (and just save respect tokens) in timeouts as well
+	if( GS_MatchPaused() ) {
 		return false;
 	}
 
-	if( G_ISGHOSTING( ent ) ) {
-		// This is primarily for round-based gametypes. Just print a warning.
-		// Fragged players waiting for a next round start
-		// are not considered spectators while really they are.
-		// Other gametypes should follow this behaviour to avoid misunderstanding rules.
-		displayCodexViolationWarning();
+	bool displayingWarningRequested = false;
+	bool respectViolationTriggered  = false;
+
+	if( G_ISGHOSTING( m_ent ) ) {
+		if( const int64_t millisSinceLastWarn = level.time - m_warnedAt; millisSinceLastWarn >= 2000 ) {
+			// This is primarily for round-based gametypes. Just print a warning.
+			// Fragged players waiting for a next round start
+			// are not considered spectators while really they are.
+			// Other gametypes should follow this behaviour to avoid misunderstanding rules.
+			displayingWarningRequested = true;
+		}
+	} else {
+		// We do not intercept this condition in RespectHandler::HandleMessage()
+		// as we still need to collect last said tokens for clients using CheckForTokens()
+		if( matchState <= MATCH_STATE_PLAYTIME ) {
+			if( matchState < MATCH_STATE_PLAYTIME ) {
+				displayingWarningRequested = true;
+				// Don't set the timestamp
+			} else {
+				if( !m_warnedAt ) {
+					m_warnedAt = level.time;
+					displayingWarningRequested = true;
+				} else {
+					// Don't warn again for occasional flood
+					if( const int64_t millisSinceLastWarn = level.time - m_warnedAt; millisSinceLastWarn > 2000 ) {
+						// Allow speaking occasionally once per 5 minutes
+						if( millisSinceLastWarn > 5 * 60 * 1000 ) {
+							m_warnedAt = level.time;
+							displayingWarningRequested = true;
+						} else {
+							m_hasViolatedCodex = true;
+							respectViolationTriggered = true;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	assert( !( displayingWarningRequested && respectViolationTriggered ) );
+	if( displayingWarningRequested ) {
+		const wsw::StringView title( "Less talk, let's play!"_asView );
+		const wsw::StringView desc( ""_asView );
+		// Zero-size arrays are illegal for MSVC. We should switch to passing std::span eventually.
+		const std::pair<wsw::StringView, wsw::StringView> actions[1];
+		G_SendActionRequest( m_ent, "respectWarning"_asView, 3000, title, desc, actions, actions + 0 );
+		// Continue the message handling
 		return false;
 	}
 
-	// We do not intercept this condition in RespectHandler::HandleMessage()
-	// as we still need to collect last said tokens for clients using CheckForTokens()
-	if( matchState > MATCH_STATE_PLAYTIME ) {
-		return false;
-	}
-
-	if( matchState < MATCH_STATE_PLAYTIME ) {
-		displayCodexViolationWarning();
-		return false;
-	}
-
-	// Never warned (at start of the level)
-	if( !warnedAt ) {
-		warnedAt = level.time;
-		displayCodexViolationWarning();
-		// Let the message be printed by default facilities
-		return false;
-	}
-
-	const int64_t millisSinceLastWarn = level.time - warnedAt;
-	// Don't warn again for occasional flood
-	if( millisSinceLastWarn < 2000 ) {
-		// Swallow messages silently
+	if( respectViolationTriggered ) {
+		// Print the message first
+		ChatPrintHelper chatPrintHelper( m_ent, message.clientCommandNum, message.text );
+		chatPrintHelper.printToEverybody( ChatHandlersChain::instance() );
+		// Then announce
+		announceMisconductBehaviour( "violated" );
+		// Interrupt the message handling
 		return true;
 	}
 
-	// Allow speaking occasionally once per 5 minutes
-	if( millisSinceLastWarn > 5 * 60 * 1000 ) {
-		warnedAt = level.time;
-		displayCodexViolationWarning();
-		return false;
-	}
-
-	hasViolatedCodex = true;
-	// Print the message first
-	ChatPrintHelper chatPrintHelper( ent, message.clientCommandNum, message.text );
-	chatPrintHelper.printToEverybody( ChatHandlersChain::instance() );
-	// Then announce
-	announceMisconductBehaviour( "violated" );
-	// Interrupt handing of the message
-	return true;
+	// Continue the message handling
+	return false;
 }
 
 void RespectHandler::ClientEntry::announceMisconductBehaviour( const char *action ) {
 	// Ignore bots.
 	// We plan to add R&S bot behaviour but do not currently want to touch the game module
-	if( ent->r.svflags & SVF_FAKECLIENT ) {
+	if( m_ent->r.svflags & SVF_FAKECLIENT ) {
 		return;
 	}
 
@@ -385,76 +392,43 @@ void RespectHandler::ClientEntry::announceMisconductBehaviour( const char *actio
 	(void)action;
 
 	char message[256] = S_COLOR_YELLOW "'" S_COLOR_CYAN "Fair play" S_COLOR_YELLOW "' award lost";
-
-	G_PrintMsg( ent, "%s!\n", message );
-}
-
-void RespectHandler::ClientEntry::announceFairPlay() {
-	G_PlayerAward( ent, S_COLOR_CYAN "Fair play!" );
-	G_PrintMsg( ent, "Your stats and awards have been confirmed!\n" );
-
-	char cmd[MAX_STRING_CHARS];
-	Q_snprintfz( cmd, sizeof( cmd ), "ply \"%s\"", S_RESPECT_REWARD );
-	trap_GameCmd( ent, cmd );
+	G_PrintMsg( m_ent, "%s!\n", message );
 }
 
 class RespectToken {
-	const char *name { nullptr };
-	wsw::StringView *aliases { nullptr };
-	int tokenNum { -1 };
-	int numAliases { -1 };
+	const wsw::StringView m_name;
+	const unsigned m_tokenNum;
+	const wsw::Vector<wsw::StringView> m_aliases;
 
-	// TODO: Can all this stuff be implemented using variadic templates?
-	void InitFrom( const char *name_, int tokenNum_, int numAliases_, ... ) {
-		aliases = (wsw::StringView *)::malloc( numAliases_ * sizeof( wsw::StringView ) );
-		numAliases = numAliases_;
-		name = name_;
-		tokenNum = tokenNum_;
-
-		va_list va;
-		va_start( va, numAliases_ );
-		for( int i = 0; i < numAliases_; ++i ) {
-			const char *alias = va_arg( va, const char * );
-			new( aliases + i )wsw::StringView( alias );
-		}
-		va_end( va );
-	}
-
-	int TryMatchingByAlias( const char *p, const wsw::StringView &alias ) const;
+	[[nodiscard]]
+	auto tryMatchingByAlias( const char *p, const wsw::StringView &alias ) const -> std::optional<unsigned>;
 public:
-	RespectToken( const char *name_, int tokenNum_, const char *alias1 ) {
-		InitFrom( name_, tokenNum_, 1, alias1 );
+	RespectToken( const wsw::StringView &name, unsigned tokenNum, wsw::Vector<wsw::StringView> &&aliases ) noexcept
+		: m_name( name ), m_tokenNum( tokenNum ), m_aliases( aliases ) {
+		assert( !m_aliases.empty() );
+		assert( std::all_of( m_aliases.begin(), m_aliases.end(), []( const wsw::StringView &a ) { return a.isZeroTerminated(); } ) );
 	}
 
-	RespectToken( const char *name_, int tokenNum_, const char *a1, const char *a2, const char *a3 ) {
-		InitFrom( name_, tokenNum_, 3, a1, a2, a3 );
-	}
+	[[nodiscard]]
+	auto getName() const -> const wsw::StringView & { return m_name; }
+	[[nodiscard]]
+	auto getNum() const -> unsigned { return m_tokenNum; }
 
-	RespectToken( const char *name_, int tokenNum_, const char *a1, const char *a2, const char *a3, const char *a4 ) {
-		InitFrom( name_, tokenNum_, 4, a1, a2, a3, a4 );
-	}
-
-	~RespectToken() {
-		::free( aliases );
-	}
-
-	const char *Name() const { return name; }
-	int TokenNum() const { return tokenNum; }
-
-	int GetMatchedLength( const char *p ) const;
+	[[nodiscard]]
+	auto getMatchedLength( const char *p ) const -> std::optional<unsigned>;
 };
 
-int RespectToken::GetMatchedLength( const char *p ) const {
-	for( int i = 0; i < numAliases; ++i ) {
-		const int len = TryMatchingByAlias( p, aliases[i] );
-		if( len > 0 ) {
-			return len;
+auto RespectToken::getMatchedLength( const char *p ) const -> std::optional<unsigned> {
+	for( const wsw::StringView &alias: m_aliases ) {
+		if( const std::optional<unsigned> maybeMatchedLen = tryMatchingByAlias( p, alias ) ) {
+			return maybeMatchedLen;
 		}
 	}
-	return -1;
+	return std::nullopt;
 }
 
-int RespectToken::TryMatchingByAlias( const char *p, const wsw::StringView &alias ) const {
+auto RespectToken::tryMatchingByAlias( const char *p, const wsw::StringView &alias ) const -> std::optional<unsigned> {
+	assert( alias.isZeroTerminated() );
 	const char *const start = p;
 	for( const char aliasChar: alias ) {
 		assert( !::isalpha( aliasChar ) || ::islower( aliasChar ) );
@@ -465,75 +439,70 @@ int RespectToken::TryMatchingByAlias( const char *p, const wsw::StringView &alia
 				break;
 			}
 			if( charToMatch != '^' ) {
-				return -1;
+				return std::nullopt;
 			}
 			const char nextCharToMatch = *p++;
 			if( nextCharToMatch && !::isdigit( nextCharToMatch ) ) {
-				return -1;
+				return std::nullopt;
 			}
 		}
 	}
-	return (int)( p - start );
+	return (unsigned)( p - start );
 }
 
 class RespectTokensRegistry {
-	static const std::array<RespectToken, 10> TOKENS;
+	static const std::array<RespectToken, 10> kTokens;
 
-	static_assert( RespectHandler::kNumTokens == 10, "" );
+	static_assert( RespectHandler::kNumTokens == 10 );
 public:
-	// For players staying in game during the match
-	static const int SAY_AT_START_TOKEN_NUM;
-	static const int SAY_AT_END_TOKEN_NUM;
+	static const unsigned kSayAtStartTokenNum;
+	static const unsigned kSayAtEndTokenNum;
 
-	/**
-	 * Finds a number of a token (a number of a token aliases group) the supplied string matches.
-	 * @param p a pointer to a string data. Should not point to a white-space. A successful match advances this token.
-	 * @return a number of token (of a token aliases group), a negative value on failure.
-	 */
-	static int MatchByToken( const char **p );
+	[[nodiscard]]
+	static auto matchByToken( const char **p ) -> std::optional<unsigned>;
 
-	static const RespectToken &TokenByName( const char *name ) {
-		for( const RespectToken &token: TOKENS ) {
-			if( !Q_stricmp( token.Name(), name ) ) {
-				return token;
+	[[nodiscard]]
+	static auto findByName( const wsw::StringView &name ) -> const RespectToken * {
+		for( const RespectToken &token: kTokens ) {
+			if( token.getName().equalsIgnoreCase( name ) ) {
+				return std::addressof( token );
 			}
 		}
-		abort();
+		return nullptr;
 	}
 
-	static const RespectToken &TokenForNum( int num ) {
-		assert( (size_t)num < TOKENS.size() );
-		assert( TOKENS[num].TokenNum() == num );
-		return TOKENS[num];
+	[[nodiscard]]
+	static auto getTokenForNum( unsigned num ) -> const RespectToken & {
+		const auto &result = kTokens[num];
+		assert( result.getNum() == num );
+		return result;
 	}
 };
 
-const std::array<RespectToken, 10> RespectTokensRegistry::TOKENS = {{
-	RespectToken( "hi", 0, "hi" ),
-	RespectToken( "bb", 1, "bb" ),
-	RespectToken( "glhf", 2, "glhf", "gl", "hf" ),
-	RespectToken( "gg", 3, "ggs", "gg", "bgs", "bg" ),
-	RespectToken( "plz", 4, "plz" ),
-	RespectToken( "tks", 5, "tks" ),
-	RespectToken( "soz", 6, "soz" ),
-	RespectToken( "n1", 7, "n1" ),
-	RespectToken( "nt", 8, "nt" ),
-	RespectToken( "lol", 9, "lol" ),
+const std::array<RespectToken, 10> RespectTokensRegistry::kTokens = {{
+	{ "hi"_asView, 0, { "hi"_asView } },
+	{ "bb"_asView, 1, { "bb"_asView } },
+	{ "glhf"_asView, 2, { "glhf"_asView, "gl"_asView, "hf"_asView } },
+	{ "gg"_asView, 3, { "ggs"_asView, "gg"_asView, "bgs"_asView, "bg"_asView } },
+	{ "plz"_asView, 4, { "plz"_asView } },
+	{ "tks"_asView, 5, { "tks"_asView } },
+	{ "soz"_asView, 6, { "soz"_asView } },
+	{ "n1"_asView, 7, { "n1"_asView } },
+	{ "nt"_asView, 8, { "nt"_asView } },
+	{ "lol"_asView, 9, { "lol"_asView } },
 }};
 
-const int RespectTokensRegistry::SAY_AT_START_TOKEN_NUM = RespectTokensRegistry::TokenByName( "glhf" ).TokenNum();
-const int RespectTokensRegistry::SAY_AT_END_TOKEN_NUM = RespectTokensRegistry::TokenByName( "gg" ).TokenNum();
+const unsigned RespectTokensRegistry::kSayAtStartTokenNum = RespectTokensRegistry::findByName( "glhf"_asView )->getNum();
+const unsigned RespectTokensRegistry::kSayAtEndTokenNum   = RespectTokensRegistry::findByName( "gg"_asView )->getNum();
 
-int RespectTokensRegistry::MatchByToken( const char **p ) {
-	for( const RespectToken &token: TOKENS ) {
-		int len = token.GetMatchedLength( *p );
-		if( len < 0 ) {
-			continue;
+auto RespectTokensRegistry::matchByToken( const char **p ) -> std::optional<unsigned> {
+	for( const RespectToken &token: kTokens ) {
+		if( const std::optional<unsigned> maybeMatchedLength = token.getMatchedLength( *p ) ) {
+			*p += *maybeMatchedLength;
+			return token.getNum();
 		}
-		*p += len;
-		return token.TokenNum();
 	}
-	return -1;
+	return std::nullopt;
 }
 
 /**
@@ -578,16 +547,16 @@ static bool StripUpToMaybeToken( const char **s, int *numWhitespaceChars ) {
 	return true;
 }
 
-bool RespectHandler::ClientEntry::checkForTokens( const char *message ) {
+bool RespectHandler::ClientEntry::processMessageAsRespectTokensOnlyMessage( const wsw::StringView &message ) {
 	// Do not modify tokens count immediately
 	// Either this routine fails completely or stats for all tokens get updated
-	int numFoundTokens[kNumTokens];
+	unsigned numFoundTokens[kNumTokens];
 	std::fill( std::begin( numFoundTokens ), std::end( numFoundTokens ), 0 );
 
-	const int64_t levelTime = level.time;
-
 	bool expectPunctOrSpace = false;
-	const char *p = message;
+	// TODO: Make everything work with string views directly
+	wsw::StaticString<MAX_STRING_CHARS> buffer( message.data(), message.size() );
+	const char *p = buffer.data();
 	for(;; ) {
 		int numWhitespaceChars = 0;
 		// If there were malformed color tokens
@@ -602,154 +571,129 @@ bool RespectHandler::ClientEntry::checkForTokens( const char *message ) {
 		if( expectPunctOrSpace && !numWhitespaceChars ) {
 			return false;
 		}
-		int tokenNum = RespectTokensRegistry::MatchByToken( &p );
-		if( tokenNum < 0 ) {
+		const std::optional<unsigned> maybeTokenNum = RespectTokensRegistry::matchByToken( &p );
+		if( maybeTokenNum == std::nullopt ) {
 			return false;
 		}
-		numFoundTokens[tokenNum]++;
+		numFoundTokens[*maybeTokenNum]++;
 		// Expect a whitespace after just matched token
 		// (punctuation characters are actually allowed as well).
 		expectPunctOrSpace = true;
 	}
 
-	for( int tokenNum = 0; tokenNum < kNumTokens; ++tokenNum ) {
-		int numTokens = numFoundTokens[tokenNum];
-		if( !numTokens ) {
-			continue;
+	const int64_t levelTime = level.time;
+	for( unsigned tokenNum = 0; tokenNum < kNumTokens; ++tokenNum ) {
+		if( const unsigned numTokens = numFoundTokens[tokenNum] ) {
+			m_numSaidTokens[tokenNum] += numTokens;
+			m_lastSaidAt[tokenNum] = levelTime;
 		}
-		this->numSaidTokens[tokenNum] += numTokens;
-		this->lastSaidAt[tokenNum] = levelTime;
 	}
 
 	return true;
 }
 
 void RespectHandler::ClientEntry::checkBehaviour( const int64_t matchStartTime ) {
-	if( !ent->r.inuse ) {
+	if( !m_ent->r.inuse ) {
 		return;
 	}
 
-	if( !ent->r.client->stats.had_playtime ) {
+	if( !m_ent->r.client->stats.had_playtime ) {
 		return;
 	}
 
-	if( saidBefore && saidAfter ) {
+	if( m_hasViolatedCodex || m_hasIgnoredCodex ) {
 		return;
 	}
 
-	const auto levelTime = level.time;
-	const auto matchState = GS_MatchState();
-	const int startTokenNum = RespectTokensRegistry::SAY_AT_START_TOKEN_NUM;
+	if( m_hasCompletedMatchStartAction && m_hasCompletedMatchEndAction ) {
+		return;
+	}
+
+	const auto levelTime     = level.time;
+	const auto matchState    = GS_MatchState();
+	const auto startTokenNum = RespectTokensRegistry::kSayAtStartTokenNum;
 
 	if( matchState == MATCH_STATE_COUNTDOWN ) {
-		// If has just said "glhf"
-		if( levelTime - lastSaidAt[startTokenNum] < 64 ) {
-			saidBefore = true;
-		}
-		if( !hasTakenCountdownHint ) {
-			requestClientRespectAction( startTokenNum );
-			hasTakenCountdownHint = true;
-		}
-		return;
-	}
-
-	if( matchState == MATCH_STATE_PLAYTIME ) {
-		if( saidBefore || hasViolatedCodex ) {
-			return;
-		}
-
-		if( firstJoinedGameAt > matchStartTime ) {
-			saidBefore = true;
-			return;
-		}
-
-		// If a client has joined a spectators team
-		if( ent->s.team == TEAM_SPECTATOR ) {
-			saidBefore = true;
-			return;
-		}
-
-		const auto lastActivityAt = ent->r.client->last_activity;
-		// Skip inactive clients considering their behaviour respectful
-		if( !lastActivityAt || levelTime - lastActivityAt > 10000 ) {
-			saidBefore = true;
-			return;
-		}
-
-		if( levelTime - lastSaidAt[startTokenNum] < 64 ) {
-			saidBefore = true;
-			return;
-		}
-
-		const int64_t countdownStartTime = matchStartTime;
-		if( levelTime - countdownStartTime < 1500 ) {
-			return;
-		}
-
-		if( !hasTakenStartHint && !hasViolatedCodex ) {
-			requestClientRespectAction( startTokenNum );
-			hasTakenStartHint = true;
-			return;
-		}
-
-		// Wait for making a second hint
-		if( levelTime - countdownStartTime < 6500 ) {
-			return;
-		}
-
-		if( !hasTakenLastStartHint && !hasViolatedCodex ) {
-			requestClientRespectAction( startTokenNum );
-			hasTakenLastStartHint = true;
-			return;
-		}
-
-		if( !hasIgnoredCodex && levelTime - countdownStartTime > 10000 ) {
-			// The misconduct behaviour is going to be detected inevitably.
-			// This is just to prevent massive console spam at the same time.
-			if( random() > 0.97f ) {
-				hasIgnoredCodex = true;
-				announceMisconductBehaviour( "ignored" );
+		if( !m_hasCompletedMatchStartAction ) {
+			// If has just said "glhf"
+			if( levelTime - m_lastSaidAt[startTokenNum] < 64 ) {
+				m_hasCompletedMatchStartAction = true;
+			} else {
+				if( !m_hasTakenCountdownHint ) {
+					requestClientRespectAction( startTokenNum );
+					m_hasTakenCountdownHint = true;
+				}
 			}
-			return;
+		}
+	} else if( matchState == MATCH_STATE_PLAYTIME ) {
+		if( !m_hasCompletedMatchStartAction ) {
+			const auto lastActivityAt = m_ent->r.client->last_activity;
+			if( !lastActivityAt || levelTime - lastActivityAt > 10000 ) {
+				// Skip inactive clients considering their behaviour respectful
+				m_hasCompletedMatchStartAction = true;
+			} else if( levelTime - m_lastSaidAt[startTokenNum] < 64 ) {
+				// Complete the start action
+				m_hasCompletedMatchStartAction = true;
+			} else {
+				const int64_t countdownStartTime = wsw::max( m_joinedMidGameAt, matchStartTime );
+				if( levelTime - countdownStartTime > 1500 ) {
+					if( !m_hasTakenStartHint ) {
+						requestClientRespectAction( startTokenNum );
+						m_hasTakenStartHint = true;
+					} else {
+						// Wait for making a second hint
+						if( levelTime - countdownStartTime > 1500 + 5000 ) {
+							if( !m_hasTakenSecondStartHint ) {
+								requestClientRespectAction( startTokenNum );
+								m_hasTakenSecondStartHint = true;
+							} else {
+								// Consider that the user has ignored the R&S Codex
+								if( levelTime - countdownStartTime > 10000 ) {
+									// The misconduct behaviour is going to be detected inevitably.
+									// This is just to prevent massive console spam at the same time.
+									if( random() > 0.95f ) {
+										m_hasIgnoredCodex = true;
+										announceMisconductBehaviour( "ignored" );
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	} else if( matchState == MATCH_STATE_POSTMATCH ) {
+		if( !m_hasCompletedMatchEndAction ) {
+			// A note: we do not distinguish players that became spectators mid-game
+			// and players that have played till the match end.
+			// They still have to say the mandatory token at the end with the single exception of becoming inactive.
+			const auto lastActivityAt = m_ent->r.client->last_activity;
+			if( !lastActivityAt || levelTime - lastActivityAt > 10000 ) {
+				m_hasCompletedMatchEndAction = true;
+			} else {
+				const unsigned endTokenNum = RespectTokensRegistry::kSayAtEndTokenNum;
+				if( levelTime - m_lastSaidAt[endTokenNum] < 64 ) {
+					G_PlayerAward( m_ent, S_COLOR_CYAN "Fair play!" );
+					G_PrintMsg( m_ent, "Your stats and awards have been confirmed!\n" );
+
+					char cmd[MAX_STRING_CHARS];
+					Q_snprintfz( cmd, sizeof( cmd ), "ply \"%s\"", S_RESPECT_REWARD );
+					trap_GameCmd( m_ent, cmd );
+
+					m_hasCompletedMatchEndAction = true;
+				} else {
+					if( !m_hasTakenFinalHint ) {
+						requestClientRespectAction( endTokenNum );
+						m_hasTakenFinalHint = true;
+					}
+				}
+			}
 		}
 	}
-
-	if( matchState != MATCH_STATE_POSTMATCH ) {
-		return;
-	}
-
-	if( hasViolatedCodex || hasIgnoredCodex ) {
-		return;
-	}
-
-	// A note: we do not distinguish players that became spectators mid-game
-	// and players that have played till the match end.
-	// They still have to say the mandatory token at the end with the single exception of becoming inactive.
-
-	const auto lastActivityAt = ent->r.client->last_activity;
-	if( !lastActivityAt || levelTime - lastActivityAt > 10000 ) {
-		saidAfter = true;
-		return;
-	}
-
-	const int endTokenNum = RespectTokensRegistry::SAY_AT_END_TOKEN_NUM;
-	if( levelTime - lastSaidAt[endTokenNum] < 64 ) {
-		if( !saidAfter ) {
-			announceFairPlay();
-			saidAfter = true;
-		}
-	}
-
-	if( saidAfter || hasTakenFinalHint ) {
-		return;
-	}
-
-	requestClientRespectAction( endTokenNum );
-	hasTakenFinalHint = true;
 }
 
-void RespectHandler::ClientEntry::requestClientRespectAction( int tokenNum ) {
-	wsw::StringView rawTokenView( RespectTokensRegistry::TokenForNum( tokenNum ).Name() );
+void RespectHandler::ClientEntry::requestClientRespectAction( unsigned tokenNum ) {
+	wsw::StringView rawTokenView( RespectTokensRegistry::getTokenForNum( tokenNum ).getName() );
 	wsw::StaticString<8> token;
 	token << rawTokenView;
 	for( char &ch: token ) {
@@ -762,7 +706,7 @@ void RespectHandler::ClientEntry::requestClientRespectAction( int tokenNum ) {
 	title << "Say "_asView << yellow << token << white << ", please!"_asView;
 
 	// Client bindings for a 1st token start at 0-th offset in the numeric keys row.
-	const int keyNum = ( tokenNum + 1 ) % 10;
+	const unsigned keyNum = ( tokenNum + 1 ) % 10;
 
 	wsw::StaticString<32> desc;
 	desc << "Press "_asView << yellow << keyNum << white << " for that"_asView;
@@ -773,102 +717,48 @@ void RespectHandler::ClientEntry::requestClientRespectAction( int tokenNum ) {
 	command << "say "_asView << rawTokenView;
 
 	const std::pair<wsw::StringView, wsw::StringView> actions[1] { { key.asView(), command.asView() } };
-	G_SendActionRequest( ent, "respectAction"_asView, 4000, title.asView(), desc.asView(), actions, actions + 1 );
-}
-
-void RespectHandler::ClientEntry::displayCodexViolationWarning() {
-	const wsw::StringView title( "Less talk, let's play!"_asView );
-	const wsw::StringView desc( ""_asView );
-	// Zero-size arrays are illegal for MSVC. We should switch to passing std::span eventually.
-	const std::pair<wsw::StringView, wsw::StringView> actions[1];
-	G_SendActionRequest( ent, "respectWarning"_asView, 3000, title, desc, actions, actions + 0 );
+	G_SendActionRequest( m_ent, "respectAction"_asView, 4000, title.asView(), desc.asView(), actions, actions + 1 );
 }
 
 void RespectHandler::ClientEntry::onClientDisconnected() {
-	if( GS_MatchState() != MATCH_STATE_PLAYTIME ) {
-		return;
-	}
-
-	if( !ent->r.client->stats.had_playtime ) {
-		return;
-	}
-
-	// Skip bots currently
-	if( ent->r.svflags & SVF_FAKECLIENT ) {
-		return;
-	}
-
-	if( hasIgnoredCodex || hasViolatedCodex ) {
-		return;
-	}
-
-	// We have decided to consider the behaviour respectful in this case
-	saidAfter = true;
+	// TODO: Save respect stats
+	// TODO: We should try saving respect state for non-authenticated clients as well
 }
 
 void RespectHandler::ClientEntry::onClientJoinedTeam( int newTeam ) {
-	if( GS_MatchState() > MATCH_STATE_PLAYTIME ) {
-		return;
+	if( GS_MatchState() == MATCH_STATE_PLAYTIME ) {
+		// Invalidate the "saidAfter" flag possible set on a disconnection during a match
+		// TODO: Does it still hold?
+		if( newTeam == TEAM_SPECTATOR ) {
+			m_hasCompletedMatchEndAction = false;
+		} else {
+			if( !m_joinedMidGameAt ) {
+				m_joinedMidGameAt = level.time;
+			}
+		}
 	}
-
-	// Invalidate the "saidAfter" flag possible set on a disconnection during a match
-	if( newTeam == TEAM_SPECTATOR ) {
-		saidAfter = false;
-		return;
-	}
-
-	if( !firstJoinedGameAt && ( GS_MatchState() == MATCH_STATE_PLAYTIME ) ) {
-		firstJoinedGameAt = level.time;
-	}
-
-	// Check whether there is already Codex violation recorded for the player during this match
-	mm_uuid_t clientSessionId = this->ent->r.client->mm_session;
-	if( !clientSessionId.IsValidSessionId() ) {
-		return;
-	}
-
-	/*
-	auto *respectStats = StatsowFacade::Instance()->FindRespectStatsById( clientSessionId );
-	if( !respectStats ) {
-		return;
-	}*/
-
-	/*
-	this->hasViolatedCodex = respectStats->hasViolatedCodex;
-	this->hasIgnoredCodex = respectStats->hasIgnoredCodex;
-	*/
-	this->hasViolatedCodex = false;
-	this->hasIgnoredCodex  = false;
 }
 
 void RespectHandler::ClientEntry::addToReportStats( RespectStats *reportedStats ) {
-	if( reportedStats->hasViolatedCodex ) {
-		return;
-	}
-
-	if( hasViolatedCodex ) {
-		reportedStats->Clear();
-		reportedStats->hasViolatedCodex = true;
-		reportedStats->hasIgnoredCodex = hasIgnoredCodex;
-		return;
-	}
-
-	if( hasIgnoredCodex ) {
-		reportedStats->Clear();
-		reportedStats->hasIgnoredCodex = true;
-		return;
-	}
-
-	if( reportedStats->hasIgnoredCodex ) {
-		return;
-	}
-
-	for( int i = 0; i < kNumTokens; ++i ) {
-		if( !numSaidTokens[i] ) {
-			continue;
+	if( !reportedStats->hasViolatedCodex ) {
+		if( m_hasViolatedCodex ) {
+			reportedStats->Clear();
+			reportedStats->hasViolatedCodex = true;
+			reportedStats->hasIgnoredCodex  = m_hasIgnoredCodex;
+		} else if( !reportedStats->hasIgnoredCodex ) {
+			if( m_hasIgnoredCodex ) {
+				reportedStats->Clear();
+				reportedStats->hasIgnoredCodex = true;
+			} else {
+				for( unsigned tokenNum = 0; tokenNum < kNumTokens; ++tokenNum ) {
+					if( const auto numTokens = m_numSaidTokens[tokenNum]; numTokens > 0 ) {
+						const auto &token = RespectTokensRegistry::getTokenForNum( tokenNum );
+						assert( token.getName().isZeroTerminated() );
+						reportedStats->AddToEntry( token.getName().data(), numTokens );
+					}
+				}
+			}
 		}
-		const auto &token = RespectTokensRegistry::TokenForNum( i );
-		reportedStats->AddToEntry( token.Name(), numSaidTokens[i] );
 	}
 }
 

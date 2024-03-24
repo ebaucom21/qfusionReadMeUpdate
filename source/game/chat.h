@@ -214,46 +214,36 @@ class RespectHandler final : public ChatHandler {
 	enum { kNumTokens = 10 };
 
 	struct ClientEntry {
-		int64_t warnedAt { 0 };
-		int64_t firstJoinedGameAt { 0 };
-		int64_t firstSaidAt[kNumTokens] {};
-		int64_t lastSaidAt[kNumTokens] {};
-		const edict_s *ent { nullptr };
-		int numSaidTokens[kNumTokens] {0 };
-		bool saidBefore { false };
-		bool saidAfter { false };
-		bool hasTakenCountdownHint { false };
-		bool hasTakenStartHint { false };
-		bool hasTakenLastStartHint { false };
-		bool hasTakenFinalHint { false };
-		bool hasIgnoredCodex { false };
-		bool hasViolatedCodex { false };
+		int64_t m_warnedAt { 0 };
+		int64_t m_joinedMidGameAt { 0 };
+		int64_t m_lastSaidAt[kNumTokens] {};
+		const edict_s *m_ent { nullptr };
+		unsigned m_numSaidTokens[kNumTokens] {0 };
+		bool m_hasCompletedMatchStartAction { false };
+		bool m_hasCompletedMatchEndAction { false };
+		bool m_hasTakenCountdownHint { false };
+		bool m_hasTakenStartHint { false };
+		bool m_hasTakenSecondStartHint { false };
+		bool m_hasTakenFinalHint { false };
+		bool m_hasIgnoredCodex { false };
+		bool m_hasViolatedCodex { false };
 
 		void reset();
 
 		[[nodiscard]]
 		bool handleMessage( const ChatMessage &message );
 
-		/**
-		 * Scans the message for respect tokens.
-		 * Adds found tokens to token counters after a successful scan.
-		 * @param message a message to scan
-		 * @return true if only respect tokens are met (or a trimmed string is empty)
-		 */
 		[[nodiscard]]
-		bool checkForTokens( const char *message );
+		bool processMessageAsRespectTokensOnlyMessage( const wsw::StringView &message );
 
 		/**
 		 * Checks actions necessary to honor Respect and Sportsmanship Codex for a client every frame
 		 */
 		void checkBehaviour( int64_t matchStartTime );
 
-		void requestClientRespectAction( int tokenNum );
-		void displayCodexViolationWarning();
+		void requestClientRespectAction( unsigned tokenNum );
 
 		void announceMisconductBehaviour( const char *action );
-
-		void announceFairPlay();
 
 		/**
 		 * Adds accumulated data to reported stats.
