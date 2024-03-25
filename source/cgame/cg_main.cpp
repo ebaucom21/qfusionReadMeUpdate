@@ -4158,11 +4158,17 @@ static void CG_LerpLaserbeamEnt( centity_t *cent, ViewState *viewState ) {
 		return;
 	}
 
-	// Otherwise it keeps resetting the beam prematurely for the "our client" pov
+	// Disallow artificially triggering the effect if the owner does no longer set it
+	if( !owner->localEffects[LOCALEFFECT_LASERBEAM] ) {
+		return;
+	}
+
+	// Disallow resetting the beam prematurely for the "our client" pov
 	const int64_t minNextTime = cg.time + 1;
 	if( owner->localEffects[LOCALEFFECT_LASERBEAM] < minNextTime ) {
 		owner->localEffects[LOCALEFFECT_LASERBEAM] = minNextTime;
 	}
+
 	owner->laserCurved = ( cent->current.type == ET_CURVELASERBEAM ) ? true : false;
 }
 
