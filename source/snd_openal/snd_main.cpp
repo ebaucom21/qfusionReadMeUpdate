@@ -157,6 +157,15 @@ void SoundSystem::shutdown( bool verbose ) {
 	}
 }
 
+auto SoundSystem::getExactName( const SoundSet *sound ) -> std::optional<wsw::StringView> {
+	if( sound ) {
+		if( const auto *exact = std::get_if<SoundSetProps::Exact>( &sound->props.name ) ) {
+			return exact->value;
+		}
+	}
+	return std::nullopt;
+}
+
 ALenum S_SoundFormat( int width, int channels ) {
 	if( width == 1 ) {
 		if( channels == 1 ) {

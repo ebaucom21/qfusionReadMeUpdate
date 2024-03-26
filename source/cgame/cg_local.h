@@ -879,9 +879,11 @@ void CG_CalcViewWeapon( cg_viewweapon_t *viewweapon, ViewState *viewState );
 void CG_ViewWeapon_StartAnimationEvent( int newAnim, ViewState *viewState );
 void CG_ViewWeapon_RefreshAnimation( cg_viewweapon_t *viewweapon, ViewState *viewState );
 
+class DuplicatedEventsFilter;
+
 void CG_FireEvents( bool early );
 void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted );
-void CG_AddAnnouncerEvent( const SoundSet *sound, bool queued );
+void CG_AddAnnouncerEvent( const SoundSet *sound, bool queued, DuplicatedEventsFilter *duplicatedEventsFilter );
 void CG_ReleaseAnnouncerEvents( void );
 void CG_ClearAnnouncerEvents( void );
 

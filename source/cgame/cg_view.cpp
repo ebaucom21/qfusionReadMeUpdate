@@ -306,7 +306,7 @@ static void CG_AddLocalSounds() {
 					const SoundSet *sound = SoundSystem::instance()->registerSound( SoundSetProps {
 						.name = SoundSetProps::Exact { exactName },
 					});
-					CG_AddAnnouncerEvent( sound, false );
+					CG_AddAnnouncerEvent( sound, false, nullptr );
 				}
 
 				lastSecond = remainingSeconds;

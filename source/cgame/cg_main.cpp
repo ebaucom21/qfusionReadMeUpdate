@@ -1728,28 +1728,90 @@ static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dirVec, int weapon, int 
 							  firedef->spread, firedef->v_spread, firedef->timeout );
 }
 
+class DuplicatedEventsFilter {
+public:
+	void reset() {
+		m_queuedAnnouncementGroup.reset();
+		m_nonQueuedAnnouncementGroup.reset();
+	}
+
+	[[nodiscard]]
+	bool permitQueuedAnnouncement( const SoundSet *soundSet ) { return permit( soundSet, &m_queuedAnnouncementGroup ); }
+	[[nodiscard]]
+	bool permitNonQueuedAnnouncement( const SoundSet *soundSet ) { return permit( soundSet, &m_nonQueuedAnnouncementGroup ); }
+private:
+	struct AnnouncementGroup {
+		std::map<wsw::String, uintptr_t, std::less<>> identifiersForNames;
+		wsw::Vector<uintptr_t> blockedAnnouncements;
+		void reset() { blockedAnnouncements.clear(); }
+	};
+
+	[[nodiscard]]
+	static bool permit( const SoundSet *soundSet, AnnouncementGroup *group ) {
+		if( soundSet ) {
+			// Unfortunately, in the current codebase announcements which are logically the same
+			// are not grouped into a single sound set for each logical group.
+			// We have to use this hacky approach to group announcements together.
+			// Consider that alterantives in the same group differ by trailing digits.
+			if( const std::optional<wsw::StringView> maybeExactName = SoundSystem::instance()->getExactName( soundSet ) ) {
+				constexpr wsw::StringView prefix( "sounds/announcer/"_asView );
+				if( maybeExactName->startsWith( prefix, wsw::IgnoreCase ) ) {
+					// Drop the prefix as well so we need fewer boxing for long names
+					const wsw::StringView name = maybeExactName->drop( prefix.size() ).dropRightWhile( []( char ch ) {
+						return std::isdigit( ch );
+					});
+					if( !name.empty() ) {
+						const uintptr_t identifier = getIdentifierForName( name, group );
+						const auto end             = group->blockedAnnouncements.end();
+						if( std::find( group->blockedAnnouncements.begin(), end, identifier ) == end ) {
+							group->blockedAnnouncements.push_back( identifier );
+							return true;
+						}
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	[[nodiscard]]
+	static auto getIdentifierForName( const wsw::StringView &name, AnnouncementGroup *group ) -> uintptr_t {
+		const std::string_view nameView( name.data(), name.size() );
+		if( auto it = group->identifiersForNames.find( nameView ); it != group->identifiersForNames.end() ) {
+			return it->second;
+		}
+		const uintptr_t identifier = group->identifiersForNames.size() + 1;
+		group->identifiersForNames.insert( std::make_pair( wsw::String( nameView ), identifier ) );
+		return identifier;
+	}
+
+	AnnouncementGroup m_queuedAnnouncementGroup;
+	AnnouncementGroup m_nonQueuedAnnouncementGroup;
+};
+
 void CG_ClearAnnouncerEvents( void ) {
 	cg_announcerEventsCurrent = cg_announcerEventsHead = 0;
 }
 
-void CG_AddAnnouncerEvent( const SoundSet *sound, bool queued ) {
-	if( !sound ) {
-		return;
+void CG_AddAnnouncerEvent( const SoundSet *sound, bool queued, DuplicatedEventsFilter *duplicatedEventsFilter ) {
+	if( sound ) [[likely]] {
+		if( !queued ) {
+			if( !duplicatedEventsFilter || duplicatedEventsFilter->permitNonQueuedAnnouncement( sound ) ) {
+				SoundSystem::instance()->startLocalSound( sound, v_volumeAnnouncer.get() );
+				cg_announcerEventsDelay = CG_ANNOUNCER_EVENTS_FRAMETIME; // wait
+			}
+		} else {
+			if( !duplicatedEventsFilter || duplicatedEventsFilter->permitQueuedAnnouncement( sound ) ) {
+				cgNotice() << "Adding announcer event" << (uintptr_t)sound << "filter?" << (int)(duplicatedEventsFilter != nullptr) << "at" << cg.time;
+				if( cg_announcerEventsCurrent + CG_MAX_ANNOUNCER_EVENTS >= cg_announcerEventsHead ) {
+					// full buffer (we do nothing, just let it overwrite the oldest
+				}
+				// add it
+				cg_announcerEvents[cg_announcerEventsHead & CG_MAX_ANNOUNCER_EVENTS_MASK].sound = sound;
+				cg_announcerEventsHead++;
+			}
+		}
 	}
-
-	if( !queued ) {
-		SoundSystem::instance()->startLocalSound( sound, v_volumeAnnouncer.get() );
-		cg_announcerEventsDelay = CG_ANNOUNCER_EVENTS_FRAMETIME; // wait
-		return;
-	}
-
-	if( cg_announcerEventsCurrent + CG_MAX_ANNOUNCER_EVENTS >= cg_announcerEventsHead ) {
-		// full buffer (we do nothing, just let it overwrite the oldest
-	}
-
-	// add it
-	cg_announcerEvents[cg_announcerEventsHead & CG_MAX_ANNOUNCER_EVENTS_MASK].sound = sound;
-	cg_announcerEventsHead++;
 }
 
 void CG_ReleaseAnnouncerEvents( void ) {
@@ -2537,7 +2599,7 @@ static void handlePlayerStatePickupEvent( unsigned event, unsigned parm, ViewSta
 * This events are only received by this client, and only affect it.
  * TODO: For other povs
 */
-static void CG_FirePlayerStateEvents( ViewState *viewState ) {
+static void CG_FirePlayerStateEvents( ViewState *viewState, DuplicatedEventsFilter *duplicatedEventsFilter ) {
 	if( viewState->view.POVent != (int)viewState->snapPlayerState.POVnum ) {
 		return;
 	}
@@ -2584,11 +2646,11 @@ static void CG_FirePlayerStateEvents( ViewState *viewState ) {
 				break;
 
 			case PSEV_ANNOUNCER:
-				CG_AddAnnouncerEvent( cgs.soundPrecache[parm], false );
+				CG_AddAnnouncerEvent( cgs.soundPrecache[parm], false, duplicatedEventsFilter );
 				break;
 
 			case PSEV_ANNOUNCER_QUEUED:
-				CG_AddAnnouncerEvent( cgs.soundPrecache[parm], true );
+				CG_AddAnnouncerEvent( cgs.soundPrecache[parm], true, duplicatedEventsFilter );
 				break;
 
 			default:
@@ -2608,8 +2670,12 @@ void CG_FireEvents( bool early ) {
 		return;
 	}
 
+	// Made static to suppress unnecessary allocations, there's no better solution in this codebase state
+	static DuplicatedEventsFilter duplicatedEventsFilter;
+	duplicatedEventsFilter.reset();
+
 	for( unsigned viewIndex = 0; viewIndex < cg.numSnapViewStates; ++viewIndex ) {
-		CG_FirePlayerStateEvents( &cg.viewStates[viewIndex] );
+		CG_FirePlayerStateEvents( &cg.viewStates[viewIndex], &duplicatedEventsFilter );
 	}
 
 	cg.fireEvents = false;

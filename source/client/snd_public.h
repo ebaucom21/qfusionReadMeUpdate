@@ -127,6 +127,9 @@ public:
 	[[nodiscard]]
 	virtual auto registerSound( const SoundSetProps &props ) -> const SoundSet * = 0;
 
+	[[nodiscard]]
+	auto getExactName( const SoundSet *sound ) -> std::optional<wsw::StringView>;
+
 	virtual void startFixedSound( const SoundSet *sound, const float *origin, int channel, float fvol, float attenuation ) = 0;
 	virtual void startRelativeSound( const SoundSet *sound, int entNum, int channel, float fvol, float attenuation ) = 0;
 	virtual void startGlobalSound( const SoundSet *sound, int channel, float fvol ) = 0;
