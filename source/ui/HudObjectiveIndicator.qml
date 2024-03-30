@@ -49,18 +49,18 @@ Item {
     readonly property int indicatorAnim: indicatorState.anim
 
     readonly property real minFrameBaseOpacity: 0.5
-    readonly property real maxFrameWidth: 72 - 8 + extraExclusiveModeWidth
-    readonly property real maxFrameHeight: 72 - 8
-    readonly property real collapsedHeight: 80
-    readonly property real borderWidth: 5
+    readonly property real maxFrameWidth: Hud.teamScoreHeight - 2 * Hud.elementRadius + extraExclusiveModeWidth
+    readonly property real maxFrameHeight: Hud.teamScoreHeight - 2 * Hud.elementRadius
+    readonly property real collapsedHeight: Hud.teamScoreHeight
+    readonly property real borderWidth: Hud.miniviewBorderWidth
 
     readonly property real barHeight: 16 * barHeightFrac
     readonly property real barMargin: 8 * barHeightFrac
 
     Item {
         id: frameArea
-        anchors.top: parent.top
-        anchors.topMargin: -2
+        anchors.verticalCenter: parent.top
+        anchors.verticalCenterOffset: 0.5 * collapsedHeight
         anchors.horizontalCenter: parent.horizontalCenter
         width: collapsedHeight
         height: collapsedHeight
@@ -79,7 +79,7 @@ Item {
         border.color: indicatorColor
         border.width: borderWidth
         opacity: Math.min(1.0, baseOpacity + (Hud.ui.isShowingScoreboard ? 0.0 : 0.1))
-        radius: 16
+        radius: 1.2 * Hud.elementRadius
 
         function restoreDefaultProperties() {
             if (!frameAlertAnim.running && !frameActionAnim.running) {
@@ -218,6 +218,7 @@ Item {
         width: parent.width - 2 * root.barMargin
         height: root.barHeight
         color: Hud.ui.colorWithAlpha(indicatorColor, 0.6)
+        radius: 0.5 * Hud.elementRadius
 
         Rectangle {
             visible: indicatorProgress

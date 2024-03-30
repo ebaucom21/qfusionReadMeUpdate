@@ -40,14 +40,14 @@ Item {
             width: root.width
             height: root.height
             layer.enabled: true
-            layer.effect: ElevationEffect { elevation: 64 }
+            layer.effect: ElevationEffect { elevation: Hud.elementElevation }
             Component.onDestruction: Hud.destroyLayer(layer)
 
             Rectangle {
                 anchors.fill: parent
                 color: Hud.ui.isShowingTeamChatPopup ? Material.accent : "black"
                 radius: 5
-                opacity: 0.7
+                opacity: Hud.elementBackgroundColor.a
             }
 
             TextField {

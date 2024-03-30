@@ -7,10 +7,9 @@ import net.warsow 2.6
 
 Item {
     id: root
-    // Consider the extra space to the left/right to be equal to the spacing
     implicitWidth: cardWidth * povDataModel.getInventoryModel().numInventoryItems +
-                       layout.spacing * (povDataModel.getInventoryModel().numInventoryItems + 1)
-    implicitHeight: cardHeight + 32 * actualScale
+                       layout.spacing * (povDataModel.getInventoryModel().numInventoryItems - 1)
+    implicitHeight: cardHeight
     width: implicitWidth
     height: implicitHeight
 
@@ -57,8 +56,7 @@ Item {
                     width: delegateItem.width
                     height: cardHeight
                     radius: cardRadius
-                    color: "black"
-                    opacity: 0.7
+                    color: Hud.elementBackgroundColor
                 }
 
                 Rectangle {

@@ -8,8 +8,8 @@ Item {
     id: root
     width: implicitWidth
     height: implicitHeight
-    implicitWidth: back.width + 16 * actualScale
-    implicitHeight: back.height + 16 * actualScale
+    implicitWidth: back.width
+    implicitHeight: back.height
 
     property var povDataModel
     property real miniviewScale
@@ -29,8 +29,7 @@ Item {
         radius: 12 * actualScale
         width: 128 * actualScale
         height: 172 * actualScale
-        color: "black"
-        opacity: 0.7
+        color: Hud.elementBackgroundColor
     }
 
     Image {

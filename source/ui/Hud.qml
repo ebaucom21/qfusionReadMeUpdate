@@ -10,6 +10,15 @@ QtObject {
     readonly property var chatProxy: __chatProxy
     readonly property var teamChatProxy: __teamChatProxy
 
+    readonly property var elementMargin: 16
+    readonly property var elementRadius: 6
+    readonly property var elementElevation: 16
+    readonly property var elementBackgroundColor: Qt.rgba(0.0, 0.0, 0.0, 0.7)
+    readonly property var miniviewItemWidth: 240
+    readonly property var miniviewItemHeight: 160
+    readonly property var miniviewBorderWidth: 4
+    readonly property var teamScoreHeight: 80
+
     function destroyLayer(layer) {
         if (layer) {
             layer.enabled = false

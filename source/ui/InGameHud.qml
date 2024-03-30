@@ -95,6 +95,13 @@ Item {
                         anchors.horizontalCenter: getQmlAnchor(HudLayoutModel.HCenter)
                         anchors.verticalCenter: getQmlAnchor(HudLayoutModel.VCenter)
                     }
+                    PropertyChanges {
+                        target: itemLoader
+                        anchors.topMargin: getQmlMargin(HudLayoutModel.Top)
+                        anchors.bottomMargin: getQmlMargin(HudLayoutModel.Bottom)
+                        anchors.leftMargin: getQmlMargin(HudLayoutModel.Left)
+                        anchors.rightMargin: getQmlMargin(HudLayoutModel.Right)
+                    }
                 },
                 // We can't just disable "arranged" state, we have to force transition to the "reset" state with all anchors reset
                 State {
@@ -108,6 +115,13 @@ Item {
                         anchors.right: undefined
                         anchors.horizontalCenter: undefined
                         anchors.verticalCenter: undefined
+                    }
+                    PropertyChanges {
+                        target: itemLoader
+                        anchors.topMargin: 0
+                        anchors.bottomMargin: 0
+                        anchors.leftMargin: 0
+                        anchors.rightMargin: 0
                     }
                 }
             ]
@@ -439,6 +453,16 @@ Item {
             function getQmlAnchor(anchorBit) {
                 const anchorItem = anchorItemIndex > 0 ? repeater.itemAt(anchorItemIndex - 1) : hudField
                 return getQmlAnchorOfItem(selfAnchors, anchorItemAnchors, anchorBit, anchorItem)
+            }
+
+            function getQmlMargin(anchorBit) {
+                let hasMarginForThisBit
+                if (anchorItemIndex > 0) {
+                    hasMarginForThisBit = hasAnchorMarginWithItem(selfAnchors, anchorItemAnchors, anchorBit)
+                } else {
+                    hasMarginForThisBit = hasAnchorMarginWithField(selfAnchors, anchorItemAnchors, anchorBit)
+                }
+                return hasMarginForThisBit ? (isMiniview ? 2 : Hud.elementMargin) : 0
             }
         }
     }

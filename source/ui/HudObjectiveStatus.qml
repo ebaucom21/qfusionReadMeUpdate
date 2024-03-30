@@ -6,11 +6,10 @@ import net.warsow 2.6
 
 Item {
     id: root
-    // Make anchoring to this element possible even if all indicators are hidden
-    implicitWidth: row.width ? row.width : 1
+    implicitWidth: row.width
     // TODO: Avoid using magic numbers for the height of the team score element
-    implicitHeight: Math.max(row.height, 80)
-    
+    implicitHeight: Math.max(row.height, Hud.teamScoreHeight)
+
     property var commonDataModel
 
     // TODO: Use a single model (QAbstractItemModel) for all indicators?
@@ -36,12 +35,11 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        // Don't leave the gap between team score elements even if all indicators are hidden
-        color: (row.width || root.commonDataModel.hasTwoTeams) ? Qt.rgba(0.0, 0.0, 0.0, 0.6) : "transparent"
-        radius: 1
+        color: row.width ? Qt.rgba(0.0, 0.0, 0.0, 0.6) : "transparent"
+        radius: Hud.elementRadius
 
         layer.enabled: row.width
-        layer.effect: ElevationEffect { elevation: 16 }
+        layer.effect: ElevationEffect { elevation: Hud.elementElevation }
         Component.onDestruction: Hud.destroyLayer(layer)
     }
 

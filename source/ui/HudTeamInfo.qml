@@ -15,7 +15,7 @@ Item {
 
     // TODO: Make the native code track the longest string length and give a hint?
     implicitWidth: 256 + 32 + 32 + (root.commonDataModel.hasLocations ? 128 + 32 : 0)
-    implicitHeight: list.height + 32
+    implicitHeight: list.height
 
     readonly property color evenRowColor: Qt.rgba(0.0, 0.0, 0.0, 0.7)
     readonly property color oddRowColor: Qt.rgba(0.03, 0.03, 0.03, 0.7)
@@ -24,20 +24,32 @@ Item {
         target: Hud.ui
         onDisplayedHudItemsRetrievalRequested: {
             if (list.count) {
-                Hud.ui.supplyDisplayedHudItemAndMargin(list, 64.0)
+                Hud.ui.supplyDisplayedHudItemAndMargin(back, 16.0)
             }
         }
+    }
+
+    Rectangle {
+        id: back
+        visible: list.count
+        anchors.centerIn: parent
+        width: list.width + 2 * Hud.elementRadius
+        height: list.height + 2 * Hud.elementRadius
+        radius: Hud.elementRadius
+        color: "transparent"
+        border.color: Qt.rgba(0.0, 0.0, 0.0, 0.7)
+        border.width: Hud.elementRadius
+        layer.enabled: list.count
+        layer.effect: ElevationEffect { elevation: Hud.elementElevation }
+        Component.onDestruction: Hud.destroyLayer(layer)
     }
 
     ListView {
         id: list
         anchors.centerIn: parent
         height: contentHeight
-        width: root.width - 32
+        width: root.width
         model: root.povDataModel.getTeamListModel()
-        layer.enabled: count
-        layer.effect: ElevationEffect { elevation: 64 }
-        Component.onDestruction: Hud.destroyLayer(layer)
         delegate: Rectangle {
             id: listDelegate
             width: list.width
@@ -51,8 +63,8 @@ Item {
             RowLayout {
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
+                anchors.leftMargin: 6
+                anchors.rightMargin: 6
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
 

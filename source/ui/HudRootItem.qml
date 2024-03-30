@@ -157,13 +157,13 @@ Item {
             Rectangle {
                 color: "transparent"
                 anchors.centerIn: parent
-                width: parent.width + (isATileElement ? 2.0 * border.width : border.width)
-                height: parent.height + (isATileElement ? 2.0 * border.width : border.width)
-                radius: border.width
+                width: parent.width + 2.0 * border.width
+                height: parent.height + 2.0 * border.width
+                radius: Hud.elementRadius
                 border.color: !isATileElement ? Qt.rgba(0.0, 0.0, 0.0, 0.7) :
                                 ((miniviewIndex === Hud.commonDataModel.highlightedMiniviewIndex || miniviewItem.hackyContainsMouse) ?
                                     Material.accent : Qt.rgba(0.5, 0.5, 0.5, 1.0))
-                border.width: isATileElement ? 3 : 4
+                border.width: Hud.miniviewBorderWidth
                 Behavior on border.color { ColorAnimation { duration: 100 } }
             }
         }
@@ -174,7 +174,7 @@ Item {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.right: parent.right
-        anchors.margins: 16
+        anchors.margins: Hud.elementMargin
         width: 480
         sourceComponent: ActionRequestArea {}
     }

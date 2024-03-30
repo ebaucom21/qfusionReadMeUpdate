@@ -7,7 +7,7 @@ import net.warsow 2.6
 
 ListView {
     id: root
-    spacing: 16
+    spacing: Hud.elementMargin
     model: Hud.actionRequestsModel
 
     Connections {
@@ -23,14 +23,14 @@ ListView {
         id: listDelegate
         Component.onDestruction: Hud.ui.ensureObjectDestruction(listDelegate)
         width: parent.width
-        height: Math.max(96, contentColumn.implicitHeight + 32)
+        height: Math.max(96, contentColumn.implicitHeight)
         Rectangle {
             anchors.fill: parent
             radius: 3
             color: expectsInput ? Material.accent : Qt.lighter(Material.background)
             opacity: 0.8
             layer.enabled: true
-            layer.effect: ElevationEffect { elevation: 64 }
+            layer.effect: ElevationEffect { elevation: Hud.elementElevation }
             Component.onDestruction: Hud.destroyLayer(layer)
         }
 

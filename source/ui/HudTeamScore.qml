@@ -19,7 +19,7 @@ Item {
     readonly property real maxNameWidth: Math.max(nameWidth, siblingNameWidth)
 
     implicitWidth: scoreLabel.width + Math.max(270, maxNameWidth + 100)
-    implicitHeight: 80
+    implicitHeight: Hud.teamScoreHeight
     width: implicitWidth
     height: implicitHeight
 
@@ -83,11 +83,10 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: "black"
-        opacity: 0.7
-
+        radius: Hud.elementRadius
+        color: Hud.elementBackgroundColor
         layer.enabled: true
-        layer.effect: ElevationEffect { elevation: 16 }
+        layer.effect: ElevationEffect { elevation: Hud.elementElevation }
         Component.onDestruction: Hud.destroyLayer(layer)
     }
 
@@ -96,8 +95,8 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.margins: 4
-        radius: 1
+        anchors.margins: Hud.elementRadius
+        radius: 0.5 * Hud.elementRadius
         height: 28
         color: Qt.rgba(root.color.r, root.color.g, root.color.b, 1.0)
         opacity: Hud.ui.isShowingScoreboard ? 0.5 : 0.6

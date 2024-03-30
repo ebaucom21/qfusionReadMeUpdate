@@ -37,4 +37,40 @@ Loader {
         }
         return undefined
     }
+
+    function hasAnchorMarginWithItem(selfAnchors, otherAnchors, anchorBit) {
+        // Don't try to get magins for center anchors
+        console.assert(!(anchorBit & (HudLayoutModel.HCenter | HudLayoutModel.VCenter)))
+        if (selfAnchors & anchorBit) {
+            if (anchorBit === HudLayoutModel.Left) {
+                if (otherAnchors & HudLayoutModel.Right) {
+                    return true
+                }
+            } else if (anchorBit === HudLayoutModel.Right) {
+                if (otherAnchors & HudLayoutModel.Left) {
+                    return true
+                }
+            } else if (anchorBit === HudLayoutModel.Top) {
+                if (otherAnchors & HudLayoutModel.Bottom) {
+                    return true
+                }
+            } else if (anchorBit === HudLayoutModel.Bottom) {
+                if (otherAnchors & HudLayoutModel.Top) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    function hasAnchorMarginWithField(selfAnchors, otherAnchors, anchorBit) {
+        // Don't try to get magins for center anchors
+        console.assert(!(anchorBit & (HudLayoutModel.HCenter | HudLayoutModel.VCenter)))
+        if (selfAnchors & anchorBit) {
+            if ((selfAnchors & anchorBit) === (otherAnchors & anchorBit)) {
+                return true
+            }
+        }
+        return false
+    }
 }

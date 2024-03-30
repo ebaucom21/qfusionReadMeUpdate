@@ -7,10 +7,9 @@ import net.warsow 2.6
 
 Item {
     id: root
-    // Consider the extra space to the left/right to be equal to the spacing
     implicitWidth: cardWidth * povDataModel.getInventoryModel().numInventoryItems +
-                       layout.spacing * (povDataModel.getInventoryModel().numInventoryItems + 1)
-    implicitHeight: cardHeight + 24
+                       layout.spacing * (povDataModel.getInventoryModel().numInventoryItems - 1)
+    implicitHeight: cardHeight
     width: implicitWidth
     height: implicitHeight
 
@@ -18,7 +17,7 @@ Item {
 
     readonly property real cardWidth: 60
     readonly property real cardHeight: 100
-    readonly property real cardRadius: 9
+    readonly property real cardRadius: 1.2 * Hud.elementRadius
 
     Connections {
         target: Hud.ui
@@ -28,7 +27,7 @@ Item {
     RowLayout {
         id: layout
         anchors.centerIn: parent
-        spacing: 24
+        spacing: Hud.elementMargin
 
         Repeater {
             model: root.povDataModel.getInventoryModel()
@@ -59,9 +58,8 @@ Item {
                     width: delegateItem.width
                     height: cardHeight
                     radius: cardRadius
-                    color: "black"
-                    opacity: 0.7
-                    layer.effect: ElevationEffect { elevation: 16 }
+                    color: Hud.elementBackgroundColor
+                    layer.effect: ElevationEffect { elevation: Hud.elementElevation }
                     Component.onDestruction: Hud.destroyLayer(layer)
                 }
 

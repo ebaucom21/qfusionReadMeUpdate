@@ -8,8 +8,8 @@ Item {
     id: root
     width: implicitWidth
     height: implicitHeight
-    implicitWidth: 256 + 64 + 32
-    implicitHeight: 108
+    implicitWidth: 256 + 64
+    implicitHeight: Hud.teamScoreHeight
 
     property string iconPath
     property string text
@@ -24,15 +24,12 @@ Item {
 
     Rectangle {
         id: back
-        anchors.centerIn: parent
-        width: 256 + 64
-        height: 72
-        radius: 6
-        color: "black"
-        opacity: 0.7
+        anchors.fill: parent
+        radius: Hud.elementRadius
+        color: Hud.elementBackgroundColor
 
         layer.enabled: true
-        layer.effect: ElevationEffect { elevation: 16 }
+        layer.effect: ElevationEffect { elevation: Hud.elementElevation }
         Component.onDestruction: Hud.destroyLayer(layer)
     }
 

@@ -8,7 +8,8 @@ Item {
     width: implicitWidth
     height: implicitHeight
     implicitWidth: 720
-    implicitHeight: list.height + 20
+    // Let it have intrinsic margins as it's special
+    implicitHeight: list.height + 2 * Hud.elementMargin
     opacity: 0.9
 
     property var povDataModel

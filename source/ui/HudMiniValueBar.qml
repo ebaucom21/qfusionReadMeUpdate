@@ -8,8 +8,8 @@ Item {
     id: root
     width: implicitWidth
     height: implicitHeight
-    implicitWidth: back.width + 2
-    implicitHeight: back.height + 2
+    implicitWidth: back.width
+    implicitHeight: back.height
 
     property string iconPath
     property string text
@@ -28,8 +28,7 @@ Item {
         width: valueLabel.width + image.width + 3 * commonMargin
         height: 72 * actualScale
         radius: 1
-        color: "black"
-        opacity: 0.7
+        color: Hud.elementBackgroundColor
     }
 
     Image {

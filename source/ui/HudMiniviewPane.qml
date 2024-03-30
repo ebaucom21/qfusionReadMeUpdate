@@ -13,15 +13,13 @@ Item {
     property var oldMiniviews: []
     property var oldMiniviewIndices: []
 
-    readonly property var padding: 2
-
     width: implicitWidth
     height: implicitHeight
 
     Component.onCompleted: {
         console.assert(miniviewAllocator)
-        implicitWidth = 2 * padding
-        implicitHeight = 2 * padding
+        implicitWidth  = 0
+        implicitHeight = 0
         applyMiniviewLayoutPass1()
         applyMiniviewLayoutPass2()
     }
@@ -124,9 +122,9 @@ Item {
 
         console.assert(chosenNumRows > 0 && chosenNumColumns > 0)
 
-        let chosenItemWidth  = 240
-        let chosenItemHeight = 160
-        const spacing        = 8
+        const chosenItemWidth  = Hud.miniviewItemWidth
+        const chosenItemHeight = Hud.miniviewItemHeight
+        const spacing          = Hud.elementMargin
 
         let accumHeight   = 0
         let maxAccumWidth = 0
@@ -136,8 +134,8 @@ Item {
             for (let columnNum = 0; columnNum < chosenNumColumns && currViewIndex < oldMiniviews.length; ++columnNum) {
                 const view  = oldMiniviews[currViewIndex]
                 currViewIndex++
-                view.x      = accumWidth + padding
-                view.y      = accumHeight + padding
+                view.x      = accumWidth
+                view.y      = accumHeight
                 view.width  = chosenItemWidth
                 view.height = chosenItemHeight
                 view.parent = root
@@ -148,13 +146,13 @@ Item {
             }
             maxAccumWidth = Math.max(accumWidth, maxAccumWidth)
             accumHeight += chosenItemHeight
-            if (rowNum + 1 < chosenNumRows) {
+            if (rowNum + 1 < chosenNumRows && currViewIndex < oldMiniviews.length) {
                 accumHeight += spacing
             }
         }
 
-        root.implicitWidth  = maxAccumWidth + 2 * padding
-        root.implicitHeight = accumHeight + 2 * padding
+        root.implicitWidth  = maxAccumWidth
+        root.implicitHeight = accumHeight
 
         delegatedUpdateVisibility()
     }

@@ -13,7 +13,7 @@ Item {
     property real miniviewScale
 
     implicitWidth: row.width + 32
-    implicitHeight: isMiniview ? back.height + 6 : 56
+    implicitHeight: isMiniview ? back.height : 56
 
     Connections {
         target: Hud.ui

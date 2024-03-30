@@ -8,25 +8,22 @@ Item {
     id: root
     width: implicitWidth
     height: implicitHeight
-    implicitWidth: 256
-    implicitHeight: 192
+    implicitWidth: Hud.miniviewItemWidth + Hud.miniviewBorderWidth
+    implicitHeight: Hud.miniviewItemHeight + Hud.miniviewBorderWidth
     property var povDataModel
 
     Connections {
         target: Hud.ui
-        onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(back, 64.0)
+        onDisplayedHudItemsRetrievalRequested: Hud.ui.supplyDisplayedHudItemAndMargin(back, 16.0)
     }
 
     Rectangle {
         id: back
-        anchors.centerIn: parent
-        radius: 6
-        width: 0.80 * parent.width
-        height: 0.75 * parent.height
-        color: "black"
-        opacity: 0.7
+        anchors.fill: parent
+        radius: Hud.elementRadius
+        color: Hud.elementBackgroundColor
         layer.enabled: true
-        layer.effect: ElevationEffect { elevation: 64 }
+        layer.effect: ElevationEffect { elevation: Hud.elementElevation }
         Component.onDestruction: Hud.destroyLayer(layer)
     }
 

@@ -10,8 +10,8 @@ Item {
     width: implicitWidth
     height: implicitHeight
 
-    implicitWidth: 240
-    implicitHeight: list.contentHeight + 20
+    implicitWidth: 256
+    implicitHeight: list.contentHeight
 
     property var commonDataModel
 
@@ -27,7 +27,7 @@ Item {
     ListView {
         id: list
         model: root.commonDataModel.getFragsFeedModel()
-        width: parent.width - 16
+        width: parent.width
         height: contentHeight
         anchors.centerIn: parent
         spacing: 4
