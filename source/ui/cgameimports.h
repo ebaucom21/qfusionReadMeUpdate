@@ -14,10 +14,14 @@ public:
 	bool enabled { false };
 
 	[[nodiscard]]
-	bool operator!=( const BasicObjectiveIndicatorState &that ) const {
+	bool operator==( const BasicObjectiveIndicatorState &that ) const {
 		return color[0] == that.color[0] && color[1] == that.color[1] && color[2] == that.color[2] &&
 			anim == that.anim && progress == that.progress && iconNum == that.iconNum &&
 			stringNum == that.stringNum && enabled == that.enabled;
+	}
+	[[nodiscard]]
+	bool operator!=( const BasicObjectiveIndicatorState &that ) const {
+		return !( ( *this ) == that );
 	}
 };
 

@@ -141,7 +141,7 @@ Item {
         valueShiftAmplitude: 2.00
         originalValue: 0.0
         period: alertAnimStep1Duration + alertAnimStep2Duration
-        running: indicatorAnim === HudDataModel.AlertAnim && !useExclusiveMode
+        running: indicatorAnim === HudCommonDataModel.AlertAnim && !useExclusiveMode
         targetProperty: "anchors.verticalCenterOffset"
         onRunningChanged: innerContent.restoreDefaultProperties()
     }
@@ -152,7 +152,7 @@ Item {
         valueShiftAmplitude: 1.25
         originalValue: 0.0
         period: actionAnimStep1Duration + actionAnimStep2Duration
-        running: indicatorAnim === HudDataModel.ActionAnim && !useExclusiveMode
+        running: indicatorAnim === HudCommonDataModel.ActionAnim && !useExclusiveMode
         targetProperty: "anchors.verticalCenterOffset"
         onRunningChanged: innerContent.restoreDefaultProperties()
     }
@@ -160,20 +160,20 @@ Item {
     SequentialAnimation {
         id: innerContentAnimExclusive
         loops: Animation.Infinite
-        running: (indicatorAnim === HudDataModel.AlertAnim || indicatorAnim === HudDataModel.ActionAnim) && useExclusiveMode
+        running: (indicatorAnim === HudCommonDataModel.AlertAnim || indicatorAnim === HudCommonDataModel.ActionAnim) && useExclusiveMode
         NumberAnimation {
             target: innerContent
             property: "scale"
             from: 0.00
             to: 1.00
-            duration: indicatorAnim === HudDataModel.AlertAnim ? alertAnimStep1Duration : actionAnimStep1Duration
+            duration: indicatorAnim === HudCommonDataModel.AlertAnim ? alertAnimStep1Duration : actionAnimStep1Duration
         }
         NumberAnimation {
             target: innerContent
             property: "scale"
             from: 1.00
             to: 0.90
-            duration: indicatorAnim === HudDataModel.AlertAnim ? alertAnimStep2Duration : actionAnimStep2Duration
+            duration: indicatorAnim === HudCommonDataModel.AlertAnim ? alertAnimStep2Duration : actionAnimStep2Duration
         }
         onRunningChanged: innerContent.restoreDefaultProperties()
     }
@@ -181,7 +181,7 @@ Item {
     HudObjectiveIndicatorFrameAnim {
         id: frameAlertAnim
         target: frame
-        running: indicatorAnim === HudDataModel.AlertAnim
+        running: indicatorAnim === HudCommonDataModel.AlertAnim
         initialWidth: 0.5 * maxFrameWidth
         initialHeight: 0.5 * maxFrameHeight
         peakWidth: maxFrameWidth
@@ -197,7 +197,7 @@ Item {
     HudObjectiveIndicatorFrameAnim {
         id: frameActionAnim
         target: frame
-        running: indicatorAnim === HudDataModel.ActionAnim
+        running: indicatorAnim === HudCommonDataModel.ActionAnim
         initialWidth: maxFrameWidth - 8
         initialHeight: maxFrameHeight - 8
         peakWidth: maxFrameWidth
