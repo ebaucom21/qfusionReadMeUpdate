@@ -307,7 +307,7 @@ struct ViewState {
 	// current in use, predicted or interpolated
 	player_state_t predictedPlayerState;
 
-	bool mutePovSounds;
+	bool allowSounds;
 
 	float xyspeed;
 	float oldBobTime;
@@ -657,15 +657,15 @@ extern centity_t cg_entities[MAX_EDICTS];
 
 const struct cmodel_s *CG_CModelForEntity( int entNum );
 void CG_SoundEntityNewState( centity_t *cent );
-void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState );
-void CG_LerpEntities( ViewState *viewState );
-void CG_LerpGenericEnt( centity_t *cent, ViewState *viewState );
+void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *drawFromViewState );
+void CG_LerpEntities( ViewState *drawFromViewState );
+void CG_LerpGenericEnt( centity_t *cent, ViewState *drawFromViewState );
 
 void CG_SetOutlineColor( byte_vec4_t outlineColor, byte_vec4_t color );
-void CG_AddColoredOutLineEffect( entity_t *ent, int effects, uint8_t r, uint8_t g, uint8_t b, uint8_t a, const ViewState *viewState );
-void CG_AddCentityOutLineEffect( centity_t *cent, const ViewState *viewState );
+void CG_AddColoredOutLineEffect( entity_t *ent, int effects, uint8_t r, uint8_t g, uint8_t b, uint8_t a, const ViewState *drawFromViewState );
+void CG_AddCentityOutLineEffect( centity_t *cent, const ViewState *drawFromViewState );
 
-void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname, DrawSceneRequest *, ViewState *viewState );
+void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname, DrawSceneRequest *, ViewState *drawFromViewState );
 
 void CG_ResetItemTimers( void );
 
@@ -685,7 +685,7 @@ struct model_s *CG_RegisterModel( const char *name );
 void CG_ResetClientInfos( void );
 void CG_LoadClientInfo( unsigned client, const wsw::StringView &configString );
 void CG_UpdateSexedSoundsRegistration( pmodelinfo_t *pmodelinfo );
-void CG_SexedSound( int entnum, int entchannel, const char *name, float fvol, float attn );
+void playSexedSoundInPrimaryView( int entnum, int entchannel, const char *name, float fvol, float attn );
 const SoundSet *CG_RegisterSexedSound( int entnum, const char *name );
 
 void CG_PredictedEvent( int entNum, int ev, int parm );
@@ -879,11 +879,9 @@ void CG_CalcViewWeapon( cg_viewweapon_t *viewweapon, ViewState *viewState );
 void CG_ViewWeapon_StartAnimationEvent( int newAnim, ViewState *viewState );
 void CG_ViewWeapon_RefreshAnimation( cg_viewweapon_t *viewweapon, ViewState *viewState );
 
-class DuplicatedEventsFilter;
-
 void CG_FireEvents( bool early );
 void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted );
-void CG_AddAnnouncerEvent( const SoundSet *sound, bool queued, DuplicatedEventsFilter *duplicatedEventsFilter );
+void CG_AddAnnouncerEvent( const SoundSet *sound, bool queued );
 void CG_ReleaseAnnouncerEvents( void );
 void CG_ClearAnnouncerEvents( void );
 

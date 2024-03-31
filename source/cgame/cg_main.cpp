@@ -1076,7 +1076,7 @@ static void CG_Event_WeaponBeam( vec3_t origin, vec3_t dir, int ownerNum, int we
 	VectorCopy( trace.endpos, cg_entities[ownerNum].laserPoint );
 }
 
-void CG_WeaponBeamEffect( centity_t *cent, ViewState *viewState ) {
+void CG_WeaponBeamEffect( centity_t *cent, ViewState *drawFromViewState ) {
 	orientation_t projection;
 
 	if( !cent->localEffects[LOCALEFFECT_EV_WEAPONBEAM] ) {
@@ -1084,7 +1084,7 @@ void CG_WeaponBeamEffect( centity_t *cent, ViewState *viewState ) {
 	}
 
 	// now find the projection source for the beam we will draw
-	if( !CG_PModel_GetProjectionSource( cent->current.number, &projection, viewState ) ) {
+	if( !CG_PModel_GetProjectionSource( cent->current.number, &projection, drawFromViewState ) ) {
 		VectorCopy( cent->laserOrigin, projection.origin );
 	}
 
@@ -1236,16 +1236,16 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 }
 
 // TODO: It not only adds entity to scene but also touches persistent/tracked effects
-void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
+void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, ViewState *drawFromViewState ) {
 	const signed ownerEntNum = owner->current.number;
-	const bool isOwnerThePov = viewState->isViewerEntity( ownerEntNum );
+	const bool isOwnerThePov = drawFromViewState->isViewerEntity( ownerEntNum );
 	const bool isCurved      = owner->laserCurved;
 	auto *const soundSystem  = SoundSystem::instance();
 
 	// TODO: Move the entire handling of lasers to the effects system and get rid of this state
 	if( owner->localEffects[LOCALEFFECT_LASERBEAM] <= cg.time ) {
 		if( owner->localEffects[LOCALEFFECT_LASERBEAM] ) {
-			if( !viewState->mutePovSounds ) {
+			if( drawFromViewState->allowSounds ) {
 				const SoundSet *sound = isCurved ? cgs.media.sndLasergunWeakStop : cgs.media.sndLasergunStrongStop;
 				if( isOwnerThePov ) {
 					soundSystem->startGlobalSound( sound, CHAN_AUTO, v_volumeEffects.get() );
@@ -1258,15 +1258,15 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 		return;
 	}
 
-	const bool usePovSlot        = isOwnerThePov && !viewState->view.thirdperson;
+	const bool usePovSlot        = isOwnerThePov && !drawFromViewState->view.thirdperson;
 	const unsigned povBit        = ownerEntNum ? 1u << ( ownerEntNum - 1 ) : 0;
 	const unsigned povPlayerMask = usePovSlot ? povBit : ( ~0u & ~povBit );
 
 	vec3_t laserOrigin, laserAngles, laserPoint;
 	if( usePovSlot ) {
-		VectorCopy( viewState->predictedPlayerState.pmove.origin, laserOrigin );
-		laserOrigin[2] += viewState->predictedPlayerState.viewheight;
-		VectorCopy( viewState->predictedPlayerState.viewangles, laserAngles );
+		VectorCopy( drawFromViewState->predictedPlayerState.pmove.origin, laserOrigin );
+		laserOrigin[2] += drawFromViewState->predictedPlayerState.viewheight;
+		VectorCopy( drawFromViewState->predictedPlayerState.viewangles, laserAngles );
 
 		VectorLerp( owner->laserPointOld, cg.lerpfrac, owner->laserPoint, laserPoint );
 	} else {
@@ -1287,13 +1287,13 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 
 	// draw the beam: for drawing we use the weapon projection source (already handles the case of viewer entity)
 	orientation_t projectsource;
-	if( !CG_PModel_GetProjectionSource( ownerEntNum, &projectsource, viewState ) ) {
+	if( !CG_PModel_GetProjectionSource( ownerEntNum, &projectsource, drawFromViewState ) ) {
 		VectorCopy( laserOrigin, projectsource.origin );
 	}
 
 	laserOwner = owner;
 	laserDrawSceneRequest = drawSceneRequest;
-	laserViewStateMuted = viewState->mutePovSounds;
+	laserViewStateMuted = !drawFromViewState->allowSounds;
 
 	if( isCurved ) {
 		vec3_t from, dir, blendPoint, blendAngles;
@@ -1308,7 +1308,6 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 		const int minSubdivisions   = CURVELASERBEAM_SUBDIVISIONS;
 		const int maxSubdivisions   = MAX_CURVELASERBEAM_SUBDIVISIONS;
 		const int subdivisions      = wsw::clamp( v_laserBeamSubdivisions.get(), minSubdivisions, maxSubdivisions );
-		const float rcpSubdivisions = Q_Rcp( (float)subdivisions );
 
 		unsigned numAddedPoints = 1;
 		vec3_t points[MAX_CURVELASERBEAM_SUBDIVISIONS + 1];
@@ -1351,7 +1350,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 		cg_entPModels[ownerEntNum].flash_time = cg.time + CG_GetWeaponInfo( WEAP_LASERGUN )->flashTime;
 	}
 
-	if( !viewState->mutePovSounds ) {
+	if( drawFromViewState->allowSounds ) {
 		const SoundSet *sound;
 		if( isCurved ) {
 			sound = owner->current.effects & EF_QUAD ? cgs.media.sndLasergunWeakQuadHum : cgs.media.sndLasergunWeakHum;
@@ -1413,14 +1412,14 @@ void CG_Event_LaserBeam( int entNum, int weapon, int fireMode, ViewState *viewSt
 	cent->localEffects[LOCALEFFECT_LASERBEAM] = cg.time + timeout;
 }
 
-static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode, ViewState *viewState ) {
+static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode, ViewState *updateViewWeaponInViewState ) {
 	if( !weapon ) {
 		return;
 	}
 
 	const weaponinfo_t *const weaponInfo = CG_GetWeaponInfo( weapon );
 
-	if( !viewState->mutePovSounds ) {
+	if( const ViewState *playSoundsFromViewState = getPrimaryViewState(); playSoundsFromViewState->allowSounds ) {
 		const SoundSet *sound = nullptr;
 		// sound
 		if( fireMode == FIRE_MODE_STRONG ) {
@@ -1442,14 +1441,14 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode, ViewState 
 				attenuation = ATTN_NORM;
 			}
 
-			if( viewState->isViewerEntity( entNum ) ) {
+			if( playSoundsFromViewState->isViewerEntity( entNum ) ) {
 				SoundSystem::instance()->startGlobalSound( sound, CHAN_AUTO, v_volumeEffects.get() );
 			} else {
 				SoundSystem::instance()->startRelativeSound( sound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
 			}
 			if( ( cg_entities[entNum].current.effects & EF_QUAD ) && ( weapon != WEAP_LASERGUN ) ) {
 				const SoundSet *quadSound = cgs.media.sndQuadFireSound;
-				if( viewState->isViewerEntity( entNum ) ) {
+				if( playSoundsFromViewState->isViewerEntity( entNum ) ) {
 					SoundSystem::instance()->startGlobalSound( quadSound, CHAN_AUTO, v_volumeEffects.get() );
 				} else {
 					SoundSystem::instance()->startRelativeSound( quadSound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
@@ -1518,8 +1517,8 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode, ViewState 
 	}
 
 	// add animation to the view weapon model
-	if( viewState && viewState->isViewerEntity( entNum ) && !viewState->view.thirdperson ) {
-		CG_ViewWeapon_StartAnimationEvent( fireMode == FIRE_MODE_STRONG ? WEAPMODEL_ATTACK_STRONG : WEAPMODEL_ATTACK_WEAK, viewState );
+	if( updateViewWeaponInViewState && updateViewWeaponInViewState->isViewerEntity( entNum ) && !updateViewWeaponInViewState->view.thirdperson ) {
+		CG_ViewWeapon_StartAnimationEvent( fireMode == FIRE_MODE_STRONG ? WEAPMODEL_ATTACK_STRONG : WEAPMODEL_ATTACK_WEAK, updateViewWeaponInViewState );
 	}
 }
 
@@ -1728,89 +1727,21 @@ static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dirVec, int weapon, int 
 							  firedef->spread, firedef->v_spread, firedef->timeout );
 }
 
-class DuplicatedEventsFilter {
-public:
-	void reset() {
-		m_queuedAnnouncementGroup.reset();
-		m_nonQueuedAnnouncementGroup.reset();
-	}
-
-	[[nodiscard]]
-	bool permitQueuedAnnouncement( const SoundSet *soundSet ) { return permit( soundSet, &m_queuedAnnouncementGroup ); }
-	[[nodiscard]]
-	bool permitNonQueuedAnnouncement( const SoundSet *soundSet ) { return permit( soundSet, &m_nonQueuedAnnouncementGroup ); }
-private:
-	struct AnnouncementGroup {
-		std::map<wsw::String, uintptr_t, std::less<>> identifiersForNames;
-		wsw::Vector<uintptr_t> blockedAnnouncements;
-		void reset() { blockedAnnouncements.clear(); }
-	};
-
-	[[nodiscard]]
-	static bool permit( const SoundSet *soundSet, AnnouncementGroup *group ) {
-		if( soundSet ) {
-			// Unfortunately, in the current codebase announcements which are logically the same
-			// are not grouped into a single sound set for each logical group.
-			// We have to use this hacky approach to group announcements together.
-			// Consider that alterantives in the same group differ by trailing digits.
-			if( const std::optional<wsw::StringView> maybeExactName = SoundSystem::instance()->getExactName( soundSet ) ) {
-				constexpr wsw::StringView prefix( "sounds/announcer/"_asView );
-				if( maybeExactName->startsWith( prefix, wsw::IgnoreCase ) ) {
-					// Drop the prefix as well so we need fewer boxing for long names
-					const wsw::StringView name = maybeExactName->drop( prefix.size() ).dropRightWhile( []( char ch ) {
-						return std::isdigit( ch );
-					});
-					if( !name.empty() ) {
-						const uintptr_t identifier = getIdentifierForName( name, group );
-						const auto end             = group->blockedAnnouncements.end();
-						if( std::find( group->blockedAnnouncements.begin(), end, identifier ) == end ) {
-							group->blockedAnnouncements.push_back( identifier );
-							return true;
-						}
-					}
-				}
-			}
-		}
-		return false;
-	}
-
-	[[nodiscard]]
-	static auto getIdentifierForName( const wsw::StringView &name, AnnouncementGroup *group ) -> uintptr_t {
-		const std::string_view nameView( name.data(), name.size() );
-		if( auto it = group->identifiersForNames.find( nameView ); it != group->identifiersForNames.end() ) {
-			return it->second;
-		}
-		const uintptr_t identifier = group->identifiersForNames.size() + 1;
-		group->identifiersForNames.insert( std::make_pair( wsw::String( nameView ), identifier ) );
-		return identifier;
-	}
-
-	AnnouncementGroup m_queuedAnnouncementGroup;
-	AnnouncementGroup m_nonQueuedAnnouncementGroup;
-};
-
 void CG_ClearAnnouncerEvents( void ) {
 	cg_announcerEventsCurrent = cg_announcerEventsHead = 0;
 }
 
-void CG_AddAnnouncerEvent( const SoundSet *sound, bool queued, DuplicatedEventsFilter *duplicatedEventsFilter ) {
+void CG_AddAnnouncerEvent( const SoundSet *sound, bool queued ) {
 	if( sound ) [[likely]] {
-		if( !queued ) {
-			if( !duplicatedEventsFilter || duplicatedEventsFilter->permitNonQueuedAnnouncement( sound ) ) {
-				SoundSystem::instance()->startLocalSound( sound, v_volumeAnnouncer.get() );
-				cg_announcerEventsDelay = CG_ANNOUNCER_EVENTS_FRAMETIME; // wait
-			}
-		} else {
-			if( !duplicatedEventsFilter || duplicatedEventsFilter->permitQueuedAnnouncement( sound ) ) {
-				cgNotice() << "Adding announcer event" << (uintptr_t)sound << "filter?" << (int)(duplicatedEventsFilter != nullptr) << "at" << cg.time;
-				if( cg_announcerEventsCurrent + CG_MAX_ANNOUNCER_EVENTS >= cg_announcerEventsHead ) {
-					// full buffer (we do nothing, just let it overwrite the oldest
-				}
-				// add it
-				cg_announcerEvents[cg_announcerEventsHead & CG_MAX_ANNOUNCER_EVENTS_MASK].sound = sound;
-				cg_announcerEventsHead++;
-			}
+		SoundSystem::instance()->startLocalSound( sound, v_volumeAnnouncer.get() );
+		cg_announcerEventsDelay = CG_ANNOUNCER_EVENTS_FRAMETIME; // wait
+	} else {
+		if( cg_announcerEventsCurrent + CG_MAX_ANNOUNCER_EVENTS >= cg_announcerEventsHead ) {
+			// full buffer (we do nothing, just let it overwrite the oldest
 		}
+		// add it
+		cg_announcerEvents[cg_announcerEventsHead & CG_MAX_ANNOUNCER_EVENTS_MASK].sound = sound;
+		cg_announcerEventsHead++;
 	}
 }
 
@@ -1835,24 +1766,23 @@ void CG_ReleaseAnnouncerEvents( void ) {
 }
 
 void CG_Event_Fall( entity_state_t *state, int parm ) {
-	ViewState *const viewState = getViewStateForEntity( state->number );
-	if( viewState && viewState->isViewerEntity( state->number ) ) {
-		if( viewState->snapPlayerState.pmove.pm_type != PM_NORMAL ) {
-			if( !viewState->mutePovSounds ) {
-				CG_SexedSound( state->number, CHAN_AUTO, "*fall_0", v_volumePlayers.get(), state->attenuation );
-			}
+	ViewState *const ownerViewState = getViewStateForEntity( state->number );
+	// Isn't the latter redundant?
+	if( ownerViewState && ownerViewState->isViewerEntity( state->number ) ) {
+		if( ownerViewState->snapPlayerState.pmove.pm_type != PM_NORMAL ) {
+			playSexedSoundInPrimaryView( state->number, CHAN_AUTO, "*fall_0", v_volumePlayers.get(), state->attenuation );
 			return;
 		}
 
-		CG_StartFallKickEffect( ( parm + 5 ) * 10, viewState );
+		CG_StartFallKickEffect( ( parm + 5 ) * 10, ownerViewState );
 
 		if( parm >= 15 ) {
-			CG_DamageIndicatorAdd( parm, tv( 0, 0, 1 ), viewState );
+			CG_DamageIndicatorAdd( parm, tv( 0, 0, 1 ), ownerViewState );
 		}
 	}
 
 	if( parm > 10 ) {
-		CG_SexedSound( state->number, CHAN_PAIN, "*fall_2", v_volumePlayers.get(), state->attenuation );
+		playSexedSoundInPrimaryView( state->number, CHAN_PAIN, "*fall_2", v_volumePlayers.get(), state->attenuation );
 		switch( (int)brandom( 0, 3 ) ) {
 			case 0:
 				CG_PModel_AddAnimation( state->number, 0, TORSO_PAIN1, 0, EVENT_CHANNEL );
@@ -1866,9 +1796,9 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 				break;
 		}
 	} else if( parm > 0 ) {
-		CG_SexedSound( state->number, CHAN_PAIN, "*fall_1", v_volumePlayers.get(), state->attenuation );
+		playSexedSoundInPrimaryView( state->number, CHAN_PAIN, "*fall_1", v_volumePlayers.get(), state->attenuation );
 	} else {
-		CG_SexedSound( state->number, CHAN_PAIN, "*fall_0", v_volumePlayers.get(), state->attenuation );
+		playSexedSoundInPrimaryView( state->number, CHAN_PAIN, "*fall_0", v_volumePlayers.get(), state->attenuation );
 	}
 
 	// smoke effect
@@ -1876,8 +1806,8 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 		vec3_t start, end;
 		trace_t trace;
 
-		if( viewState && viewState->isViewerEntity( state->number ) ) {
-			VectorCopy( viewState->predictedPlayerState.pmove.origin, start );
+		if( ownerViewState && ownerViewState->isViewerEntity( state->number ) ) {
+			VectorCopy( ownerViewState->predictedPlayerState.pmove.origin, start );
 		} else {
 			VectorCopy( state->origin, start );
 		}
@@ -1907,7 +1837,7 @@ void CG_Event_Pain( entity_state_t *state, int parm ) {
 														 v_volumePlayers.get(), state->attenuation );
 		}
 	} else {
-		CG_SexedSound( state->number, CHAN_PAIN, va( S_PLAYER_PAINS, 25 * parm ), v_volumePlayers.get(), state->attenuation );
+		playSexedSoundInPrimaryView( state->number, CHAN_PAIN, va( S_PLAYER_PAINS, 25 * parm ), v_volumePlayers.get(), state->attenuation );
 	}
 
 	switch( (int)brandom( 0, 3 ) ) {
@@ -1925,7 +1855,7 @@ void CG_Event_Pain( entity_state_t *state, int parm ) {
 }
 
 void CG_Event_Die( entity_state_t *state, int parm ) {
-	CG_SexedSound( state->number, CHAN_PAIN, S_PLAYER_DEATH, v_volumePlayers.get(), state->attenuation );
+	playSexedSoundInPrimaryView( state->number, CHAN_PAIN, S_PLAYER_DEATH, v_volumePlayers.get(), state->attenuation );
 
 	switch( parm ) {
 		case 0:
@@ -1947,22 +1877,22 @@ void CG_Event_Dash( entity_state_t *state, int parm ) {
 			break;
 		case 0: // dash front
 			CG_PModel_AddAnimation( state->number, LEGS_DASH, 0, 0, EVENT_CHANNEL );
-			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+			playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
 						   v_volumePlayers.get(), state->attenuation );
 			break;
 		case 1: // dash left
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_LEFT, 0, 0, EVENT_CHANNEL );
-			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+			playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
 						   v_volumePlayers.get(), state->attenuation );
 			break;
 		case 2: // dash right
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_RIGHT, 0, 0, EVENT_CHANNEL );
-			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+			playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
 						   v_volumePlayers.get(), state->attenuation );
 			break;
 		case 3: // dash back
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_BACK, 0, 0, EVENT_CHANNEL );
-			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+			playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
 						   v_volumePlayers.get(), state->attenuation );
 			break;
 	}
@@ -1997,7 +1927,7 @@ void CG_Event_WallJump( entity_state_t *state, int parm, int ev ) {
 			SoundSystem::instance()->startRelativeSound( cgs.media.sndWalljumpFailed, state->number, CHAN_BODY, v_volumeEffects.get(), ATTN_NORM );
 		}
 	} else {
-		CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_WALLJUMP_1_to_2, ( rand() & 1 ) + 1 ),
+		playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_WALLJUMP_1_to_2, ( rand() & 1 ) + 1 ),
 					   v_volumePlayers.get(), state->attenuation );
 
 		// smoke effect
@@ -2009,7 +1939,7 @@ void CG_Event_WallJump( entity_state_t *state, int parm, int ev ) {
 }
 
 void CG_Event_DoubleJump( entity_state_t *state, int parm ) {
-	CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+	playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 				   v_volumePlayers.get(), state->attenuation );
 }
 
@@ -2028,7 +1958,7 @@ void CG_Event_Jump( entity_state_t *state, int parm ) {
 	float xyspeedcheck = Q_Sqrt( cent->animVelocity[0] * cent->animVelocity[0] + cent->animVelocity[1] * cent->animVelocity[1] );
 	if( xyspeedcheck < 100 ) { // the player is jumping on the same place, not running
 		CG_PModel_AddAnimation( state->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
-		CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+		playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 					   v_volumePlayers.get(), attenuation );
 	} else {
 		vec3_t movedir;
@@ -2046,26 +1976,26 @@ void CG_Event_Jump( entity_state_t *state, int parm ) {
 			cent->jumpedLeft = !cent->jumpedLeft;
 			if( !cent->jumpedLeft ) {
 				CG_PModel_AddAnimation( state->number, LEGS_JUMP_LEG2, 0, 0, EVENT_CHANNEL );
-				CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+				playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 							   v_volumePlayers.get(), attenuation );
 			} else {
 				CG_PModel_AddAnimation( state->number, LEGS_JUMP_LEG1, 0, 0, EVENT_CHANNEL );
-				CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+				playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 							   v_volumePlayers.get(), attenuation );
 			}
 		} else {
 			CG_PModel_AddAnimation( state->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
-			CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+			playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
 						   v_volumePlayers.get(), attenuation );
 		}
 	}
 }
 
 static void handleWeaponActivateEvent( entity_state_t *ent, int parm, bool predicted ) {
-	const int weapon     = ( parm >> 1 ) & 0x3f;
-	const int fireMode   = ( parm & 0x1 ) ? FIRE_MODE_STRONG : FIRE_MODE_WEAK;
-	ViewState *viewState = getViewStateForEntity( ent->number );
-	const bool viewer    = viewState && viewState->isViewerEntity( ent->number );
+	const int weapon          = ( parm >> 1 ) & 0x3f;
+	const int fireMode        = ( parm & 0x1 ) ? FIRE_MODE_STRONG : FIRE_MODE_WEAK;
+	ViewState *ownerViewState = getViewStateForEntity( ent->number );
+	const bool viewer         = ownerViewState && ownerViewState->isViewerEntity( ent->number );
 
 	CG_PModel_AddAnimation( ent->number, 0, TORSO_WEAPON_SWITCHIN, 0, EVENT_CHANNEL );
 
@@ -2075,25 +2005,22 @@ static void handleWeaponActivateEvent( entity_state_t *ent, int parm, bool predi
 			cg_entities[ent->number].current.effects |= EF_STRONG_WEAPON;
 		}
 
-		if( viewState ) {
-			CG_ViewWeapon_RefreshAnimation( &viewState->weapon, viewState );
+		if( ownerViewState ) {
+			CG_ViewWeapon_RefreshAnimation( &ownerViewState->weapon, ownerViewState );
 		}
 	}
 
-	if( viewer && viewState == getOurClientViewState() ) {
-		viewState->predictedWeaponSwitch = 0;
+	if( viewer && ownerViewState == getOurClientViewState() ) {
+		ownerViewState->predictedWeaponSwitch = 0;
 	}
 
-	if( viewState ) {
-		if( !viewState->mutePovSounds ) {
-			if( viewer ) {
-				SoundSystem::instance()->startGlobalSound( cgs.media.sndWeaponUp, CHAN_AUTO, v_volumeEffects.get() );
-			} else {
-				SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUp, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
-			}
+	const ViewState *primaryViewState = getPrimaryViewState();
+	if( primaryViewState->allowSounds ) {
+		if( viewer && ownerViewState == primaryViewState ) {
+			SoundSystem::instance()->startGlobalSound( cgs.media.sndWeaponUp, CHAN_AUTO, v_volumeEffects.get() );
+		} else {
+			SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUp, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 		}
-	} else {
-		SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUp, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 	}
 }
 
@@ -2107,12 +2034,12 @@ static void handleSmoothRefireWeaponEvent( entity_state_t *ent, int parm, bool p
 			cg_entities[ent->number].current.effects |= EF_STRONG_WEAPON;
 		}
 
-		ViewState *viewState = getOurClientViewState();
-
-		CG_ViewWeapon_RefreshAnimation( &viewState->weapon, viewState );
+		ViewState *ownerViewState = getViewStateForEntity( ent->number );
+		assert( ownerViewState == getOurClientViewState() );
+		CG_ViewWeapon_RefreshAnimation( &ownerViewState->weapon, ownerViewState );
 
 		if( weapon == WEAP_LASERGUN ) {
-			CG_Event_LaserBeam( ent->number, weapon, fireMode, viewState );
+			CG_Event_LaserBeam( ent->number, weapon, fireMode, ownerViewState );
 		}
 	}
 }
@@ -2128,34 +2055,33 @@ static void handleFireWeaponEvent( entity_state_t *ent, int parm, bool predicted
 		}
 	}
 
-	ViewState *const viewState = getViewStateForEntity( ent->number );
-	// Supply the primary view state for playing sounds of players without respective view state
-	CG_FireWeaponEvent( ent->number, weapon, fireMode, viewState ? viewState : getPrimaryViewState() );
+	ViewState *const attackerViewState = getViewStateForEntity( ent->number );
+	CG_FireWeaponEvent( ent->number, weapon, fireMode, attackerViewState );
 
 	// riotgun bullets, electrobolt and instagun beams are predicted when the weapon is fired
 	if( predicted ) {
-		assert( viewState );
+		assert( attackerViewState );
 		vec3_t origin, dir;
 
 		if( ( weapon == WEAP_ELECTROBOLT && fireMode == FIRE_MODE_STRONG ) || weapon == WEAP_INSTAGUN ) {
-			VectorCopy( viewState->predictedPlayerState.pmove.origin, origin );
-			origin[2] += viewState->predictedPlayerState.viewheight;
-			AngleVectors( viewState->predictedPlayerState.viewangles, dir, NULL, NULL );
-			CG_Event_WeaponBeam( origin, dir, viewState->predictedPlayerState.POVnum, weapon, fireMode );
+			VectorCopy( attackerViewState->predictedPlayerState.pmove.origin, origin );
+			origin[2] += attackerViewState->predictedPlayerState.viewheight;
+			AngleVectors( attackerViewState->predictedPlayerState.viewangles, dir, NULL, NULL );
+			CG_Event_WeaponBeam( origin, dir, attackerViewState->predictedPlayerState.POVnum, weapon, fireMode );
 		} else if( weapon == WEAP_RIOTGUN || weapon == WEAP_MACHINEGUN ) {
-			const int seed = viewState->predictedEventTimes[EV_FIREWEAPON] & 255;
+			const int seed = attackerViewState->predictedEventTimes[EV_FIREWEAPON] & 255;
 
-			VectorCopy( viewState->predictedPlayerState.pmove.origin, origin );
-			origin[2] += viewState->predictedPlayerState.viewheight;
-			AngleVectors( viewState->predictedPlayerState.viewangles, dir, NULL, NULL );
+			VectorCopy( attackerViewState->predictedPlayerState.pmove.origin, origin );
+			origin[2] += attackerViewState->predictedPlayerState.viewheight;
+			AngleVectors( attackerViewState->predictedPlayerState.viewangles, dir, NULL, NULL );
 
 			if( weapon == WEAP_RIOTGUN ) {
-				CG_Event_FireRiotgun( origin, dir, weapon, fireMode, seed, viewState->predictedPlayerState.POVnum );
+				CG_Event_FireRiotgun( origin, dir, weapon, fireMode, seed, attackerViewState->predictedPlayerState.POVnum );
 			} else {
-				CG_Event_FireMachinegun( origin, dir, weapon, fireMode, seed, viewState->predictedPlayerState.POVnum );
+				CG_Event_FireMachinegun( origin, dir, weapon, fireMode, seed, attackerViewState->predictedPlayerState.POVnum );
 			}
 		} else if( weapon == WEAP_LASERGUN ) {
-			CG_Event_LaserBeam( ent->number, weapon, fireMode, viewState );
+			CG_Event_LaserBeam( ent->number, weapon, fireMode, attackerViewState );
 		}
 	}
 }
@@ -2201,24 +2127,26 @@ static void handleFireBulletEvent( entity_state_t *ent, int parm, bool predicted
 }
 
 static void handleNoAmmoClickEvent( entity_state_t *ent, int parm, bool predicted ) {
-	ViewState *const viewState = getOurClientViewState();
-	if( viewState->isViewerEntity( ent->number ) ) {
-		SoundSystem::instance()->startGlobalSound( cgs.media.sndWeaponUpNoAmmo, CHAN_ITEM, v_volumeEffects.get() );
-	} else {
-		SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUpNoAmmo, ent->origin, CHAN_ITEM, v_volumeEffects.get(), ATTN_IDLE );
+	ViewState *const primaryViewState = getPrimaryViewState();
+	if( primaryViewState->allowSounds ) {
+		if( primaryViewState->isViewerEntity( ent->number ) ) {
+			SoundSystem::instance()->startGlobalSound( cgs.media.sndWeaponUpNoAmmo, CHAN_ITEM, v_volumeEffects.get() );
+		} else {
+			SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUpNoAmmo, ent->origin, CHAN_ITEM, v_volumeEffects.get(), ATTN_IDLE );
+		}
 	}
 }
 
 static void handleJumppadEvent( entity_state_t *ent, bool predicted ) {
-	CG_SexedSound( ent->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ), v_volumePlayers.get(), ent->attenuation );
+	playSexedSoundInPrimaryView( ent->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ), v_volumePlayers.get(), ent->attenuation );
 	CG_PModel_AddAnimation( ent->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
 }
 
 static void handleSexedSoundEvent( entity_state_t *ent, int parm, bool predicted ) {
 	if( parm == 2 ) {
-		CG_SexedSound( ent->number, CHAN_AUTO, S_PLAYER_GASP, v_volumePlayers.get(), ent->attenuation );
+		playSexedSoundInPrimaryView( ent->number, CHAN_AUTO, S_PLAYER_GASP, v_volumePlayers.get(), ent->attenuation );
 	} else if( parm == 1 ) {
-		CG_SexedSound( ent->number, CHAN_AUTO, S_PLAYER_DROWN, v_volumePlayers.get(), ent->attenuation );
+		playSexedSoundInPrimaryView( ent->number, CHAN_AUTO, S_PLAYER_DROWN, v_volumePlayers.get(), ent->attenuation );
 	}
 }
 
@@ -2274,12 +2202,16 @@ static void handleBulletSparksEvent( entity_state_t *ent, int parm, bool predict
 
 static void handleItemRespawnEvent( entity_state_t *ent, int parm, bool predicted ) {
 	cg_entities[ent->number].respawnTime = cg.time;
-	SoundSystem::instance()->startRelativeSound( cgs.media.sndItemRespawn, ent->number, CHAN_AUTO,
-												 v_volumeEffects.get(), ATTN_IDLE );
+	if( getPrimaryViewState()->allowSounds ) {
+		SoundSystem::instance()->startRelativeSound( cgs.media.sndItemRespawn, ent->number, CHAN_AUTO,
+													 v_volumeEffects.get(), ATTN_IDLE );
+	}
 }
 
 static void handlePlayerRespawnEvent( entity_state_t *ent, int parm, bool predicted ) {
-	SoundSystem::instance()->startFixedSound( cgs.media.sndPlayerRespawn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
+	if( getPrimaryViewState()->allowSounds ) {
+		SoundSystem::instance()->startFixedSound( cgs.media.sndPlayerRespawn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
+	}
 
 	if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
 		if( ViewState *const viewState = getViewStateForEntity( ent->ownerNum ) ) {
@@ -2294,7 +2226,9 @@ static void handlePlayerRespawnEvent( entity_state_t *ent, int parm, bool predic
 }
 
 static void handlePlayerTeleportInEvent( entity_state_t *ent, int parm, bool predicted ) {
-	SoundSystem::instance()->startFixedSound( cgs.media.sndTeleportIn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
+	if( getPrimaryViewState()->allowSounds ) {
+		SoundSystem::instance()->startFixedSound( cgs.media.sndTeleportIn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
+	}
 
 	if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
 		cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_IN] = cg.time;
@@ -2303,7 +2237,9 @@ static void handlePlayerTeleportInEvent( entity_state_t *ent, int parm, bool pre
 }
 
 static void handlePlayerTeleportOutEvent( entity_state_t *ent, int parm, bool predicted ) {
-	SoundSystem::instance()->startFixedSound( cgs.media.sndTeleportOut, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
+	if( getPrimaryViewState()->allowSounds ) {
+		SoundSystem::instance()->startFixedSound( cgs.media.sndTeleportOut, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
+	}
 
 	if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
 		cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_OUT] = cg.time;
@@ -2420,9 +2356,11 @@ static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted ) {
 }
 
 static void handleMoverEvent( entity_state_t *ent, int parm ) {
-	vec3_t so;
-	CG_GetEntitySpatilization( ent->number, so, NULL );
-	SoundSystem::instance()->startFixedSound( cgs.soundPrecache[parm], so, CHAN_AUTO, v_volumeEffects.get(), ATTN_STATIC );
+	if( getPrimaryViewState()->allowSounds ) {
+		vec3_t so;
+		CG_GetEntitySpatilization( ent->number, so, NULL );
+		SoundSystem::instance()->startFixedSound( cgs.soundPrecache[parm], so, CHAN_AUTO, v_volumeEffects.get(), ATTN_STATIC );
+	}
 }
 
 void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
@@ -2430,9 +2368,9 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 		return;
 	}
 
-	const ViewState *primaryViewState = getOurClientViewState();
-	if( primaryViewState->isViewerEntity( ent->number ) ) {
-		if( ev < PREDICTABLE_EVENTS_MAX && ( predicted != primaryViewState->view.playerPrediction ) ) {
+	const ViewState *ourClientViewState = getOurClientViewState();
+	if( ourClientViewState->isViewerEntity( ent->number ) ) {
+		if( ev < PREDICTABLE_EVENTS_MAX && ( predicted != ourClientViewState->view.playerPrediction ) ) {
 			return;
 		}
 	}
@@ -2470,7 +2408,7 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 		case EV_SPARKS: return handleSparksEvent( ent, parm, predicted );
 		case EV_BULLET_SPARKS: return handleBulletSparksEvent( ent, parm, predicted );
 		case EV_LASER_SPARKS: return;
-		case EV_GESTURE: return CG_SexedSound( ent->number, CHAN_BODY, "*taunt", v_volumePlayers.get(), ent->attenuation );
+		case EV_GESTURE: return playSexedSoundInPrimaryView( ent->number, CHAN_BODY, "*taunt", v_volumePlayers.get(), ent->attenuation );
 		case EV_DROP: return CG_PModel_AddAnimation( ent->number, 0, TORSO_DROP, 0, EVENT_CHANNEL );
 		case EV_SPOG: return CG_SmallPileOfGibs( ent->origin, parm, ent->origin2, ent->team );
 		case EV_ITEM_RESPAWN: return handleItemRespawnEvent( ent, parm, predicted );
@@ -2522,46 +2460,51 @@ static void CG_FireEntityEvents( bool early ) {
 	}
 }
 
-static void handlePlayerStateHitSoundEvent( unsigned event, unsigned parm, ViewState *viewState ) {
+static void handlePlayerStateHitSoundEvent( unsigned event, unsigned parm, ViewState *playerViewState ) {
+	const ViewState *primaryViewState = getPrimaryViewState();
+	const bool allowPlayingSounds     = primaryViewState == playerViewState && primaryViewState->allowSounds;
 	if( parm < 4 ) {
 		// hit of some caliber
-		if( !viewState->mutePovSounds ) {
+		if( allowPlayingSounds ) {
 			SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponHit[parm], v_volumeHitsound.get() );
 			SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponHit2[parm], v_volumeHitsound.get() );
 		}
-		viewState->crosshairDamageTimestamp = cg.time;
+		playerViewState->crosshairDamageTimestamp = cg.time;
 	} else if( parm == 4 ) {
 		// killed an enemy
-		if( !viewState->mutePovSounds ) {
+		if( allowPlayingSounds ) {
 			SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponKill, v_volumeHitsound.get() );
 		}
-		viewState->crosshairDamageTimestamp = cg.time;
+		playerViewState->crosshairDamageTimestamp = cg.time;
 	} else if( parm <= 6 ) {
 		// hit a teammate
-		if( !viewState->mutePovSounds ) {
+		if( allowPlayingSounds ) {
 			SoundSystem::instance()->startLocalSound( cgs.media.sndWeaponHitTeam, v_volumeHitsound.get() );
 		}
 		if( v_showHelp.get() ) {
 			if( random() <= 0.5f ) {
-				CG_CenterPrint( viewState, "Don't shoot at members of your team!" );
+				CG_CenterPrint( playerViewState, "Don't shoot at members of your team!" );
 			} else {
-				CG_CenterPrint( viewState, "You are shooting at your team-mates!" );
+				CG_CenterPrint( playerViewState, "You are shooting at your team-mates!" );
 			}
 		}
 	}
 }
 
-static void handlePlayerStatePickupEvent( unsigned event, unsigned parm, ViewState *viewState ) {
-	if( v_pickupFlash.get() && !viewState->view.thirdperson ) {
-		CG_StartColorBlendEffect( 1.0f, 1.0f, 1.0f, 0.25f, 150, viewState );
+static void handlePlayerStatePickupEvent( unsigned event, unsigned parm, ViewState *playerViewState ) {
+	if( v_pickupFlash.get() && !playerViewState->view.thirdperson ) {
+		CG_StartColorBlendEffect( 1.0f, 1.0f, 1.0f, 0.25f, 150, playerViewState );
 	}
 
 	bool processAutoSwitch = false;
 	const int autoSwitchVarValue = v_weaponAutoSwitch.get();
 	if( autoSwitchVarValue && !cgs.demoPlaying && ( parm > WEAP_NONE && parm < WEAP_TOTAL ) ) {
-		if( viewState->predictedPlayerState.pmove.pm_type == PM_NORMAL && viewState->predictedPlayerState.POVnum == cgs.playerNum + 1 ) {
-			if( !viewState->oldSnapPlayerState.inventory[parm] ) {
-				processAutoSwitch = true;
+		if( playerViewState == getOurClientViewState() ) {
+			// If not chasing somebody
+			if( playerViewState->predictedPlayerState.pmove.pm_type == PM_NORMAL && playerViewState->predictedPlayerState.POVnum == cgs.playerNum + 1 ) {
+				if( !playerViewState->oldSnapPlayerState.inventory[parm] ) {
+					processAutoSwitch = true;
+				}
 			}
 		}
 	}
@@ -2572,7 +2515,7 @@ static void handlePlayerStatePickupEvent( unsigned event, unsigned parm, ViewSta
 			// Switch when player's only weapon is gunblade
 			unsigned i;
 			for( i = WEAP_GUNBLADE + 1; i < WEAP_TOTAL; i++ ) {
-				if( i != parm && viewState->predictedPlayerState.inventory[i] ) {
+				if( i != parm && playerViewState->predictedPlayerState.inventory[i] ) {
 					break;
 				}
 			}
@@ -2583,7 +2526,7 @@ static void handlePlayerStatePickupEvent( unsigned event, unsigned parm, ViewSta
 			// Switch when the new weapon improves player's selected weapon
 			unsigned best = WEAP_GUNBLADE;
 			for( unsigned i = WEAP_GUNBLADE + 1; i < WEAP_TOTAL; i++ ) {
-				if( i != parm && viewState->predictedPlayerState.inventory[i] ) {
+				if( i != parm && playerViewState->predictedPlayerState.inventory[i] ) {
 					best = i;
 				}
 			}
@@ -2596,61 +2539,69 @@ static void handlePlayerStatePickupEvent( unsigned event, unsigned parm, ViewSta
 
 /*
 * CG_FirePlayerStateEvents
-* This events are only received by this client, and only affect it.
- * TODO: For other povs
+* This events are only received by this player state, and only affect it.
 */
-static void CG_FirePlayerStateEvents( ViewState *viewState, DuplicatedEventsFilter *duplicatedEventsFilter ) {
-	if( viewState->view.POVent != (int)viewState->snapPlayerState.POVnum ) {
+static void CG_FirePlayerStateEvents( ViewState *playerViewState ) {
+	if( playerViewState->view.POVent != (int)playerViewState->snapPlayerState.POVnum ) {
 		return;
 	}
+
+	[[maybe_unused]] const ViewState *const primaryViewState = getPrimaryViewState();
+	[[maybe_unused]] const bool allowPlayingSounds = primaryViewState == playerViewState && primaryViewState->allowSounds;
 
 	vec3_t dir;
 	for( unsigned count = 0; count < 2; count++ ) {
 		// first byte is event number, second is parm
-		const unsigned event = viewState->snapPlayerState.event[count] & 127;
-		const unsigned parm  = viewState->snapPlayerState.eventParm[count] & 0xFF;
+		const unsigned event = playerViewState->snapPlayerState.event[count] & 127;
+		const unsigned parm  = playerViewState->snapPlayerState.eventParm[count] & 0xFF;
 
 		switch( event ) {
 			case PSEV_HIT:
-				handlePlayerStateHitSoundEvent( event, parm, viewState );
+				handlePlayerStateHitSoundEvent( event, parm, playerViewState );
 				break;
 
 			case PSEV_PICKUP:
-				handlePlayerStatePickupEvent( event, parm, viewState );
+				handlePlayerStatePickupEvent( event, parm, playerViewState );
 				break;
 
 			case PSEV_DAMAGE_20:
 				ByteToDir( parm, dir );
-				CG_DamageIndicatorAdd( 20, dir, viewState );
+				CG_DamageIndicatorAdd( 20, dir, playerViewState );
 				break;
 
 			case PSEV_DAMAGE_40:
 				ByteToDir( parm, dir );
-				CG_DamageIndicatorAdd( 40, dir, viewState );
+				CG_DamageIndicatorAdd( 40, dir, playerViewState );
 				break;
 
 			case PSEV_DAMAGE_60:
 				ByteToDir( parm, dir );
-				CG_DamageIndicatorAdd( 60, dir, viewState );
+				CG_DamageIndicatorAdd( 60, dir, playerViewState );
 				break;
 
 			case PSEV_DAMAGE_80:
 				ByteToDir( parm, dir );
-				CG_DamageIndicatorAdd( 80, dir, viewState );
+				CG_DamageIndicatorAdd( 80, dir, playerViewState );
 				break;
 
 			case PSEV_INDEXEDSOUND:
-				if( cgs.soundPrecache[parm] && !viewState->mutePovSounds ) {
-					SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[parm], CHAN_AUTO, v_volumeEffects.get() );
+				if( const SoundSet *sound = cgs.soundPrecache[parm] ) {
+					if( allowPlayingSounds ) {
+						SoundSystem::instance()->startGlobalSound( sound, CHAN_AUTO, v_volumeEffects.get() );
+					}
 				}
 				break;
 
 			case PSEV_ANNOUNCER:
-				CG_AddAnnouncerEvent( cgs.soundPrecache[parm], false, duplicatedEventsFilter );
+				if( allowPlayingSounds ) {
+					CG_AddAnnouncerEvent( cgs.soundPrecache[parm], false );
+				}
 				break;
 
 			case PSEV_ANNOUNCER_QUEUED:
-				CG_AddAnnouncerEvent( cgs.soundPrecache[parm], true, duplicatedEventsFilter );
+				if( allowPlayingSounds ) {
+					CG_AddAnnouncerEvent( cgs.soundPrecache[parm], true );
+				}
 				break;
 
 			default:
@@ -2670,12 +2621,8 @@ void CG_FireEvents( bool early ) {
 		return;
 	}
 
-	// Made static to suppress unnecessary allocations, there's no better solution in this codebase state
-	static DuplicatedEventsFilter duplicatedEventsFilter;
-	duplicatedEventsFilter.reset();
-
 	for( unsigned viewIndex = 0; viewIndex < cg.numSnapViewStates; ++viewIndex ) {
-		CG_FirePlayerStateEvents( &cg.viewStates[viewIndex], &duplicatedEventsFilter );
+		CG_FirePlayerStateEvents( &cg.viewStates[viewIndex] );
 	}
 
 	cg.fireEvents = false;
@@ -3060,7 +3007,7 @@ static void CG_UpdatePlayerState() {
 
 		// Predict from the snap state
 		viewState->predictedPlayerState = viewState->snapPlayerState;
-		viewState->mutePovSounds = true;
+		viewState->allowSounds          = false;
 
 		cg.snapViewStatePresentMask |= ( 1u << framePlayerState->playerNum );
 		cg.numSnapViewStates++;
@@ -3076,13 +3023,15 @@ static void CG_UpdatePlayerState() {
 		cg.viewStates[MAX_CLIENTS].predictedPlayerState.pmove.pm_type   = PM_SPECTATOR;
 		cg.viewStates[MAX_CLIENTS].predictFromPlayerState.pmove.pm_type = PM_SPECTATOR;
 	}
-	cg.viewStates[cg.ourClientViewportIndex].mutePovSounds = false;
 
 	const auto ourActualMoveType = cg.viewStates[cg.ourClientViewportIndex].predictedPlayerState.pmove.pm_type;
 	// Force view from our in-game client
 	if( ourActualMoveType != PM_SPECTATOR && ourActualMoveType != PM_CHASECAM ) {
 		cg.chasedViewportIndex = cg.ourClientViewportIndex;
 		cg.chasedPlayerNum     = cgs.playerNum;
+		if( cg.chaseMode == CAM_TILED ) {
+			cg.chaseMode = CAM_INEYES;
+		}
 	} else {
 		const unsigned requestedPlayerNum = cg.pendingChasedPlayerNum.value_or( cg.chasedPlayerNum );
 		// Check whether we have lost the pov.
@@ -3098,6 +3047,20 @@ static void CG_UpdatePlayerState() {
 			cg.chasedViewportIndex = cg.ourClientViewportIndex;
 			cg.chasedPlayerNum     = cgs.playerNum;
 		}
+	}
+
+	assert( cg.chasedViewportIndex < cg.numSnapViewStates );
+	assert( cg.chasedPlayerNum < MAX_CLIENTS );
+
+	if( cg.hasPendingSwitchFromTiledMode ) {
+		if( cg.chaseMode == CAM_TILED ) {
+			CG_SwitchChaseCamMode();
+		}
+		cg.hasPendingSwitchFromTiledMode = false;
+	}
+
+	if( cg.chaseMode != CAM_TILED ) {
+		cg.viewStates[cg.chasedViewportIndex].allowSounds = true;
 	}
 
 	cg.pendingChasedPlayerNum = std::nullopt;
@@ -3246,13 +3209,6 @@ static void CG_UpdatePlayerState() {
 			cg.tileMiniviewViewStateIndices.insert(
 				cg.tileMiniviewViewStateIndices.end(), indices.begin(), indices.end() );
 		}
-	}
-
-	if( cg.hasPendingSwitchFromTiledMode ) {
-		if( cg.chaseMode == CAM_TILED ) {
-			CG_SwitchChaseCamMode();
-		}
-		cg.hasPendingSwitchFromTiledMode = false;
 	}
 }
 
@@ -3411,7 +3367,7 @@ static void CG_EntAddTeamColorTransitionEffect( centity_t *cent ) {
 	cent->ent.shaderRGBA[2] = (uint8_t)( newcolor[2] * 255 );
 }
 
-static void CG_AddLinkedModel( centity_t *cent, DrawSceneRequest *drawSceneRequest, const ViewState *viewState ) {
+static void CG_AddLinkedModel( centity_t *cent, DrawSceneRequest *drawSceneRequest, const ViewState *drawFromViewState ) {
 	static entity_t ent;
 	orientation_t tag;
 	struct model_s *model;
@@ -3455,13 +3411,13 @@ static void CG_AddLinkedModel( centity_t *cent, DrawSceneRequest *drawSceneReque
 	}
 
 	CG_AddColoredOutLineEffect( &ent, cent->effects,
-								cent->outlineColor[0], cent->outlineColor[1], cent->outlineColor[2], cent->outlineColor[3], viewState );
+								cent->outlineColor[0], cent->outlineColor[1], cent->outlineColor[2], cent->outlineColor[3], drawFromViewState );
 	CG_AddEntityToScene( &ent, drawSceneRequest );
 	CG_AddShellEffects( &ent, cent->effects, drawSceneRequest );
 }
 
-void CG_AddCentityOutLineEffect( centity_t *cent, const ViewState *viewState ) {
-	CG_AddColoredOutLineEffect( &cent->ent, cent->effects, cent->outlineColor[0], cent->outlineColor[1], cent->outlineColor[2], cent->outlineColor[3], viewState );
+void CG_AddCentityOutLineEffect( centity_t *cent, const ViewState *drawFromViewState ) {
+	CG_AddColoredOutLineEffect( &cent->ent, cent->effects, cent->outlineColor[0], cent->outlineColor[1], cent->outlineColor[2], cent->outlineColor[3], drawFromViewState );
 }
 
 static void CG_UpdateGenericEnt( centity_t *cent ) {
@@ -3506,14 +3462,14 @@ void CG_ExtrapolateLinearProjectile( centity_t *cent ) {
 	AnglesToAxis( cent->current.angles, cent->ent.axis );
 }
 
-void CG_LerpGenericEnt( centity_t *cent, ViewState *viewState ) {
+void CG_LerpGenericEnt( centity_t *cent, ViewState *drawFromViewState ) {
 	int i;
 	vec3_t ent_angles = { 0, 0, 0 };
 
 	cent->ent.backlerp = 1.0f - cg.lerpfrac;
 
-	if( viewState->isViewerEntity( cent->current.number ) || viewState->view.POVent == cent->current.number ) {
-		VectorCopy( viewState->predictedPlayerState.viewangles, ent_angles );
+	if( drawFromViewState->isViewerEntity( cent->current.number ) || drawFromViewState->view.POVent == cent->current.number ) {
+		VectorCopy( drawFromViewState->predictedPlayerState.viewangles, ent_angles );
 	} else {
 		// interpolate angles
 		for( i = 0; i < 3; i++ )
@@ -3535,8 +3491,8 @@ void CG_LerpGenericEnt( centity_t *cent, ViewState *viewState ) {
 		VectorSubtract( cent->current.origin2, cent->current.origin, move );
 		Matrix3_TransformVector( cent->ent.axis, move, delta );
 		VectorMA( cent->current.origin, cent->ent.backlerp, delta, cent->ent.origin );
-	} else if( viewState->isViewerEntity( cent->current.number ) || viewState->view.POVent == cent->current.number ) {
-		VectorCopy( viewState->predictedPlayerState.pmove.origin, cent->ent.origin );
+	} else if( drawFromViewState->isViewerEntity( cent->current.number ) || drawFromViewState->view.POVent == cent->current.number ) {
+		VectorCopy( drawFromViewState->predictedPlayerState.pmove.origin, cent->ent.origin );
 		VectorCopy( cent->ent.origin, cent->ent.origin2 );
 	} else {
 		if( cgs.extrapolationTime && cent->canExtrapolate ) { // extrapolation
@@ -3600,7 +3556,7 @@ void CG_LerpGenericEnt( centity_t *cent, ViewState *viewState ) {
 	VectorCopy( cent->ent.origin, cent->ent.lightingOrigin );
 }
 
-static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
+static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *drawFromViewState ) {
 	if( !cent->ent.scale ) {
 		return;
 	}
@@ -3621,7 +3577,7 @@ static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneReques
 	}
 
 	// add to refresh list
-	CG_AddCentityOutLineEffect( cent, viewState );
+	CG_AddCentityOutLineEffect( cent, drawFromViewState );
 
 	// render effects
 	cent->ent.renderfx = cent->renderfx;
@@ -3679,7 +3635,7 @@ static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneReques
 
 	// flags are special
 	if( cent->effects & EF_FLAG_TRAIL ) {
-		CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, "tag_linked", drawSceneRequest, viewState );
+		CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, "tag_linked", drawSceneRequest, drawFromViewState );
 	}
 
 	if( !cent->current.modelindex ) {
@@ -3689,11 +3645,11 @@ static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneReques
 	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 
 	if( cent->current.modelindex2 ) {
-		CG_AddLinkedModel( cent, drawSceneRequest, viewState );
+		CG_AddLinkedModel( cent, drawSceneRequest, drawFromViewState );
 	}
 }
 
-void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
+void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname, DrawSceneRequest *drawSceneRequest, ViewState *drawFromViewState ) {
 	static entity_t flag;
 	orientation_t tag;
 
@@ -3745,7 +3701,7 @@ void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *t
 								(uint8_t)( teamcolor[0] * 0.3 ),
 								(uint8_t)( teamcolor[1] * 0.3 ),
 								(uint8_t)( teamcolor[2] * 0.3 ),
-								255, viewState );
+								255, drawFromViewState );
 
 	CG_AddEntityToScene( &flag, drawSceneRequest );
 
@@ -3846,17 +3802,17 @@ static void CG_AddFlagBaseEnt( centity_t *cent, DrawSceneRequest *drawSceneReque
 	}
 }
 
-static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
+static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *drawFromViewState ) {
 	// render effects
 	cent->ent.renderfx = cent->renderfx;
 #ifndef CELSHADEDMATERIAL
 	cent->ent.renderfx |= RF_MINLIGHT;
 #endif
 
-	if( viewState->isViewerEntity( cent->current.number ) ) {
+	if( drawFromViewState->isViewerEntity( cent->current.number ) ) {
 		cg.effects = cent->effects;
 		VectorCopy( cent->ent.lightingOrigin, cg.lightingOrigin );
-		if( !viewState->view.thirdperson && cent->current.modelindex ) {
+		if( !drawFromViewState->view.thirdperson && cent->current.modelindex ) {
 			cent->ent.renderfx |= RF_VIEWERMODEL; // only draw from mirrors
 		}
 	}
@@ -3866,10 +3822,10 @@ static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest
 		return;
 	}
 
-	CG_AddPModel( cent, drawSceneRequest, viewState );
+	CG_AddPModel( cent, drawSceneRequest, drawFromViewState );
 
 	if( v_playerTrail.get() ) {
-		if( cent->current.number != (int)viewState->predictedPlayerState.POVnum ) {
+		if( cent->current.number != (int)drawFromViewState->predictedPlayerState.POVnum ) {
 			const float timeDeltaSeconds  = 1e-3f * (float)cgs.snapFrameTime;
 			const float speedThreshold    = 0.5f * ( DEFAULT_PLAYERSPEED + DEFAULT_DASHSPEED );
 			const float distanceThreshold = speedThreshold * timeDeltaSeconds;
@@ -3893,12 +3849,12 @@ static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest
 	// corpses can never have a model in modelindex2
 	if( cent->current.type != ET_CORPSE ) {
 		if( cent->current.modelindex2 ) {
-			CG_AddLinkedModel( cent, drawSceneRequest, viewState );
+			CG_AddLinkedModel( cent, drawSceneRequest, drawFromViewState );
 		}
 	}
 }
 
-static void CG_AddSpriteEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
+static void CG_AddSpriteEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *drawFromViewState ) {
 	if( !cent->ent.scale ) {
 		return;
 	}
@@ -3924,7 +3880,7 @@ static void CG_AddSpriteEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest
 	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 
 	if( cent->current.modelindex2 ) {
-		CG_AddLinkedModel( cent, drawSceneRequest, viewState );
+		CG_AddLinkedModel( cent, drawSceneRequest, drawFromViewState );
 	}
 }
 
@@ -4047,7 +4003,7 @@ static void CG_UpdateItemEnt( centity_t *cent ) {
 	}
 }
 
-static void CG_AddItemEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
+static void CG_AddItemEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewState *drawFromViewState ) {
 	int msec;
 
 	if( !cent->item ) {
@@ -4086,11 +4042,11 @@ static void CG_AddItemEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest, 
 
 		// flags are special
 		if( cent->effects & EF_FLAG_TRAIL ) {
-			CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, NULL, drawSceneRequest, viewState );
+			CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, NULL, drawSceneRequest, drawFromViewState );
 			return;
 		}
 
-		CG_AddGenericEnt( cent, drawSceneRequest, viewState );
+		CG_AddGenericEnt( cent, drawSceneRequest, drawFromViewState );
 		return;
 	} else {
 		if( cent->effects & EF_GHOST ) {
@@ -4217,11 +4173,13 @@ static void CG_UpdateLaserbeamEnt( centity_t *cent ) {
 	VectorCopy( cent->current.origin2, owner->laserPoint );
 }
 
-static void CG_LerpLaserbeamEnt( centity_t *cent, ViewState *viewState ) {
+static void CG_LerpLaserbeamEnt( centity_t *cent, ViewState *drawFromViewState ) {
 	centity_t *owner = &cg_entities[cent->current.ownerNum];
 
-	if( viewState->view.playerPrediction && v_predictLaserBeam.get() && viewState->isViewerEntity( cent->current.ownerNum ) ) {
-		return;
+	if( drawFromViewState->view.playerPrediction && v_predictLaserBeam.get() ) {
+		if( drawFromViewState->isViewerEntity( cent->current.ownerNum ) ) {
+			return;
+		}
 	}
 
 	// Disallow artificially triggering the effect if the owner does no longer set it
@@ -4296,8 +4254,10 @@ void CG_SoundEntityNewState( centity_t *cent ) {
 	fixed = ( cent->current.channel & CHAN_FIXED ) ? true : false;
 	attenuation = cent->current.attenuation;
 
+	const ViewState *const primaryViewState = getPrimaryViewState();
+
 	if( attenuation == ATTN_NONE ) {
-		if( cgs.soundPrecache[soundindex] ) {
+		if( cgs.soundPrecache[soundindex] && primaryViewState->allowSounds ) {
 			SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[soundindex], channel & ~CHAN_FIXED, 1.0f );
 		}
 		return;
@@ -4322,23 +4282,25 @@ void CG_SoundEntityNewState( centity_t *cent ) {
 		if( owner ) {
 			auto string = cgs.configStrings.getSound( soundindex );
 			if( string && string->startsWith( '*' ) ) {
-				CG_SexedSound( owner, channel | ( fixed ? CHAN_FIXED : 0 ), string->data(), 1.0f, attenuation );
+				playSexedSoundInPrimaryView( owner, channel | ( fixed ? CHAN_FIXED : 0 ), string->data(), 1.0f, attenuation );
 			}
 		}
 		return;
 	}
 
-	if( fixed ) {
-		SoundSystem::instance()->startFixedSound( cgs.soundPrecache[soundindex], cent->current.origin, channel, 1.0f, attenuation );
-	} else if( getPrimaryViewState()->isViewerEntity( owner ) ) {
-		SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[soundindex], channel, 1.0f );
-	} else {
-		SoundSystem::instance()->startRelativeSound( cgs.soundPrecache[soundindex], owner, channel, 1.0f, attenuation );
+	if( primaryViewState->allowSounds ) {
+		if( fixed ) {
+			SoundSystem::instance()->startFixedSound( cgs.soundPrecache[soundindex], cent->current.origin, channel, 1.0f, attenuation );
+		} else if( primaryViewState->isViewerEntity( owner ) ) {
+			SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[soundindex], channel, 1.0f );
+		} else {
+			SoundSystem::instance()->startRelativeSound( cgs.soundPrecache[soundindex], owner, channel, 1.0f, attenuation );
+		}
 	}
 }
 
-void CG_EntityLoopSound( entity_state_t *state, float attenuation, const ViewState *viewState ) {
-	if( state->sound && !viewState->mutePovSounds ) {
+static void CG_EntityLoopSound( entity_state_t *state, float attenuation, const ViewState *drawFromViewState ) {
+	if( state->sound && drawFromViewState->allowSounds ) {
 		const SoundSet *const sound          = cgs.soundPrecache[state->sound];
 		const int entNum                     = state->number;
 		const uintptr_t loopIdentifyingToken = state->number;
@@ -4347,7 +4309,7 @@ void CG_EntityLoopSound( entity_state_t *state, float attenuation, const ViewSta
 	}
 }
 
-void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) {
+void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *drawFromViewState ) {
 	vec3_t autorotate;
 	// bonus items rotate at a fixed rate
 	VectorSet( autorotate, 0, ( cg.time % 3600 ) * 0.1, 0 );
@@ -4372,24 +4334,24 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) 
 
 		switch( cent->type ) {
 			case ET_GENERIC:
-				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
+				CG_AddGenericEnt( cent, drawSceneRequest, drawFromViewState );
 				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				canLight = true;
 				break;
 			case ET_GIB:
 				if( false ) {
-					CG_AddGenericEnt( cent, drawSceneRequest, viewState );
-					CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+					CG_AddGenericEnt( cent, drawSceneRequest, drawFromViewState );
+					CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 					canLight = true;
 				}
 				break;
 			case ET_BLASTER:
-				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
+				CG_AddGenericEnt( cent, drawSceneRequest, drawFromViewState );
 				cg.effectsSystem.touchBlastTrail( cent->current.number, cent->ent.origin, cent->velocity, cg.time );
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 
 				// We use relatively large light radius because this projectile moves very fast, so make it noticeable
 				drawSceneRequest->addLight( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.7f, 0.0f );
@@ -4399,14 +4361,14 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) 
 				cent->current.frame = cent->prev.frame = 0;
 				cent->ent.frame =  cent->ent.oldframe = 0;
 
-				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
+				CG_AddGenericEnt( cent, drawSceneRequest, drawFromViewState );
 				cg.effectsSystem.touchElectroTrail( cent->current.number, cent->current.ownerNum, cent->ent.origin, cg.time );
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				drawSceneRequest->addLight( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.9f, 1.0f );
 				break;
 			case ET_ROCKET:
-				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
-				CG_EntityLoopSound( state, ATTN_NORM, viewState );
+				CG_AddGenericEnt( cent, drawSceneRequest, drawFromViewState );
+				CG_EntityLoopSound( state, ATTN_NORM, drawFromViewState );
 				if( cent->current.effects & EF_STRONG_WEAPON ) {
 					cg.effectsSystem.touchStrongRocketTrail( cent->current.number, cent->ent.origin, cg.time );
 					drawSceneRequest->addLight( cent->ent.origin, 300.0f, 192.0f, 1.0f, 0.7f, 0.3f );
@@ -4416,21 +4378,21 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) 
 				}
 				break;
 			case ET_GRENADE:
-				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
+				CG_AddGenericEnt( cent, drawSceneRequest, drawFromViewState );
 				if( cent->current.effects & EF_STRONG_WEAPON ) {
 					cg.effectsSystem.touchStrongGrenadeTrail( cent->current.number, cent->ent.origin, cg.time );
 				} else {
 					cg.effectsSystem.touchWeakGrenadeTrail( cent->current.number, cent->ent.origin, cg.time );
 				}
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				drawSceneRequest->addLight( cent->ent.origin, 200.0f, 96.0f, 0.0f, 0.3f, 1.0f );
 				break;
 			case ET_PLASMA:
 				plasmaStateIndices[numPlasmaEnts++] = (uint16_t)stateIndex;
 				break;
 			case ET_WAVE:
-				CG_AddGenericEnt( cent, drawSceneRequest, viewState );
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_AddGenericEnt( cent, drawSceneRequest, drawFromViewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				// Add the core light
 				drawSceneRequest->addLight( cent->ent.origin, 128.0f, 128.0f, 0.0f, 0.3f, 1.0f );
 				// Add the corona light
@@ -4442,43 +4404,43 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) 
 				break;
 			case ET_SPRITE:
 			case ET_RADAR:
-				CG_AddSpriteEnt( cent, drawSceneRequest, viewState );
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_AddSpriteEnt( cent, drawSceneRequest, drawFromViewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				canLight = true;
 				break;
 
 			case ET_ITEM:
-				CG_AddItemEnt( cent, drawSceneRequest, viewState );
+				CG_AddItemEnt( cent, drawSceneRequest, drawFromViewState );
 				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
-				CG_EntityLoopSound( state, ATTN_IDLE, viewState );
+				CG_EntityLoopSound( state, ATTN_IDLE, drawFromViewState );
 				canLight = true;
 				break;
 
 			case ET_PLAYER:
-				CG_AddPlayerEnt( cent, drawSceneRequest, viewState );
+				CG_AddPlayerEnt( cent, drawSceneRequest, drawFromViewState );
 				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
-				CG_EntityLoopSound( state, ATTN_IDLE, viewState );
-				CG_LaserBeamEffect( cent, drawSceneRequest, viewState );
-				CG_WeaponBeamEffect( cent, viewState );
+				CG_EntityLoopSound( state, ATTN_IDLE, drawFromViewState );
+				CG_LaserBeamEffect( cent, drawSceneRequest, drawFromViewState );
+				CG_WeaponBeamEffect( cent, drawFromViewState );
 				canLight = true;
 				break;
 
 			case ET_CORPSE:
-				CG_AddPlayerEnt( cent, drawSceneRequest, viewState );
+				CG_AddPlayerEnt( cent, drawSceneRequest, drawFromViewState );
 				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
-				CG_EntityLoopSound( state, ATTN_IDLE, viewState );
+				CG_EntityLoopSound( state, ATTN_IDLE, drawFromViewState );
 				canLight = true;
 				break;
 
 			case ET_BEAM:
 				CG_AddBeamEnt( cent );
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				break;
 
 			case ET_LASERBEAM:
@@ -4487,12 +4449,12 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) 
 
 			case ET_PORTALSURFACE:
 				CG_AddPortalSurfaceEnt( cent, drawSceneRequest );
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				break;
 
 			case ET_FLAG_BASE:
-				CG_AddFlagBaseEnt( cent, drawSceneRequest, viewState );
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_AddFlagBaseEnt( cent, drawSceneRequest, drawFromViewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				canLight = true;
 				break;
 
@@ -4504,14 +4466,14 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) 
 
 			case ET_DECAL:
 				CG_AddDecalEnt( cent );
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				break;
 
 			case ET_PUSH_TRIGGER:
 				if( v_drawEntityBoxes.get() ) {
 					CG_DrawEntityBox( cent );
 				}
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				break;
 
 			case ET_EVENT:
@@ -4523,7 +4485,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) 
 
 			case ET_PARTICLES:
 				CG_AddParticlesEnt( cent );
-				CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				break;
 
 				// TODO: Remove once the net protocol gets updated
@@ -4548,8 +4510,8 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) 
 	for( unsigned i = 0; i < numPlasmaEnts; ++i ) {
 		entity_state_t *state = &cg.frame.parsedEntities[plasmaStateIndices[i]];
 		centity_t *cent       = &cg_entities[state->number];
-		CG_AddGenericEnt( cent, drawSceneRequest, viewState );
-		CG_EntityLoopSound( state, ATTN_STATIC, viewState );
+		CG_AddGenericEnt( cent, drawSceneRequest, drawFromViewState );
+		CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 
 		if( state->effects & EF_STRONG_WEAPON ) {
 			//cgNotice() << "velocity" << cent->velocity[0] << cent->velocity[1] << cent->velocity[2];
@@ -4563,7 +4525,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) 
 		float programLightRadius                  = 0.0f;
 
 		// TODO: This should be handled at rendering layer during culling/light prioritization
-		const float squareDistance = DistanceSquared( viewState->view.refdef.vieworg, state->origin );
+		const float squareDistance = DistanceSquared( drawFromViewState->view.refdef.vieworg, state->origin );
 		// TODO: Using fov tangent ratio is a more correct approach (but nobody actually notices in zooomed in state)
 		if( squareDistance < 384.0f * 384.0f ) {
 			programLightRadius = desiredProgramLightRadius;
@@ -4584,7 +4546,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *viewState ) 
 /*
 * Interpolate the entity states positions into the entity_t structs
 */
-void CG_LerpEntities( ViewState *viewState ) {
+void CG_LerpEntities( ViewState *drawFromViewState ) {
 	entity_state_t *state;
 	int pnum;
 	centity_t *cent;
@@ -4614,7 +4576,7 @@ void CG_LerpEntities( ViewState *viewState ) {
 				if( state->linearMovement ) {
 					CG_ExtrapolateLinearProjectile( cent );
 				} else {
-					CG_LerpGenericEnt( cent, viewState );
+					CG_LerpGenericEnt( cent, drawFromViewState );
 				}
 				break;
 
@@ -4634,7 +4596,7 @@ void CG_LerpEntities( ViewState *viewState ) {
 
 			case ET_LASERBEAM:
 			case ET_CURVELASERBEAM:
-				CG_LerpLaserbeamEnt( cent, viewState );
+				CG_LerpLaserbeamEnt( cent, drawFromViewState );
 				break;
 
 			case ET_MINIMAP_ICON:

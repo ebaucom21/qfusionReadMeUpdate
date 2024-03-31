@@ -27,11 +27,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/configvars.h"
 
 void EffectsSystemFacade::startSound( const SoundSet *sound, const float *origin, float attenuation ) {
-	SoundSystem::instance()->startFixedSound( sound, origin, CHAN_AUTO, v_volumeEffects.get(), attenuation );
+	// TODO: We can save plenty of computations if we do this check earlier in the call stack
+	if( getPrimaryViewState()->allowSounds ) {
+		SoundSystem::instance()->startFixedSound( sound, origin, CHAN_AUTO, v_volumeEffects.get(), attenuation );
+	}
 }
 
 void EffectsSystemFacade::startRelativeSound( const SoundSet *sound, int entNum, float attenuation ) {
-	SoundSystem::instance()->startRelativeSound( sound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
+	if( getPrimaryViewState()->allowSounds ) {
+		SoundSystem::instance()->startRelativeSound( sound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
+	}
 }
 
 void EffectsSystemFacade::spawnRocketExplosionEffect( const float *origin, const float *dir, int mode ) {

@@ -287,8 +287,9 @@ bool CG_ChaseStep( int step ) {
 }
 
 static void CG_AddLocalSounds() {
-	// add local announces
-	if( GS_Countdown() ) {
+	// Note: Most announcements are currently pov-dependent, so we should not play them in tiled mode.
+	// See also handling of announcements while processing player state events.
+	if( GS_Countdown() && getPrimaryViewState()->allowSounds ) {
 		if( GS_MatchDuration() ) {
 			const int64_t curtime = GS_MatchPaused() ? cg.frame.serverTime : cg.time;
 			int64_t duration = GS_MatchDuration();
@@ -306,7 +307,7 @@ static void CG_AddLocalSounds() {
 					const SoundSet *sound = SoundSystem::instance()->registerSound( SoundSetProps {
 						.name = SoundSetProps::Exact { exactName },
 					});
-					CG_AddAnnouncerEvent( sound, false, nullptr );
+					CG_AddAnnouncerEvent( sound, false );
 				}
 
 				lastSecond = remainingSeconds;
@@ -630,7 +631,7 @@ void CG_StartColorBlendEffect( float r, float g, float b, float a, int time, Vie
 	viewState->colorblends[bnum].blendtime = time;
 }
 
-void CG_DamageIndicatorAdd( int damage, const vec3_t dir, ViewState *viewState ) {
+void CG_DamageIndicatorAdd( int damage, const vec3_t dir, ViewState *playerViewState ) {
 	if( !v_damageIndicator.get() ) {
 		return;
 	}
@@ -647,7 +648,7 @@ void CG_DamageIndicatorAdd( int damage, const vec3_t dir, ViewState *viewState )
 
 	vec3_t playerAngles;
 	playerAngles[PITCH] = 0;
-	playerAngles[YAW]   = viewState->predictedPlayerState.viewangles[YAW];
+	playerAngles[YAW]   = playerViewState->predictedPlayerState.viewangles[YAW];
 	playerAngles[ROLL]  = 0;
 
 	mat3_t playerAxis;
@@ -689,8 +690,8 @@ void CG_DamageIndicatorAdd( int damage, const vec3_t dir, ViewState *viewState )
 	}
 
 	for( int i = 0; i < 4; i++ ) {
-		if( viewState->damageBlends[i] < cg.time + blends[i] ) {
-			viewState->damageBlends[i] = cg.time + blends[i];
+		if( playerViewState->damageBlends[i] < cg.time + blends[i] ) {
+			playerViewState->damageBlends[i] = cg.time + blends[i];
 		}
 	}
 #undef TOP_BLEND
