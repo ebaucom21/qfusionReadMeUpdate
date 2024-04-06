@@ -783,6 +783,24 @@ void W_Detonate_Rocket( edict_t *ent, const edict_t *ignore, const cplane_t *pla
 	G_FreeEdict( ent );
 }
 
+static void W_Think_Plasma( edict_t * );
+
+static void convertToTossProjectile( edict_t *self ) {
+	self->s.linearMovement = false;
+	self->movetype = MOVETYPE_BOUNCEGRENADE;
+	if( self->s.type == ET_ROCKET ) {
+		self->nextThink = self->timeout;
+		self->think = G_FreeEdict;
+		self->gravity = g_rocket_gravity_scale->value;
+	} else {
+		self->think = W_Think_Plasma;
+		self->gravity = g_plasma_gravity_scale->value;
+		// Add instant up velocity boost, this is more important for such fast projectiles.
+		// From the other hand, it has to be sufficiently small to keep the curve visually smooth.
+		self->velocity[2] += g_plasma_up_speed_boost->value;
+	}
+}
+
 /*
 * W_Fire_Rocket
 */
@@ -798,27 +816,28 @@ edict_t *W_Fire_Rocket( edict_t *self, vec3_t start, vec3_t angles, int speed, f
 		damage = 9999;
 	}
 
-	if( mod == MOD_ROCKET_S ) {
-		rocket = W_Fire_LinearProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, minDamage, radius, timeout, timeDelta );
-	} else {
-		rocket = W_Fire_TossProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, minDamage, radius, timeout, timeDelta, g_rocket_gravity_scale->value );
-	}
-
+	rocket = W_Fire_LinearProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, minDamage, radius, timeout, timeDelta );
 	rocket->s.type = ET_ROCKET; //rocket trail sfx
 	if( mod == MOD_ROCKET_S ) {
 		rocket->s.modelindex = trap_ModelIndex( PATH_ROCKET_STRONG_MODEL );
 		rocket->s.effects |= EF_STRONG_WEAPON;
 		rocket->s.sound = trap_SoundIndex( S_WEAPON_ROCKET_S_FLY );
+		rocket->think = G_FreeEdict;
+		rocket->nextThink = level.time + timeout;
 	} else {
 		rocket->s.modelindex = trap_ModelIndex( PATH_ROCKET_WEAK_MODEL );
 		rocket->s.effects &= ~EF_STRONG_WEAPON;
 		rocket->s.sound = trap_SoundIndex( S_WEAPON_ROCKET_W_FLY );
+		rocket->think     = convertToTossProjectile;
+		rocket->nextThink = level.time + wsw::max( 2 * game.snapFrameTime, g_projectile_toss_morph_delay->integer );
 	}
+
 	rocket->s.attenuation = ATTN_STATIC;
 	rocket->touch = W_Touch_Rocket;
-	rocket->think = G_FreeEdict;
 	rocket->classname = "rocket";
 	rocket->style = mod;
+	// Set it for strong projectile as well for consistency
+	rocket->timeout = level.time + timeout;
 
 	return rocket;
 }
@@ -933,6 +952,14 @@ static void W_Think_Plasma( edict_t *ent ) {
 	W_Plasma_Backtrace( ent, start );
 }
 
+static void W_Think_Plasma2( edict_t *ent ) {
+	if( ent->trigger_timeout < level.time ) {
+		convertToTossProjectile( ent );
+	}
+
+	W_Think_Plasma( ent );
+}
+
 /*
 * W_AutoTouch_Plasma
 */
@@ -955,17 +982,12 @@ edict_t *W_Fire_Plasma( edict_t *self, vec3_t start, vec3_t angles, float damage
 		damage = 9999;
 	}
 
-	if( mod == MOD_PLASMA_S ) {
-		plasma = W_Fire_LinearProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, minDamage, radius, timeout, timeDelta );
-	} else {
-		plasma = W_Fire_TossProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, minDamage, radius, timeout, timeDelta, g_plasma_gravity_scale->value );
-	}
+	plasma = W_Fire_LinearProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, minDamage, radius, timeout, timeDelta );
 
 	plasma->s.type = ET_PLASMA;
 	plasma->classname = "plasma";
 	plasma->style = mod;
 
-	plasma->think = W_Think_Plasma;
 	plasma->touch = W_AutoTouch_Plasma;
 	plasma->nextThink = level.time + 1;
 	plasma->timeout = level.time + timeout;
@@ -974,11 +996,15 @@ edict_t *W_Fire_Plasma( edict_t *self, vec3_t start, vec3_t angles, float damage
 		plasma->s.modelindex = trap_ModelIndex( PATH_PLASMA_STRONG_MODEL );
 		plasma->s.sound = trap_SoundIndex( S_WEAPON_PLASMAGUN_S_FLY );
 		plasma->s.effects |= EF_STRONG_WEAPON;
+		plasma->think = W_Think_Plasma;
 	} else {
 		plasma->s.modelindex = trap_ModelIndex( PATH_PLASMA_WEAK_MODEL );
 		plasma->s.sound = trap_SoundIndex( S_WEAPON_PLASMAGUN_W_FLY );
 		plasma->s.effects &= ~EF_STRONG_WEAPON;
+		plasma->think = W_Think_Plasma2;
+		plasma->trigger_timeout = level.time + wsw::max( 2 * game.snapFrameTime, g_projectile_toss_morph_delay->integer );
 	}
+
 	plasma->s.attenuation = ATTN_STATIC;
 	return plasma;
 }
@@ -2551,15 +2577,14 @@ void G_FireWeapon( edict_t *ent, int parm ) {
 
 	// Disable antilag for all projectiles regardless of type.
 	projectile->timeDelta = 0;
-	// Use a limited one for blasts/bolts.
-	// We have to turn it off for plasma/rockets for consistency with toss modes.
+	// Use a limited prestep for weapons with linear/initially linear trajectory.
 	const auto type = projectile->s.type;
-	if( type != ET_BLASTER && type != ET_ELECTRO_WEAK ) {
+	if( type != ET_BLASTER && type != ET_ELECTRO_WEAK && type != ET_ROCKET && type != ET_PLASMA ) {
 		return;
 	}
 
 	if( !GS_RaceGametype() ) {
-		timeOffset = wsw::min( 50, timeOffset );
+		timeOffset = wsw::min( game.snapFrameTime, timeOffset );
 	}
 
 	assert( projectile->s.linearMovement );
@@ -2570,5 +2595,15 @@ void G_FireWeapon( edict_t *ent, int parm ) {
 	// If there was not an impact
 	if( projectile->r.inuse ) {
 		VectorCopy( projectile->s.origin, projectile->s.linearMovementBegin );
+		// Re-schedule conversion to toss projectiles
+		if( !( projectile->s.effects & EF_STRONG_WEAPON ) ) {
+			if( type == ET_ROCKET ) {
+				projectile->nextThink -= timeOffset;
+				assert( projectile->nextThink > level.time );
+			} else if( type == ET_PLASMA ) {
+				projectile->trigger_timeout -= timeOffset;
+				assert( projectile->trigger_timeout > level.time );
+			}
+		}
 	}
 }

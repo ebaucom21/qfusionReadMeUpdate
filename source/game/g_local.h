@@ -352,6 +352,8 @@ extern cvar_t *g_self_knockback;
 extern cvar_t *g_knockback_scale;
 extern cvar_t *g_rocket_gravity_scale;
 extern cvar_t *g_plasma_gravity_scale;
+extern cvar_t *g_plasma_up_speed_boost;
+extern cvar_t *g_projectile_toss_morph_delay;
 extern cvar_t *g_volatile_explosives;
 extern cvar_t *g_allow_stun;
 extern cvar_t *g_armor_degradation;
