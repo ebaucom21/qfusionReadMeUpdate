@@ -121,7 +121,6 @@ class MovementSubsystem {
 
 	static constexpr unsigned MAX_SAVED_AREAS = PredictionContext::MAX_SAVED_LANDING_AREAS;
 	wsw::StaticVector<int, MAX_SAVED_AREAS> savedLandingAreas;
-	wsw::StaticVector<int, MAX_SAVED_AREAS> savedPlatformAreas;
 
 	// Limits weapon jumps attempts per second
 	// (consequential attempts are allowed but no more than several frames,
@@ -169,8 +168,6 @@ class MovementSubsystem {
 	int64_t nextRotateInputAttemptAt { 0 };
 	int64_t inputRotationBlockingTimer { 0 };
 	int64_t lastInputRotationFailureAt { 0 };
-
-	void CheckGroundPlatform();
 
 	void ApplyPendingTurnToLookAtPoint( BotInput *input, PredictionContext *context = nullptr );
 	inline void InvertInput( BotInput *input, PredictionContext *context = nullptr );

@@ -81,7 +81,7 @@ auto TriggerAreaNumsCache::getTriggersForArea( int areaNum ) const -> const Clas
 		}
 	}
 
-	for( const uint16_t num : entitiesCache->getAllPersistentMapPlatforms() ) {
+	for( const uint16_t num : entitiesCache->getAllPersistentMapPlatformTriggers() ) {
 		const auto *const __restrict ent = gameEnts + num;
 		if( BoundsIntersect( ent->r.absmin, ent->r.absmax, areaMins, areaMaxs ) ) {
 			platformNums[numPlatforms++] = num;

@@ -12,30 +12,27 @@ public:
 	void PlanPredictionStep( PredictionContext *context ) override;
 	void CheckPredictionStepResults( PredictionContext *context ) override;
 
-	void BeforePlanning() override {
-		BaseAction::BeforePlanning();
-		currTestedAreaIndex = 0;
-	}
+	void BeforePlanning() override;
 
 	void OnApplicationSequenceStopped( PredictionContext *context,
 									   SequenceStopReason stopReason,
 									   unsigned stoppedAtFrameIndex ) override;
-
-	static constexpr auto MAX_SAVED_AREAS = PredictionContext::MAX_SAVED_LANDING_AREAS;
-	using ExitAreasVector = wsw::StaticVector<int, MAX_SAVED_AREAS>;
-
 private:
-	ExitAreasVector tmpExitAreas;
-	unsigned currTestedAreaIndex { 0 };
+	unsigned m_currTestedAreaIndex { 0 };
+	const edict_t *m_foundPlatform { nullptr };
+	wsw::StaticVector<int, 24> m_exitAreas;
+
+	// TODO: These should be separate stages of script
+	enum Stage { StageWait, StageEnter, StageExit } m_stage { StageWait };
 
 	const edict_t *GetPlatform( PredictionContext *context ) const;
-	// A context might be null!
-	void TrySaveExitAreas( PredictionContext *context, const edict_t *platform );
-	const ExitAreasVector &SuggestExitAreas( PredictionContext *context, const edict_t *platform );
-	void FindExitAreas( PredictionContext *context, const edict_t *platform, ExitAreasVector &exitAreas );
+	bool DetermineStageAndProperties( PredictionContext *context, const edict_t *platform );
+	void FindSuitableAreasInBox( const Vec3 &boxMins, const Vec3 &boxMaxs, wsw::StaticVector<int, 24> *foundAreas );
+	int FindNavTargetReachableAreas( std::span<const int> givenAreas, int navTargetAreaNum, wsw::StaticVector<int, 24> *foundAreas );
 
-	void SetupIdleRidingPlatformMovement( PredictionContext *context, const edict_t *platform );
-	void SetupExitPlatformMovement( PredictionContext *context, const edict_t *platform );
+	void SetupEnterPlatformMovement( PredictionContext *context );
+	void SetupExitPlatformMovement( PredictionContext *context );
+	void SetupRidePlatformMovement( PredictionContext *context );
 };
 
 #endif

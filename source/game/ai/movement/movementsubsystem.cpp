@@ -86,31 +86,6 @@ void MovementSubsystem::Frame( BotInput *input ) {
 	BaseAction *movementAction = predictionContext.GetActionAndRecordForCurrTime( &movementActionRecord );
 
 	movementAction->ExecActionRecord( &movementActionRecord, input, nullptr );
-
-	CheckGroundPlatform();
-}
-
-void MovementSubsystem::CheckGroundPlatform() {
-	const edict_t *self = game.edicts + bot->EntNum();
-	if( !self->groundentity ) {
-		return;
-	}
-
-	// Reset saved platform areas after touching a solid world ground
-	if( self->groundentity == world ) {
-		savedPlatformAreas.clear();
-		return;
-	}
-
-	if( self->groundentity->use != Use_Plat ) {
-		return;
-	}
-
-	if( self->groundentity->moveinfo.state != STATE_BOTTOM ) {
-		return;
-	}
-
-	ridePlatformAction.TrySaveExitAreas( nullptr, self->groundentity );
 }
 
 void MovementSubsystem::CheckBlockingDueToInputRotation() {

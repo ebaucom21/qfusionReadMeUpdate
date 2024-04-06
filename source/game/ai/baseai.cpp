@@ -185,21 +185,17 @@ void Ai::Frame() {
 void Ai::Think() {
 	if( !G_ISGHOSTING( self ) ) {
 		// TODO: Check whether we are camping/holding a spot
-		bool checkBlocked = true;
 		if( !self->groundentity ) {
-			checkBlocked = false;
-		} else if( self->groundentity->use == Use_Plat && VectorLengthSquared( self->groundentity->velocity ) > 10 * 10 ) {
-			checkBlocked = false;
-		}
-
-		if( checkBlocked && VectorLengthSquared( self->velocity ) > 30 * 30 ) {
 			blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
-		}
-
-		// if completely stuck somewhere
-		if( blockedTimeoutAt < level.time ) {
-			OnBlockedTimeout();
-			return;
+		} else if( self->groundentity->use == Use_Plat && VectorLengthSquared( self->groundentity->velocity ) > wsw::square( 1 ) ) {
+			blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
+		} else if( VectorLengthSquared( self->velocity ) > wsw::square( 30 ) ) {
+			blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
+		} else {
+			// if completely stuck somewhere
+			if( blockedTimeoutAt < level.time ) {
+				OnBlockedTimeout();
+			}
 		}
 	}
 }

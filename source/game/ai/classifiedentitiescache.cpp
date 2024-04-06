@@ -29,7 +29,7 @@ inline void add( Container *c, int num ) {
 void ClassifiedEntitiesCache::retrievePersistentEntities() {
 	m_allJumppads.clear();
 	m_allTeleporters.clear();
-	m_allPlatforms.clear();
+	m_allPlatformTriggers.clear();
 
 	const auto *__restrict gameEnts = game.edicts;
 	const int numEnts = game.numentities;
@@ -44,7 +44,7 @@ void ClassifiedEntitiesCache::retrievePersistentEntities() {
 					add( &m_allTeleporters, ent->s.number );
 					m_persistentEntitiesMask.set( (size_t)i );
 				} else if( !Q_stricmp( classname, "trigger_platform" ) ) {
-					add( &m_allPlatforms, ent->s.number );
+					add( &m_allPlatformTriggers, ent->s.number );
 					m_persistentEntitiesMask.set( (size_t)i );
 				}
 			}

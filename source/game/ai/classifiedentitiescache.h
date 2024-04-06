@@ -17,7 +17,7 @@ public:
 private:
 	wsw::StaticVector<uint16_t, kMaxClassTriggerEnts> m_allTeleporters;
 	wsw::StaticVector<uint16_t, kMaxClassTriggerEnts> m_allJumppads;
-	wsw::StaticVector<uint16_t, kMaxClassTriggerEnts> m_allPlatforms;
+	wsw::StaticVector<uint16_t, kMaxClassTriggerEnts> m_allPlatformTriggers;
 	wsw::StaticVector<uint16_t, MAX_EDICTS> m_allOtherTriggers;
 	std::bitset<MAX_EDICTS> m_persistentEntitiesMask;
 	bool m_hasRetrievedPersistentEntities { false };
@@ -47,8 +47,8 @@ public:
 		return { m_allJumppads.begin(), m_allJumppads.end() };
 	}
 	[[nodiscard]]
-	auto getAllPersistentMapPlatforms() const -> std::span<const uint16_t> {
-		return { m_allPlatforms.begin(), m_allPlatforms.end() };
+	auto getAllPersistentMapPlatformTriggers() const -> std::span<const uint16_t> {
+		return { m_allPlatformTriggers.begin(), m_allPlatformTriggers.end() };
 	}
 	[[nodiscard]]
 	auto getAllOtherTriggersInThisFrame() const -> std::span<const uint16_t> {

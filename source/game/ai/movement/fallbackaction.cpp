@@ -6,6 +6,7 @@
 #include "../navigation/aasstaticroutetable.h"
 #include "../manager.h"
 #include "../trajectorypredictor.h"
+#include "../classifiedentitiescache.h"
 
 void FallbackAction::PlanPredictionStep( PredictionContext *context ) {
 	bool handledSpecialMovement = false;
@@ -362,11 +363,49 @@ MovementScript *FallbackAction::TryFindAasBasedFallback( PredictionContext *cont
 	}
 
 	if( traveltype == TRAVEL_JUMPPAD || traveltype == TRAVEL_TELEPORT || traveltype == TRAVEL_ELEVATOR ) {
-		// Always follow these reachabilities
 		auto *fallback = &m_subsystem->useWalkableNodeScript;
-		// Note: We have to add several units to the target Z, otherwise a collision test
-		// on next frame is very likely to immediately deactivate it
-		fallback->Activate( ( Vec3( 0, 0, -playerbox_stand_mins[2] ) + nextReach.start ).Data(), 16.0f );
+		bool didPlatformSpecificHandling = false;
+		if( traveltype == TRAVEL_ELEVATOR ) {
+			const edict_t *foundPlatform = nullptr;
+			// Q3 be_aas_optimize.c: "for TRAVEL_ELEVATOR the facenum is the model number of elevator"
+			for( const auto triggerEntNum: wsw::ai::ClassifiedEntitiesCache::instance()->getAllPersistentMapPlatformTriggers() ) {
+				const edict_t *trigger = game.edicts + triggerEntNum;
+				const edict_t *platform = trigger->enemy;
+				assert( platform && platform->use == Use_Plat );
+				if( platform->s.modelindex == (unsigned)nextReach.facenum ) {
+					foundPlatform = platform;
+					break;
+				}
+			}
+			if( foundPlatform && ( foundPlatform->moveinfo.state == STATE_TOP || foundPlatform->moveinfo.state == STATE_BOTTOM ) ) {
+				// Figure out what platform state (TOP or BOTTOM) is closer to the reach start
+				const float startDeltaZ = std::fabs( foundPlatform->moveinfo.start_origin[2] - nextReach.start[2] );
+				const float endDeltaZ   = std::fabs( foundPlatform->moveinfo.end_origin[2] - nextReach.start[2] );
+				if( startDeltaZ < endDeltaZ ) {
+					if( foundPlatform->moveinfo.state == STATE_TOP ) {
+						didPlatformSpecificHandling = true;
+					}
+				} else {
+					if( foundPlatform->moveinfo.state == STATE_BOTTOM ) {
+						didPlatformSpecificHandling = true;
+					}
+				}
+				if( didPlatformSpecificHandling ) {
+					Vec3 targetOrigin( 0.5f * ( Vec3( foundPlatform->r.absmin ) + Vec3( foundPlatform->r.absmax ) ) );
+					targetOrigin.Z() = nextReach.start[2] - playerbox_stand_mins[2];
+					fallback->Activate( targetOrigin.Data(), 16.0f );
+				}
+			}
+		}
+
+		if( !didPlatformSpecificHandling ) {
+			Vec3 targetOrigin( nextReach.start );
+			// Note: We have to add several units to the target Z, otherwise a collision test
+			// on next frame is very likely to immediately deactivate it
+			targetOrigin.Z() -= playerbox_stand_mins[2];
+			fallback->Activate( targetOrigin.Data(), 16.0f );
+		}
+
 		return fallback;
 	}
 

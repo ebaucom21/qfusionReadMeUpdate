@@ -285,6 +285,30 @@ static void Intercepted_Trace( trace_t *t, const vec3_t start, const vec3_t mins
 							   int ignore, int contentmask, int timeDelta ) {
 	// TODO: Check whether contentmask is compatible
 	GAME_IMPORT.CM_ClipToShapeList( pmoveShapeList, t, start, end, mins, maxs, contentmask );
+	if( !currPredictionContext->m_platformTriggerEntNumsToUseDuringPrediction.empty() ) [[unlikely]] {
+		if( t->fraction > 0.0f ) [[likely]] {
+			auto *const cache = &currPredictionContext->nearbyTriggersCache;
+			// Note: We don't expand actually checked bounds as it does some expansion on its own and mins/maxs are small
+			cache->ensureValidForBounds( start, end );
+			const float *clipMins = mins ? mins : vec3_origin;
+			const float *clipMaxs = maxs ? maxs : vec3_origin;
+			for( unsigned platformIndex = 0; platformIndex < cache->numPlatformSolidEnts; ++platformIndex ) {
+				const auto *const platform = game.edicts + cache->platformSolidEntNums[platformIndex];
+				if( ISBRUSHMODEL( platform->s.modelindex ) ) [[likely]] {
+					struct cmodel_s *cmodel = trap_CM_InlineModel( (int)platform->s.modelindex );
+					trace_t t2;
+					trap_CM_TransformedBoxTrace( &t2, start, end, clipMins, clipMaxs, cmodel, contentmask,
+												 platform->s.origin, platform->s.angles );
+					if( t2.fraction < t->fraction ) {
+						*t = t2;
+						if( t2.fraction == 0.0f ) {
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 static int Intercepted_PointContents( const vec3_t p, int timeDelta ) {
@@ -357,8 +381,8 @@ void PredictionContext::OnInterceptedPMoveTouchTriggers( pmove_t *pm, vec3_t con
 		}
 	}
 
-	for( unsigned i = 0; i < nearbyTriggersCache.numPlatformEnts; ++i ) {
-		const uint16_t entNum = nearbyTriggersCache.platformEntNums[i];
+	for( unsigned i = 0; i < nearbyTriggersCache.numPlatformTriggerEnts; ++i ) {
+		const uint16_t entNum = nearbyTriggersCache.platformTriggerEntNums[i];
 		if( GClip_EntityContact( mins, maxs, gameEdicts + entNum ) ) {
 			frameEvents.touchedPlatformEntNum = entNum;
 			break;
@@ -619,14 +643,7 @@ BaseAction *PredictionContext::SuggestSuitableAction() {
 
 	if( const edict_t *groundEntity = entityPhysicsState.GroundEntity() ) {
 		if( groundEntity->use == Use_Plat ) {
-			// (prevent blocking if touching platform but not actually triggering it like @ wdm1 GA)
-			const auto &mins = groundEntity->r.absmin;
-			const auto &maxs = groundEntity->r.absmax;
-			if( mins[0] <= entityPhysicsState.Origin()[0] && maxs[0] >= entityPhysicsState.Origin()[0] ) {
-				if( mins[1] <= entityPhysicsState.Origin()[1] && maxs[1] >= entityPhysicsState.Origin()[1] ) {
-					return &m_subsystem->ridePlatformAction;
-				}
-			}
+			return &m_subsystem->ridePlatformAction;
 		}
 	}
 
@@ -906,12 +923,8 @@ static void collectNearbyTriggers( wsw::StaticVector<uint16_t, N> *__restrict de
 	dest->clear();
 
 	for( const uint16_t entNum: entNums ) {
-		vec3_t triggerOrigin;
-		const edict_t *const __restrict trigger = gameEdicts + entNum;
-		// Distrust trigger->origin
-		VectorAvg( trigger->r.absmin, trigger->r.absmax, triggerOrigin );
-		const float radiusLike = 0.5f * DistanceFast( trigger->r.absmin, trigger->r.absmax );
-		if( DistanceSquared( botOrigin, triggerOrigin ) < wsw::square( radiusLike + 768.0f ) ) {
+		const edict_t *const trigger = gameEdicts + entNum;
+		if( BoundsAndSphereIntersect( trigger->r.absmin, trigger->r.absmax, botOrigin, 768.0f ) ) {
 			dest->push_back( entNum );
 			// TODO: Add an initial pass to select nearest/best in this case?
 			if( dest->full() ) [[unlikely]] {
@@ -927,8 +940,28 @@ void PredictionContext::SaveNearbyEntities() {
 
 	collectNearbyTriggers( &m_jumppadEntNumsToUseDuringPrediction, origin, cache->getAllPersistentMapJumppads() );
 	collectNearbyTriggers( &m_teleporterEntNumsToUseDuringPrediction, origin, cache->getAllPersistentMapTeleporters() );
-	collectNearbyTriggers( &m_platformEntNumsToUseDuringPrediction, origin, cache->getAllPersistentMapPlatforms() );
 	collectNearbyTriggers( &m_otherTriggerEntNumsToUseDuringPrediction, origin, cache->getAllOtherTriggersInThisFrame() );
+
+	m_platformTriggerEntNumsToUseDuringPrediction.clear();
+	for( const uint16_t entNum: cache->getAllPersistentMapPlatformTriggers() ) {
+		bool shouldAddThisTrigger = false;
+		const edict_t *const trigger = game.edicts + entNum;
+		if( BoundsAndSphereIntersect( trigger->r.absmin, trigger->r.absmax, origin, 768.0f ) ) {
+			shouldAddThisTrigger = true;
+		} else {
+			const edict_t *platform = trigger->enemy;
+			assert( platform && platform->use == Use_Plat );
+			if( BoundsAndSphereIntersect( platform->r.absmin, platform->r.absmax, origin, 768.0f ) ) {
+				shouldAddThisTrigger = true;
+			}
+		}
+		if( shouldAddThisTrigger ) {
+			m_platformTriggerEntNumsToUseDuringPrediction.push_back( entNum );
+			if( m_platformTriggerEntNumsToUseDuringPrediction.full() ) [[unlikely]] {
+				break;
+			}
+		}
+	}
 
 	nearbyTriggersCache.context = this;
 }

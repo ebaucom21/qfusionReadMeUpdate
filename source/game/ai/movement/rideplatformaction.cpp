@@ -1,24 +1,43 @@
 #include "rideplatformaction.h"
 #include "movementlocal.h"
 
+void RidePlatformAction::BeforePlanning() {
+	BaseAction::BeforePlanning();
+	m_currTestedAreaIndex = 0;
+	m_foundPlatform       = nullptr;
+	m_stage               = StageWait;
+	m_exitAreas.clear();
+}
+
 void RidePlatformAction::PlanPredictionStep( PredictionContext *context ) {
 	auto *const defaultAction = context->SuggestDefaultAction();
 	if( !GenericCheckIsActionEnabled( context, defaultAction ) ) {
 		return;
 	}
 
-	const edict_t *platform = GetPlatform( context );
-	if( !platform ) {
-		context->cannotApplyAction = true;
-		context->actionSuggestedByAction = defaultAction;
-		Debug( "Cannot apply the action (cannot find a platform below)\n" );
-		return;
+	if( !m_foundPlatform ) {
+		const edict_t *platform = GetPlatform( context );
+		if( !platform ) {
+			context->cannotApplyAction = true;
+			context->actionSuggestedByAction = defaultAction;
+			Debug( "Cannot apply the action (cannot find a platform below)\n" );
+			return;
+		}
+		if( !DetermineStageAndProperties( context, platform ) ) {
+			context->cannotApplyAction = true;
+			context->actionSuggestedByAction = defaultAction;
+			Debug( "Cannot determine what to do (enter, ride or exit)\n" );
+			return;
+		}
+		m_foundPlatform = platform;
 	}
 
-	if( platform->moveinfo.state == STATE_TOP ) {
-		SetupExitPlatformMovement( context, platform );
+	if( m_stage == StageEnter ) {
+		SetupEnterPlatformMovement( context );
+	} else if( m_stage == StageExit ) {
+		SetupExitPlatformMovement( context );
 	} else {
-		SetupIdleRidingPlatformMovement( context, platform );
+		SetupRidePlatformMovement( context );
 	}
 }
 
@@ -28,29 +47,52 @@ void RidePlatformAction::CheckPredictionStepResults( PredictionContext *context 
 		return;
 	}
 
+	assert( m_stage == StageExit );
+
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
-	const int targetAreaNum = m_subsystem->savedPlatformAreas[currTestedAreaIndex];
-	const int currAreaNum = entityPhysicsState.CurrAasAreaNum();
-	const int droppedToFloorAreaNum = entityPhysicsState.DroppedToFloorAasAreaNum();
-	if( currAreaNum == targetAreaNum || droppedToFloorAreaNum == targetAreaNum ) {
-		Debug( "The bot has entered the target exit area, should stop planning\n" );
-		context->isCompleted = true;
-		return;
+	if( const edict_t *groundEntity = entityPhysicsState.GroundEntity(); groundEntity && groundEntity->use != Use_Plat ) {
+		const int exitAreaNum = m_exitAreas[m_currTestedAreaIndex];
+		const int currAreaNum = entityPhysicsState.CurrAasAreaNum();
+		const int droppedToFloorAreaNum = entityPhysicsState.DroppedToFloorAasAreaNum();
+		if( currAreaNum == exitAreaNum || droppedToFloorAreaNum == exitAreaNum ) {
+			context->isCompleted = true;
+			return;
+		}
+
+		const auto *const aasWorld = AiAasWorld::instance();
+		if( const int exitClusterNum = aasWorld->floorClusterNum( exitAreaNum ) ) {
+			for( const int areaNum: { currAreaNum, droppedToFloorAreaNum } ) {
+				if( exitClusterNum == aasWorld->floorClusterNum( areaNum ) ) {
+					context->isCompleted = true;
+					return;
+				}
+			}
+		}
+
+		// TODO: We should trace areas (AasTraceAreas) each step...
+		Vec3 playerBoxMins( context->movementState->entityPhysicsState.Origin() );
+		Vec3 playerBoxMaxs( context->movementState->entityPhysicsState.Origin() );
+		playerBoxMins += playerbox_stand_mins, playerBoxMaxs += playerbox_stand_maxs;
+		const auto &exitArea = aasWorld->getAreas()[exitAreaNum];
+		if( BoundsIntersect( playerBoxMins.Data(), playerBoxMaxs.Data(), exitArea.mins, exitArea.maxs ) ) {
+			context->isCompleted = true;
+			return;
+		}
 	}
 
 	const unsigned sequenceDuration = SequenceDuration( context );
-	if( sequenceDuration < 250 ) {
+	if( sequenceDuration < 500 ) {
 		context->SaveSuggestedActionForNextFrame( this );
 		return;
 	}
 
 	if( originAtSequenceStart.SquareDistance2DTo( entityPhysicsState.Origin() ) < 32 * 32 ) {
-		Debug( "The bot is likely stuck trying to use area #%d to exit the platform\n", currTestedAreaIndex );
+		Debug( "The bot is likely stuck trying to use area #%d to exit the platform\n", m_currTestedAreaIndex );
 		context->SetPendingRollback();
 		return;
 	}
 
-	if( sequenceDuration > 550 ) {
+	if( sequenceDuration > 750 ) {
 		Debug( "The bot still has not reached the target exit area\n" );
 		context->SetPendingRollback();
 		return;
@@ -67,91 +109,77 @@ void RidePlatformAction::OnApplicationSequenceStopped( PredictionContext *contex
 		return;
 	}
 
-	currTestedAreaIndex++;
+	m_currTestedAreaIndex++;
 }
 
-inline void DirToKeyInput( const Vec3 &desiredDir, const AiEntityPhysicsState &entityPhysicsState, BotInput *input ) {
-	DirToKeyInput( desiredDir, entityPhysicsState.ForwardDir().Data(), entityPhysicsState.RightDir().Data(), input );
+void RidePlatformAction::SetupEnterPlatformMovement( PredictionContext *context ) {
+	auto *botInput = &context->record->botInput;
+	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
+
+	botInput->isLookDirSet       = true;
+	botInput->isUcmdSet          = true;
+	botInput->canOverrideUcmd    = true;
+	botInput->canOverrideLookVec = true;
+
+	// Look at the trigger in 2D world projection
+	Vec3 intendedLookDir( 0.5f * ( Vec3( m_foundPlatform->r.absmin ) + Vec3( m_foundPlatform->r.absmax ) ) );
+	intendedLookDir -= entityPhysicsState.Origin();
+	intendedLookDir.Z() = 0;
+	if( intendedLookDir.normalizeFast() ) {
+		botInput->SetIntendedLookDir( intendedLookDir, true );
+		botInput->SetForwardMovement( 1 );
+	} else {
+		// Set a random input that should not lead to blocking
+		botInput->SetForwardMovement( 1 );
+		botInput->SetRightMovement( 1 );
+	}
+
+	// Our aim is firing a trigger and nothing else, walk carefully
+	botInput->SetWalkButton( true );
+
+	context->isCompleted = true;
 }
 
-void RidePlatformAction::SetupIdleRidingPlatformMovement( PredictionContext *context, const edict_t *platform ) {
-	TrySaveExitAreas( context, platform );
-
+void RidePlatformAction::SetupRidePlatformMovement( PredictionContext *context ) {
 	auto *botInput = &context->record->botInput;
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 
 	// Put all this shared clutter at the beginning
 
-	botInput->isUcmdSet = true;
-	botInput->canOverrideUcmd = true;
+	botInput->isLookDirSet       = true;
+	botInput->isUcmdSet          = true;
+	botInput->canOverrideUcmd    = true;
 	botInput->canOverrideLookVec = true;
 
 	Debug( "Stand idle on the platform, do not plan ahead\n" );
 	context->isCompleted = true;
 
-	// We are sure the platform has not arrived to the top, otherwise this method does not get called
-	if( VectorCompare( vec3_origin, platform->velocity ) && bot->MillisInBlockedState() > 500 ) {
-		// A rare but possible situation that happens e.g. on wdm1 near the GA
-		// A bot stands still and the platform is considered its groundentity but it does not move
-
-		// Look at the trigger in 2D world projection
-		Vec3 intendedLookDir( platform->s.origin );
-		intendedLookDir -= entityPhysicsState.Origin();
-		intendedLookDir.Z() = 0;
-		// Denormalization is possible, add a protection
-		float squareLength = intendedLookDir.SquaredLength();
-		if( squareLength > 1 ) {
-			intendedLookDir *= 1.0f / sqrtf( squareLength );
-			botInput->SetIntendedLookDir( intendedLookDir, true );
-			DirToKeyInput( intendedLookDir, entityPhysicsState, botInput );
-		} else {
-			// Set a random input that should not lead to blocking
-			botInput->SetIntendedLookDir( &axis_identity[AXIS_UP] );
-			botInput->SetForwardMovement( 1 );
-			botInput->SetRightMovement( 1 );
-		}
-
-		// Our aim is firing a trigger and nothing else, walk carefully
-		botInput->SetWalkButton( true );
-		return;
-	}
-
-	// The bot remains staying still on a platform in all other cases
-
 	if( const std::optional<SelectedEnemy> &selectedEnemy = bot->GetSelectedEnemy() ) {
 		Vec3 toEnemy( selectedEnemy->LastSeenOrigin() );
 		toEnemy -= context->movementState->entityPhysicsState.Origin();
 		botInput->SetIntendedLookDir( toEnemy, false );
-		return;
+	} else if( const std::optional<Vec3> &keptInFovPoint = bot->GetKeptInFovPoint() ) {
+		Vec3 toPoint( *keptInFovPoint );
+		toPoint -= context->movementState->entityPhysicsState.Origin();
+		botInput->SetIntendedLookDir( toPoint, false );
 	}
 
-	float height = platform->moveinfo.start_origin[2] - platform->moveinfo.end_origin[2];
-	float frac = ( platform->s.origin[2] - platform->moveinfo.end_origin[2] ) / height;
-	// If the bot is fairly close to the destination and there are saved areas, start looking at the first one
-	if( frac > 0.5f && !m_subsystem->savedPlatformAreas.empty() ) {
-		const auto &area = AiAasWorld::instance()->getAreas()[m_subsystem->savedPlatformAreas.front()];
-		Vec3 lookVec( area.center );
-		lookVec -= context->movementState->entityPhysicsState.Origin();
-		botInput->SetIntendedLookDir( lookVec, false );
-		return;
+	// Try staying in the middle of platform
+	if( const auto *groundEntity = entityPhysicsState.GroundEntity(); groundEntity && groundEntity->use == Use_Plat ) {
+		Vec3 toTarget( 0.5f * ( Vec3( groundEntity->r.absmin ) + Vec3( groundEntity->r.absmax ) ) );
+		toTarget.Z() = entityPhysicsState.Origin()[2];
+		toTarget -= entityPhysicsState.Origin();
+		// Don't do that staying sufficiently close to the middle
+		if( toTarget.normalizeFast( { .minAcceptableLength = 20.0f } ) ) {
+			const Vec3 forwardDir( entityPhysicsState.ForwardDir() ), rightDir( entityPhysicsState.RightDir() );
+			DirToKeyInput( toTarget, forwardDir.Data(), rightDir.Data(), botInput );
+			botInput->SetWalkButton( true );
+		}
 	}
-
-	// Keep looking in the current direction but change pitch
-	Vec3 lookVec( context->movementState->entityPhysicsState.ForwardDir() );
-	lookVec.Z() = 0.5f - 1.0f * frac;
-	botInput->SetIntendedLookDir( lookVec, false );
 }
 
-void RidePlatformAction::SetupExitPlatformMovement( PredictionContext *context, const edict_t *platform ) {
-	const ExitAreasVector &suggestedAreas = SuggestExitAreas( context, platform );
-	if( suggestedAreas.empty() ) {
-		Debug( "Warning: there is no platform exit areas, do not plan ahead\n" );
-		this->isDisabledForPlanning = true;
-		context->SetPendingRollback();
-		return;
-	}
-
-	if( currTestedAreaIndex >= suggestedAreas.size() ) {
+void RidePlatformAction::SetupExitPlatformMovement( PredictionContext *context ) {
+	if( m_currTestedAreaIndex >= m_exitAreas.size() ) {
 		Debug( "All suggested exit area tests have failed\n" );
 		this->isDisabledForPlanning = true;
 		context->SetPendingRollback();
@@ -161,35 +189,33 @@ void RidePlatformAction::SetupExitPlatformMovement( PredictionContext *context, 
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *botInput = &context->record->botInput;
 
-	const auto &area = AiAasWorld::instance()->getAreas()[suggestedAreas[currTestedAreaIndex]];
+	botInput->isLookDirSet       = true;
+	botInput->isUcmdSet          = true;
+	botInput->canOverrideUcmd    = false;
+	botInput->canOverrideLookVec = false;
+
+	const auto &area = AiAasWorld::instance()->getAreas()[m_exitAreas[m_currTestedAreaIndex]];
 	Vec3 intendedLookDir( area.center );
 	intendedLookDir.Z() = area.mins[2] + 32;
 	intendedLookDir -= entityPhysicsState.Origin();
 
-	const auto maybeDistance = intendedLookDir.normalizeFast();
-	if( maybeDistance ) {
-		Debug( "Warning: Failed to normalize intended look dir\n" );
-		this->isDisabledForPlanning = true;
-		context->SetPendingRollback();
-		return;
-	}
-
-	botInput->SetIntendedLookDir( intendedLookDir, true );
-
-	botInput->isUcmdSet = true;
-	float dot = intendedLookDir.Dot( entityPhysicsState.ForwardDir() );
-	if( dot < 0.0f ) {
-		botInput->SetTurnSpeedMultiplier( 3.0f );
-		return;
-	}
-
-	if( dot < 0.7f ) {
+	if( const std::optional<float> maybeDistance = intendedLookDir.normalizeFast() ) {
+		botInput->SetIntendedLookDir( intendedLookDir, true );
+		botInput->SetForwardMovement( 1 );
 		botInput->SetWalkButton( true );
-		return;
-	}
-
-	if( *maybeDistance > 64.0f ) {
-		botInput->SetSpecialButton( true );
+		float dot = intendedLookDir.Dot( entityPhysicsState.ForwardDir() );
+		if( dot < 0.3f ) {
+			botInput->SetTurnSpeedMultiplier( 3.0f );
+		} else if( dot > 0.9f ) {
+			botInput->SetWalkButton( false );
+			if( *maybeDistance > 72.0f && dot > 0.95f ) {
+				botInput->SetSpecialButton( true );
+			}
+		}
+	} else {
+		// Set a random input that should not lead to blocking
+		botInput->SetForwardMovement( 1 );
+		botInput->SetWalkButton( true );
 	}
 }
 
@@ -218,121 +244,155 @@ const edict_t *RidePlatformAction::GetPlatform( PredictionContext *context ) con
 	return nullptr;
 }
 
-void RidePlatformAction::TrySaveExitAreas( PredictionContext *context, const edict_t *platform ) {
-	auto &savedAreas = m_subsystem->savedPlatformAreas;
-	// Don't overwrite already present areas
-	if( !savedAreas.empty() ) {
-		return;
+bool RidePlatformAction::DetermineStageAndProperties( PredictionContext *context, const edict_t *platform ) {
+	if( platform->moveinfo.state != STATE_TOP && platform->moveinfo.state != STATE_BOTTOM ) {
+		m_stage = StageWait;
+		return true;
 	}
 
-	int navTargetAreaNum = bot->NavTargetAasAreaNum();
-	// Skip if there is no nav target.
-	// SetupExitAreaMovement() handles the case when there is no exit areas.
-	if( !navTargetAreaNum ) {
-		return;
-	}
+	const Vec3 addToMins( -48.0f, -48.0f, -8.0f ), addToMaxs( +48.0f, +48.0f, +24.0f );
 
-	FindExitAreas( context, platform, tmpExitAreas );
+	Vec3 startMins( platform->r.mins ), startMaxs( platform->r.maxs );
+	startMins.Z() = platform->r.maxs[2] + platform->moveinfo.start_origin[2];
+	startMaxs.Z() = platform->r.maxs[2] + platform->moveinfo.start_origin[2];
+	startMins += addToMins, startMaxs += addToMaxs;
 
-	const auto *routeCache = bot->RouteCache();
-	const int travelFlags = bot->AllowedTravelFlags();
+	Vec3 endMins( platform->r.mins ), endMaxs( platform->r.maxs );
+	endMins.Z() = platform->r.maxs[2] + platform->moveinfo.end_origin[2];
+	endMaxs.Z() = platform->r.maxs[2] + platform->moveinfo.end_origin[2];
+	endMins += addToMins, endMaxs += addToMaxs;
 
-	int areaTravelTimes[MAX_SAVED_AREAS];
-	for( unsigned i = 0, end = tmpExitAreas.size(); i < end; ++i ) {
-		int travelTime = routeCache->TravelTimeToGoalArea( tmpExitAreas[i], navTargetAreaNum, travelFlags );
-		if( !travelTime ) {
-			continue;
+	wsw::StaticVector<int, 24> startBoxAreas, endBoxAreas;
+	FindSuitableAreasInBox( startMins, startMaxs, &startBoxAreas );
+	FindSuitableAreasInBox( endMins, endMaxs, &endBoxAreas );
+
+	// Prune shared areas
+	wsw::StaticVector<int, 24> sharedAreas;
+	for( unsigned turn = 0; turn < 2; ++turn ) {
+		const wsw::StaticVector<int, 24> &sourceAreas    = turn ? startBoxAreas : endBoxAreas;
+		const wsw::StaticVector<int, 24> &checkedInAreas = turn ? endBoxAreas : startBoxAreas;
+		for( const int areaNum: sourceAreas ) {
+			if( std::find( checkedInAreas.begin(), checkedInAreas.end(), areaNum ) != checkedInAreas.end() ) {
+				if( std::find( sharedAreas.begin(), sharedAreas.end(), areaNum ) == sharedAreas.end() ) {
+					sharedAreas.push_back( areaNum );
+				}
+			}
 		}
-
-		savedAreas.push_back( tmpExitAreas[i] );
-		areaTravelTimes[i] = travelTime;
 	}
 
-	// Sort areas
-	for( unsigned i = 1, end = savedAreas.size(); i < end; ++i ) {
-		int area = savedAreas[i];
-		int travelTime = areaTravelTimes[i];
-		int j = i - 1;
-		for(; j >= 0 && areaTravelTimes[j] < travelTime; j-- ) {
-			savedAreas[j + 1] = savedAreas[j];
-			areaTravelTimes[j + 1] = areaTravelTimes[j];
+	if( !sharedAreas.empty() ) {
+		for( wsw::StaticVector<int, 24> *areas: { &startBoxAreas, &endBoxAreas } ) {
+			for( unsigned i = 0; i < areas->size(); ) {
+				if( std::find( sharedAreas.begin(), sharedAreas.end(), areas->operator[]( i ) ) != sharedAreas.end() ) {
+					areas->operator[]( i ) = areas->back();
+					areas->pop_back();
+				} else {
+					++i;
+				}
+			}
 		}
+	}
 
-		savedAreas[j + 1] = area;
-		areaTravelTimes[j + 1] = travelTime;
+	bool succeeded = false;
+	if( const int navTargetAreaNum = bot->NavTargetAasAreaNum() ) {
+		wsw::StaticVector<int, 24> startReachAreas;
+		if( const int bestStartTravelTime = FindNavTargetReachableAreas( startBoxAreas, navTargetAreaNum, &startReachAreas ) ) {
+			wsw::StaticVector<int, 24> endReachAreas;
+			if( const int bestEndTravelTime = FindNavTargetReachableAreas( endBoxAreas, navTargetAreaNum, &endReachAreas ) ) {
+				// If the top travel time is smaller/better
+				if( bestStartTravelTime < bestEndTravelTime ) {
+					if( platform->moveinfo.state == STATE_TOP ) {
+						m_stage = StageExit;
+						m_exitAreas.clear();
+						m_exitAreas.insert( m_exitAreas.end(), startReachAreas.begin(), startReachAreas.end() );
+					} else {
+						m_stage = StageEnter;
+					}
+					succeeded = true;
+				} else if( bestStartTravelTime > bestEndTravelTime ) {
+					if( platform->moveinfo.state == STATE_TOP ) {
+						m_stage = StageEnter;
+					} else {
+						m_stage = StageExit;
+						m_exitAreas.clear();
+						m_exitAreas.insert( m_exitAreas.end(), endReachAreas.begin(), endReachAreas.end() );
+					}
+					succeeded = true;
+				}
+			}
+		}
+	}
+
+	// TODO: Sort exit areas
+	if( !succeeded ) {
+		m_exitAreas.clear();
+		if( platform->moveinfo.state == STATE_TOP ) {
+			m_exitAreas.insert( m_exitAreas.end(), startBoxAreas.begin(), startBoxAreas.end() );
+		} else {
+			m_exitAreas.insert( m_exitAreas.end(), endBoxAreas.begin(), endBoxAreas.end() );
+		}
+		if( m_exitAreas.empty() ) {
+			return false;
+		}
+		m_stage = StageExit;
+	}
+
+	assert( m_stage != StageExit || !m_exitAreas.empty() );
+	return true;
+}
+
+void RidePlatformAction::FindSuitableAreasInBox( const Vec3 &boxMins, const Vec3 &boxMaxs,
+												wsw::StaticVector<int, 24> *foundAreas ) {
+	const auto *aasWorld        = AiAasWorld::instance();
+	const auto *aasAreas        = aasWorld->getAreas().data();
+	const auto *aasAreaSettings = aasWorld->getAreaSettings().data();
+
+	foundAreas->clear();
+
+	int areaNumsBuffer[48];
+	for( const int areaNum: aasWorld->findAreasInBox( boxMins, boxMaxs, areaNumsBuffer, (int)std::size( areaNumsBuffer ) ) ) {
+		const auto &areaSettings = aasAreaSettings[areaNum];
+		if( ( areaSettings.areaflags & AREA_GROUNDED ) ) {
+			if( !( areaSettings.areaflags & ( AREA_JUNK | AREA_DISABLED ) ) ) {
+				if( !( areaSettings.contents & ( AREACONTENTS_MOVER | AREACONTENTS_DONOTENTER ) ) ) {
+					const auto &area = aasAreas[areaNum];
+					trace_t trace;
+					Vec3 traceStart( 0.5f * ( Vec3( area.mins ) + Vec3( area.maxs ) ) );
+					traceStart.Z() = area.maxs[2] - 1.0f;
+					Vec3 traceEnd( traceStart );
+					traceEnd.Z() = area.mins[2] - 48.0f;
+					G_Trace( &trace, traceStart.Data(), nullptr, nullptr, traceEnd.Data(), nullptr, MASK_SOLID );
+					if( trace.fraction != 1.0f ) {
+						if( trace.ent == 0 || game.edicts[trace.ent].use != Use_Plat ) {
+							foundAreas->push_back( areaNum );
+							if( foundAreas->full() ) {
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 }
 
-typedef RidePlatformAction::ExitAreasVector ExitAreasVector;
+int RidePlatformAction::FindNavTargetReachableAreas( std::span<const int> givenAreas,
+													 int navTargetAreaNum,
+													 wsw::StaticVector<int, 24> *foundAreas ) {
+	foundAreas->clear();
 
-const ExitAreasVector &RidePlatformAction::SuggestExitAreas( PredictionContext *context, const edict_t *platform ) {
-	if( !m_subsystem->savedPlatformAreas.empty() ) {
-		return m_subsystem->savedPlatformAreas;
-	}
-
-	FindExitAreas( context, platform, tmpExitAreas );
-
-	// Save found areas to avoid repeated FindExitAreas() calls while testing next area after rollback
-	for( int areaNum: tmpExitAreas )
-		m_subsystem->savedPlatformAreas.push_back( areaNum );
-
-	return tmpExitAreas;
-};
-
-void RidePlatformAction::FindExitAreas( PredictionContext *context, const edict_t *platform, ExitAreasVector &exitAreas ) {
-	const auto &aasWorld = AiAasWorld::instance();
-	const auto aasAreas = aasWorld->getAreas();
-	const auto aasAreaSettings = aasWorld->getAreaSettings();
-
-	edict_t *const ignore = game.edicts + bot->EntNum();
-
-	const MovementState &movementState = context ? *context->movementState : m_subsystem->movementState;
-
-	exitAreas.clear();
-
-	Vec3 mins( platform->r.absmin );
-	Vec3 maxs( platform->r.absmax );
-	// SP_func_plat(): start is the top position, end is the bottom
-	mins.Z() = platform->moveinfo.start_origin[2];
-	maxs.Z() = platform->moveinfo.start_origin[2] + 96.0f;
-	// We have to extend bounds... check whether wdm9 movement is OK if one changes these values.
-	for( int i = 0; i < 2; ++i ) {
-		mins.Data()[i] -= 96.0f;
-		maxs.Data()[i] += 96.0f;
-	}
-
-	Vec3 finalBotOrigin( movementState.entityPhysicsState.Origin() );
-	// Add an extra 1 unit offset for tracing purposes
-	finalBotOrigin.Z() += platform->moveinfo.start_origin[2] - platform->s.origin[2] + 1.0f;
-
-	trace_t trace;
-	int boxAreaNumsBuffer[48];
-	const auto boxAreaNums = aasWorld->findAreasInBox( mins, maxs, boxAreaNumsBuffer, 48 );
-	for( const int areaNum: boxAreaNums ) {
-		const auto &area = aasAreas[areaNum];
-		const auto &areaSettings = aasAreaSettings[areaNum];
-		if( !( areaSettings.areaflags & AREA_GROUNDED ) ) {
-			continue;
-		}
-		if( areaSettings.areaflags & ( AREA_JUNK | AREA_DISABLED ) ) {
-			continue;
-		}
-		if( areaSettings.contents & ( AREACONTENTS_DONOTENTER | AREACONTENTS_MOVER ) ) {
-			continue;
-		}
-
-		Vec3 areaPoint( area.center );
-		areaPoint.Z() = area.mins[2] + 8.0f;
-
-		// Do not use player box as trace mins/maxs (it leads to blocking when a bot rides a platform near a wall)
-		G_Trace( &trace, finalBotOrigin.Data(), nullptr, nullptr, areaPoint.Data(), ignore, MASK_ALL );
-		if( trace.fraction != 1.0f ) {
-			continue;
-		}
-
-		exitAreas.push_back( areaNum );
-		if( exitAreas.full() ) {
-			break;
+	int bestTravelTime = 0;
+	for( const int areaNum: givenAreas ) {
+		if( const int travelTime = bot->RouteCache()->PreferredRouteToGoalArea( areaNum, navTargetAreaNum ) ) {
+			if( !bestTravelTime || travelTime < bestTravelTime ) {
+				bestTravelTime = travelTime;
+			}
+			foundAreas->push_back( areaNum );
+			if( foundAreas->full() ) [[unlikely]] {
+				break;
+			}
 		}
 	}
+
+	return bestTravelTime;
 }

@@ -246,7 +246,7 @@ public:
 	// A: It's still useful for other bots (that have a different origin) and for various other calculations.
 	wsw::StaticVector<uint16_t, 12> m_teleporterEntNumsToUseDuringPrediction;
 	wsw::StaticVector<uint16_t, 12> m_jumppadEntNumsToUseDuringPrediction;
-	wsw::StaticVector<uint16_t, 12> m_platformEntNumsToUseDuringPrediction;
+	wsw::StaticVector<uint16_t, 12> m_platformTriggerEntNumsToUseDuringPrediction;
 	wsw::StaticVector<uint16_t, 32> m_otherTriggerEntNumsToUseDuringPrediction;
 
 	class BaseAction *SuggestSuitableAction();
