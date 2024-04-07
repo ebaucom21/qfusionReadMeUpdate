@@ -277,7 +277,7 @@ void InventoryModel::checkPropertyChanges( unsigned viewStateIndex ) {
 auto TeamListModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
 		{ Health, "health" }, { Armor, "armor" }, { WeaponIconPath, "weaponIconPath" },
-		{ Nickname, "nickname" }, { Location, "location" }, { Powerups, "powerups" }
+		{ Nickname, "nickname" }, { Powerups, "powerups" }
 	};
 }
 
@@ -293,7 +293,6 @@ auto TeamListModel::data( const QModelIndex &index, int role ) const -> QVariant
 				case Armor: return m_entries[row].armor;
 				case WeaponIconPath: return weaponPropsCache.getWeaponIconPath( (int)m_entries[row].weapon );
 				case Nickname: return toStyledText( CG_PlayerName( m_entries[row].playerNum ) );
-				case Location: return toStyledText( CG_LocationName( m_entries[row].location ) );
 				case Powerups: return m_entries[row].powerups;
 				default: return QVariant();
 			}
@@ -319,7 +318,6 @@ void TeamListModel::fillEntries( const ReplicatedScoreboardData &scoreboardData,
 					.health    = scoreboardData.getPlayerHealth( i ),
 					.armor     = scoreboardData.getPlayerArmor( i ),
 					.weapon    = scoreboardData.getPlayerWeapon( i ),
-					.location  = scoreboardData.getPlayerLocation( i ),
 					.powerups  = scoreboardData.getPlayerPowerupBits( i ),
 				});
 			}
@@ -400,7 +398,6 @@ void TeamListModel::update( const ReplicatedScoreboardData &scoreboardData, unsi
 		numUpdates += hasArmorUpdates;
 		const bool hasWeaponUpdates = entry.weapon != oldEntry.weapon;
 		numUpdates += hasWeaponUpdates;
-		const bool hasLocationUpdates = entry.location != oldEntry.location;
 
 		if( numUpdates ) {
 			// Specify a full row update by default
@@ -413,8 +410,6 @@ void TeamListModel::update( const ReplicatedScoreboardData &scoreboardData, unsi
 					changedRoles = &kArmorAsRole;
 				} else if( hasWeaponUpdates ) {
 					changedRoles = &kWeaponIconPathAsRole;
-				} else if( hasLocationUpdates ) {
-					changedRoles = &kLocationAsRole;
 				}
 			} else if( numUpdates == 2 ) {
 				if( hasHealthUpdates && hasArmorUpdates ) {
@@ -1120,14 +1115,6 @@ void HudCommonDataModel::checkPropertyChanges( int64_t currTime ) {
 	const bool wasInPostmatchState = m_isInPostmatchState;
 	if( wasInPostmatchState != ( m_isInPostmatchState = rawMatchState > MATCH_STATE_PLAYTIME ) ) {
 		Q_EMIT isInPostmatchStateChanged( m_isInPostmatchState );
-	}
-
-	const auto hadLocations = m_hasLocations;
-	assert( MAX_LOCATIONS > 1 );
-	// Require having at least a couple of locations defined
-	m_hasLocations = ::cl.configStrings.get( CS_LOCATIONS + 0 ) && ::cl.configStrings.get( CS_LOCATIONS + 1 );
-	if( hadLocations != m_hasLocations ) {
-		Q_EMIT hasLocationsChanged( m_hasLocations );
 	}
 
 	m_fragsFeedModel.update( currTime );

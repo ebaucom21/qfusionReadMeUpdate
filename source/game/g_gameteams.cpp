@@ -949,11 +949,6 @@ static void UpdatePoint( edict_t *who ) {
 	}
 }
 
-static void Say_Team_Location( edict_t *who, char *buf, int buflen, const char *current_color ) {
-	G_MapLocationNameForTAG( G_MapLocationTAGForOrigin( who->s.origin ), buf, buflen );
-	Q_strncatz( buf, current_color, buflen );
-}
-
 static void Say_Team_Armor( edict_t *who, char *buf, int buflen, const char *current_color ) {
 	if( GS_Armor_TagForCount( who->r.client->armor ) != ARMOR_NONE ) {
 		Q_snprintfz( buf, buflen, "%s%i%s", GS_FindItemByTag( GS_Armor_TagForCount( who->r.client->armor ) )->color,
@@ -1063,11 +1058,6 @@ static void Say_Team_Point( edict_t *who, char *buf, int buflen, const char *cur
 	}
 }
 
-static void Say_Team_Point_Location( edict_t *who, char *buf, int buflen, const char *current_color ) {
-	G_MapLocationNameForTAG( G_MapLocationTAGForOrigin( point_location ), buf, buflen );
-	Q_strncatz( buf, current_color, buflen );
-}
-
 static void Say_Team_Pickup( edict_t *who, char *buf, int buflen, const char *current_color ) {
 	if( !who->r.client->last_pickup ) {
 		buf[0] = 0;
@@ -1081,15 +1071,6 @@ static void Say_Team_Pickup( edict_t *who, char *buf, int buflen, const char *cu
 	}
 }
 
-static void Say_Team_Pickup_Location( edict_t *who, char *buf, int buflen, const char *current_color ) {
-	if( !who->r.client->last_pickup ) {
-		buf[0] = 0;
-	} else {
-		G_MapLocationNameForTAG( G_MapLocationTAGForOrigin( point_location ), buf, buflen );
-		Q_strncatz( buf, current_color, buflen );
-	}
-}
-
 static void Say_Team_Drop( edict_t *who, char *buf, int buflen, const char *current_color ) {
 	const gsitem_t *item = who->r.client->last_drop_item;
 
@@ -1097,15 +1078,6 @@ static void Say_Team_Drop( edict_t *who, char *buf, int buflen, const char *curr
 		buf[0] = 0;
 	} else {
 		Q_snprintfz( buf, buflen, "%s%s%s", ( item->color ? item->color : "" ), item->shortname, current_color );
-	}
-}
-
-static void Say_Team_Drop_Location( edict_t *who, char *buf, int buflen, const char *current_color ) {
-	if( !who->r.client->last_drop_item ) {
-		buf[0] = 0;
-	} else {
-		G_MapLocationNameForTAG( G_MapLocationTAGForOrigin( who->r.client->last_drop_location ), buf, buflen );
-		Q_strncatz( buf, current_color, buflen );
 	}
 }
 
@@ -1151,9 +1123,6 @@ void G_Say_Team( edict_t *who, const char *inmsg, uint64_t clientCommandNum ) {
 			char buf[256];
 			buf[0] = 0;
 			switch( *++msg ) {
-				case 'l':
-					Say_Team_Location( who, buf, sizeof( buf ), current_color );
-					break;
 				case 'a':
 					Say_Team_Armor( who, buf, sizeof( buf ), current_color );
 					break;
@@ -1169,20 +1138,11 @@ void G_Say_Team( edict_t *who, const char *inmsg, uint64_t clientCommandNum ) {
 				case 'x':
 					Say_Team_Point( who, buf, sizeof( buf ), current_color );
 					break;
-				case 'y':
-					Say_Team_Point_Location( who, buf, sizeof( buf ), current_color );
-					break;
 				case 'X':
 					Say_Team_Pickup( who, buf, sizeof( buf ), current_color );
 					break;
-				case 'Y':
-					Say_Team_Pickup_Location( who, buf, sizeof( buf ), current_color );
-					break;
 				case 'd':
 					Say_Team_Drop( who, buf, sizeof( buf ), current_color );
-					break;
-				case 'D':
-					Say_Team_Drop_Location( who, buf, sizeof( buf ), current_color );
 					break;
 				case '%':
 					*p++ = *msg;

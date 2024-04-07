@@ -5480,10 +5480,6 @@ auto CG_GetMatchClockTime() -> std::pair<int, int> {
 	return { minutes, seconds };
 }
 
-wsw::StringView CG_LocationName( unsigned location ) {
-	return ::cl.configStrings.getLocation( location ).value();
-}
-
 wsw::StringView CG_PlayerName( unsigned playerNum ) {
 	assert( playerNum < (unsigned)MAX_CLIENTS );
 	return wsw::StringView( cgs.clientInfo[playerNum].name );

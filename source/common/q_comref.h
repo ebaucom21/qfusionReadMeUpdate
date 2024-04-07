@@ -146,7 +146,6 @@ typedef struct {
 #define BYTE2ANGLE( x )     ( ( x ) * ( 360.0 / 256 ) )
 
 #define MAX_GAMECOMMANDS    64     // command names for command completion
-#define MAX_LOCATIONS       128
 #define MAX_WEAPONDEFS      MAX_ITEMS
 #define MAX_HELPMESSAGES    64
 
@@ -202,8 +201,7 @@ typedef struct {
 #define CS_ITEMS            ( CS_LIGHTS + MAX_LIGHTSTYLES )
 #define CS_PLAYERINFOS      ( CS_ITEMS + MAX_ITEMS )
 #define CS_GAMECOMMANDS     ( CS_PLAYERINFOS + MAX_CLIENTS )
-#define CS_LOCATIONS        ( CS_GAMECOMMANDS + MAX_GAMECOMMANDS )
-#define CS_WEAPONDEFS       ( CS_LOCATIONS + MAX_LOCATIONS )
+#define CS_WEAPONDEFS       ( CS_GAMECOMMANDS + MAX_GAMECOMMANDS )
 #define CS_GENERAL          ( CS_WEAPONDEFS + MAX_WEAPONDEFS )
 #define CS_CALLVOTEINFOS    ( CS_GENERAL + MAX_GENERAL )
 #define CS_GAMETYPE_OPTIONS ( CS_CALLVOTEINFOS + MAX_CALLVOTEINFOS )
@@ -546,8 +544,6 @@ public:
 	int scores[kMaxPlayers];
 	short values[kMaxShortSlots][kMaxPlayers];
 	uint32_t packedPlayerSpecificData[kMaxPlayers];
-	// Locations are transmitted separately since they can't fit preferred 32 bit of packed player data
-	uint8_t locations[kMaxPlayers];
 	// The challengers queue. Entity numbers are written (this means valid entries are non-zero and start from 1).
 	uint8_t challengersQueue[kMaxPlayers];
 
@@ -649,24 +645,10 @@ public:
 		return unpackWord( packedPlayerSpecificData[playerIndex], kPowerupsMask, kPowerupsShift );
 	}
 
-	void setPlayerLocation( unsigned playerIndex, unsigned location ) {
-		assert( playerIndex < (unsigned)MAX_CLIENTS );
-		assert( location < (unsigned)MAX_LOCATIONS );
-		static_assert( (unsigned)MAX_LOCATIONS <= std::numeric_limits<uint8_t>::max() );
-		locations[playerIndex] = location;
-	}
-
-	[[nodiscard]]
-	auto getPlayerLocation( unsigned playerIndex ) const -> unsigned {
-		assert( playerIndex < (unsigned)MAX_CLIENTS );
-		return locations[playerIndex];
-	}
-
 	void shadowPrivateData( unsigned playerIndex ) {
 		setPlayerHealth( playerIndex, 0 );
 		setPlayerArmor( playerIndex, 0 );
 		setPlayerWeapon( playerIndex, 0 );
-		setPlayerLocation( playerIndex, 0 );
 	}
 
 	void setPlayerConnected( unsigned playerIndex, bool connected ) {
@@ -708,7 +690,6 @@ public:
 			assert( getPlayerShort( destRow, slot ) == that.getPlayerShort( thatSrcRow, slot ) );
 		}
 		packedPlayerSpecificData[destRow] = that.packedPlayerSpecificData[thatSrcRow];
-		locations[destRow] = that.locations[thatSrcRow];
 	}
 };
 

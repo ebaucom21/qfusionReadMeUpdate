@@ -616,19 +616,7 @@ void SP_target_position( edict_t *self ) {
 //notduel : when set to 1, entity will not spawn in "Teamplay" and "CTF" modes. (jal: todo)
 //notteam : when set to 1, entity will not spawn in "Teamplay" and "CTF" modes.
 void SP_target_location( edict_t *self ) {
-	int location;
-
-	self->r.svflags |= SVF_NOCLIENT;
-
-	// wsw : jal : locations names
-	if( self->count > 0 && self->count < 10 ) {
-		location = G_RegisterMapLocationName( va( "%c%c%s", Q_COLOR_ESCAPE, self->count + '0', self->message ) );
-	} else {
-		location = G_RegisterMapLocationName( self->message );
-	}
-
-	Q_clamp( self->count, 0, 7 );
-	self->style = location;
+	G_FreeEdict( self );
 }
 
 

@@ -8,7 +8,7 @@ Item {
     id: root
     width: implicitWidth
     height: implicitHeight
-    implicitWidth: 256 + 64
+    implicitWidth: Hud.valueBarWidth
     implicitHeight: Hud.teamScoreHeight
 
     property string iconPath

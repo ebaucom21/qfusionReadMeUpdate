@@ -66,7 +66,6 @@ class TeamListModel : public QAbstractListModel {
 		Armor,
 		WeaponIconPath,
 		Nickname,
-		Location,
 		Powerups
 	};
 
@@ -74,7 +73,6 @@ class TeamListModel : public QAbstractListModel {
 		unsigned playerNum;
 		unsigned health { 0 }, armor { 0 };
 		unsigned weapon { 0 };
-		unsigned location { 0 };
 		unsigned powerups { 0 };
 	};
 
@@ -87,7 +85,6 @@ class TeamListModel : public QAbstractListModel {
 	static inline const QVector<int> kArmorAsRole { Armor };
 	static inline const QVector<int> kHealthAndArmorAsRole { Armor };
 	static inline const QVector<int> kWeaponIconPathAsRole { WeaponIconPath };
-	static inline const QVector<int> kLocationAsRole { Location };
 
 	unsigned m_povPlayerNum { ~0u };
 	int m_team { -1 };
@@ -429,9 +426,6 @@ public:
 	Q_SIGNAL void isInPostmatchStateChanged( bool isInPostmatchState );
 	Q_PROPERTY( bool isInPostmatchState MEMBER m_isInPostmatchState NOTIFY isInPostmatchStateChanged );
 
-	Q_SIGNAL void hasLocationsChanged( bool hasLocations );
-	Q_PROPERTY( bool hasLocations MEMBER m_hasLocations NOTIFY hasLocationsChanged );
-
 	Q_SIGNAL void highlightedMiniviewIndexChanged( int highlightedMiniviewIndex );
 	Q_PROPERTY( int highlightedMiniviewIndex MEMBER m_highlightedMiniviewIndex NOTIFY highlightedMiniviewIndexChanged );
 
@@ -598,8 +592,6 @@ private:
 
 	bool m_isInWarmupState { false };
 	bool m_isInPostmatchState { false };
-
-	bool m_hasLocations { false };
 
 	bool m_hasSetFragsFeedModelOwnership { false };
 	bool m_hasSetRegularLayoutModelOwnership { false };

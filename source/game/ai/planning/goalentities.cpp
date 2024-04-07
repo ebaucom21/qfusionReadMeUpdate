@@ -214,15 +214,8 @@ NavEntity::NavEntity( const edict_t *ent_, int aasAreaNum_, NavEntityFlags flags
 	, ent( ent_ )
 	, entityId( (int)( ent_ - game.edicts ) )
 	, flags( flags_ ) {
-
 	// Try providing sane debug messages
 	const char *const className = ent->classname ? ent->classname : "";
-	int locationTag = G_MapLocationTAGForOrigin( ent->s.origin );
-	if( !locationTag ) {
-		const char *location = trap_GetConfigString( CS_LOCATIONS + locationTag );
-		Q_snprintfz( name, MAX_NAME_LEN, "%s(ent#=%d)@%s", className, ENTNUM( ent ), location );
-		return;
-	}
 
 	if( ( flags & NavEntityFlags::MOVABLE ) != NavEntityFlags::NONE ) {
 		if( ENTNUM( ent ) <= gs.maxclients ) {

@@ -1256,21 +1256,6 @@ static void Cmd_MatchIP_f( const CmdArgs &cmdArgs ) {
 #endif
 
 /*
-* Cmd_ListLocations_f
-*/
-static void Cmd_ListLocations_f( const CmdArgs & ) {
-	int i;
-
-	for( i = 0; i < MAX_LOCATIONS; i++ ) {
-		const char *cs = trap_GetConfigString( CS_LOCATIONS + i );
-		if( !cs[0] ) {
-			break;
-		}
-		G_Printf( "%2d %s\n", i, cs );
-	}
-}
-
-/*
 * G_AddCommands
 */
 void G_AddServerCommands( void ) {
@@ -1292,8 +1277,6 @@ void G_AddServerCommands( void ) {
 #endif
 
 	trap_Cmd_AddCommand( "dumpASapi", G_asDumpAPI_f );
-
-	trap_Cmd_AddCommand( "listlocations", Cmd_ListLocations_f );
 }
 
 /*
@@ -1318,6 +1301,4 @@ void G_RemoveCommands( void ) {
 #endif
 
 	trap_Cmd_RemoveCommand( "dumpASapi" );
-
-	trap_Cmd_RemoveCommand( "listlocations" );
 }

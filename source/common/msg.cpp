@@ -1277,10 +1277,6 @@ static const msg_field_t raw_scoreboard_msg_fields[] = {
 		32, MAX_CLIENTS, WIRE_BASE128
 	},
 	{
-		offsetof( ReplicatedScoreboardData, locations ),
-		8, MAX_CLIENTS, WIRE_FIXED_INT8
-	},
-	{
 		offsetof( ReplicatedScoreboardData, challengersQueue ),
 		8, MAX_CLIENTS, WIRE_FIXED_INT8
 	}

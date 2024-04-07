@@ -907,7 +907,6 @@ void G_InitLevel( char *mapname, char *entities, int entstrlen, int64_t levelTim
 
 	ClientCommandsHandler::init();
 
-	G_MapLocations_Init();
 	G_SpawnQueue_Init();
 	G_Teams_Init();
 

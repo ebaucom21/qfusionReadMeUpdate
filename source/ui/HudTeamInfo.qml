@@ -13,9 +13,8 @@ Item {
     property var commonDataModel
     property var povDataModel
 
-    // TODO: Make the native code track the longest string length and give a hint?
-    implicitWidth: 256 + 32 + 32 + (root.commonDataModel.hasLocations ? 128 + 32 : 0)
-    implicitHeight: list.height
+    implicitWidth: Hud.valueBarWidth
+    implicitHeight: list.height + 2 * Hud.elementRadius
 
     readonly property color evenRowColor: Qt.rgba(0.0, 0.0, 0.0, 0.7)
     readonly property color oddRowColor: Qt.rgba(0.03, 0.03, 0.03, 0.7)
@@ -33,7 +32,7 @@ Item {
         id: back
         visible: list.count
         anchors.centerIn: parent
-        width: list.width + 2 * Hud.elementRadius
+        width: Hud.valueBarWidth
         height: list.height + 2 * Hud.elementRadius
         radius: Hud.elementRadius
         color: "transparent"
@@ -48,7 +47,7 @@ Item {
         id: list
         anchors.centerIn: parent
         height: contentHeight
-        width: root.width
+        width: Hud.valueBarWidth - 2 * Hud.elementRadius
         model: root.povDataModel.getTeamListModel()
         delegate: Rectangle {
             id: listDelegate
@@ -143,21 +142,8 @@ Item {
                     style: Text.Raised
                     textFormat: Text.StyledText
                     text: nickname
+                    maximumLineCount: 1
                     elide: Text.ElideMiddle
-                }
-                Label {
-                    visible: root.commonDataModel.hasLocations
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 0.75
-                    horizontalAlignment: Qt.AlignRight
-                    font.weight: Font.ExtraBold
-                    font.pointSize: 12
-                    font.letterSpacing: 1
-                    style: Text.Raised
-                    elide: Text.ElideRight
-                    textFormat: Text.StyledText
-                    text: location
-                    opacity: 0.7
                 }
             }
         }

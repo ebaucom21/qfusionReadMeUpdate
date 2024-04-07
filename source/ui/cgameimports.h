@@ -79,7 +79,6 @@ std::optional<unsigned> CG_ActiveChasePovOfViewState( unsigned viewStateIndex );
 bool CG_IsUsingChasePov( unsigned viewStateIndex );
 wsw::StringView CG_PlayerName( unsigned playerNum );
 wsw::StringView CG_PlayerClan( unsigned playerClan );
-wsw::StringView CG_LocationName( unsigned location );
 
 bool CG_UsesTiledView();
 void CG_SwitchToPlayerNum( unsigned playerNum );

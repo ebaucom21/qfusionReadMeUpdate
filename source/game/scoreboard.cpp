@@ -363,9 +363,6 @@ void Scoreboard::endUpdating() {
 						assert( (unsigned)client->ps.stats[STAT_WEAPON] < 16u );
 						m_replicatedData.setPlayerWeapon( playerIndex, client->ps.stats[STAT_WEAPON] );
 						if( ent->s.team > TEAM_SPECTATOR && !G_IsDead( ent ) ) {
-							if( const int location = G_MapLocationTAGForOrigin( ent->s.origin ); location >= 0 ) {
-								m_replicatedData.setPlayerLocation( playerIndex, (unsigned)location );
-							}
 							unsigned powerupBits = 0;
 							powerupBits |= client->ps.stats[POWERUP_QUAD] ? kPowerupBitQuad : 0;
 							powerupBits |= client->ps.stats[POWERUP_SHELL] ? kPowerupBitShell : 0;

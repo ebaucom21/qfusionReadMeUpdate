@@ -59,7 +59,6 @@ static const asEnumVal_t asConfigstringEnumVals[] =
 	ASLIB_ENUM_VAL( CS_ITEMS ),
 	ASLIB_ENUM_VAL( CS_PLAYERINFOS ),
 	ASLIB_ENUM_VAL( CS_GAMECOMMANDS ),
-	ASLIB_ENUM_VAL( CS_LOCATIONS ),
 	ASLIB_ENUM_VAL( CS_GENERAL ),
 	ASLIB_ENUM_VAL( CS_GAMETYPE_OPTIONS ),
 
@@ -2895,31 +2894,6 @@ static asstring_t *asFunc_ML_GetMapByNum( int num ) {
 	return nullptr;
 }
 
-static asstring_t *asFunc_LocationName( asvec3_t *origin ) {
-	char buf[MAX_CONFIGSTRING_CHARS];
-	asstring_t *data;
-
-	G_MapLocationNameForTAG( G_MapLocationTAGForOrigin( origin->v ), buf, sizeof( buf ) );
-
-	data = qasStringFactoryBuffer( (char *)buf, strlen( buf ) );
-	return data;
-}
-
-static int asFunc_LocationTag( asstring_t *str ) {
-	return G_MapLocationTAGForName( str->buffer );
-}
-
-static asstring_t *asFunc_LocationForTag( int tag ) {
-	char buf[MAX_CONFIGSTRING_CHARS];
-	asstring_t *data;
-
-	G_MapLocationNameForTAG( tag, buf, sizeof( buf ) );
-
-	data = qasStringFactoryBuffer( (char *)buf, strlen( buf ) );
-
-	return data;
-}
-
 static int asFunc_ImageIndex( asstring_t *str ) {
 	if( !str || !str->buffer ) {
 		return 0;
@@ -3276,9 +3250,6 @@ static const asglobfuncs_t asGameGlobFuncs[] =
 	{ "const String @G_LoadFile( const String & )", asFUNCTION( asFunc_LoadFile ), NULL },
 	{ "int G_FileLength( const String & )", asFUNCTION( asFunc_FileLength ), NULL },
 	{ "void G_CmdExecute( const String & )", asFUNCTION( asFunc_Cmd_ExecuteText ), NULL },
-	{ "const String @G_LocationName( const Vec3 &in origin )", asFUNCTION( asFunc_LocationName ), NULL },
-	{ "int G_LocationTag( const String & )", asFUNCTION( asFunc_LocationTag ), NULL },
-	{ "const String @G_LocationName( int tag )", asFUNCTION( asFunc_LocationForTag ), NULL },
 
 	{ "void __G_CallThink( Entity @ent )", asFUNCTION( G_CallThink ), &asEntityCallThinkFuncPtr },
 	{ "void __G_CallTouch( Entity @ent, Entity @other, const Vec3 planeNormal, int surfFlags )", asFUNCTION( G_CallTouch ), &asEntityCallTouchFuncPtr },

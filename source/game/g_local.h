@@ -681,12 +681,6 @@ edict_t *G_PlayerForText( const char *text );
 
 void G_PrecacheWeapondef( int weapon );
 
-void G_MapLocations_Init( void );
-int G_RegisterMapLocationName( const char *name );
-int G_MapLocationTAGForName( const char *name );
-int G_MapLocationTAGForOrigin( const vec3_t origin );
-void G_MapLocationNameForTAG( int tag, char *buf, size_t buflen );
-
 void G_SetBoundsForSpanEntity( edict_t *ent, vec_t size );
 
 //

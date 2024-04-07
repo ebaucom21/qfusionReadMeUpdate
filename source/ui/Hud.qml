@@ -18,6 +18,7 @@ QtObject {
     readonly property var miniviewItemHeight: 160
     readonly property var miniviewBorderWidth: 4
     readonly property var teamScoreHeight: 80
+    readonly property var valueBarWidth: 256 + 64 + 16
 
     function destroyLayer(layer) {
         if (layer) {
