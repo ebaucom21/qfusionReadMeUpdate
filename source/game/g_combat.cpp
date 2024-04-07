@@ -744,20 +744,10 @@ class SplashPropagationSolver {
 	inline bool isVulnerable( const edict_t *ent, bool volatileExplosives ) const;
 	[[nodiscard]]
 	bool coarseCanSplashDamage( const edict_t *ent ) const;
-	[[nodiscard]]
-	auto findRawEntsInRadius( int *rawEntNumsBuffer ) const -> std::span<int>;
-
-	void pruneInvulnerableEnts( const std::span<int> &rawEntNums,
-								EntNumsVector &vulnerableEntNums,
-								bool *vulnerableEntsMask ) const;
 
 	void computeDamageParams( const EntNumsVector &vulnerableEnts, DamageParamsVector &damageParams );
 
 	void applyDamage( const DamageParams &params );
-
-	void collectSolidWaveObstacles( const std::span<int> &rawEntNums,
-									const bool *vulnerableEntsMask,
-									EntNumsVector &waveObstacles ) const;
 
 	[[nodiscard]]
 	auto propagate( const DamageParamRefsVector &entParams,
@@ -812,53 +802,6 @@ inline bool SplashPropagationSolver::isVulnerable( const edict_t *ent, bool vola
 	}
 	const auto entType = ent->s.type;
 	return entType == ET_ROCKET || entType == ET_GRENADE || entType == ET_WAVE;
-}
-
-auto SplashPropagationSolver::findRawEntsInRadius( int *rawEntNumsBuffer ) const -> std::span<int> {
-	const auto radius = (float)m_inflictor->projectileInfo.radius;
-	const int numEnts = GClip_FindInRadius4D( m_inflictor->s.origin, radius, rawEntNumsBuffer, MAX_EDICTS, 0 );
-	return { rawEntNumsBuffer, (size_t)numEnts };
-}
-
-void SplashPropagationSolver::pruneInvulnerableEnts( const std::span<int> &rawEntNums,
-													 EntNumsVector &vulnerableEntNums,
-													 bool *vulnerableEntsMask ) const {
-	const bool volatileExplosives = GS_RaceGametype() && g_volatile_explosives->integer;
-	const edict_t *const gameEdicts = game.edicts;
-
-	if( rawEntNums.size() <= vulnerableEntNums.capacity() ) [[likely]] {
-		for( const int entNum: rawEntNums ) {
-			if( isVulnerable( gameEdicts + entNum, volatileExplosives ) ) {
-				vulnerableEntNums.push_back( entNum );
-				vulnerableEntsMask[entNum] = true;
-			}
-		}
-	} else {
-		// A rare but possible case, let's handle it.
-		// Give clients a priority.
-		for( const int entNum: rawEntNums ) {
-			if( const edict_t *ent = gameEdicts + entNum; ent->r.client && ent != m_ignore ) {
-				if( isVulnerable( gameEdicts + entNum, volatileExplosives ) ) {
-					vulnerableEntNums.push_back( entNum );
-					vulnerableEntsMask[entNum] = true;
-					if( vulnerableEntNums.full() ) [[unlikely]] {
-						return;
-					}
-				}
-			}
-		}
-		for( const int entNum: rawEntNums ) {
-			if( const edict_t *ent = gameEdicts + entNum; !ent->r.client ) {
-				if( isVulnerable( ent, volatileExplosives ) ) {
-					vulnerableEntNums.push_back( entNum );
-					vulnerableEntsMask[entNum] = true;
-					if( vulnerableEntNums.full() ) [[unlikely]] {
-						return;
-					}
-				}
-			}
-		}
-	}
 }
 
 void SplashPropagationSolver::computeDamageParams( const EntNumsVector &vulnerableEnts,
@@ -975,25 +918,11 @@ void SplashPropagationSolver::applyDamage( const DamageParams &params ) {
 		} else if( ent->s.type == ET_WAVE ) {
 			W_Detonate_Wave( ent, m_inflictor, nullptr, 0 );
 		} else {
-			wsw::failWithLogicError( "A match over an explosive projectile type is non-exhausting" );
-		}
-	}
-}
-
-void SplashPropagationSolver::collectSolidWaveObstacles( const std::span<int> &rawEntNums,
-														 const bool *vulnerableEntsMask,
-														 EntNumsVector &waveObstacles ) const {
-	const auto *const gameEdicts = game.edicts;
-	waveObstacles.clear();
-	for( const int entNum: rawEntNums ) {
-		if( !vulnerableEntsMask[entNum] ) {
-			const auto solid = gameEdicts[entNum].s.solid;
-			if( solid == SOLID_BMODEL && solid == SOLID_YES ) {
-				waveObstacles.push_back( entNum );
-				if( waveObstacles.full() ) [[unlikely]] {
-					break;
-				}
-			}
+			wsw::String message;
+			message.append( "Unknown entity type " );
+			message.append( std::to_string( ent->s.type ) );
+			message.append( " for ent->takedamage == 0" );
+			wsw::failWithLogicError( message.data() );
 		}
 	}
 }
@@ -1017,37 +946,37 @@ auto SplashPropagationSolver::propagate( const DamageParamRefsVector &entParams,
 	FringeEntry fringe[kMaxCoordSteps * kMaxCoordSteps * kMaxCoordSteps];
 
 	const auto *const gameEdicts = game.edicts;
-	const auto radius = (float)m_inflictor->projectileInfo.radius;
-	const auto squareRadius = radius * radius;
-	const auto coordStep = 2.0f * radius / (float)numCoordSteps;
-	const auto xStride = numCoordSteps * numCoordSteps;
-	const auto yStride = numCoordSteps;
+	const auto radius            = (float)m_inflictor->projectileInfo.radius;
+	const auto squareRadius      = radius * radius;
+	const auto coordStep         = 2.0f * radius / (float)numCoordSteps;
+	const auto xStride           = numCoordSteps * numCoordSteps;
+	const auto yStride           = numCoordSteps;
 
 	const float *__restrict explosionOrigin = m_inflictor->s.origin;
 	VectorCopy( explosionOrigin, fringe[0].center );
 	assert( numCoordSteps % 2u == 1u );
-	const auto midCoordIndex = numCoordSteps / 2;
+	const auto midCoordIndex  = numCoordSteps / 2;
 	fringe[0].coordIndices[0] = midCoordIndex;
 	fringe[0].coordIndices[1] = midCoordIndex;
 	fringe[0].coordIndices[2] = midCoordIndex;
-	int fringeHead = 0, fringeTail = 1;
 
+	int fringeHead       = 0;
+	int fringeTail       = 1;
 	uint32_t hitEntsMask = 0;
 	while( fringeHead < fringeTail ) {
 		const FringeEntry &__restrict entry = fringe[fringeHead++];
 
-		// TODO: Replace by a cell mask test!
-		unsigned entIndex = 0;
-		for( auto &p: entParams ) {
-			auto *__restrict ent = gameEdicts + p->entNum;
+		// TODO: Prefer cell mask test!
+		// Note that this check still has to be performed for boundary cells (not fully within bounds)
+		for( unsigned entIndex = 0; entIndex < entParams.size(); ++entIndex ) {
+			auto *__restrict ent = gameEdicts + entParams[entIndex]->entNum;
 			if( BoundsIntersect( ent->r.absmin, ent->r.absmax, entry.center, entry.center ) ) {
 				hitEntsMask |= ( 1u << entIndex );
 			}
-			entIndex++;
 		}
 
 		// Check for early exit if we have hit all entities
-		if( hitEntsMask == allEntsMask ) {
+		if( hitEntsMask == allEntsMask ) [[unlikely]] {
 			return hitEntsMask;
 		}
 
@@ -1062,7 +991,7 @@ auto SplashPropagationSolver::propagate( const DamageParamRefsVector &entParams,
 			// so it's actually better as no additional branching is performed.
 			if( DistanceSquared( otherCellCenter, explosionOrigin ) < squareRadius ) {
 				// Make coordinates for the step destination cell point
-				const auto newCoordIndex = wsw::min( (int)entry.coordIndices[coordNum] + sign, (int)numCoordSteps - 1 );
+				const auto newCoordIndex = wsw::clamp( (int)entry.coordIndices[coordNum] + sign, 0, (int)numCoordSteps - 1 );
 				unsigned coordIndices[] { entry.coordIndices[0], entry.coordIndices[1], entry.coordIndices[2] };
 				coordIndices[coordNum] = (unsigned)newCoordIndex;
 				const unsigned cellIndex = xStride * coordIndices[0] + yStride * coordIndices[1] + coordIndices[2];
@@ -1086,68 +1015,133 @@ void SplashPropagationSolver::operator()() {
 	const auto *const gameEdicts = game.edicts;
 
 	int rawEntNumsBuffer[MAX_EDICTS];
-	const std::span<int> rawEntNums = findRawEntsInRadius( rawEntNumsBuffer );
+	const auto radius = (float)m_inflictor->projectileInfo.radius;
+	const int numEnts = GClip_FindInRadius4D( m_inflictor->s.origin, radius, rawEntNumsBuffer, MAX_EDICTS, 0 );
+	const std::span<const int> rawEntNums( rawEntNumsBuffer, rawEntNumsBuffer + numEnts );
+
 	// Do an early shortcut.
 	// A top-level call always includes the projectile in the output.
-	if( rawEntNums.size() == 1 && rawEntNums.front() == m_inflictor->s.number ) {
-		return;
-	}
+	if( !rawEntNums.empty() && !( rawEntNums.size() == 1 && rawEntNums.front() == m_inflictor->s.number ) ) {
+		const bool volatileExplosives = GS_RaceGametype() && g_volatile_explosives->integer != 0;
 
-	// Prune invulnerable entities
-
-	EntNumsVector vulnerableEntNums;
-	alignas( 16 ) bool vulnerableEntsMask[MAX_EDICTS] {};
-	pruneInvulnerableEnts( rawEntNums, vulnerableEntNums, vulnerableEntsMask );
-
-	// Compute ideal (like there's no obstacles in-between) damage parameters.
-	// We will apply these parameters to all entities regardless of obstruction status for consistency reasons.
-
-	DamageParamsVector params;
-	computeDamageParams( vulnerableEntNums, params );
-
-	uint32_t nonDamagedEntsMask = 0;
-	DamageParamRefsVector nonDamagedEnts;
-	for( const DamageParams &param: params ) {
-		// Apply damage immediately if fast and coarse checks permit.
-		if( coarseCanSplashDamage( gameEdicts + param.entNum ) ) {
-			applyDamage( param );
+		// Perform an initial pruning of invulnerable entities
+		EntNumsVector vulnerableEntNums;
+		if( rawEntNums.size() <= vulnerableEntNums.capacity() ) [[likely]] {
+			for( const int entNum: rawEntNums ) {
+				if( isVulnerable( gameEdicts + entNum, volatileExplosives ) ) {
+					vulnerableEntNums.push_back( entNum );
+				}
+			}
 		} else {
-			nonDamagedEntsMask |= ( 1u << nonDamagedEnts.size() );
-			nonDamagedEnts.push_back( std::addressof( param ) );
+			// A rare but possible case, let's handle it.
+			// Give clients a priority.
+			for( const int entNum: rawEntNums ) {
+				if( const edict_t *ent = gameEdicts + entNum; ent->r.client ) {
+					if( isVulnerable( gameEdicts + entNum, volatileExplosives ) ) {
+						vulnerableEntNums.push_back( entNum );
+						if( vulnerableEntNums.full() ) [[unlikely]] {
+							break;
+						}
+					}
+				}
+			}
+			if( !vulnerableEntNums.full() ) {
+				for( const int entNum: rawEntNums ) {
+					if( const edict_t *ent = gameEdicts + entNum; !ent->r.client ) {
+						if( isVulnerable( ent, volatileExplosives ) ) {
+							vulnerableEntNums.push_back( entNum );
+							if( vulnerableEntNums.full() ) [[unlikely]] {
+								break;
+							}
+						}
+					}
+				}
+			}
 		}
-	}
 
-	// All coarse checks have lead to success
-	if( !nonDamagedEntsMask ) {
-		return;
-	}
+		// Compute ideal (like there's no obstacles in-between) damage parameters.
+		// We will apply these parameters to all entities regardless of obstruction status for consistency reasons.
 
-	EntNumsVector waveObstacles;
-	collectSolidWaveObstacles( rawEntNums, vulnerableEntsMask, waveObstacles );
+		DamageParamsVector damageParamsStorage;
+		computeDamageParams( vulnerableEntNums, damageParamsStorage );
 
-	if( !s_shapeListStorage ) {
-		s_shapeListStorage = GAME_IMPORT.CM_AllocShapeList();
-	}
+		// Caution! Vulnerability status of other entities may change while applying damage
+		// (a chain of doors/triggers is an example, not even talking about implicit recursion while exploding projectiles).
+		// This means we cannot rely on computing it once and have to recalculate it where it was implied
 
-	const auto radius     = (float)m_inflictor->projectileInfo.radius;
-	const Vec3 splashMins = Vec3( -radius, -radius, -radius ) + m_inflictor->s.origin;
-	const Vec3 splashMaxs = Vec3( +radius, +radius, +radius ) + m_inflictor->s.origin;
-	GAME_IMPORT.CM_BuildShapeList( s_shapeListStorage, splashMins.Data(), splashMaxs.Data(), MASK_SOLID );
+		DamageParamRefsVector nonDamagedEnts;
+		for( const DamageParams &param: damageParamsStorage ) {
+			// Check again each step (damaging entities may change vulnerability status of next entities)
+			if( isVulnerable( gameEdicts + param.entNum, volatileExplosives ) ) {
+				// Apply damage immediately if fast and coarse checks permit.
+				if( coarseCanSplashDamage( gameEdicts + param.entNum ) ) {
+					applyDamage( param );
+				} else {
+					nonDamagedEnts.push_back( std::addressof( param ) );
+				}
+			}
+		}
 
-	const ClipRegion clipRegion( s_shapeListStorage, std::span<int>( waveObstacles.begin(), waveObstacles.size() ) );
+		// Check afterwards (damaging last entities may change status of previously added entities)
+		unsigned numEntsToKeep = 0;
+		for( unsigned checkedAtIndex = 0; checkedAtIndex < nonDamagedEnts.size(); ++checkedAtIndex ) {
+			const DamageParams *const params = nonDamagedEnts[checkedAtIndex];
+			if( isVulnerable( gameEdicts + params->entNum, volatileExplosives ) ) {
+				nonDamagedEnts[numEntsToKeep++] = params;
+			}
+		}
+		nonDamagedEnts.erase( nonDamagedEnts.begin() + numEntsToKeep, nonDamagedEnts.end() );
 
-	// Do not try adjusting number of steps according to radius.
-	// Use a maximal number of steps possible.
-	// There is a single exception when radius is really low.
-	static_assert( kMaxCoordSteps % 2u == 1u );
-	static_assert( ( kMaxCoordSteps / 2 ) % 2u == 1u );
-	const auto numCoordSteps = (int)( radius >= 48 ? kMaxCoordSteps : kMaxCoordSteps / 2 );
+		// If some coarse checks have not lead to success
+		if( !nonDamagedEnts.empty() ) {
+			uint32_t nonDamagedEntsMask = 0;
+			for( unsigned index = 0; index < nonDamagedEntsMask; ++index ) {
+				nonDamagedEntsMask |= ( 1u << index );
+			}
 
-	// Propagate the wave and mark bits for entities that should accept the damage
-	const uint32_t affectedEntsMask = propagate( nonDamagedEnts, numCoordSteps, clipRegion, nonDamagedEntsMask );
-	for( unsigned i = 0; i < 32; ++i ) {
-		if( affectedEntsMask & ( 1u << i ) ) {
-			applyDamage( *nonDamagedEnts[i] );
+			EntNumsVector waveObstacles;
+			for( const int entNum: rawEntNums ) {
+				const edict_t *ent = gameEdicts + entNum;
+				if( ent->s.solid == SOLID_YES || ent->s.solid == SOLID_BMODEL ) {
+					if( !isVulnerable( ent, volatileExplosives ) ) {
+						waveObstacles.push_back( entNum );
+						if( waveObstacles.full() ) [[unlikely]] {
+							break;
+						}
+					}
+				}
+			}
+
+			if( !s_shapeListStorage ) {
+				s_shapeListStorage = GAME_IMPORT.CM_AllocShapeList();
+			}
+
+			const Vec3 splashMins = Vec3( -radius, -radius, -radius ) + m_inflictor->s.origin;
+			const Vec3 splashMaxs = Vec3( +radius, +radius, +radius ) + m_inflictor->s.origin;
+			// TODO: Add/use a fused call
+			GAME_IMPORT.CM_BuildShapeList( s_shapeListStorage, splashMins.Data(), splashMaxs.Data(), MASK_SOLID );
+			GAME_IMPORT.CM_ClipShapeList( s_shapeListStorage, s_shapeListStorage, splashMins.Data(), splashMaxs.Data() );
+
+			const ClipRegion clipRegion( s_shapeListStorage, std::span<int>( waveObstacles.begin(), waveObstacles.size() ) );
+
+			// Do not try adjusting number of steps according to radius.
+			// Use a maximal number of steps possible.
+			// There is a single exception when radius is really low.
+			static_assert( kMaxCoordSteps % 2u == 1u );
+			static_assert( ( kMaxCoordSteps / 2 ) % 2u == 1u );
+			const auto numCoordSteps = (int)( radius >= 48 ? kMaxCoordSteps : kMaxCoordSteps / 2 );
+
+			// Propagate the wave and mark bits for entities that should accept the damage
+			const uint32_t affectedEntsMask = propagate( nonDamagedEnts, numCoordSteps, clipRegion, nonDamagedEntsMask );
+			for( unsigned entIndex = 0; entIndex < numEntsToKeep; ++entIndex ) {
+				if( affectedEntsMask & ( 1u << entIndex ) ) {
+					const DamageParams *params = nonDamagedEnts[entIndex];
+					// Check again
+					if( isVulnerable( gameEdicts + params->entNum, volatileExplosives ) ) {
+						applyDamage( *params );
+					}
+				}
+			}
 		}
 	}
 }
