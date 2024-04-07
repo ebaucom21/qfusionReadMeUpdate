@@ -721,8 +721,9 @@ void RespectHandler::ClientEntry::requestClientRespectAction( unsigned tokenNum 
 }
 
 void RespectHandler::ClientEntry::onClientDisconnected() {
-	// TODO: Save respect stats
-	// TODO: We should try saving respect state for non-authenticated clients as well
+	// We assume that Statsow has just saved stats (including respect status) for this client
+	// TODO: Do something for non-authenticated clients
+	reset();
 }
 
 void RespectHandler::ClientEntry::onClientJoinedTeam( int newTeam ) {
@@ -989,6 +990,14 @@ void ChatHandlersChain::resetForClient( int clientNum ) {
 	m_floodFilter.resetForClient( clientNum );
 	m_respectHandler.resetForClient( clientNum );
 	m_ignoreFilter.resetForClient( clientNum );
+}
+
+void ChatHandlersChain::onClientDisconnected( const edict_s *ent ) {
+	// Reset everything except the respect handler which needs special treatment
+	m_muteFilter.resetForClient( ENTNUM( ent ) - 1 );
+	m_floodFilter.resetForClient( ENTNUM( ent ) - 1 );
+	m_respectHandler.onClientDisconnected( ent );
+	m_ignoreFilter.resetForClient( ENTNUM( ent ) - 1 );
 }
 
 auto ChatHandlersChain::handleMessage( const ChatMessage &message )

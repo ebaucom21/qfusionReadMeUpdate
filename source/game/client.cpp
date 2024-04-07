@@ -1218,7 +1218,7 @@ void ClientDisconnect( edict_t *ent, const char *reason ) {
 	}
 
 	//StatsowFacade::Instance()->OnClientDisconnected( ent );
-	ChatHandlersChain::instance()->resetForClient( ENTNUM( ent ) - 1 );
+	ChatHandlersChain::instance()->onClientDisconnected( ent );
 
 	for( int team = TEAM_PLAYERS; team < GS_MAX_TEAMS; team++ )
 		G_Teams_UnInvitePlayer( team, ent );
@@ -1762,8 +1762,10 @@ void Client::executeUcmd( const usercmd_t &ucmd_, int timeDelta_ ) {
 	checkInstaShield();
 
 	if( ps.pmove.pm_type == PM_NORMAL ) {
-		stats.had_playtime = true;
-		// StatsowFacade::Instance()->OnClientHadPlaytime( this );
+		if( GS_MatchState() == MATCH_STATE_PLAYTIME ) {
+			stats.had_playtime = true;
+			// StatsowFacade::Instance()->OnClientHadPlaytime( this );
+		}
 	}
 
 	snap.plrkeys |= ucmdToPlayerKeys();

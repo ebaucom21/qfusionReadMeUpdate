@@ -321,9 +321,8 @@ public:
 		return m_respectHandler.skipStatsForClient( ent );
 	}
 
-	void onClientDisconnected( const edict_s *ent ) {
-		m_respectHandler.onClientDisconnected( ent );
-	}
+	void onClientDisconnected( const edict_s *ent );
+
 	void onClientJoinedTeam( const edict_s *ent, int newTeam ) {
 		m_respectHandler.onClientJoinedTeam( ent, newTeam );
 	}

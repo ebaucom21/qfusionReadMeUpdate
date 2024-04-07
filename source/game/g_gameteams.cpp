@@ -316,6 +316,7 @@ void G_Teams_SetTeam( edict_t *ent, int team ) {
 	assert( team >= TEAM_SPECTATOR && team < GS_MAX_TEAMS );
 
 	//StatsowFacade::Instance()->OnClientJoinedTeam( ent, team );
+	ChatHandlersChain::instance()->onClientJoinedTeam( ent, team );
 
 	if( ent->r.client->team != TEAM_SPECTATOR && team != TEAM_SPECTATOR ) {
 		// keep scores when switching between non-spectating teams
