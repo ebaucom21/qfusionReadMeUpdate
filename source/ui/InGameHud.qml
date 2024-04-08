@@ -191,7 +191,7 @@ Item {
                     if (!hudField.povDataModel.hasActivePov && (flags & HudLayoutModel.PovOnly)) {
                         return false
                     }
-                    if (hudField.commonDataModel.isUsingChasePov && !(flags & HudLayoutModel.ChasePovOnly)) {
+                    if (!hudField.povDataModel.isUsingChasePov && (flags & HudLayoutModel.ChasePovOnly)) {
                         return false
                     }
                     if (!hudField.povDataModel.isPovAlive && (flags & HudLayoutModel.AlivePovOnly)) {

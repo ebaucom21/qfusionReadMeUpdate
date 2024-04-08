@@ -127,7 +127,8 @@ class QtUISystem : public QObject, public UISystem {
 	friend class NativelyDrawnImage;
 	friend class NativelyDrawnModel;
 public:
-	void refresh() override;
+	void refreshProperties() override;
+	void renderInternally() override;
 
 	void drawBackgroundMapIfNeeded() override;
 	void drawMenuPartInMainContext() override;
@@ -661,7 +662,6 @@ private:
 	void updateCVarAwareControls();
 	void updateHudOccluders();
 
-	void checkPropertyChanges();
 	void setActiveMenuMask( unsigned activeMask );
 
 	void renderQml( QmlSandbox *sandbox );
@@ -971,12 +971,10 @@ auto UISystem::instance() -> UISystem * {
 	return uiSystemInstanceHolder.instance();
 }
 
-void QtUISystem::refresh() {
+void QtUISystem::renderInternally() {
 #ifndef _WIN32
 	QGuiApplication::processEvents( QEventLoop::AllEvents );
 #endif
-
-	checkPropertyChanges();
 
 	/*
 	if( m_hudSandbox ) {
@@ -1513,7 +1511,7 @@ void QtUISystem::setActiveMenuMask( unsigned activeMask ) {
 	}
 }
 
-void QtUISystem::checkPropertyChanges() {
+void QtUISystem::refreshProperties() {
 	const auto lastClientState = m_clientState;
 	const auto actualClientState = cls.state;
 	m_clientState = actualClientState;

@@ -1516,7 +1516,8 @@ void SCR_UpdateScreen( void ) {
 
 	// Perform UI refresh (that may include binding UI GL context and unbinding it) first
 	auto *const uiSystem = wsw::ui::UISystem::instance();
-	uiSystem->refresh();
+	uiSystem->refreshProperties();
+	uiSystem->renderInternally();
 
 	// TODO: Pass as flags
 	const bool forcevsync = cls.state == CA_DISCONNECTED || uiSystem->suggestsUsingVSync();

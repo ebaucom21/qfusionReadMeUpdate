@@ -1295,7 +1295,7 @@ void HudPovDataModel::resetHudFeed() {
 
 void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
 	const bool hadActivePov = m_hasActivePov, wasUsingChasePov = m_isUsingChasePov, wasPovAlive = m_isPovAlive;
-	m_hasActivePov    = CG_ActiveChasePovOfViewState( m_viewStateIndex ) != std::nullopt;
+	m_hasActivePov    = CG_ActivePovOfViewState( m_viewStateIndex ) != std::nullopt;
 	m_isUsingChasePov = m_hasActivePov && CG_IsUsingChasePov( m_viewStateIndex );
 	m_isPovAlive      = m_hasActivePov && CG_IsPovAlive( m_viewStateIndex );
 	if( wasPovAlive != m_isPovAlive ) {
@@ -1369,8 +1369,8 @@ void HudPovDataModel::checkPropertyChanges( int64_t currTime ) {
 
 void HudPovDataModel::updateScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {
 	if( CG_HasTwoTeams() ) {
-		if( const auto maybeActiveChasePov = CG_ActiveChasePovOfViewState( m_viewStateIndex ) ) {
-			m_teamListModel.update( scoreboardData, *maybeActiveChasePov );
+		if( const auto maybeActivePovNum = CG_ActivePovOfViewState( m_viewStateIndex ) ) {
+			m_teamListModel.update( scoreboardData, *maybeActivePovNum );
 		}
 	}
 }

@@ -1213,9 +1213,16 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			unsigned viewStateIndices[MAX_CLIENTS + 1];
 			unsigned numDisplayedViewStates = 0;
 
-			// TODO: Should we stay in tiled mode for the single pov?
-			const bool shouldUseNonTiledMode = cg.chaseMode != CAM_TILED || cg.tileMiniviewViewStateIndices.empty();
-			if( shouldUseNonTiledMode ) {
+			const bool actuallyUseTiledMode = CG_UsesTiledView();
+			if( actuallyUseTiledMode ) {
+				assert( cg.tileMiniviewViewStateIndices.size() == cg.tileMiniviewPositions.size() );
+				// TODO: Std::copy?
+				for( unsigned i = 0; i < cg.tileMiniviewViewStateIndices.size(); ++i ) {
+					viewRects[i]        = cg.tileMiniviewPositions[i];
+					viewStateIndices[i] = cg.tileMiniviewViewStateIndices[i];
+				}
+				numDisplayedViewStates = cg.tileMiniviewViewStateIndices.size();
+			} else {
 				if( const int size = std::round( v_viewSize.get() ); size < 100 ) {
 					// Round to a multiple of 2
 					const int regionWidth  = ( ( cgs.vidWidth * size ) / 100 ) & ( ~1 );
@@ -1234,14 +1241,6 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				viewStateIndices[0] = (unsigned)( getPrimaryViewState() - cg.viewStates );
 				numDisplayedViewStates = 1;
 				numDisplayedViewStates += wsw::ui::UISystem::instance()->retrieveHudControlledMiniviews( viewRects + 1, viewStateIndices + 1 );
-			} else {
-				assert( cg.tileMiniviewViewStateIndices.size() == cg.tileMiniviewPositions.size() );
-				// TODO: Std::copy?
-				for( unsigned i = 0; i < cg.tileMiniviewViewStateIndices.size(); ++i ) {
-					viewRects[i] = cg.tileMiniviewPositions[i];
-					viewStateIndices[i] = cg.tileMiniviewViewStateIndices[i];
-				}
-				numDisplayedViewStates = cg.tileMiniviewViewStateIndices.size();
 			}
 
 			// TODO: Use the same DrawSceneRequest instance but modify POV-specific data
@@ -1250,18 +1249,25 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
 				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
-				const Rect viewport      = viewRects[viewNum];
+				const Rect viewport        = viewRects[viewNum];
+				const bool isMiniview      = viewNum != 0 || actuallyUseTiledMode;
 
 				int viewDefType  = VIEWDEF_PLAYERVIEW;
 				bool thirdperson = false;
 				if( viewState == getPrimaryViewState() ) {
 					if( cgs.demoPlaying && cg.isDemoCamFree ) {
-						viewDefType = VIEWDEF_CAMERA;
+						if( !isMiniview ) {
+							viewDefType = VIEWDEF_CAMERA;
+						}
 					} else {
-						if( cg.chaseMode == CAM_INEYES ) {
-							thirdperson = v_thirdPerson.get();
-						} else if( cg.chaseMode == CAM_THIRDPERSON ) {
-							thirdperson = true;
+						// Draw from third-person view only if we have an active pov.
+						// Otherwise we end up with confusing switching of camera location.
+						if( CG_ActivePovOfViewState( cg.chasedViewportIndex ) != std::nullopt ) {
+							if( cg.chaseMode == CAM_INEYES ) {
+								thirdperson = v_thirdPerson.get();
+							} else if( cg.chaseMode == CAM_THIRDPERSON ) {
+								thirdperson = true;
+							}
 						}
 					}
 				}
@@ -1275,8 +1281,7 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 				refdef_t *rd = &viewState->view.refdef;
 				AnglesToAxis( viewState->view.angles, rd->viewaxis );
 
-				const bool isMiniview = viewNum != 0 || !shouldUseNonTiledMode;
-				rd->rdflags = CG_RenderFlags( viewState, isMiniview, !shouldUseNonTiledMode );
+				rd->rdflags = CG_RenderFlags( viewState, isMiniview, actuallyUseTiledMode );
 
 				// warp if underwater
 				if( rd->rdflags & RDF_UNDERWATER ) {
@@ -1324,6 +1329,7 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 				SubmitDrawSceneRequest( drawSceneRequest );
 
+				const bool isMiniview = viewNum != 0 || actuallyUseTiledMode;
 				if( shouldDraw2D && viewState->view.draw2D ) {
 					bool drawGfx = true;
 					if( shouldCheckDrawingUnderMenu ) {
@@ -1339,7 +1345,7 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 						}
 					}
 					bool drawCrosshair = false;
-					if( CG_ActiveChasePovOfViewState( viewStateIndices[viewNum] ) != std::nullopt ) {
+					if( CG_ActivePovOfViewState( viewStateIndices[viewNum] ) != std::nullopt ) {
 						if( CG_IsPovAlive( viewStateIndices[viewNum] ) ) {
 							drawCrosshair = true;
 						}
@@ -1351,7 +1357,7 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 					if( shouldDrawHuds ) {
 						if( drawGfx ) {
 							std::optional<float> miniviewScale;
-							if( viewNum != 0 || !shouldUseNonTiledMode ) {
+							if( isMiniview ) {
 								miniviewScale = wsw::min( (float)rd.width / (float)cgs.vidWidth, (float)rd.height / (float)cgs.vidHeight );
 							}
 							drawNamesAndBeacons( viewState, miniviewScale );
@@ -1364,7 +1370,7 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 				CG_ResetTemporaryBoneposesCache(); // clear for next frame
 
-				if( viewNum == 0 && shouldUseNonTiledMode ) {
+				if( !isMiniview ) {
 					RF_Set2DScissor( 0, 0, cgs.vidWidth, cgs.vidHeight );
 					wsw::ui::UISystem::instance()->drawMenuPartInMainContext();
 				}
@@ -1379,7 +1385,7 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			const ViewState *primaryViewState = getPrimaryViewState();
 			SoundSystem::instance()->updateListener( primaryViewState->view.origin, primaryViewState->view.velocity, primaryViewState->view.axis );
 
-			hasRenderedTheMenu = numDisplayedViewStates > 0 && shouldUseNonTiledMode;
+			hasRenderedTheMenu = numDisplayedViewStates > 0 && !actuallyUseTiledMode;
 		}
 	}
 

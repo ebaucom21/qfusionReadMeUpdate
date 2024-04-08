@@ -35,7 +35,8 @@ public:
 	[[nodiscard]]
 	static auto instance() -> UISystem *;
 
-	virtual void refresh() = 0;
+	virtual void refreshProperties() = 0;
+	virtual void renderInternally() = 0;
 
 	virtual void drawBackgroundMapIfNeeded() = 0;
 	virtual void drawMenuPartInMainContext() = 0;

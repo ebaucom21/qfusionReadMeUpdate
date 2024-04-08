@@ -3015,13 +3015,19 @@ static void CG_UpdatePlayerState() {
 
 	//assert( cg.ourClientViewportIndex < cg.numSnapViewStates );
 	// TODO: Can we do something better?
+	unsigned fallbackPlayerNum = cgs.playerNum;
 	if( cg.ourClientViewportIndex >= cg.numSnapViewStates ) {
 		assert( cgs.demoPlaying );
-		std::memset( &cg.viewStates[MAX_CLIENTS], 0, sizeof( ViewState ) );
-		cg.ourClientViewportIndex = MAX_CLIENTS;
-		// TODO: There should be default initializers for that
-		cg.viewStates[MAX_CLIENTS].predictedPlayerState.pmove.pm_type   = PM_SPECTATOR;
-		cg.viewStates[MAX_CLIENTS].predictFromPlayerState.pmove.pm_type = PM_SPECTATOR;
+		if( cg.frame.multipov ) {
+			std::memset( &cg.viewStates[MAX_CLIENTS], 0, sizeof( ViewState ) );
+			cg.ourClientViewportIndex = MAX_CLIENTS;
+			// TODO: There should be default initializers for that
+			cg.viewStates[MAX_CLIENTS].predictedPlayerState.pmove.pm_type   = PM_SPECTATOR;
+			cg.viewStates[MAX_CLIENTS].predictFromPlayerState.pmove.pm_type = PM_SPECTATOR;
+		} else {
+			cg.ourClientViewportIndex = 0;
+			fallbackPlayerNum         = 0;
+		}
 	}
 
 	const auto ourActualMoveType = cg.viewStates[cg.ourClientViewportIndex].predictedPlayerState.pmove.pm_type;
@@ -3029,9 +3035,7 @@ static void CG_UpdatePlayerState() {
 	if( ourActualMoveType != PM_SPECTATOR && ourActualMoveType != PM_CHASECAM ) {
 		cg.chasedViewportIndex = cg.ourClientViewportIndex;
 		cg.chasedPlayerNum     = cgs.playerNum;
-		if( cg.chaseMode == CAM_TILED ) {
-			cg.chaseMode = CAM_INEYES;
-		}
+		cg.chaseMode           = CAM_INEYES;
 	} else {
 		const unsigned requestedPlayerNum = cg.pendingChasedPlayerNum.value_or( cg.chasedPlayerNum );
 		// Check whether we have lost the pov.
@@ -3043,14 +3047,13 @@ static void CG_UpdatePlayerState() {
 			cg.chasedViewportIndex = maybePlayerNumAndIndex->first;
 			cg.chasedPlayerNum     = maybePlayerNumAndIndex->second;
 		} else {
-			// Should not happen?
 			cg.chasedViewportIndex = cg.ourClientViewportIndex;
-			cg.chasedPlayerNum     = cgs.playerNum;
+			cg.chasedPlayerNum     = fallbackPlayerNum;
 		}
 	}
 
-	assert( cg.chasedViewportIndex < cg.numSnapViewStates );
-	assert( cg.chasedPlayerNum < MAX_CLIENTS );
+	assert( cg.chasedViewportIndex < cg.numSnapViewStates || ( cgs.demoPlaying && cg.chasedViewportIndex == MAX_CLIENTS ) );
+	assert( cg.chasedPlayerNum < MAX_CLIENTS || cgs.demoPlaying );
 
 	if( cg.hasPendingSwitchFromTiledMode ) {
 		if( cg.chaseMode == CAM_TILED ) {
@@ -3226,8 +3229,13 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 
 	CG_UpdatePlayerState();
 
+	auto *const uiSystem = wsw::ui::UISystem::instance();
+	// Must be performed immediately if there were POV property updates
+	// TODO: Don't call it twice per frame in this case
+	uiSystem->refreshProperties();
+
 	static_assert( AccuracyRows::Span::extent == kNumAccuracySlots );
-	wsw::ui::UISystem::instance()->updateScoreboard( frame->scoreboardData, AccuracyRows {
+	uiSystem->updateScoreboard( frame->scoreboardData, AccuracyRows {
 		.weak   = AccuracyRows::Span( getPrimaryViewState()->snapPlayerState.weakAccuracy ),
 		.strong = AccuracyRows::Span( getPrimaryViewState()->snapPlayerState.strongAccuracy ),
 	});
@@ -5239,10 +5247,9 @@ int CG_RealClientTeam() {
 	return getOurClientViewState()->snapPlayerState.stats[STAT_REALTEAM];
 }
 
-std::optional<unsigned> CG_ActiveChasePovOfViewState( unsigned viewStateIndex ) {
+std::optional<unsigned> CG_ActivePovOfViewState( unsigned viewStateIndex ) {
 	assert( viewStateIndex <= cg.numSnapViewStates || ( cgs.demoPlaying && viewStateIndex == MAX_CLIENTS ) );
 	const ViewState *viewState = cg.viewStates + viewStateIndex;
-
 	// Don't even bother in another case
 	if( const unsigned statePovNum = viewState->predictedPlayerState.POVnum; statePovNum > 0 ) {
 		unsigned chosenPovNum = 0;
@@ -5263,9 +5270,16 @@ std::optional<unsigned> CG_ActiveChasePovOfViewState( unsigned viewStateIndex ) 
 }
 
 bool CG_IsUsingChasePov( unsigned viewStateIndex ) {
-	assert( viewStateIndex <= cg.numSnapViewStates || ( cgs.demoPlaying && viewStateIndex == MAX_CLIENTS ) );
-	const ViewState *viewState = cg.viewStates + viewStateIndex;
-	return viewState->predictedPlayerState.POVnum != viewState->predictedPlayerState.playerNum + 1;
+	if( !cg.frame.multipov ) {
+		assert( viewStateIndex == cg.chasedViewportIndex );
+		const auto &playerState = cg.viewStates[viewStateIndex].predictedPlayerState;
+		return ( playerState.POVnum != playerState.playerNum + 1 ) || ( cgs.demoPlaying && CG_IsViewAttachedToPlayer() );
+	}
+	if( viewStateIndex == cg.chasedViewportIndex ) {
+		return !( cg.ourClientViewportIndex == cg.chasedViewportIndex && cgs.playerNum == cg.chasedPlayerNum );
+	}
+	// Consider it true for miniviews
+	return true;
 }
 
 bool CG_IsPovAlive( unsigned viewStateIndex ) {
@@ -5383,7 +5397,13 @@ unsigned CG_GetOurClientViewStateIndex() {
 
 std::optional<unsigned> CG_GetPlayerNumForViewState( unsigned viewStateIndex ) {
 	if( viewStateIndex < cg.numSnapViewStates ) {
-		return cg.viewStates[viewStateIndex].snapPlayerState.playerNum;
+		if( cg.frame.multipov ) {
+			return cg.viewStates[viewStateIndex].snapPlayerState.playerNum;
+		}
+		const auto &playerState = cg.viewStates[viewStateIndex].predictedPlayerState;
+		if( playerState.POVnum > 0 && playerState.POVnum < gs.maxclients + 1 ) {
+			return playerState.POVnum - 1;
+		}
 	}
 	return std::nullopt;
 }
@@ -5510,7 +5530,7 @@ void CG_MessageMode2( const CmdArgs & ) {
 
 // Only covers the demo playback case, otherwise the UI grabs it first on its own
 bool CG_GrabsMouseMovement() {
-	if( cg.chaseMode == CAM_TILED ) {
+	if( CG_UsesTiledView() ) {
 		return false;
 	}
 	if( cgs.demoPlaying ) {
@@ -5520,7 +5540,8 @@ bool CG_GrabsMouseMovement() {
 }
 
 bool CG_UsesTiledView() {
-	return cg.chaseMode == CAM_TILED;
+	// Don't actually use the tiled mode unless there are at least 2 available povs
+	return cg.chaseMode == CAM_TILED && cg.tileMiniviewViewStateIndices.size() > 1;
 }
 
 void CG_SwitchToPlayerNum( unsigned playerNum ) {
