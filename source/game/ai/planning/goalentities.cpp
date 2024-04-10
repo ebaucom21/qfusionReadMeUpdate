@@ -201,10 +201,11 @@ void NavEntitiesRegistry::Update() {
 	const auto *aasWorld = AiAasWorld::instance();
 	for( auto *navEnt = activeNavEntsHead; navEnt; navEnt = navEnt->Next() ) {
 		if( ( navEnt->flags & NavEntityFlags::MOVABLE ) != NavEntityFlags::NONE ) {
-			// Isn't it an obvious cheating?
-			// So far only teammates are set as nav targets sometimes among all clients.
-			navEnt->origin.Set( navEnt->ent->s.origin );
-			navEnt->aasAreaNum = aasWorld->findAreaNum( navEnt->ent->s.origin );
+			// If it has been moved
+			if( navEnt->origin != Vec3( navEnt->ent->s.origin ) ) {
+				navEnt->origin.Set( navEnt->ent->s.origin );
+				navEnt->aasAreaNum = aasWorld->findAreaNum( navEnt->ent->s.origin );
+			}
 		}
 	}
 }

@@ -462,7 +462,10 @@ static void drop_make_touchable( edict_t *ent ) {
 }
 
 static void AI_AddDroppedItem( edict_t *ent ) {
-	AI_AddNavEntity( ent, (ai_nav_entity_flags)( AI_NAV_REACH_AT_TOUCH | AI_NAV_DROPPED ) );
+	// Let the AI re-check its location every frame
+	AI_AddNavEntity( ent, (ai_nav_entity_flags)( AI_NAV_REACH_AT_TOUCH | AI_NAV_DROPPED | AI_NAV_MOVABLE ) );
+	// Let it bounce/use movers, but don't try registering it again
+	ent->stop = nullptr;
 }
 
 edict_t *Drop_Item( edict_t *ent, const gsitem_t *item ) {
