@@ -2,7 +2,6 @@
 #include "planninglocal.h"
 #include "../manager.h"
 #include "../teamplay/baseteam.h"
-#include "../baseai.h"
 #include "../groundtracecache.h"
 #include "../navigation/aasworld.h"
 #include "../../../common/q_collision.h"

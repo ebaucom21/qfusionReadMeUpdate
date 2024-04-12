@@ -347,24 +347,21 @@ void AI_NavEntityReached( edict_t *ent ) {
 // removes the AI handle from memory
 //==========================================
 void G_FreeAI( edict_t *ent ) {
-	if( !ent->ai ) {
+	if( !ent->bot ) {
 		return;
 	}
 
-	AiManager::Instance()->UnlinkAi( ent->ai );
+	AiManager::Instance()->UnlinkBot( ent->bot );
 
-	// Perform a virtual destructor call
-	ent->ai->~Ai();
+	ent->bot->~Bot();
 
-	Q_free( ent->ai );
-	ent->ai = nullptr;
-	// TODO: Merge these fields, add a fast custom RTTI if needed
+	Q_free( ent->bot );
 	ent->bot = nullptr;
 }
 
 void AI_TouchedEntity( edict_t *self, edict_t *ent ) {
-	if( Ai *ai = self->ai ) {
-		ai->TouchedEntity( ent );
+	if( Bot *bot = self->bot ) {
+		bot->TouchedEntity( ent );
 	}
 }
 
@@ -387,8 +384,8 @@ void AI_Knockback( edict_t *self, edict_t *attacker, const vec3_t basedir, int k
 }
 
 void AI_Think( edict_t *self ) {
-	if( Ai *ai = self->ai ) {
-		ai->Update();
+	if( Bot *bot = self->bot ) {
+		bot->Update();
 	}
 }
 

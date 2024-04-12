@@ -341,7 +341,7 @@ void G_Teams_SetTeam( edict_t *ent, int team ) {
 	G_Match_CheckReadys();
 	G_UpdatePlayerMatchMsg( ent );
 
-	if( ent->ai ) {
+	if( ent->bot ) {
 		AI_JoinedTeam( ent, team );
 	}
 }

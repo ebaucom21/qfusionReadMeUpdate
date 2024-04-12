@@ -2,6 +2,7 @@
 #define WSW_86ec701e_71a0_4c5e_8b07_29fc000feb4e_H
 
 class BaseAction;
+class AiAasRouteCache;
 
 #include "botinput.h"
 #include "movementstate.h"

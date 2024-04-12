@@ -625,7 +625,7 @@ void G_CallTouch( edict_t *self, edict_t *other, cplane_t *plane, int surfFlags 
 		G_asCallMapEntityTouch( self, other, plane, surfFlags );
 	}
 
-	if( touched && other->ai ) {
+	if( touched && other->bot ) {
 		AI_TouchedEntity( other, self );
 	}
 }
@@ -656,7 +656,7 @@ void G_CallStop( edict_t *self ) {
 * G_CallPain
 */
 void G_CallPain( edict_t *ent, edict_t *attacker, float kick, float damage ) {
-	if( ent->ai ) {
+	if( ent->bot ) {
 		AI_Pain( ent, attacker, kick, damage );
 	}
 

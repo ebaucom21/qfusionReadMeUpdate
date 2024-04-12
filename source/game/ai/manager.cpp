@@ -82,18 +82,11 @@ void AiManager::OnBotDropped( edict_t *ent ) {
 	teams[entNum] = TEAM_SPECTATOR;
 }
 
-void AiManager::LinkAi( Ai *ai ) {
-	if( Bot *bot = dynamic_cast<Bot *>( ai ) ) {
-		wsw::link( bot, &botHandlesHead, Bot::AI_LINKS );
-	}
+void AiManager::LinkBot( Bot *bot ) {
+	wsw::link( bot, &botHandlesHead, Bot::AI_LINKS );
 }
 
-void AiManager::UnlinkAi( Ai *ai ) {
-	Bot *bot = dynamic_cast<Bot *>( ai );
-	if( !bot ) {
-		return;
-	}
-
+void AiManager::UnlinkBot( Bot *bot ) {
 	wsw::unlink( bot, &botHandlesHead, Bot::AI_LINKS );
 
 	// All links related to the unlinked AI become invalid.
@@ -222,7 +215,7 @@ float AiManager::MakeSkillForNewBot( const Client *client ) const {
 }
 
 void AiManager::SetupBotForEntity( edict_t *ent ) {
-	if( ent->ai ) {
+	if( ent->bot ) {
 		AI_FailWith( "AiManager::SetupBotForEntity()", "Entity AI has been already initialized\n" );
 	}
 
@@ -232,9 +225,8 @@ void AiManager::SetupBotForEntity( edict_t *ent ) {
 
 	auto *mem = (uint8_t *)Q_malloc( sizeof( Bot ) );
 	ent->bot = new( mem )Bot( ent, MakeSkillForNewBot( ent->r.client ) );
-	ent->ai = ent->bot;
 
-	LinkAi( ent->bot );
+	LinkBot( ent->bot );
 
 	ent->think = nullptr;
 	ent->nextThink = level.time + 1;
@@ -291,7 +283,7 @@ void AiManager::RemoveBot( const wsw::StringView &name ) {
 void AiManager::AfterLevelScriptShutdown() {
 	// Do not iterate over the linked list of bots since it is implicitly modified by these calls
 	for( edict_t *ent = game.edicts + gs.maxclients; PLAYERNUM( ent ) >= 0; ent-- ) {
-		if( !ent->r.inuse || !ent->ai ) {
+		if( !ent->r.inuse || !ent->bot ) {
 			continue;
 		}
 
@@ -428,7 +420,7 @@ bool AiManager::IsAreaReachableFromHubAreas( int targetArea, float *score ) cons
 }
 
 bool AiManager::GlobalQuota::Fits( const Bot *bot ) const {
-	return !bot->IsGhosting();
+	return !G_ISGHOSTING( bot->self );
 }
 
 bool AiManager::ThinkQuota::Fits( const Bot *bot ) const {

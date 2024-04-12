@@ -5,7 +5,6 @@
 #include "../../common/links.h"
 #include "awareness/awarenessmodule.h"
 #include "planning/planningmodule.h"
-#include "baseai.h"
 #include "vec3.h"
 
 #include "movement/movementsubsystem.h"
@@ -72,13 +71,16 @@ struct AiObjectiveSpot;
 struct AiDefenceSpot;
 struct AiOffenseSpot;
 
-class Bot: public Ai {
+class Bot: public AiFrameAwareComponent {
 	friend class AiManager;
 	friend class BotEvolutionManager;
 	friend class AiBaseTeam;
 	friend class AiSquadBasedTeam;
 	friend class AiObjectiveBasedTeam;
+	friend class AiPlanner;
 	friend class BotPlanner;
+	friend class AiAction;
+	friend class AiGoal;
 	friend class AiSquad;
 	friend class SquadsBuilder;
 	friend class EnemiesTracker;
@@ -130,35 +132,12 @@ public:
 	float Skill() const { return skillLevel; }
 	bool IsReady() const { return level.ready[PLAYERNUM( self )]; }
 
-	void OnPain( const edict_t *enemy, float kick, int damage ) {
-		if( enemy != self ) {
-			awarenessModule.OnPain( enemy, kick, damage );
-		}
-	}
+	void TouchedEntity( edict_t *ent );
 
-	void OnKnockback( edict_t *attacker, const vec3_t basedir, int kick, int dflags ) {
-		if( kick ) {
-			lastKnockbackAt = level.time;
-			VectorCopy( basedir, lastKnockbackBaseDir );
-			if( attacker == self ) {
-				lastOwnKnockbackKick = kick;
-				lastOwnKnockbackAt = level.time;
-			}
-		}
-	}
-
-	void OnEnemyDamaged( const edict_t *enemy, int damage ) {
-		if( enemy != self ) {
-			awarenessModule.OnEnemyDamaged( enemy, damage );
-		}
-	}
-
-	void OnEnemyOriginGuessed( const edict_t *enemy, unsigned millisSinceLastSeen, const float *guessedOrigin = nullptr ) {
-		if( !guessedOrigin ) {
-			guessedOrigin = enemy->s.origin;
-		}
-		awarenessModule.OnEnemyOriginGuessed( enemy, millisSinceLastSeen, guessedOrigin );
-	}
+	void OnPain( const edict_t *enemy, float kick, int damage );
+	void OnKnockback( const edict_t *attacker, const vec3_t basedir, int kick, int dflags );
+	void OnEnemyDamaged( const edict_t *enemy, int damage );
+	void OnEnemyOriginGuessed( const edict_t *enemy, unsigned millisSinceLastSeen, const float *guessedOrigin = nullptr );
 
 	void RegisterEvent( const edict_t *ent, int event, int parm ) {
 		awarenessModule.RegisterEvent( ent, event, parm );
@@ -299,136 +278,84 @@ public:
 	// The movement code should use this method if there really are no
 	// feasible ways to continue traveling to the nav target.
 	void OnMovementToNavTargetBlocked();
-protected:
-	void Frame() override;
-	void Think() override;
 
-	void PreFrame() override;
+	void notifyOfNavEntitySignaledAsReached( const NavEntity *navEntity );
+	void notifyOfNavEntityRemoved( const NavEntity *navEntity );
 
-	void SetFrameAffinity( unsigned modulo, unsigned offset ) override {
-		AiFrameAwareComponent::SetFrameAffinity( modulo, offset );
-		planningModule.SetFrameAffinity( modulo, offset );
-		awarenessModule.SetFrameAffinity( modulo, offset );
+	int NavTargetAasAreaNum() const {
+		return navTarget ? navTarget->AasAreaNum() : 0;
 	}
 
-	void invalidateNavTarget() override {
-		Ai::invalidateNavTarget();
-		m_selectedNavEntity = std::nullopt;
-	}
-
-	void notifyOfNavEntitySignaledAsReached( const NavEntity *navEntity_ ) override {
-		Ai::notifyOfNavEntitySignaledAsReached( navEntity_ );
-		if( m_selectedNavEntity && m_selectedNavEntity->navEntity == navEntity_ ) {
-			m_selectedNavEntity = std::nullopt;
+	Vec3 NavTargetOrigin() const {
+		if( !navTarget ) {
+			AI_FailWith( "Ai::NavTargetOrigin()", "Nav target is not present\n" );
 		}
+		return navTarget->Origin();
 	}
 
-	void notifyOfNavEntityRemoved( const NavEntity *navEntity_ ) override {
-		Ai::notifyOfNavEntityRemoved( navEntity_ );
-		if( m_selectedNavEntity && m_selectedNavEntity->navEntity == navEntity_ ) {
-			m_selectedNavEntity = std::nullopt;
+	float NavTargetRadius() const {
+		if( !navTarget ) {
+			AI_FailWith( "Ai::NavTargetRadius()", "Nav target is not present\n" );
 		}
+		return navTarget->RadiusOrDefault( 40.0f );
 	}
 
-	void TouchedOtherEntity( const edict_t *entity ) override;
-private:
-	bool IsPrimaryAimEnemy( const edict_t *enemy ) const {
-		return m_selectedEnemy && m_selectedEnemy->IsBasedOn( enemy );
+	bool IsNavTargetBasedOnEntity( const edict_t *ent ) const {
+		return navTarget && navTarget->IsBasedOnEntity( ent );
 	}
 
-	// Put these often accessed members first
-
-	AiSquad *squad { nullptr };
-	float skillLevel;
-	float baseOffensiveness { 0.5f };
-
-	unsigned similarWorldStateInstanceId { 0 };
-
-	// TODO: Move to the AwarenessModule?
-	std::optional<SelectedEnemy> m_selectedEnemy;
-	std::optional<SelectedEnemy> m_lostEnemy;
-	SelectedMiscTactics selectedTactics;
-	std::optional<SelectedNavEntity> m_selectedNavEntity;
-
-	// Put the movement subsystem at the object beginning so the relative offset is small
-	MovementSubsystem m_movementSubsystem;
-	BotAwarenessModule awarenessModule;
-
-	// Put planning module and weight config together
-	BotPlanningModule planningModule;
-	BotWeightConfig weightConfig;
-
-	BotWeaponsUsageModule weaponsUsageModule;
-
-	std::optional<BotInput> m_pendingClientThinkInput;
-
-	/**
-	 * {@code next[]} and {@code prev[]} links below are addressed by these indices
-	 */
-	enum { SQUAD_LINKS, TMP_LINKS, TEAM_LINKS, OBJECTIVE_LINKS, AI_LINKS };
-
-	Bot *next[5] { nullptr, nullptr, nullptr, nullptr, nullptr };
-	Bot *prev[5] { nullptr, nullptr, nullptr, nullptr, nullptr };
-
-	Bot *NextInSquad() { return next[SQUAD_LINKS]; };
-	const Bot *NextInSquad() const { return next[SQUAD_LINKS]; }
-
-	Bot *NextInTmpList() { return next[TMP_LINKS]; }
-	const Bot *NextInTmpList() const { return next[TMP_LINKS]; }
-
-	Bot *NextInBotsTeam() { return next[TEAM_LINKS]; }
-	const Bot *NextInBotsTeam() const { return next[TEAM_LINKS]; }
-
-	Bot *NextInObjective() { return next[OBJECTIVE_LINKS]; }
-	const Bot *NextInObjective() const { return next[OBJECTIVE_LINKS]; }
-
-	Bot *NextInAIList() { return next[AI_LINKS]; }
-	const Bot *NextInAIList() const { return next[AI_LINKS]; }
-
-	AiObjectiveSpot *objectiveSpot { nullptr };
-
-	int64_t m_lastTouchedTeleportAt { 0 };
-	int64_t m_lastTouchedJumppadAt { 0 };
-	int64_t m_lastTouchedElevatorAt { 0 };
-
-	int64_t lastKnockbackAt { 0 };
-	int64_t lastOwnKnockbackAt { 0 };
-	int lastOwnKnockbackKick { 0 };
-	vec3_t lastKnockbackBaseDir;
-
-	int64_t lastItemSelectedAt { 0 };
-	int64_t noItemAvailableSince { 0 };
-
-	int64_t lastBlockedNavTargetReportedAt { 0 };
-
-	/**
-	 * This value should be updated at the beginning of every frame.
-	 * Making it lazy is not good for performance reasons (the result might be accessed in tight loops).
-	 */
-	bool hasOnlyGunblade { false };
-
-	inline bool ShouldUseRoamSpotAsNavTarget() const {
-		const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = GetSelectedNavEntity();
-		return ( maybeSelectedNavEntity == std::nullopt ) && ( level.time - noItemAvailableSince > 3000 );
+	void SetNavTarget( const NavTarget *navTarget_ ) {
+		this->navTarget = navTarget_;
 	}
 
-	bool CanChangeWeapons() const {
-		return m_movementSubsystem.CanChangeWeapons();
+	void SetNavTarget( const Vec3 &navTargetOrigin, float reachRadius ) {
+		localNavSpotStorage.Set( navTargetOrigin, reachRadius, NavTargetFlags::REACH_ON_RADIUS );
+		this->navTarget = &localNavSpotStorage;
 	}
 
-	void ChangeWeapons( const SelectedWeapons &selectedWeapons_ );
-	void OnBlockedTimeout() override;
-	void GhostingFrame();
-	void ActiveFrame();
+	void ResetNavTarget() {
+		this->navTarget = nullptr;
+	}
 
-	void PostFrame() override;
+	bool IsCloseToNavTarget( float proximityThreshold ) const {
+		return DistanceSquared( self->s.origin, navTarget->Origin().Data() ) < proximityThreshold * proximityThreshold;
+	}
 
-	void OnRespawn();
+	unsigned MillisInBlockedState() const {
+		int64_t diff = BLOCKED_TIMEOUT - ( blockedTimeoutAt - level.time );
+		return diff >= 0 ? (unsigned)diff : 0;
+	}
 
-	void CheckTargetProximity();
-public:
+	bool IsBlocked() const {
+		// Blocking is checked in Think() frames (usually every 64 millis),
+		// so the blockedTimeoutAt value might be a bit outdated
+		return MillisInBlockedState() > 64 + 16;
+	}
+
+	unsigned MillisUntilBlockedTimeout() const {
+		// Returning a positive BLOCKED_TIMEOUT might be confusing in this case
+		if( !IsBlocked() ) {
+			return 0;
+		}
+		int64_t diff = level.time - blockedTimeoutAt;
+		return diff >= 0 ? (unsigned)diff : 0;
+	}
+
+	int AllowedTravelFlags() const { return travelFlags[1]; }
+	ArrayRange<int> TravelFlags() const { return travelFlagsRange; }
+
+	// Exposed for native and script actions
+	int CheckTravelTimeMillis( const Vec3 &from, const Vec3 &to, bool allowUnreachable = true );
+
+	// Helps to reject non-feasible enemies quickly.
+	// A false result does not guarantee that enemy is feasible.
+	// A true result guarantees that enemy is not feasible.
+	bool IsDefinitelyNotAFeasibleEnemy( const edict_t *ent ) const;
+
+	void SetAttitude( const edict_t *ent, int attitude );
+
 	// These methods are exposed mostly for script interface
-	inline unsigned NextSimilarWorldStateInstanceId() {
+	unsigned NextSimilarWorldStateInstanceId() {
 		return ++similarWorldStateInstanceId;
 	}
 
@@ -572,6 +499,167 @@ public:
 	 * @note weapons without actual ammo are ignored.
 	 */
 	bool HasOnlyGunblade() const { return hasOnlyGunblade; }
+
+private:
+	void Frame() override;
+	void Think() override;
+
+	void PreFrame() override;
+
+	void SetFrameAffinity( unsigned modulo, unsigned offset ) override;
+
+	const char *Nick() const {
+		return self->r.client ? self->r.client->netname.data() : self->classname;
+	}
+
+	bool CanHandleNavTargetTouch( const edict_t *ent );
+	bool TryReachNavTargetByProximity();
+	void TouchedOtherEntity( const edict_t *entity );
+
+	bool IsPrimaryAimEnemy( const edict_t *enemy ) const {
+		return m_selectedEnemy && m_selectedEnemy->IsBasedOn( enemy );
+	}
+
+	inline bool ShouldUseRoamSpotAsNavTarget() const {
+		const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = GetSelectedNavEntity();
+		return ( maybeSelectedNavEntity == std::nullopt ) && ( level.time - noItemAvailableSince > 3000 );
+	}
+
+	bool CanChangeWeapons() const {
+		return m_movementSubsystem.CanChangeWeapons();
+	}
+
+	void ChangeWeapons( const SelectedWeapons &selectedWeapons_ );
+
+	void OnBlockedTimeout();
+	void GhostingFrame();
+	void ActiveFrame();
+
+	void PostThink() override;
+	void PostFrame() override;
+
+	void OnRespawn();
+
+	void CheckTargetProximity();
+
+	float GetChangedAngle( float oldAngle, float desiredAngle, unsigned frameTime,
+						   float angularSpeedMultiplier, int angleIndex ) const;
+
+	// This function produces very basic but reliable results.
+	// Imitation of human-like aiming should be a burden of callers that prepare the desiredDirection.
+	Vec3 GetNewViewAngles( const vec3_t oldAngles, const Vec3 &desiredDirection, unsigned frameTime, float angularSpeedMultiplier ) const;
+
+
+	edict_t *const self;
+	// Must be set in a subclass constructor. A subclass manages memory for its planner
+	// (it either has it as an intrusive member of allocates it on heap)
+	// and provides a reference to it to this base class via this pointer.
+	AiPlanner *planner { nullptr };
+	// Must be set in a subclass constructor.
+	// A subclass should decide whether a shared or separated route cache should be used.
+	// A subclass should destroy the cache instance if necessary.
+	AiAasRouteCache *routeCache { nullptr };
+	// A cached reference to an AAS world, set by this class
+	AiAasWorld *aasWorld;
+	// Must be set in a subclass constructor. Can be arbitrary changed later.
+	// Can point to external (predicted) entity physics state during movement planning.
+	AiEntityPhysicsState *entityPhysicsState { nullptr };
+
+	// Preferred and allowed travel flags
+	int travelFlags[2] { ALLOWED_TRAVEL_FLAGS, PREFERRED_TRAVEL_FLAGS };
+	ArrayRange<int> travelFlagsRange { travelFlags, travelFlags + 2 };
+
+	int64_t blockedTimeoutAt;
+	int64_t prevThinkAt { 0 };
+	int64_t lastNavTargetReachedAt { 0 };
+
+	vec3_t angularViewSpeed { 0.0f, 0.0f, 0.0f };
+
+	// An actually used nav target, be it a nav entity or a spot
+	const NavTarget *navTarget { nullptr };
+	NavSpot localNavSpotStorage { NavSpot::Dummy() };
+
+	// Negative  = enemy
+	// Zero      = ignore (don't attack)
+	// Positive  = allies (might be treated as potential squad mates)
+	// All entities have a negative attitude by default.
+	// The default MayNotBeFeasibleEnemy() gives attitude the lowest priority,
+	// teams in team-based gametypes, aiIntrinsicEntityWeight (for non-clients) are tested first.
+	int8_t attitude[MAX_EDICTS];
+
+	AiSquad *squad { nullptr };
+	const float skillLevel;
+	float baseOffensiveness { 0.5f };
+
+	unsigned similarWorldStateInstanceId { 0 };
+
+	// TODO: Move to the AwarenessModule?
+	std::optional<SelectedEnemy> m_selectedEnemy;
+	std::optional<SelectedEnemy> m_lostEnemy;
+	SelectedMiscTactics selectedTactics;
+	std::optional<SelectedNavEntity> m_selectedNavEntity;
+
+	// Put the movement subsystem at the object beginning so the relative offset is small
+	MovementSubsystem m_movementSubsystem;
+	BotAwarenessModule awarenessModule;
+
+	// Put planning module and weight config together
+	BotPlanningModule planningModule;
+	BotWeightConfig weightConfig;
+
+	BotWeaponsUsageModule weaponsUsageModule;
+
+	std::optional<BotInput> m_pendingClientThinkInput;
+
+	static constexpr float DEFAULT_YAW_SPEED = 330.0f;
+	static constexpr float DEFAULT_PITCH_SPEED = 170.0f;
+
+	static constexpr unsigned BLOCKED_TIMEOUT = 15000;
+
+	/**
+	 * {@code next[]} and {@code prev[]} links below are addressed by these indices
+	 */
+	enum { SQUAD_LINKS, TMP_LINKS, TEAM_LINKS, OBJECTIVE_LINKS, AI_LINKS };
+
+	Bot *next[5] { nullptr, nullptr, nullptr, nullptr, nullptr };
+	Bot *prev[5] { nullptr, nullptr, nullptr, nullptr, nullptr };
+
+	Bot *NextInSquad() { return next[SQUAD_LINKS]; };
+	const Bot *NextInSquad() const { return next[SQUAD_LINKS]; }
+
+	Bot *NextInTmpList() { return next[TMP_LINKS]; }
+	const Bot *NextInTmpList() const { return next[TMP_LINKS]; }
+
+	Bot *NextInBotsTeam() { return next[TEAM_LINKS]; }
+	const Bot *NextInBotsTeam() const { return next[TEAM_LINKS]; }
+
+	Bot *NextInObjective() { return next[OBJECTIVE_LINKS]; }
+	const Bot *NextInObjective() const { return next[OBJECTIVE_LINKS]; }
+
+	Bot *NextInAIList() { return next[AI_LINKS]; }
+	const Bot *NextInAIList() const { return next[AI_LINKS]; }
+
+	AiObjectiveSpot *objectiveSpot { nullptr };
+
+	int64_t m_lastTouchedTeleportAt { 0 };
+	int64_t m_lastTouchedJumppadAt { 0 };
+	int64_t m_lastTouchedElevatorAt { 0 };
+
+	int64_t lastKnockbackAt { 0 };
+	int64_t lastOwnKnockbackAt { 0 };
+	int lastOwnKnockbackKick { 0 };
+	vec3_t lastKnockbackBaseDir;
+
+	int64_t lastItemSelectedAt { 0 };
+	int64_t noItemAvailableSince { 0 };
+
+	int64_t lastBlockedNavTargetReportedAt { 0 };
+
+	/**
+	 * This value should be updated at the beginning of every frame.
+	 * Making it lazy is not good for performance reasons (the result might be accessed in tight loops).
+	 */
+	bool hasOnlyGunblade { false };
 };
 
 #endif

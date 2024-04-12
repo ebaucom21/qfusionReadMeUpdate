@@ -314,8 +314,6 @@ inline bool BaseAction::GenericCheckIsActionEnabled( PredictionContext *context,
 	return false;
 }
 
-typedef PredictionContext PredictionContext;
-
 inline void BaseAction::CheckDisableOrSwitchPreconditions( PredictionContext *context, const char *methodTag ) {
 #ifdef ENABLE_MOVEMENT_ASSERTIONS
 	if( context->isCompleted ) {

@@ -7,21 +7,20 @@
 #include "../component.h"
 #include "../../../common/wswstaticvector.h"
 #include "../navigation/aasroutecache.h"
-#include "../baseai.h"
 #include "worldstate.h"
 
 class AiGoal {
 	friend class Ai;
 	friend class AiPlanner;
 protected:
-	Ai *const self;
+	Bot *const self;
 	const char *name;
 	const unsigned updatePeriod;
 	int debugColor { 0 };
 	float weight { 0.0f };
 
 public:
-	AiGoal( Ai *self_, const char *name_, unsigned updatePeriod_ )
+	AiGoal( Bot *self_, const char *name_, unsigned updatePeriod_ )
 		: self( self_ ), name( name_ ), updatePeriod( updatePeriod_ ) {}
 
 	virtual ~AiGoal() = default;
@@ -49,7 +48,7 @@ public:
 class AiActionRecord : public PoolItem {
 	friend class AiBaseAction;
 protected:
-	Ai *const self;
+	Bot *const self;
 	const char *name;
 
 #ifndef _MSC_VER
@@ -67,7 +66,7 @@ protected:
 public:
 	AiActionRecord *nextInPlan { nullptr };
 
-	AiActionRecord( PoolBase *pool_, Ai *self_, const char *name_ )
+	AiActionRecord( PoolBase *pool_, Bot *self_, const char *name_ )
 		: PoolItem( pool_ ), self( self_ ), name( name_ ) {}
 
 	virtual void Activate() {
@@ -117,7 +116,7 @@ struct PlannerNode : PoolItem {
 	// A hash of the associated world state (put here for optimal members alignment)
 	uint32_t worldStateHash { 0 };
 
-	inline PlannerNode( PoolBase *pool, Ai *self );
+	inline PlannerNode( PoolBase *pool, Bot *self );
 
 	~PlannerNode() override {
 		if( actionRecord ) {
@@ -138,7 +137,7 @@ struct PlannerNode : PoolItem {
 class AiAction {
 	friend class Ai;
 protected:
-	Ai *self;
+	Bot *self;
 	const char *name;
 
 #ifndef _MSC_VER
@@ -155,7 +154,7 @@ protected:
 
 	PlannerNode *newNodeForRecord( AiActionRecord *record, const WorldState &worldState, float cost );
 public:
-	AiAction( Ai *self_, const char *name_ )
+	AiAction( Bot *self_, const char *name_ )
 		: self( self_ ), name( name_ ) {}
 
 	virtual ~AiAction() = default;
@@ -178,7 +177,7 @@ public:
 	static constexpr unsigned MAX_ACTIONS = 36;
 
 protected:
-	Ai *const ai;
+	Bot *const ai;
 
 	AiActionRecord *planHead { nullptr };
 	AiGoal *activeGoal { nullptr };
@@ -190,7 +189,7 @@ protected:
 	static constexpr unsigned MAX_PLANNER_NODES = 384;
 	Pool<PlannerNode, MAX_PLANNER_NODES> plannerNodesPool { "PlannerNodesPool" };
 
-	explicit AiPlanner( Ai *ai_ ): ai( ai_ ) {}
+	explicit AiPlanner( Bot *ai_ ): ai( ai_ ) {}
 
 	virtual void PrepareCurrWorldState( WorldState *worldState ) = 0;
 

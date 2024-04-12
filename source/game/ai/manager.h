@@ -70,8 +70,8 @@ protected:
 
 	void FindHubAreas();
 public:
-	void LinkAi( Ai *ai );
-	void UnlinkAi( Ai *ai );
+	void LinkBot( Bot *bot );
+	void UnlinkBot( Bot *bot );
 
 	void OnBotDropped( edict_t *ent );
 

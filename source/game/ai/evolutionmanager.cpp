@@ -190,7 +190,7 @@ void DefaultBotEvolutionManager::OnBotConnected( edict_t *ent ) {
 }
 
 float DefaultBotEvolutionManager::DefaultEvolutionScore( const edict_t *ent ) const {
-	if( !ent->ai ) {
+	if( !ent->bot ) {
 		return 0.0f;
 	}
 

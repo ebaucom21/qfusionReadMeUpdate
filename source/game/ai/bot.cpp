@@ -13,14 +13,12 @@
 #endif
 
 Bot::Bot( edict_t *self_, float skillLevel_ )
-	: Ai( self_
-		, &planningModule.planner
-		, AiAasRouteCache::NewInstance( &travelFlags[0] )
-		, &m_movementSubsystem.movementState.entityPhysicsState
-		, PREFERRED_TRAVEL_FLAGS
-		, ALLOWED_TRAVEL_FLAGS
-		, skillLevel_ > 0.33f ? DEFAULT_YAW_SPEED * 1.5f : DEFAULT_YAW_SPEED
-		, skillLevel_ > 0.33f ? DEFAULT_PITCH_SPEED * 1.2f : DEFAULT_PITCH_SPEED )
+	: self( self_ )
+	, planner( &planningModule.planner )
+	, routeCache( AiAasRouteCache::NewInstance( &travelFlags[0] ) )
+	, aasWorld( AiAasWorld::instance() )
+	, entityPhysicsState( &m_movementSubsystem.movementState.entityPhysicsState )
+	, blockedTimeoutAt( level.time + BLOCKED_TIMEOUT )
 	, skillLevel( skillLevel_ )
 	, m_movementSubsystem( this )
 	, awarenessModule( this )
@@ -29,6 +27,11 @@ Bot::Bot( edict_t *self_, float skillLevel_ )
 	, weaponsUsageModule( this ) {
 	self->r.client->movestyle = GS_CLASSICBUNNY;
 	SetTag( "%s", self->r.client->netname.data() );
+	angularViewSpeed[YAW]   = skillLevel_ > 0.33f ? DEFAULT_YAW_SPEED * 1.5f : DEFAULT_YAW_SPEED;
+	angularViewSpeed[PITCH] = skillLevel_ > 0.33f ? DEFAULT_PITCH_SPEED * 1.2f : DEFAULT_PITCH_SPEED;
+	angularViewSpeed[ROLL]  = 0.0f;
+	static_assert( sizeof( attitude[0] ) == 1 && sizeof( attitude ) == MAX_EDICTS );
+	std::memset( attitude, -1, sizeof( attitude ) );
 }
 
 #ifndef _MSC_VER
@@ -86,6 +89,36 @@ int Bot::OffenseSpotId() const {
 	return -1;
 }
 
+void Bot::notifyOfNavEntitySignaledAsReached( const NavEntity *navEntity ) {
+	if( navTarget && navTarget->IsBasedOnNavEntity( navEntity ) ) {
+		ResetNavTarget();
+	}
+	if( m_selectedNavEntity && m_selectedNavEntity->navEntity == navEntity ) {
+		m_selectedNavEntity = std::nullopt;
+	}
+}
+
+void Bot::notifyOfNavEntityRemoved( const NavEntity *navEntity ) {
+	if( navTarget && navTarget->IsBasedOnNavEntity( navEntity ) ) {
+		ResetNavTarget();
+	}
+	if( m_selectedNavEntity && m_selectedNavEntity->navEntity == navEntity ) {
+		m_selectedNavEntity = std::nullopt;
+	}
+}
+
+void Bot::TouchedEntity( edict_t *ent ) {
+	if( CanHandleNavTargetTouch( ent ) ) {
+		// Clear goal area num to ensure bot will not repeatedly try to reach that area even if he has no goals.
+		// Usually it gets overwritten in this or next frame, when bot picks up next goal,
+		// but sometimes there are no other goals to pick up.
+		ResetNavTarget();
+		m_selectedNavEntity = std::nullopt;
+	} else {
+		TouchedOtherEntity( ent );
+	}
+}
+
 void Bot::TouchedOtherEntity( const edict_t *entity ) {
 	if( !entity->classname ) {
 		return;
@@ -135,7 +168,76 @@ void Bot::CheckTargetProximity() {
 		return;
 	}
 
-	invalidateNavTarget();
+	navTarget           = nullptr;
+	m_selectedNavEntity = std::nullopt;
+}
+
+bool Bot::CanHandleNavTargetTouch( const edict_t *ent ) {
+	if( !ent ) {
+		return false;
+	}
+
+	if( !navTarget ) {
+		return false;
+	}
+
+	if( !navTarget->IsBasedOnEntity( ent ) ) {
+		return false;
+	}
+
+	if( !navTarget->ShouldBeReachedAtTouch() ) {
+		return false;
+	}
+
+	lastNavTargetReachedAt = level.time;
+	return true;
+}
+
+bool Bot::TryReachNavTargetByProximity() {
+	if( !navTarget ) {
+		return false;
+	}
+
+	if( !navTarget->ShouldBeReachedAtRadius() ) {
+		return false;
+	}
+
+	if( ( navTarget->Origin() - self->s.origin ).SquaredLength() < wsw::square( navTarget->RadiusOrDefault( 40.0f ) ) ) {
+		lastNavTargetReachedAt = level.time;
+		return true;
+	}
+
+	return false;
+}
+
+void Bot::OnPain( const edict_t *enemy, float kick, int damage ) {
+	if( enemy != self ) {
+		awarenessModule.OnPain( enemy, kick, damage );
+	}
+}
+
+void Bot::OnKnockback( const edict_t *attacker, const vec3_t basedir, int kick, int dflags ) {
+	if( kick ) {
+		lastKnockbackAt = level.time;
+		VectorCopy( basedir, lastKnockbackBaseDir );
+		if( attacker == self ) {
+			lastOwnKnockbackKick = kick;
+			lastOwnKnockbackAt = level.time;
+		}
+	}
+}
+
+void Bot::OnEnemyDamaged( const edict_t *enemy, int damage ) {
+	if( enemy != self ) {
+		awarenessModule.OnEnemyDamaged( enemy, damage );
+	}
+}
+
+void Bot::OnEnemyOriginGuessed( const edict_t *enemy, unsigned millisSinceLastSeen, const float *guessedOrigin ) {
+	if( !guessedOrigin ) {
+		guessedOrigin = enemy->s.origin;
+	}
+	awarenessModule.OnEnemyOriginGuessed( enemy, millisSinceLastSeen, guessedOrigin );
 }
 
 const std::optional<SelectedNavEntity> &Bot::GetOrUpdateSelectedNavEntity() {
@@ -239,9 +341,25 @@ void Bot::Think() {
 	assert( !m_selectedEnemy || !m_selectedEnemy->ShouldInvalidate() );
 
 	// Call superclass method first
-	Ai::Think();
+	AiFrameAwareComponent::Think();
 
-	if( !IsGhosting() ) {
+	if( !G_ISGHOSTING( self ) ) {
+		// TODO: Check whether we are camping/holding a spot
+		if( !self->groundentity ) {
+			blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
+		} else if( self->groundentity->use == Use_Plat && VectorLengthSquared( self->groundentity->velocity ) > wsw::square( 1 ) ) {
+			blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
+		} else if( VectorLengthSquared( self->velocity ) > wsw::square( 30 ) ) {
+			blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
+		} else {
+			// if completely stuck somewhere
+			if( blockedTimeoutAt < level.time ) {
+				OnBlockedTimeout();
+			}
+		}
+	}
+
+	if( !G_ISGHOSTING( self ) ) {
 		// TODO: Let the weapons usage module decide?
 		if( CanChangeWeapons() ) {
 			weaponsUsageModule.Think( planningModule.CachedWorldState() );
@@ -254,9 +372,17 @@ void Bot::Frame() {
 	m_pendingClientThinkInput = std::nullopt;
 
 	// Call superclass method first
-	Ai::Frame();
+	AiFrameAwareComponent::Frame();
 
-	if( IsGhosting() ) {
+	if( !G_ISGHOSTING( self ) ) {
+		entityPhysicsState->UpdateFromEntity( self );
+	}
+
+	if( level.spawnedTimeStamp + 5000 > game.realtime || !level.canSpawnEntities ) {
+		self->nextThink = level.time + game.snapFrameTime;
+	}
+
+	if( G_ISGHOSTING( self ) ) {
 		GhostingFrame();
 	} else {
 		ActiveFrame();
@@ -522,6 +648,17 @@ float Bot::GetEffectiveOffensiveness() const {
 	return baseOffensiveness;
 }
 
+void Bot::SetAttitude( const edict_t *ent, int attitude_ ) {
+	const int entNum       = ent->s.number;
+	const auto oldAttitude = this->attitude[entNum];
+	this->attitude[entNum] = (int8_t)attitude_;
+
+	if( oldAttitude != attitude_ ) {
+		// TODO: Invalidate enemy selection
+		// OnAttitudeChanged( ent, oldAttitude, attitude_ );
+	}
+}
+
 bool Bot::TryGetExtraComputationQuota() const {
 	return MillisInBlockedState() < 100 && AiManager::Instance()->TryGetExpensiveComputationQuota( this );
 }
@@ -550,4 +687,112 @@ void Bot::PreFrame() {
 			break;
 		}
 	}
+}
+
+void Bot::SetFrameAffinity( unsigned modulo, unsigned offset ) {
+	AiFrameAwareComponent::SetFrameAffinity( modulo, offset );
+	planningModule.SetFrameAffinity( modulo, offset );
+	awarenessModule.SetFrameAffinity( modulo, offset );
+}
+
+float Bot::GetChangedAngle( float oldAngle, float desiredAngle, unsigned frameTime,
+						   float angularSpeedMultiplier, int angleIndex ) const {
+	float maxAngularMove = angularSpeedMultiplier * angularViewSpeed[angleIndex] * ( 1e-3f * frameTime );
+	float angularMove = AngleNormalize180( desiredAngle - oldAngle );
+	if( angularMove < -maxAngularMove ) {
+		angularMove = -maxAngularMove;
+	} else if( angularMove > maxAngularMove ) {
+		angularMove = maxAngularMove;
+	}
+
+	return AngleNormalize180( oldAngle + angularMove );
+}
+
+Vec3 Bot::GetNewViewAngles( const vec3_t oldAngles, const Vec3 &desiredDirection,
+						    unsigned frameTime, float angularSpeedMultiplier ) const {
+	vec3_t newAngles, desiredAngles;
+	VecToAngles( desiredDirection.Data(), desiredAngles );
+	assert( desiredAngles[ROLL] == 0.0f );
+
+	for( auto angleNum: { YAW, PITCH } ) {
+		// Normalize180 angles so they can be compared
+		newAngles[angleNum]     = AngleNormalize180( oldAngles[angleNum] );
+		desiredAngles[angleNum] = AngleNormalize180( desiredAngles[angleNum] );
+		if( newAngles[angleNum] != desiredAngles[angleNum] ) {
+			newAngles[angleNum] = GetChangedAngle( newAngles[angleNum], desiredAngles[angleNum],
+												   frameTime, angularSpeedMultiplier, angleNum );
+		}
+	}
+
+	newAngles[ROLL] = 0.0f;
+	return Vec3( newAngles );
+}
+
+int Bot::CheckTravelTimeMillis( const Vec3& from, const Vec3 &to, bool allowUnreachable ) {
+	// We try to use the same checks the TacticalSpotsRegistry performs to find spots.
+	// If a spot is not reachable, it is an bug,
+	// because a reachability must have been checked by the spots registry first in a few preceeding calls.
+
+	int fromAreaNum;
+	if( ( from - self->s.origin ).SquaredLength() < wsw::square( 4.0f ) ) {
+		fromAreaNum = aasWorld->findAreaNum( self );
+	} else {
+		fromAreaNum = aasWorld->findAreaNum( from );
+	}
+
+	if( !fromAreaNum ) {
+		if( allowUnreachable ) {
+			return 0;
+		}
+
+		FailWith( "CheckTravelTimeMillis(): Can't find `from` AAS area" );
+	}
+
+	const int toAreaNum = aasWorld->findAreaNum( to.Data() );
+	if( !toAreaNum ) {
+		if( allowUnreachable ) {
+			return 0;
+		}
+
+		FailWith( "CheckTravelTimeMillis(): Can't find `to` AAS area" );
+	}
+
+	if( int aasTravelTime = routeCache->PreferredRouteToGoalArea( fromAreaNum, toAreaNum ) ) {
+		return 10 * aasTravelTime;
+	}
+
+	if( allowUnreachable ) {
+		return 0;
+	}
+
+	FailWith( "CheckTravelTimeMillis(): Can't find travel time %d->%d\n", fromAreaNum, toAreaNum );
+}
+
+bool Bot::IsDefinitelyNotAFeasibleEnemy( const edict_t *ent ) const {
+	if( !ent->r.inuse ) {
+		return true;
+	}
+	// Skip non-clients that do not have positive intrinsic entity weight
+	if( !ent->r.client && ent->aiIntrinsicEnemyWeight <= 0.0f ) {
+		return true;
+	}
+	// Skip ghosting entities
+	if( G_ISGHOSTING( ent ) ) {
+		return true;
+	}
+	// Skip chatting or notarget entities except carriers
+	if( ( ent->flags & ( FL_NOTARGET | FL_BUSY ) ) && !( ent->s.effects & EF_CARRIER ) ) {
+		return true;
+	}
+	// Skip teammates. Note that team overrides attitude
+	if( GS_TeamBasedGametype() && ent->s.team == self->s.team ) {
+		return true;
+	}
+	// Skip entities that has a non-negative bot attitude.
+	// Note that by default all entities have negative attitude.
+	if( attitude[ENTNUM( ent )] >= 0 ) {
+		return true;
+	}
+
+	return self == ent;
 }

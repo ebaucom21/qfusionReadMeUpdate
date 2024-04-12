@@ -1804,7 +1804,7 @@ void Client::runPMove( pmove_t *pm ) {
 	pm->cmd = ucmd;
 
 	// A grand hack to disable occasional ladder usage for bots/AI beings without intrusive changes to bot code
-	if( getEntity()->ai ) {
+	if( getEntity()->bot ) {
 		pm->skipLadders = true;
 	}
 

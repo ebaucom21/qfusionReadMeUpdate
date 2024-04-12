@@ -9,7 +9,7 @@ inline float DamageToKill( float health, float armor ) {
 	return DamageToKill( health, armor, g_armor_protection->value, g_armor_degradation->value );
 }
 
-inline PlannerNode::PlannerNode( PoolBase *pool, Ai *self ) : PoolItem( pool ) {}
+inline PlannerNode::PlannerNode( PoolBase *pool, Bot *self ) : PoolItem( pool ) {}
 
 inline const BotWeightConfig &BotAction::WeightConfig() const {
 	return Self()->WeightConfig();

@@ -170,7 +170,7 @@ bool AiSquad::IsSupporter( const edict_t *bot ) const {
 
 	for( Bot *otherBot = botsListHead; otherBot; otherBot = otherBot->NextInSquad() ) {
 		if( otherBot->Self() != bot ) {
-			if( !otherBot->IsGhosting() && IsCarrier( otherBot->Self() ) ) {
+			if( !G_ISGHOSTING( otherBot->Self() ) && IsCarrier( otherBot->Self() ) ) {
 				return !IsCarrier( bot );
 			}
 		}
@@ -197,7 +197,7 @@ void AiSquad::Think() {
 	}
 
 	for( Bot *bot = botsListHead; bot; bot = bot->NextInSquad() ) {
-		if( bot->IsGhosting() ) {
+		if( G_ISGHOSTING( bot->Self() ) ) {
 			Invalidate();
 			return;
 		}
@@ -1201,12 +1201,12 @@ void AiSquadBasedTeam::SetupSquads() {
 	// This will never be met in realistic use cases (the number of bots is limited and teams are almost always even).
 	wsw::StaticVector<CandidatePair, 64> candidatePairs;
 	for( Bot *bot = orphanBotsHead; bot; bot = bot->NextInSquad() ) {
-		if( bot->IsGhosting() ) {
+		if( G_ISGHOSTING( bot->Self() ) ) {
 			continue;
 		}
 		const int botNavTargetAreaNum = bot->NavTargetAasAreaNum();
 		for( Bot *otherBot = bot->NextInSquad(); otherBot; otherBot = otherBot->NextInSquad() ) {
-			if( otherBot->IsGhosting() ) {
+			if( G_ISGHOSTING( otherBot->Self() ) ) {
 				continue;
 			}
 			if( DistanceSquared( bot->Origin(), otherBot->Origin() ) > CONNECTIVITY_PROXIMITY * CONNECTIVITY_PROXIMITY ) {
@@ -1395,7 +1395,7 @@ void AiSquadBasedTeam::PlayerAssistanceTracker::UpdateInfluence() {
 		const auto playerEntNum = playerIndices[i];
 		edict_t *const __restrict ent = gameEdicts + playerEntNum;
 		// Skip other AI beings
-		if( ent->ai ) {
+		if( ent->bot ) {
 			continue;
 		}
 		if( G_ISGHOSTING( ent ) ) {

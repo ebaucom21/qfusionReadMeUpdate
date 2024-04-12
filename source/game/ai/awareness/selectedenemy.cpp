@@ -357,7 +357,12 @@ bool SelectedEnemy::TestAboutToHitLGorPG( int64_t levelTime ) const {
 
 	// Check whether this PG can be matched against LG
 	const auto *ent = m_enemy->m_ent;
-	if( !ent->ai ) {
+	if( const Bot *thatBot = ent->bot ) {
+		// Raise the skip distance threshold for hard bots
+		if( Q_Sqrt( squareDistance ) > 384.0f + 512.0f * thatBot->Skill() ) {
+			return false;
+		}
+	} else {
 		// Check whether PG is usable at this ping
 		const auto ping = -(float)ent->r.client->timeDelta;
 		// Make sure we got timeDelta sign right
@@ -370,11 +375,6 @@ bool SelectedEnemy::TestAboutToHitLGorPG( int64_t levelTime ) const {
 		// Skip if the client is fairly far to adjust PG tracking for this ping.
 		// Lower the skip distance threshold for high-ping clients.
 		if( Q_Sqrt( squareDistance ) > 768.0f - 384.0f * pingFactor ) {
-			return false;
-		}
-	} else if( const Bot *thatBot = ent->bot ) {
-		// Raise the skip distance threshold for hard bots
-		if( Q_Sqrt( squareDistance ) > 384.0f + 512.0f * thatBot->Skill() ) {
 			return false;
 		}
 	}

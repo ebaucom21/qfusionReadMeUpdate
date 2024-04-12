@@ -2,7 +2,6 @@
 #define WSW_a69d3211_8dbc_4f4e_8ea9_55a9636ced1c_H
 
 #include <stdarg.h>
-#include "../baseai.h"
 #include "planner.h"
 #include "../awareness/enemiestracker.h"
 #include "itemsselector.h"
