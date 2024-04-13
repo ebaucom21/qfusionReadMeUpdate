@@ -73,7 +73,8 @@ Item {
                             model: 2
                             delegate: SlantedButton {
                                 text: booleanOptionTexts[index]
-                                bodySlantDegrees: optionBodySlantDegrees
+                                leftBodyPartSlantDegrees: optionBodySlantDegrees
+                                rightBodyPartSlantDegrees: optionBodySlantDegrees
                                 textSlantDegrees: 0.0
                                 extraWidthOnMouseOver: optionExtraWidthOnMouseOver
                                 extraHeightOnMouseOver: optionExtraHeightOnMouseOver
@@ -117,7 +118,8 @@ Item {
                                     delegate: SlantedButton {
                                         readonly property int flatIndex: rowIndex * maxOptionsPerRow + index
                                         Layout.preferredWidth: optionWidth
-                                        bodySlantDegrees: optionBodySlantDegrees
+                                        leftBodyPartSlantDegrees: optionBodySlantDegrees
+                                        rightBodyPartSlantDegrees: optionBodySlantDegrees
                                         textSlantDegrees: 0.0
                                         extraWidthOnMouseOver: optionExtraWidthOnMouseOver
                                         extraHeightOnMouseOver: optionExtraHeightOnMouseOver

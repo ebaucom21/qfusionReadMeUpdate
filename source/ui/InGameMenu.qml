@@ -388,7 +388,8 @@ Rectangle {
                         Layout.preferredWidth: 144
                         displayIconPlaceholder: false
                         labelHorizontalCenterOffset: -10
-                        bodySlantDegrees: -9
+                        leftBodyPartSlantDegrees: -9
+                        rightBodyPartSlantDegrees: -9
                         textSlantDegrees: -4
                         Material.background: Qt.darker(UI.hudCommonDataModel.alphaColor, 2)
                         Material.accent: Qt.darker(UI.hudCommonDataModel.alphaColor, 1.2)
@@ -400,11 +401,13 @@ Rectangle {
                             UI.ui.joinAlpha()
                         }
                     }
+                    // TODO: Check why spacing visually differs
                     SlantedButton {
                         Layout.preferredWidth: 144 + 16
                         displayIconPlaceholder: false
                         labelHorizontalCenterOffset: 0
-                        bodySlantDegrees: 0
+                        leftBodyPartSlantDegrees: -8
+                        rightBodyPartSlantDegrees: +9
                         textSlantDegrees: 0
                         Layout.alignment: Qt.AlignHCenter
                         text: "Any team"
@@ -419,7 +422,8 @@ Rectangle {
                         Layout.preferredWidth: 144
                         displayIconPlaceholder: false
                         labelHorizontalCenterOffset: 0
-                        bodySlantDegrees: +10
+                        leftBodyPartSlantDegrees: +10
+                        rightBodyPartSlantDegrees: +10
                         textSlantDegrees: +5
                         Material.background: Qt.darker(UI.hudCommonDataModel.betaColor, 2)
                         Material.accent: Qt.darker(UI.hudCommonDataModel.betaColor, 1.2)

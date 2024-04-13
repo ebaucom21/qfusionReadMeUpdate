@@ -31,7 +31,8 @@ Item {
     property real labelHorizontalCenterOffset: -12
 
     property real placeholderSlantDegrees: 19.0
-    property real bodySlantDegrees: 20.0
+    property real leftBodyPartSlantDegrees: 20.0
+    property real rightBodyPartSlantDegrees: 20.0
     property real textSlantDegrees: 15.0
 
     property real cornerRadius: 3
@@ -47,8 +48,6 @@ Item {
 
     readonly property var translationMatrix:
         UI.ui.makeTranslateMatrix(highlightAnim.running ? highlightAnimAmplitude * highlightAnim.bodyShiftFrac : 0.0, 0.0)
-    readonly property var fullHeightTransformMatrix:
-        UI.ui.makeSkewXMatrix(height, bodySlantDegrees).times(translationMatrix)
 
     states: [
         State {
@@ -108,41 +107,25 @@ Item {
 
     Keys.onEnterPressed: root.clicked()
 
-    // Reduces opacity of the dropped shadow
-    Item {
-        anchors.fill: parent
-        opacity: 0.67 * Math.min(body.width / parent.width, 1.0)
-        z: -1
-
-        // Acts as a shadow caster.
-        // Putting content inside it is discouraged as antialiasing does not seem to be working in this case
-        Item {
-            anchors.centerIn: parent
-            height: parent.height
-            width: body.width
-
-            layer.enabled: root.enabled
-            layer.effect: ElevationEffect { elevation: 16 }
-
-            transform: Matrix4x4 { matrix: fullHeightTransformMatrix }
-        }
-    }
-
-    Rectangle {
+    SlantedBackground {
         id: body
         anchors.centerIn: parent
         width: (mouseArea.containsMouse || highlightAnim.highlightActive) && root.extraWidthOnMouseOver ? parent.width + root.extraWidthOnMouseOver : parent.width
         height: (mouseArea.containsMouse || highlightAnim.highlightActive) && root.extraHeightOnMouseOver ? parent.height + root.extraHeightOnMouseOver : parent.height
         radius: root.cornerRadius
+        leftPartSkewDegrees: root.leftBodyPartSlantDegrees
+        rightPartSkewDegrees: root.rightBodyPartSlantDegrees
+        shadowOpacity: Math.min(1.0, width / parent.width)
+        enabled: root.enabled
 
-        color: !root.enabled ? "darkgrey" : (hasActiveHighlight ? Material.accentColor : Qt.lighter(Material.backgroundColor, 1.35))
+        transform: Matrix4x4 { matrix: translationMatrix }
+
+        fillColor: !root.enabled ? "darkgrey" : (hasActiveHighlight ? Material.accentColor : Qt.lighter(Material.backgroundColor, 1.35))
         opacity: !root.enabled ? 0.2 : 1.0
-
-        transform: Matrix4x4 { matrix: fullHeightTransformMatrix }
 
         Behavior on width { SmoothedAnimation { duration: 333 } }
         Behavior on height { SmoothedAnimation { duration: 333 } }
-        Behavior on color { ColorAnimation { duration: highlightAnim.colorAnimDuration } }
+        Behavior on fillColor { ColorAnimation { duration: highlightAnim.colorAnimDuration } }
     }
 
     Component {

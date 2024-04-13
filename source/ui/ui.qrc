@@ -104,6 +104,8 @@
         <file>SettingsRow.qml</file>
         <file>SimpleVideoDecoration.qml</file>
         <file>SlantedButton.qml</file>
+        <file>SlantedBackground.qml</file>
+        <file>SlantedShape.qml</file>
         <file>SoundSettings.qml</file>
         <file>TeamsSettings.qml</file>
         <file>TeamSettingsTeamColumn.qml</file>
