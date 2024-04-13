@@ -536,9 +536,6 @@ public:
 	uint64_t playersTeamMask;
 	// See locations remark
 	uint64_t playersFlagsMask;
-	// Bit positions correspond to a player index.
-	// This is supposed to be set individually prior to transmission to a specific pov.
-	uint32_t povChaseMask;
 	int alphaScore;
 	int betaScore;
 	int scores[kMaxPlayers];
@@ -667,12 +664,6 @@ public:
 	[[nodiscard]]
 	bool isPlayerGhosting( unsigned playerIndex ) const {
 		return testPlayerFlagBit( playerIndex, kFlagBitGhosting );
-	}
-
-	[[nodiscard]]
-	bool isClientMyChaser( unsigned playerNum ) const {
-		assert( playerNum < (unsigned)MAX_CLIENTS );
-		return povChaseMask & ( 1u << playerNum );
 	}
 
 	[[nodiscard]]

@@ -114,14 +114,12 @@ public:
 	// Can't declare a plain array due to the type being noncopyable and we don't want to use a dynamic allocation.
 	StaticVector<ScoreboardTeamModel, 4> m_teamModelsHolder;
 	ScoreboardSpecsModelData m_specsModel { this, &m_playerIndicesForLists[TEAM_SPECTATOR] };
-	ScoreboardSpecsModelData m_chasersModel { this, &m_chasers };
 	ScoreboardSpecsModelData m_challengersModel { this, &m_challengers };
 
 	ScoreboardAccuracyData m_accuracyModel;
 
 	Layout m_layout { SideBySide };
 	TableStyle m_tableStyle { Checkerboard };
-	bool m_hasChasers { false };
 
 	VarModificationTracker m_layoutModificationTracker;
 	VarModificationTracker m_tableStyleModificationTracker;
@@ -129,7 +127,6 @@ public:
 	void checkVars();
 
 	wsw::StaticVector<unsigned, MAX_CLIENTS> m_playerIndicesForLists[5];
-	wsw::StaticVector<unsigned, MAX_CLIENTS> m_chasers;
 	wsw::StaticVector<unsigned, MAX_CLIENTS> m_challengers;
 
 	using PlayerUpdates = Scoreboard::PlayerUpdates;
@@ -180,13 +177,8 @@ public:
 	Q_SIGNAL void tableStyleChanged( TableStyle tableStyle );
 	Q_PROPERTY( TableStyle tableStyle MEMBER m_tableStyle NOTIFY tableStyleChanged );
 
-	Q_SIGNAL void hasChasersChanged( bool hasChasers );
-	Q_PROPERTY( bool hasChasers MEMBER m_hasChasers NOTIFY hasChasersChanged );
-
 	Q_SIGNAL void specsModelChanged();
 	Q_PROPERTY( QJsonArray specsModel READ getSpecsModel NOTIFY specsModelChanged );
-	Q_SIGNAL void chasersModelChanged();
-	Q_PROPERTY( QJsonArray chasersModel READ getChasersModel NOTIFY chasersModelChanged );
 	Q_SIGNAL void challengersModelChanged();
 	Q_PROPERTY( QJsonArray challengersModel READ getChallengersModel NOTIFY challengersModelChanged );
 
@@ -195,8 +187,6 @@ public:
 
 	[[nodiscard]]
 	auto getSpecsModel() -> QJsonArray { return m_specsModel.asQmlArray(); }
-	[[nodiscard]]
-	auto getChasersModel() -> QJsonArray { return m_chasersModel.asQmlArray(); }
 	[[nodiscard]]
 	auto getChallengersModel() -> QJsonArray { return m_challengersModel.asQmlArray(); }
 

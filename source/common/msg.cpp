@@ -1250,10 +1250,6 @@ static const msg_field_t raw_scoreboard_msg_fields[] = {
 		64, 1, WIRE_BASE128
 	},
 	{
-		offsetof( ReplicatedScoreboardData, povChaseMask ),
-		32, 1, WIRE_BASE128
-	},
-	{
 		offsetof( ReplicatedScoreboardData, alphaScore ),
 		32, 1, WIRE_BASE128
 	},

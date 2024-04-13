@@ -110,16 +110,6 @@ Rectangle {
             title: "Spectators"
         }
 
-        ScoreboardSpecsPane {
-            playersPerRow: 3
-            playersInFirstRow: 3
-            visible: UI.scoreboard.hasChasers && UI.scoreboard.chasersModel.length
-            width: root.tableWidth - root.baseCellWidth
-            height: implicitHeight
-            model: UI.scoreboard.chasersModel
-            title: "Chasers"
-        }
-
         ScoreboardStatsPane {
             id: statsPane
             width: root.tableWidth - root.baseCellWidth

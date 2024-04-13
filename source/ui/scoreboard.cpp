@@ -255,10 +255,6 @@ auto Scoreboard::checkAndGetUpdates( const RawData &currData, PlayerUpdatesList 
 	unsigned updatesMask = 0x0;
 	bool isTeamUpdateNeeded[4] { false, false, false, false };
 
-	if( currData.povChaseMask != m_oldRawData.povChaseMask ) {
-		updatesMask |= (unsigned)UpdateFlags::Chasers;
-	}
-
 	// This element-wise comparison is 100% correct for this field, as it's padded by zeroes
 	if( std::memcmp( currData.challengersQueue, m_oldRawData.challengersQueue, std::size( currData.challengersQueue ) ) != 0 ) {
 		updatesMask |= (unsigned)UpdateFlags::Challengers;
@@ -274,9 +270,6 @@ auto Scoreboard::checkAndGetUpdates( const RawData &currData, PlayerUpdatesList 
 			const unsigned playerNum = currData.getPlayerNum( playerIndex );
 			static_assert( kMaxPlayers <= sizeof( unsigned ) * 8 );
 			assert( playerNum >= 0 && playerNum < sizeof( unsigned ) * 8 );
-			if( currData.povChaseMask & ( 1u << playerNum ) ) {
-				updatesMask |= (unsigned)UpdateFlags::Chasers;
-			}
 			if( !( updatesMask & (unsigned)UpdateFlags::Challengers ) ) {
 				const uint8_t *const queueBegin = std::begin( currData.challengersQueue );
 				const uint8_t *const queueEnd   = std::end( currData.challengersQueue );

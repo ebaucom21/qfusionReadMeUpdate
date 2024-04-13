@@ -130,7 +130,6 @@ BoolConfigVar v_showAwards( "cg_showAwards"_asView, { .byDefault = true, .flags 
 BoolConfigVar v_showFragsFeed( "cg_showFragsFeed"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
 BoolConfigVar v_showMessageFeed( "cg_showMessageFeed"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
 BoolConfigVar v_showCaptureAreas( "cg_showCaptureAreas"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
-BoolConfigVar v_showChasers( "cg_showChasers"_asView, { .byDefault = true, .flags = CVAR_ARCHIVE } );
 
 // TODO: Default width values are way too large (even if they don't visually look like that), clip the image
 FloatConfigVar v_ebBeamWidth( "cg_ebBeamWidth"_asView, { .byDefault = 48.0f, .flags = CVAR_ARCHIVE } );

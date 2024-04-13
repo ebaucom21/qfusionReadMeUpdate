@@ -127,10 +127,6 @@ public:
 	}
 
 	[[nodiscard]]
-	bool isClientMyChaser( unsigned playerNum ) const {
-		return m_oldRawData.isClientMyChaser( playerNum );
-	}
-	[[nodiscard]]
 	auto getClientNumOfChallenger( unsigned indexInQueue ) const -> std::optional<unsigned> {
 		return m_oldRawData.getClientNumOfChallenger( indexInQueue );
 	}
@@ -184,8 +180,7 @@ public:
 		Players      = 1 << 0,  // Properties of players were updated
 		Spectators   = 1 << 1,  // Properties of spectators were updated
 		Teams        = 1 << 2,  // Teams (lists of players in team) were updated
-		Chasers      = 1 << 3,  // Chasers or properties of chasers were updated
-		Challengers  = 1 << 4,  // Challengers or properties of challengers were updated
+		Challengers  = 1 << 3,  // Challengers or properties of challengers were updated
 	};
 
 	[[nodiscard]]

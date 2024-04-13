@@ -83,7 +83,4 @@ wsw::StringView CG_PlayerClan( unsigned playerClan );
 bool CG_UsesTiledView();
 void CG_SwitchToPlayerNum( unsigned playerNum );
 
-class BoolConfigVar;
-extern BoolConfigVar v_showChasers;
-
 #endif

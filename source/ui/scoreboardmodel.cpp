@@ -298,12 +298,6 @@ void ScoreboardModelProxy::checkVars() {
 			Q_EMIT tableStyleChanged( m_tableStyle );
 		}
 	}
-
-	const auto oldHasChasers = m_hasChasers;
-	m_hasChasers = v_showChasers.get() && CG_ActivePovOfViewState( CG_GetOurClientViewStateIndex() ) != std::nullopt;
-	if( m_hasChasers != oldHasChasers ) {
-		Q_EMIT hasChasersChanged( m_hasChasers );
-	}
 }
 
 void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData, const AccuracyRows &accuracyRows ) {
@@ -347,10 +341,9 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData, con
 		}
 	}
 
-	const bool mustResetChasers     = (unsigned)*maybeUpdateFlags & (unsigned)Scoreboard::UpdateFlags::Chasers;
 	const bool mustResetChallengers = (unsigned)*maybeUpdateFlags & (unsigned)Scoreboard::UpdateFlags::Challengers;
 	const bool mustResetSpectators  = (unsigned)*maybeUpdateFlags & (unsigned)Scoreboard::UpdateFlags::Spectators;
-	if( mustResetChasers | mustResetChallengers ) {
+	if( mustResetChallengers ) {
 		alignas( 16 ) unsigned clientIndices[kMaxPlayers];
 		std::fill( std::begin( clientIndices ), std::end( clientIndices ), ~0u );
 		for( unsigned playerIndex = 0; playerIndex < kMaxPlayers; ++playerIndex ) {
@@ -358,15 +351,6 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData, con
 				const unsigned clientNum = m_scoreboard.getPlayerNum( playerIndex );
 				clientIndices[clientNum] = playerIndex;
 			}
-		}
-		if( mustResetChasers ) {
-			m_chasers.clear();
-			for( unsigned clientNum = 0; clientNum < MAX_CLIENTS; ++clientNum ) {
-				if( m_scoreboard.isClientMyChaser( clientNum ) ) {
-					m_chasers.push_back( clientIndices[clientNum] );
-				}
-			}
-			m_chasersModel.markAsUpdated();
 		}
 		if( mustResetChallengers ) {
 			m_challengers.clear();
@@ -415,7 +399,7 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData, con
 		if( m_scoreboard.isPlayerConnected( playerIndex ) ) {
 			const auto teamNum = (int)m_scoreboard.getPlayerTeam( playerIndex );
 			if( !wasTeamReset[teamNum] ) {
-				// Spectators use the simplified model along with chasers/challengers
+				// Spectators use the simplified model along with challengers
 				if( teamNum == TEAM_SPECTATOR ) {
 					m_specsModel.markAsUpdated();
 				} else {
@@ -448,9 +432,6 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData, con
 
 	if( m_specsModel.isMarkedAsUpdated() ) {
 		Q_EMIT specsModelChanged();
-	}
-	if( m_chasersModel.isMarkedAsUpdated() ) {
-		Q_EMIT chasersModelChanged();
 	}
 	if( m_challengersModel.isMarkedAsUpdated() ) {
 		Q_EMIT challengersModelChanged();

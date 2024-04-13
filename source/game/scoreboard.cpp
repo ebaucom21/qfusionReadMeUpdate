@@ -449,33 +449,12 @@ auto Scoreboard::getRawReplicatedDataForClient( unsigned clientNum ) -> const Re
 }
 
 auto Scoreboard::getRawReplicatedDataForDemo() -> const ReplicatedScoreboardData * {
-	m_replicatedData.povChaseMask = 0;
 	return &m_replicatedData;
 }
 
 [[nodiscard]]
-auto Scoreboard::preparePlayerSpecificData( unsigned index, unsigned clientNum ) -> const ReplicatedScoreboardData * {
-	m_replicatedData.povChaseMask = 0;
-	if( !m_replicatedData.isPlayerConnected( index ) ) {
-		return &m_replicatedData;
-	}
-
-	int chasePovEntNum = (int)clientNum + 1;
-	if( m_replicatedData.getPlayerTeam( index ) == TEAM_SPECTATOR ) {
-		const edict_t *ent = game.edicts + clientNum + 1;
-		if( !ent->r.client->chase.active ) {
-			return &m_replicatedData;
-		}
-		chasePovEntNum = ent->r.client->chase.target;
-	}
-
-	for( const edict_t *ent = game.edicts + 1; ent->s.number <= gs.maxclients; ent++ ) {
-		if( ent->r.client->chase.active && ent->r.client->chase.target == chasePovEntNum ) {
-			assert( (unsigned)( ent->s.number - 1 ) < (unsigned)MAX_CLIENTS );
-			m_replicatedData.povChaseMask |= 1u << ( ent->s.number - 1 );
-		}
-	}
-
+auto Scoreboard::preparePlayerSpecificData( unsigned, unsigned ) -> const ReplicatedScoreboardData * {
+	// It's no longer actually modified. This could change in future.
 	return &m_replicatedData;
 }
 
