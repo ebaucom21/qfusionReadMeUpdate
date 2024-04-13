@@ -115,17 +115,12 @@ AiObjectiveBasedTeam::AiObjectiveBasedTeam( int team_ )
 	, offenseSpots( "OffenseSpot" ) {}
 
 void AiObjectiveBasedTeam::ObjectiveSpotImpl::ReleaseHelpers() {
-	auto *registry = NavEntitiesRegistry::Instance();
-	for( auto &ent: helperEnts ) {
-		if( !ent ) {
-			continue;
+	for( edict_t *&ent: helperEnts ) {
+		if( ent ) {
+			AI_RemoveNavEntity( ent );
+			G_FreeEdict( ent );
+			ent = nullptr;
 		}
-		auto *navEnt = registry->NavEntityForEntity( ent );
-		if( navEnt ) {
-			registry->RemoveNavEntity( navEnt );
-		}
-		G_FreeEdict( ent );
-		ent = nullptr;
 	}
 }
 
