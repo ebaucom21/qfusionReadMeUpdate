@@ -95,7 +95,8 @@ Item {
 
                 Label {
                     id: descLabel
-                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.WordWrap
                     maximumLineCount: 4
                     elide: Qt.ElideRight

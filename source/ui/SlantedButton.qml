@@ -22,18 +22,19 @@ Item {
     property bool highlighted
     property bool highlightedWithAnim
     property bool checked
-    property bool displayIconPlaceholder: true
+    property bool displayIconPlaceholder: false
     property bool highlightOnActiveFocus: true
+    property alias font: label.font
 
     property real iconWidthAndHeight: 20
     property real iconOrPlaceholderLeftMargin: 20
     property real labelLeftMargin: 12
     property real labelHorizontalCenterOffset: -12
 
-    property real placeholderSlantDegrees: 19.0
-    property real leftBodyPartSlantDegrees: 20.0
-    property real rightBodyPartSlantDegrees: 20.0
-    property real textSlantDegrees: 15.0
+    property real placeholderSlantDegrees: UI.buttonBodySlantDegrees - 1.0
+    property real leftBodyPartSlantDegrees: UI.buttonBodySlantDegrees
+    property real rightBodyPartSlantDegrees: UI.buttonBodySlantDegrees
+    property real textSlantDegrees: UI.buttonTextSlantDegrees
 
     property real cornerRadius: 3
 
@@ -186,10 +187,8 @@ Item {
         text: root.text
         font.pointSize: 12
         font.weight: Font.ExtraBold
-        font.letterSpacing: mouseArea.containsMouse ? 2.25 : 1.25
+        font.letterSpacing: 1.5
         font.capitalization: Font.AllUppercase
-
-        Behavior on font.letterSpacing { SmoothedAnimation { duration: 333 } }
 
         transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(label.height, textSlantDegrees).times(translationMatrix) }
         opacity: root.enabled ? 1.0 : 0.5

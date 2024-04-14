@@ -243,37 +243,25 @@ Item {
             }
 
             RowLayout {
-                Layout.preferredWidth: 0.75 * root.width
-                Layout.maximumWidth: 0.75 * root.width
                 Layout.alignment: Qt.AlignHCenter
-                Button {
-                    flat: true
+                spacing: UI.minAcceptRejectSpacing
+                SlantedLeftSecondaryButton {
                     text: "back"
-                    Layout.preferredWidth: 96
-                    Material.theme: Material.Dark
                     onClicked: stackView.replace(voteSelectionComponent)
                 }
-                Item {
-                    Layout.fillWidth: true
-                }
-                Button {
+                SlantedRightPrimaryButton {
                     visible: UI.ui.isOperator && (selectedVoteFlags & CallvotesModel.Operator)
                     enabled: argsSelectionLoader.item && argsSelectionLoader.item.canProceed
                     highlighted: enabled
                     text: "opcall"
-                    Layout.preferredWidth: 108
-                    Material.theme: Material.Dark
-                    Material.accent: Qt.lighter(root.Material.background, 1.35)
                     onClicked: startVote(argsSelectionLoader.item.chosenValue, true)
                 }
-                Button {
+                SlantedRightPrimaryButton {
                     id: voteButton
                     visible: selectedVoteFlags & CallvotesModel.Regular
                     enabled: argsSelectionLoader.item && argsSelectionLoader.item.canProceed
                     highlighted: enabled
                     text: "vote"
-                    Layout.preferredWidth: 108
-                    Material.theme: enabled ? Material.light : Material.Dark
                     onClicked: startVote(argsSelectionLoader.item.chosenValue, false)
                 }
             }

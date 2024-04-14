@@ -386,14 +386,12 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 32
-        width: 0.67 * parent.width
+        width: UI.acceptRejectRowWidthFrac * parent.width
         height: 64
 
-        Button {
+        SlantedLeftSecondaryButton {
             id: backButton
-            flat: true
             text: "back"
-            Layout.preferredWidth: 120
             visible: stackView.currentItem.canGoBack
             onClicked: stackView.currentItem.handleBackRequest()
         }
@@ -405,11 +403,10 @@ Item {
 
         Item { Layout.fillWidth: true }
 
-        Button {
+        SlantedRightPrimaryButton {
             id: nextButton
             highlighted: true
             text: stackView.currComponent === savePageComponent ? "save" : "next"
-            Layout.preferredWidth: 120
             visible: stackView.currentItem.canGoNext
             onClicked: stackView.currentItem.handleNextRequest()
         }

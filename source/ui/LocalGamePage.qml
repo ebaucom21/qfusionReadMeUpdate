@@ -310,13 +310,11 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 32
-        width: 0.67 * parent.width
+        width: UI.acceptRejectRowWidthFrac * parent.width
 
-        Button {
+        SlantedLeftSecondaryButton {
             id: prevButton
-            flat: true
             text: "back"
-            Layout.preferredWidth: 120
             visible: swipeView.currentItem.canGoPrev
             onClicked: swipeView.currentIndex = swipeView.currentIndex - 1
         }
@@ -328,11 +326,10 @@ Item {
 
         Item { Layout.fillWidth: true }
 
-        Button {
+        SlantedRightPrimaryButton {
             id: nextButton
             highlighted: true
             text: swipeView.currentIndex === 2 ? "start" : "next"
-            Layout.preferredWidth: 120
             visible: swipeView.currentItem.canGoNext
             onClicked: {
                 if (swipeView.currentIndex !== 2) {

@@ -159,11 +159,15 @@ Item {
                 horizontalAlignment: Qt.AlignHCenter
                 text: "No servers found"
             }
-            Button {
-                Layout.preferredWidth: 144
+            SlantedButton {
+                Layout.preferredWidth: UI.neutralCentralButtonWidth
                 Layout.alignment: Qt.AlignHCenter
                 highlighted: true
                 text: "Play offline"
+                leftBodyPartSlantDegrees: -0.5 * UI.buttonBodySlantDegrees
+                rightBodyPartSlantDegrees: 0.5 * UI.buttonBodySlantDegrees
+                textSlantDegrees: 0
+                labelHorizontalCenterOffset: 0
                 // TODO: This should be less hacky
                 onClicked: primaryMenu.activePageTag = primaryMenu.pageLocalGame
             }

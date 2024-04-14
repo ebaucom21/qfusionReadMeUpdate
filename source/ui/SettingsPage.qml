@@ -96,28 +96,26 @@ Item {
                 color: UI.ui.colorWithAlpha(Qt.darker(Material.background, 1.25), 0.67)
             }
 
-            Button {
+            SlantedLeftSecondaryButton {
                 anchors {
                     verticalCenter: parent.verticalCenter
                     right: parent.horizontalCenter
-                    rightMargin: 8
+                    rightMargin: 0.5 * UI.minAcceptRejectSpacing
                 }
                 text: "Revert"
-                flat: true
-                width: UI.ui.popupButtonWidth
+                width: implicitWidth
                 onClicked: UI.ui.rollbackPendingCVarChanges()
             }
 
-            Button {
+            SlantedRightPrimaryButton {
+                highlighted: true
                 anchors {
                     verticalCenter: parent.verticalCenter
                     left: parent.horizontalCenter
-                    leftMargin: 8
+                    leftMargin: 0.5 * UI.minAcceptRejectSpacing
                 }
+                width: implicitWidth
                 text: "Accept"
-                flat: false
-                width: UI.ui.popupButtonWidth
-                highlighted: true
                 onClicked: UI.ui.commitPendingCVarChanges()
             }
         }

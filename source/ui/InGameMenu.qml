@@ -80,6 +80,7 @@ Rectangle {
                     text: "Main menu"
                     KeyNavigation.down: loadoutsButton
                     Layout.fillWidth: true
+                    displayIconPlaceholder: true
                     onClicked: UI.ui.showMainMenu()
                 }
                 SlantedButton {
@@ -89,6 +90,7 @@ Rectangle {
                     visible: canShowLoadouts
                     text: canShowLoadouts ? UI.gametypeOptionsModel.tabTitle : ""
                     Layout.fillWidth: true
+                    displayIconPlaceholder: true
                     onClicked: stackView.push(gametypeOptionsComponent)
                 }
                 SlantedButton {
@@ -99,6 +101,7 @@ Rectangle {
                     highlightedWithAnim: visible && !UI.ui.isReady
                     text: UI.ui.isReady ? "Not ready" : "Ready"
                     Layout.fillWidth: true
+                    displayIconPlaceholder: true
                     onClicked: {
                         if (UI.ui.isReady) {
                             UI.ui.setNotReady()
@@ -116,6 +119,7 @@ Rectangle {
                     visible: UI.ui.canJoin
                     text: "Join"
                     Layout.fillWidth: true
+                    displayIconPlaceholder: true
                     onClicked: {
                         if (UI.hudCommonDataModel.hasTwoTeams && UI.ui.canJoinAlpha && UI.ui.canJoinBeta) {
                             stackView.push(teamSelectionComponent)
@@ -132,6 +136,7 @@ Rectangle {
                     visible: !UI.ui.canJoin && (UI.ui.canJoinAlpha !== UI.ui.canJoinBeta)
                     text: "Switch team"
                     Layout.fillWidth: true
+                    displayIconPlaceholder: true
                     onClicked: {
                         if (UI.hudCommonDataModel.isInWarmupState) {
                             if (UI.ui.canJoinAlpha) {
@@ -153,6 +158,7 @@ Rectangle {
                     visible: UI.ui.canToggleChallengerStatus && UI.hudCommonDataModel.realClientTeam === HudDataModel.TeamSpectators
                     text: UI.ui.isInChallengersQueue ? "Leave the queue" : "Enter the queue"
                     Layout.fillWidth: true
+                    displayIconPlaceholder: true
                     onClicked: {
                         if (UI.ui.isInChallengersQueue) {
                             UI.ui.leaveChallengersQueue()
@@ -170,6 +176,7 @@ Rectangle {
                     visible: UI.ui.canSpectate
                     text: "Spectate"
                     Layout.fillWidth: true
+                    displayIconPlaceholder: true
                     onClicked: {
                         if (UI.hudCommonDataModel.isInWarmupState) {
                             UI.ui.spectate()
@@ -184,6 +191,7 @@ Rectangle {
                     KeyNavigation.up: spectateButton
                     text: "Disconnect"
                     Layout.fillWidth: true
+                    displayIconPlaceholder: true
                     onClicked: {
                         if (UI.hudCommonDataModel.realClientTeam === HudDataModel.TeamSpectators || UI.hudCommonDataModel.isInWarmupState) {
                             UI.ui.disconnect()
@@ -385,12 +393,12 @@ Rectangle {
                     Layout.alignment: Qt.AlignHCenter
                     spacing: 24
                     SlantedButton {
-                        Layout.preferredWidth: 144
+                        Layout.preferredWidth: UI.acceptOrRejectButtonWidth
                         displayIconPlaceholder: false
-                        labelHorizontalCenterOffset: -10
-                        leftBodyPartSlantDegrees: -9
-                        rightBodyPartSlantDegrees: -9
-                        textSlantDegrees: -4
+                        leftBodyPartSlantDegrees: -UI.buttonBodySlantDegrees
+                        rightBodyPartSlantDegrees: -0.5 * UI.buttonBodySlantDegrees
+                        textSlantDegrees: -0.3 * UI.buttonTextSlantDegrees
+                        labelHorizontalCenterOffset: 0
                         Material.background: Qt.darker(UI.hudCommonDataModel.alphaColor, 2)
                         Material.accent: Qt.darker(UI.hudCommonDataModel.alphaColor, 1.2)
                         text: UI.hudCommonDataModel.alphaName
@@ -401,14 +409,13 @@ Rectangle {
                             UI.ui.joinAlpha()
                         }
                     }
-                    // TODO: Check why spacing visually differs
                     SlantedButton {
-                        Layout.preferredWidth: 144 + 16
+                        Layout.preferredWidth: UI.neutralCentralButtonWidth
                         displayIconPlaceholder: false
-                        labelHorizontalCenterOffset: 0
-                        leftBodyPartSlantDegrees: -8
-                        rightBodyPartSlantDegrees: +9
+                        leftBodyPartSlantDegrees: -0.5 * UI.buttonBodySlantDegrees
+                        rightBodyPartSlantDegrees: +0.5 * UI.buttonBodySlantDegrees
                         textSlantDegrees: 0
+                        labelHorizontalCenterOffset: 0
                         Layout.alignment: Qt.AlignHCenter
                         text: "Any team"
                         onClicked: {
@@ -419,12 +426,12 @@ Rectangle {
                         }
                     }
                     SlantedButton {
-                        Layout.preferredWidth: 144
+                        Layout.preferredWidth: UI.acceptOrRejectButtonWidth
                         displayIconPlaceholder: false
+                        leftBodyPartSlantDegrees: 0.5 * UI.buttonBodySlantDegrees
+                        rightBodyPartSlantDegrees: UI.buttonBodySlantDegrees
+                        textSlantDegrees: +0.3 * UI.buttonTextSlantDegrees
                         labelHorizontalCenterOffset: 0
-                        leftBodyPartSlantDegrees: +10
-                        rightBodyPartSlantDegrees: +10
-                        textSlantDegrees: +5
                         Material.background: Qt.darker(UI.hudCommonDataModel.betaColor, 2)
                         Material.accent: Qt.darker(UI.hudCommonDataModel.betaColor, 1.2)
                         text: UI.hudCommonDataModel.betaName
@@ -623,6 +630,8 @@ Rectangle {
                 contentComponent: Label {
                     readonly property bool focusable: false
                     property int secondsLeft: 3
+                    width: UI.ui.desiredPopupWidth
+                    horizontalAlignment: Qt.AlignHCenter
                     font.weight: Font.Medium
                     font.pointSize: 12
                     font.letterSpacing: 0.5

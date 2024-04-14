@@ -77,11 +77,16 @@ StackView {
                     }
                 }
 
-                Button {
-                    Layout.preferredWidth: 150
+                SlantedButton {
+                    Layout.preferredWidth: UI.neutralCentralButtonWidth
                     Layout.margins: 16
                     Layout.alignment: Qt.AlignHCenter
                     text: "Edit HUDs"
+                    font.capitalization: Font.MixedCase
+                    labelHorizontalCenterOffset: 0
+                    leftBodyPartSlantDegrees: -0.5 * UI.buttonBodySlantDegrees
+                    rightBodyPartSlantDegrees: +0.5 * UI.buttonBodySlantDegrees
+                    textSlantDegrees: 0
                     highlighted: true
                     //Material.accent: Qt.lighter(Material.background, 1.1)
                     onClicked: root.startHudEditorWizard()

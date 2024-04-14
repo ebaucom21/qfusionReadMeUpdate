@@ -195,11 +195,10 @@ Item {
 			anchors.rightMargin: 12
 			font.family: UI.ui.headingFontFamily
 			font.pointSize: 12
-			font.letterSpacing: mouseArea.containsMouse ? 1.75 : 1.25
+			font.letterSpacing: 1.5
 			text: root.text
 			font.weight: Font.ExtraBold
 			font.capitalization: Font.AllUppercase
-			Behavior on font.letterSpacing { SmoothedAnimation { duration: 333 } }
 		}
 
 		MouseArea {

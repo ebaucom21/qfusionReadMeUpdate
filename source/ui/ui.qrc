@@ -106,6 +106,8 @@
         <file>SlantedButton.qml</file>
         <file>SlantedBackground.qml</file>
         <file>SlantedShape.qml</file>
+        <file>SlantedLeftSecondaryButton.qml</file>
+        <file>SlantedRightPrimaryButton.qml</file>
         <file>SoundSettings.qml</file>
         <file>TeamsSettings.qml</file>
         <file>TeamSettingsTeamColumn.qml</file>

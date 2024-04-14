@@ -23,7 +23,6 @@ FocusScope {
 
     property real contentTopMargin: 16
     property real buttonsTopMargin: 28
-    property real desiredButtonWidth
     property real columnWidth: UI.ui.desiredPopupWidth
 
     property bool contentToButtonsKeyNavigationTargetIndex
@@ -126,7 +125,8 @@ FocusScope {
 
         Label {
             id: titleLabel
-            Layout.alignment: Qt.AlignHCenter
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
             font.pointSize: 18
             font.letterSpacing: 1.25
             font.capitalization: Font.SmallCaps
@@ -135,7 +135,7 @@ FocusScope {
 
         Loader {
             id: contentLoader
-            Layout.alignment: Qt.AlignHCenter
+            Layout.alignment: Text.AlignHCenter
             Layout.topMargin: contentTopMargin
             Layout.preferredWidth: item ? item.implicitWidth : 0
             Layout.preferredHeight: item ? item.implicitHeight : 0
@@ -146,22 +146,31 @@ FocusScope {
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: buttonsTopMargin
-            spacing: 32
+            spacing: UI.minAcceptRejectSpacing
 
             Repeater {
                 id: buttonsRepeater
                 property int numInstantiatedItems
                 model: root.numButtons
                 delegate: SlantedButton {
-                    Layout.preferredWidth: desiredButtonWidth > 0 ? desiredButtonWidth :
-                        (root.numButtons < 3 ? primaryColumn.width / 2 : primaryColumnWidth / root.numButtons)
+                    Layout.preferredWidth:
+                        (root.numButtons === 1) ? UI.neutralCentralButtonWidth : UI.acceptOrRejectButtonWidth
                     text: root.buttonTexts[index]
                     enabled: root.buttonEnabledStatuses[index]
                     highlighted: root.buttonFocusStatuses[index]
                     // Don't try to manage it on its own
                     highlightOnActiveFocus: false
-                    displayIconPlaceholder: false
+                    leftBodyPartSlantDegrees:
+                        (root.numButtons === 1) ? -0.5 * UI.buttonBodySlantDegrees :
+                            (((index === 0) ? -1.0 : +0.3) * UI.buttonBodySlantDegrees)
+                    rightBodyPartSlantDegrees:
+                        (root.numButtons === 1) ? +0.5 * UI.buttonBodySlantDegrees :
+                            (((index === 0) ? -0.3 : +1.0) * UI.buttonBodySlantDegrees)
+                    textSlantDegrees:
+                        (root.numButtons === 1) ? 0 : (((index === 0) ? -0.3 : +0.3) * UI.buttonTextSlantDegrees)
                     labelHorizontalCenterOffset: 0
+                    Material.accent:
+                        (root.numButtons > 1 && index === 0) ? Qt.lighter(Material.background, 2.0) : root.Material.accent
                     onClicked: root.buttonClicked(index)
                     Keys.onEnterPressed: root.buttonClicked(index)
                     onActiveFocusChanged: {
