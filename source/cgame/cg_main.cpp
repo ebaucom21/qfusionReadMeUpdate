@@ -3143,10 +3143,12 @@ static void CG_UpdatePlayerState() {
 
 	if( tmpIndicesForTwoTilePanes[0].size() + tmpIndicesForTwoTilePanes[1].size() > 0 ) {
 		wsw::StaticVector<float, 8> allowedAspectRatio;
-		const auto primaryRatio   = (float)cgs.vidWidth / (float)cgs.vidHeight;
-		bool addedThePrimaryRatio = false;
-		for( const float ratio: { 5.0f / 4.0f, 3.0f / 4.0f, 16.0f / 10.0f } ) {
-			if( ratio <= primaryRatio ) {
+		const auto primaryRatio     = (float)cgs.vidWidth / (float)cgs.vidHeight;
+		bool addedThePrimaryRatio   = false;
+		// Disallow everything that is lower than 3/2 on wide screens (otherwise it looks ugly)
+		const float minAllowedRatio = wsw::min( primaryRatio, 3.0f / 2.0f );
+		for( const float ratio: { 5.0f / 4.0f, 3.0f / 4.0f, 3.0f / 2.0f, 16.0f / 10.0f } ) {
+			if( ratio >= minAllowedRatio ) {
 				allowedAspectRatio.push_back( ratio );
 				if( ratio == primaryRatio ) {
 					addedThePrimaryRatio = true;
@@ -3157,12 +3159,16 @@ static void CG_UpdatePlayerState() {
 			allowedAspectRatio.push_back( primaryRatio );
 		}
 
-		constexpr int horizontalSpacing = 16;
-		constexpr int verticalSpacing   = 16;
+		constexpr int horizontalSpacing = 24;
+		constexpr int verticalSpacing   = 24;
+
+		const int topMargin      = cgs.vidHeight / 4;
+		const int bottomMargin   = cgs.vidHeight / 8;
+		const int fieldHeight    = cgs.vidHeight - topMargin - bottomMargin;
+		const int baseFieldWidth = ( 5 * cgs.vidWidth ) / 6;
 
 		if( hasTwoTeams ) {
-			const int fieldWidth  = ( ( 3 * cgs.vidWidth ) / 4 ) / 2;
-			const int fieldHeight = ( ( 5 * cgs.vidHeight ) / 8 ) / 2;
+			const int fieldWidth = baseFieldWidth / 2;
 
 			unsigned useLayoutOfPane;
 			if( tmpIndicesForTwoTilePanes[0].size() < tmpIndicesForTwoTilePanes[1].size() ) {
@@ -3178,7 +3184,7 @@ static void CG_UpdatePlayerState() {
 
 			const int spaceBetweenPanes = ( cgs.vidWidth - 2 * fieldWidth ) / 5;
 			int fieldX                  = ( cgs.vidWidth - spaceBetweenPanes - 2 * fieldWidth ) / 2;
-			const int fieldY            = ( cgs.vidHeight - fieldHeight ) / 2;
+			const int fieldY            = topMargin;
 
 			for( const auto &indices: tmpIndicesForTwoTilePanes ) {
 				if( !indices.empty() ) {
@@ -3194,11 +3200,10 @@ static void CG_UpdatePlayerState() {
 			assert( !tmpIndicesForTwoTilePanes[0].empty() && tmpIndicesForTwoTilePanes[1].empty() );
 			const auto &indices = tmpIndicesForTwoTilePanes[0];
 
-			const int fieldWidth  = ( 3 * cgs.vidWidth ) / 4;
-			const int fieldHeight = ( 5 * cgs.vidHeight ) / 8;
+			const int fieldWidth = baseFieldWidth;
 			const Rect fieldRect {
 				.x      = ( cgs.vidWidth - fieldWidth ) / 2,
-				.y      = ( cgs.vidHeight - fieldHeight ) / 2,
+				.y      = topMargin,
 				.width  = fieldWidth,
 				.height = fieldHeight,
 			};
