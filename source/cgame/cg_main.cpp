@@ -3178,22 +3178,62 @@ static void CG_UpdatePlayerState() {
 				useLayoutOfPane = 0;
 			}
 
-			const TileLayoutSpecs &layoutSpecs = findBestLayoutForTiles( fieldWidth, fieldHeight,
+			// Generally, use the same tile specs for both panes
+			const TileLayoutSpecs &sharedSpecs = findBestLayoutForTiles( fieldWidth, fieldHeight,
 																		 tmpIndicesForTwoTilePanes[useLayoutOfPane].size(),
 																		 horizontalSpacing, verticalSpacing,
 																		 allowedAspectRatio );
 
-			const int spaceBetweenPanes = ( cgs.vidWidth - 2 * fieldWidth ) / 5;
+			const int spaceBetweenPanes = ( cgs.vidWidth - 2 * fieldWidth ) / 2;
 			int fieldX                  = ( cgs.vidWidth - spaceBetweenPanes - 2 * fieldWidth ) / 2;
 			const int fieldY            = topMargin;
 
-			for( const auto &indices: tmpIndicesForTwoTilePanes ) {
-				if( !indices.empty() ) {
+			for( unsigned paneIndex = 0; paneIndex < 2; ++paneIndex ) {
+				if( const auto &indices = tmpIndicesForTwoTilePanes[paneIndex]; !indices.empty() ) {
+					bool didSpecificHandling = false;
+					// If we have a single tile left in this pane and the other pane has multiple tiles
+					if( indices.size() == 1 && tmpIndicesForTwoTilePanes[(paneIndex + 1) % 2].size() > 1 ) {
+						// Select new array of allowed aspect ratio for a single huge tile.
+						// Disallow ratio values which are lesser than the shared one.
+						const auto sharedAspectRatio = (float)sharedSpecs.cellWidth / (float)sharedSpecs.cellHeight;
+						wsw::StaticVector<float, 8> singleTileAllowedAspectRatio;
+						assert( !allowedAspectRatio.empty() );
+						bool hasAddedTheActualRatio = false;
+						for( float ratio: allowedAspectRatio ) {
+							if( ratio >= sharedAspectRatio ) {
+								singleTileAllowedAspectRatio.push_back( ratio );
+								if( ratio == sharedAspectRatio ) {
+									hasAddedTheActualRatio = true;
+								}
+							}
+						}
+						// Protect from various numeric precision issues
+						if( !hasAddedTheActualRatio ) {
+							singleTileAllowedAspectRatio.push_back( sharedAspectRatio );
+						}
+						// Don't let it be taller than the opposite pane
+						const auto otherPaneActualGridHeight  = (int)( sharedSpecs.cellHeight * sharedSpecs.numRows +
+							verticalSpacing * ( sharedSpecs.numRows - 1 ) );
+						// The exception to use of sharedSpecs
+						const TileLayoutSpecs &singleTileSpecs = findBestLayoutForTiles( fieldWidth, otherPaneActualGridHeight,
+																						 1,
+																						 horizontalSpacing, verticalSpacing,
+																						 singleTileAllowedAspectRatio );
+						// Align it to the top of the other pane
+						cg.tileMiniviewPositions.emplace_back( Rect {
+							.x      = fieldX + ( fieldWidth - singleTileSpecs.cellWidth ) / 2,
+							.y      = fieldY + ( fieldHeight - otherPaneActualGridHeight ) / 2,
+							.width  = singleTileSpecs.cellWidth,
+							.height = singleTileSpecs.cellHeight,
+						});
+						didSpecificHandling = true;
+					}
 					const Rect fieldRect { .x = fieldX, .y = fieldY, .width  = fieldWidth, .height = fieldHeight };
-					prepareMiniviewTiles( layoutSpecs, fieldRect, indices.size(),
-										  horizontalSpacing, verticalSpacing, &cg.tileMiniviewPositions );
-					cg.tileMiniviewViewStateIndices.insert(
-						cg.tileMiniviewViewStateIndices.end(), indices.begin(), indices.end() );
+					if( !didSpecificHandling ) {
+						prepareMiniviewTiles( sharedSpecs, fieldRect, indices.size(),
+											  horizontalSpacing, verticalSpacing, &cg.tileMiniviewPositions );
+					}
+					cg.tileMiniviewViewStateIndices.insert( cg.tileMiniviewViewStateIndices.end(), indices.begin(), indices.end() );
 				}
 				fieldX += fieldWidth + spaceBetweenPanes;
 			}
