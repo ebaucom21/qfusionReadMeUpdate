@@ -71,7 +71,7 @@ struct AiObjectiveSpot;
 struct AiDefenceSpot;
 struct AiOffenseSpot;
 
-class Bot: public AiFrameAwareComponent {
+class Bot: public AiComponent {
 	friend class AiManager;
 	friend class BotEvolutionManager;
 	friend class AiBaseTeam;
@@ -171,7 +171,7 @@ public:
 		awarenessModule.OnEnemyRemoved( enemy );
 	}
 
-	void OnHurtByNewThreat( const edict_t *newThreat, const AiFrameAwareComponent *threatDetector ) {
+	void OnHurtByNewThreat( const edict_t *newThreat, const AiComponent *threatDetector ) {
 		awarenessModule.OnHurtByNewThreat( newThreat, threatDetector );
 	}
 
@@ -196,7 +196,7 @@ public:
 
 	void EnableAutoAlert( const AiAlertSpot &alertSpot,
 						  AlertTracker::AlertCallback callback,
-						  AiFrameAwareComponent *receiver ) {
+						  AiComponent *receiver ) {
 		awarenessModule.EnableAutoAlert( alertSpot, callback, receiver );
 	}
 
@@ -500,14 +500,13 @@ public:
 	 */
 	bool HasOnlyGunblade() const { return hasOnlyGunblade; }
 
+	void Update();
+
+	bool PermitsDistributedUpdateThisFrame() const {
+		assert( m_frameAffinityModulo && m_frameAffinityOffset < m_frameAffinityModulo && wsw::isPowerOf2( m_frameAffinityModulo ) );
+		return ( level.framenum & ( m_frameAffinityModulo - 1 ) ) == m_frameAffinityOffset;
+	}
 private:
-	void Frame() override;
-	void Think() override;
-
-	void PreFrame() override;
-
-	void SetFrameAffinity( unsigned modulo, unsigned offset ) override;
-
 	const char *Nick() const {
 		return self->r.client ? self->r.client->netname.data() : self->classname;
 	}
@@ -532,11 +531,6 @@ private:
 	void ChangeWeapons( const SelectedWeapons &selectedWeapons_ );
 
 	void OnBlockedTimeout();
-	void GhostingFrame();
-	void ActiveFrame();
-
-	void PostThink() override;
-	void PostFrame() override;
 
 	void OnRespawn();
 
@@ -548,7 +542,6 @@ private:
 	// This function produces very basic but reliable results.
 	// Imitation of human-like aiming should be a burden of callers that prepare the desiredDirection.
 	Vec3 GetNewViewAngles( const vec3_t oldAngles, const Vec3 &desiredDirection, unsigned frameTime, float angularSpeedMultiplier ) const;
-
 
 	edict_t *const self;
 	// Must be set in a subclass constructor. A subclass manages memory for its planner
@@ -570,8 +563,9 @@ private:
 	ArrayRange<int> travelFlagsRange { travelFlags, travelFlags + 2 };
 
 	int64_t blockedTimeoutAt;
-	int64_t prevThinkAt { 0 };
-	int64_t lastNavTargetReachedAt { 0 };
+
+	unsigned m_frameAffinityModulo { 0 };
+	unsigned m_frameAffinityOffset { 0 };
 
 	vec3_t angularViewSpeed { 0.0f, 0.0f, 0.0f };
 

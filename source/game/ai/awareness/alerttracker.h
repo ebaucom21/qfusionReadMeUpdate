@@ -37,7 +37,7 @@ class Bot;
 class AlertTracker {
 	friend class BotAwarenessModule;
 public:
-	typedef void ( AiFrameAwareComponent::*AlertCallback )( Bot *detector, int spotId, float alertLevel );
+	typedef void ( AiComponent::*AlertCallback )( Bot *detector, int spotId, float alertLevel );
 private:
 	/**
 	 * An internal augmented version of AiAlertSpot
@@ -46,9 +46,9 @@ private:
 		int64_t lastReportedAt;
 		float lastReportedScore;
 		AlertCallback callback;
-		AiFrameAwareComponent *receiver;
+		AiComponent *receiver;
 
-		AlertSpot( const AiAlertSpot &spot, AlertCallback callback_, AiFrameAwareComponent *receiver_ )
+		AlertSpot( const AiAlertSpot &spot, AlertCallback callback_, AiComponent *receiver_ )
 			: AiAlertSpot( spot )
 			, lastReportedAt( 0 )
 			, lastReportedScore( 0.0f )
@@ -62,7 +62,7 @@ private:
 		}
 	};
 
-	void EnableAutoAlert( const AiAlertSpot &alertSpot, AlertCallback callback, AiFrameAwareComponent *receiver );
+	void EnableAutoAlert( const AiAlertSpot &alertSpot, AlertCallback callback, AiComponent *receiver );
 	void DisableAutoAlert( int id );
 
 	static constexpr unsigned MAX_ALERT_SPOTS = 3;

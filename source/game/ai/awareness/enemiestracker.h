@@ -238,7 +238,7 @@ public:
 
 class BotAwarenessModule;
 
-class EnemiesTracker : public AiFrameAwareComponent {
+class EnemiesTracker : public AiComponent {
 	friend class TrackedEnemy;
 	friend class BotAwarenessModule;
 	friend class AiSquad;
@@ -305,9 +305,7 @@ public:
 	[[nodiscard]]
 	auto TrackedEnemiesHead() const -> const TrackedEnemy * { return m_trackedEnemiesHead; }
 
-	void Frame() override;
-
-	void Think() override;
+	void Update();
 
 	void OnEnemyViewed( const edict_t *enemy );
 	void OnEnemyOriginGuessed( const edict_t *enemy,

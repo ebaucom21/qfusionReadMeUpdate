@@ -13,7 +13,7 @@ class Bot;
 
 class AiSquadBasedTeam;
 
-class AiSquad : public AiFrameAwareComponent {
+class AiSquad {
 	friend class AiSquadBasedTeam;
 	friend class SquadsBuilder;
 
@@ -158,7 +158,7 @@ public:
 	 */
 	bool IsSupporter( const edict_t *bot ) const;
 
-	void Think() override;
+	void Update();
 };
 
 class AiSquadBasedTeam : public AiBaseTeam {
@@ -232,8 +232,7 @@ public:
 
 	~AiSquadBasedTeam() override;
 
-	void Frame() override;
-	void Think() override;
+	virtual void Update();
 
 	bool OverridesEntityWeights( const Bot *bot ) const override;
 	const std::pair<float, float> *GetEntityWeights( const Bot *bot, const NavEntity *navEntity ) const override;

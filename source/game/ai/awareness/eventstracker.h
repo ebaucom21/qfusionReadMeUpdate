@@ -6,7 +6,7 @@
 #include "../../../common/randomgenerator.h"
 #include "awarenesslocal.h"
 
-class EventsTracker: public AiFrameAwareComponent {
+class EventsTracker : public AiComponent {
 	friend class BotAwarenessModule;
 	friend class HazardsDetector;
 
@@ -97,9 +97,7 @@ public:
 
 	void RegisterEvent( const edict_t *ent, int event, int parm );
 
-	void Frame() override;
-
-	void Think() override;
+	void Update();
 };
 
 #endif

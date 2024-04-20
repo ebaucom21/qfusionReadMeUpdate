@@ -302,7 +302,7 @@ void AiManager::SetupBotGoalsAndActions( edict_t *ent ) {
 	ent->bot->planningModule.RegisterBuiltinGoalsAndActions();
 }
 
-void AiManager::Frame() {
+void AiManager::Update() {
 	globalCpuQuota.Update( botHandlesHead );
 	thinkQuota[level.framenum % 4].Update( botHandlesHead );
 
@@ -425,7 +425,7 @@ bool AiManager::GlobalQuota::Fits( const Bot *bot ) const {
 
 bool AiManager::ThinkQuota::Fits( const Bot *bot ) const {
 	// Only bots that have the same frame affinity fit
-	return bot->frameAffinityOffset == affinityOffset;
+	return bot->m_frameAffinityOffset == affinityOffset;
 }
 
 void AiManager::Quota::Update( const Bot *aiHandlesHead ) {

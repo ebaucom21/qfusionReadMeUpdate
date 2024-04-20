@@ -2,7 +2,7 @@
 
 void AlertTracker::EnableAutoAlert( const AiAlertSpot &alertSpot,
 									AlertCallback callback,
-									AiFrameAwareComponent *receiver ) {
+									AiComponent *receiver ) {
 	constexpr const char *tag = "AlertTracker::EnableAutoAlert";
 	// First check duplicate ids. Fail on error since callers of this method are internal.
 	for( const auto &presentSpot: alertSpots ) {

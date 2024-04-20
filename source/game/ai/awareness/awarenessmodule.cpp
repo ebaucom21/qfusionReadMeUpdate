@@ -51,40 +51,36 @@ void BotAwarenessModule::InvalidateSelectedEnemiesIfNeeded() {
 	}
 }
 
-void BotAwarenessModule::Frame() {
+void BotAwarenessModule::Update() {
 	// TODO: Make the control flow clear
 	InvalidateSelectedEnemiesIfNeeded();
-
-	AiFrameAwareComponent::Frame();
 
 	enemiesTracker.Update();
 	eventsTracker.Update();
 
 	InvalidateSelectedEnemiesIfNeeded();
-}
 
-void BotAwarenessModule::Think() {
-	AiFrameAwareComponent::Think();
+	if( bot->PermitsDistributedUpdateThisFrame() ) {
+		RegisterVisibleEnemies();
+		CheckForNewHazards();
 
-	RegisterVisibleEnemies();
-	CheckForNewHazards();
-
-	if( bot->m_selectedEnemy ) {
-		if( level.time - bot->m_selectedEnemy->LastSeenAt() > wsw::min( 64u, reactionTime ) ) {
-			bot->m_selectedEnemy = std::nullopt;
+		if( bot->m_selectedEnemy ) {
+			if( level.time - bot->m_selectedEnemy->LastSeenAt() > wsw::min( 64u, reactionTime ) ) {
+				bot->m_selectedEnemy = std::nullopt;
+			}
 		}
+		if( !bot->m_selectedEnemy ) {
+			UpdateSelectedEnemy();
+			shouldUpdateBlockedAreasStatus = true;
+		}
+
+		// Calling this also makes sense if the "update" flag has been retained from previous frames
+		UpdateBlockedAreasStatus();
+
+		keptInFovPointTracker.update();
+
+		TryTriggerPlanningForNewHazard();
 	}
-	if( !bot->m_selectedEnemy ) {
-		UpdateSelectedEnemy();
-		shouldUpdateBlockedAreasStatus = true;
-	}
-
-	// Calling this also makes sense if the "update" flag has been retained from previous frames
-	UpdateBlockedAreasStatus();
-
-	keptInFovPointTracker.update();
-
-	TryTriggerPlanningForNewHazard();
 }
 
 void BotAwarenessModule::UpdateSelectedEnemy() {
@@ -158,7 +154,7 @@ void BotAwarenessModule::TryTriggerPlanningForNewHazard() {
 	}
 }
 
-void BotAwarenessModule::OnHurtByNewThreat( const edict_t *newThreat, const AiFrameAwareComponent *threatDetector ) {
+void BotAwarenessModule::OnHurtByNewThreat( const edict_t *newThreat, const AiComponent *threatDetector ) {
 	// Reject threats detected by bot brain if there is active squad.
 	// Otherwise there may be two calls for a single or different threats
 	// detected by squad and the bot brain enemy pool itself.

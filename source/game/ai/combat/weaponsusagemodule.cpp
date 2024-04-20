@@ -129,7 +129,7 @@ void BotWeaponsUsageModule::TryFire( BotInput *input ) {
 	LookAtEnemy( aimParams->suggestedCoordError, aimParams->fireOrigin, aimParams->fireTarget, input );
 
 	// Attack only in Think() frames unless a continuousFire is required or the bot has hard skill
-	if( bot->ShouldSkipThinkFrame() && bot->Skill() < 0.66f ) {
+	if( !bot->PermitsDistributedUpdateThisFrame() && bot->Skill() < 0.66f ) {
 		if( !primaryFireDef || !primaryFireDef->IsContinuousFire() ) {
 			if( !secondaryFireDef || !secondaryFireDef->IsContinuousFire() ) {
 				return;

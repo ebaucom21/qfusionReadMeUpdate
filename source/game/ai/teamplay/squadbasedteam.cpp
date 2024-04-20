@@ -191,7 +191,11 @@ constexpr float CONNECTIVITY_PROXIMITY = 256.0f;
  */
 constexpr int CONNECTIVITY_MOVE_CENTISECONDS = 100;
 
-void AiSquad::Think() {
+void AiSquad::Update() {
+	if( !parent->PermitsDistributedUpdateThisFrame() ) {
+		return;
+	}
+
 	if( !isValid ) {
 		return;
 	}
@@ -1075,10 +1079,7 @@ AiSquadBasedTeam::~AiSquadBasedTeam() {
 	}
 }
 
-void AiSquadBasedTeam::Frame() {
-	// Call super method first, it may contain some logic
-	AiBaseTeam::Frame();
-
+void AiSquadBasedTeam::Update() {
 	// Keep checking whether the orphans list is valid
 	for( Bot *bot = orphanBotsHead; bot; bot = bot->NextInSquad() ) {
 		for( Bot *otherBot = bot->NextInSquad(); otherBot; otherBot = otherBot->NextInSquad() ) {
@@ -1102,11 +1103,17 @@ void AiSquadBasedTeam::Frame() {
 	// This should be called before AiSquad::Update() (since squads expect this to be valid)
 	::clientToClientTable.Update();
 
-	// Call squads Update() (and, thus, Frame() and, maybe, Think()) each frame as it is expected
-	// even if all squad AI logic is performed only in AiSquad::Think()
-	// to prevent further errors if we decide later to put some logic in Frame()
 	for( AiSquad *squad = usedSquadsHead; squad; squad = squad->NextInList() ) {
 		squad->Update();
+	}
+
+	if( PermitsDistributedUpdateThisFrame() ) {
+		assistanceTracker.Think();
+
+		// Try setting up squads for orphan bots
+		if( orphanBotsHead ) {
+			SetupSquads();
+		}
 	}
 }
 
@@ -1170,18 +1177,6 @@ void AiSquadBasedTeam::TransferStateFrom( AiBaseTeam *that ) {
 	// Transfer the orphan bots list
 	this->orphanBotsHead = thatSquadBasedTeam->orphanBotsHead;
 	thatSquadBasedTeam->orphanBotsHead = nullptr;
-}
-
-void AiSquadBasedTeam::Think() {
-	// Call super method first, this call must not be omitted
-	AiBaseTeam::Think();
-
-	assistanceTracker.Think();
-
-	// Try setting up squads for orphan bots
-	if( orphanBotsHead ) {
-		SetupSquads();
-	}
 }
 
 struct alignas( 4 )CandidatePair {
@@ -1292,8 +1287,6 @@ AiSquad *AiSquadBasedTeam::AllocSquad() {
 
 	AiSquad *const squad = wsw::unlink( freeSquadsHead, &freeSquadsHead );
 	wsw::link( squad, &usedSquadsHead );
-	// This is very important action, otherwise the squad will not think
-	squad->SetFrameAffinity( frameAffinityModulo, frameAffinityOffset );
 	squad->PrepareToAddBots();
 	return squad;
 }

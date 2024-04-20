@@ -652,12 +652,9 @@ void AiPlanner::DeletePlan( AiActionRecord *head ) {
 	}
 }
 
-void AiPlanner::Think() {
-	// TODO: This all is not needed once we get sane entities in /game
-	if( Bot *bot = dynamic_cast<Bot *>( ai ) ) {
-		if( G_ISGHOSTING( game.edicts + bot->EntNum() ) ) {
-			return;
-		}
+void AiPlanner::Update() {
+	if( !ai->PermitsDistributedUpdateThisFrame() ) {
+		return;
 	}
 
 	// Prepare current world state for planner

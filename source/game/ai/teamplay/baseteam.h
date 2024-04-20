@@ -7,30 +7,17 @@
 
 class NavEntity;
 
-class AiBaseTeam : public AiFrameAwareComponent {
+class AiBaseTeam : public AiComponent {
 	friend class Bot;  // Bots should be able to notify its team in destructor when they get dropped immediately
 	friend class AiManager;
 
-	// We can't initialize these vars in constructor, because game exports may be not yet intialized.
-	// These values are set to -1 in constructor and computed on demand
-	mutable int svFps { -1 };
-	mutable int svSkill { -1 };
+	const unsigned m_frameAffinityModulo;
+	const unsigned m_frameAffinityOffset;
 
-	// These vars are used instead of AiFrameAwareComponent for lazy intiailization
-	mutable int teamAffinityModulo { -1 };
-	mutable int teamAffinityOffset { -1 };
-	static constexpr int MAX_AFFINITY_OFFSET = 4;
 	// This array contains count of bots that use corresponding offset for each possible affinity offset
-	unsigned affinityOffsetsInUse[MAX_AFFINITY_OFFSET];
-
-	// These arrays store copies of bot affinities to be able to access them even if the bot reference has been lost
-	unsigned char botAffinityModulo[MAX_CLIENTS];
-	unsigned char botAffinityOffsets[MAX_CLIENTS];
-
-	unsigned AffinityModulo() const;
-	unsigned TeamAffinityOffset() const;
-
-	void InitTeamAffinity() const;  // Callers are const ones, and only mutable vars are modified
+	unsigned m_affinityOffsetsInUse[4] {};
+	// This arrays stores copies of bot affinities in order to be able to access them even if the bot reference has been lost
+	uint8_t m_botAffinityOffsets[MAX_CLIENTS] {};
 
 	static void CreateTeam( int teamNum );
 	static void ReleaseTeam( int teamNum );
@@ -66,16 +53,6 @@ protected:
 	void ReleaseBotFrameAffinity( int entNum );
 	void SetBotFrameAffinity( int bot, unsigned modulo, unsigned offset );
 
-	inline int GetCachedCVar( int *cached, const char *name ) const {
-		if( *cached == -1 ) {
-			*cached = (int)trap_Cvar_Value( name );
-		}
-		return *cached;
-	}
-
-	inline int ServerFps() const { return GetCachedCVar( &svFps, "sv_fps" ); }
-	inline int ServerSkill() const { return GetCachedCVar( &svSkill, "sv_skilllevel" ); }
-
 	void Debug( const char *format, ... );
 
 	static void CheckTeamNum( int teamNum );
@@ -101,6 +78,13 @@ protected:
 		return weights1->second > weights2->second ? weights1 : weights2;
 	}
 public:
+	bool PermitsDistributedUpdateThisFrame() const {
+		assert( m_frameAffinityModulo && m_frameAffinityOffset < m_frameAffinityModulo && wsw::isPowerOf2( m_frameAffinityModulo ) );
+		return ( level.framenum & ( m_frameAffinityModulo - 1 ) ) == m_frameAffinityOffset;
+	}
+
+	virtual void Update() {}
+
 	static AiBaseTeam *GetTeamForNum( int teamNum );
 
 	/**

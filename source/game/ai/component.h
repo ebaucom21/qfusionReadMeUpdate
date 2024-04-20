@@ -27,46 +27,4 @@ public:
 	virtual ~AiComponent() = default;
 };
 
-class AiFrameAwareComponent : public AiComponent {
-protected:
-	unsigned frameAffinityModulo { 0 };
-	unsigned frameAffinityOffset { 0 };
-
-	bool ShouldSkipThinkFrame() {
-		// Check whether the modulo has not been set yet
-		// TODO: Add protection against never set modulo
-		return frameAffinityModulo == 0 || (unsigned)( level.framenum % frameAffinityModulo ) != frameAffinityOffset;
-	}
-
-	virtual void Frame() {}
-	virtual void PreFrame() {}
-	virtual void PostFrame() {}
-
-	void CheckIsInThinkFrame( const char *function ) {
-#ifdef _DEBUG
-		if( !ShouldSkipThinkFrame() ) {
-			return;
-		}
-		const char *tag = "AiFrameAwareComponent::CheckIsInThinkFrame()";
-		const char *format = "%s has been called not in think frame: frame#=%" PRId64 ", modulo=%d, offset=%d\n";
-		AI_FailWith( tag, format, function, level.framenum, frameAffinityModulo, frameAffinityOffset );
-#endif
-	}
-
-	virtual void Think() {}
-	virtual void PreThink() {}
-	virtual void PostThink() {}
-
-	// May be overridden if some actions should be performed when a frame affinity is set
-	virtual void SetFrameAffinity( unsigned modulo, unsigned offset ) {
-		assert( modulo && offset < modulo );
-		frameAffinityModulo = modulo;
-		frameAffinityOffset = offset;
-	}
-public:
-	// Call this method to update an instance state.
-	// TODO: Rename to Run() or something like that.
-	void Update();
-};
-
 #endif

@@ -6,10 +6,7 @@
 AiBaseTeam *AiBaseTeam::teamsForNums[GS_MAX_TEAMS - 1];
 
 AiBaseTeam::AiBaseTeam( int teamNum_ )
-	: teamNum( teamNum_ ) {
-	memset( botAffinityModulo, 0, sizeof( botAffinityModulo ) );
-	memset( botAffinityOffsets, 0, sizeof( botAffinityOffsets ) );
-}
+	: m_frameAffinityModulo( 4 ), m_frameAffinityOffset( teamNum_ != TEAM_BETA ? 0 : 2 ), teamNum( teamNum_ ) {}
 
 void AiBaseTeam::Debug( const char *format, ... ) {
 	// Cut it early to help optimizer to eliminate AI_Debugv call
@@ -65,46 +62,6 @@ AiBaseTeam *AiBaseTeam::ReplaceTeam( int teamNum, const std::type_info &desiredT
 	return *teamRef;
 }
 
-unsigned AiBaseTeam::AffinityModulo() const {
-	if( teamAffinityModulo == -1 ) {
-		InitTeamAffinity();
-	}
-	return (unsigned)teamAffinityModulo;
-}
-
-unsigned AiBaseTeam::TeamAffinityOffset() const {
-	if( teamAffinityOffset == -1 ) {
-		InitTeamAffinity();
-	}
-	return (unsigned)teamAffinityOffset;
-}
-
-void AiBaseTeam::InitTeamAffinity() const {
-	// We round frame time to integer milliseconds
-	int frameTime = 1000 / ServerFps();
-	// 4 for 60 fps or more, 1 for 16 fps or less
-	teamAffinityModulo = wsw::min( 4, wsw::max( 1, 64 / frameTime ) );
-	if( teamNum == TEAM_PLAYERS ) {
-		teamAffinityOffset = 0;
-		const_cast<AiBaseTeam*>( this )->SetFrameAffinity( teamAffinityModulo, teamAffinityOffset );
-		return;
-	}
-
-	static_assert( TEAM_ALPHA == 2 && TEAM_BETA == 3, "Modify affinity offset computations" );
-	switch( teamAffinityModulo ) {
-		// The Alpha AI team thinks on frame 0, the Beta AI team thinks on frame 2
-		case 4: teamAffinityOffset = ( teamNum - 2 ) * 2; break;
-		// Both Alpha and Beta AI teams think on frame 0
-		case 3: teamAffinityOffset = 0; break;
-		// The Alpha AI team thinks on frame 0, the Beta AI team thinks on frame 1
-		case 2: teamAffinityOffset = teamNum - 2; break;
-		// All AI teams think in the same frame
-		case 1: teamAffinityOffset = 0; break;
-	}
-	// Initialize superclass fields
-	const_cast<AiBaseTeam*>( this )->SetFrameAffinity( teamAffinityModulo, teamAffinityOffset );
-}
-
 void AiBaseTeam::AddBot( Bot *bot ) {
 	Debug( "new bot %s has been added\n", bot->Nick() );
 
@@ -128,86 +85,52 @@ void AiBaseTeam::RemoveBot( Bot *bot ) {
 }
 
 void AiBaseTeam::TransferStateFrom( AiBaseTeam *that ) {
-	// Copy lazily-computed counterparts of frame affinity modulo and offset
-	this->frameAffinityModulo = that->frameAffinityModulo;
-	this->frameAffinityOffset = that->frameAffinityOffset;
 	// Transfer bots list
 	this->teamBotsHead = that->teamBotsHead;
 	that->teamBotsHead = nullptr;
 }
 
 void AiBaseTeam::AcquireBotFrameAffinity( int entNum ) {
-	// Always specify offset as zero for affinity module that = 1 (any % 1 == 0)
-	if( AffinityModulo() == 1 ) {
-		SetBotFrameAffinity( entNum, AffinityModulo(), 0 );
-		return;
-	}
+	if( GS_TeamBasedGametype() ) {
+		assert( m_frameAffinityModulo == 4 );
+		// Older versions used to set think frames of every team bot one frame after the team thinks.
+		// It was expected that the team logic is going to be quite computational expensive.
+		// Actually it is not more expensive than logic of a single bot.
+		// Lets distribute frames evenly (giving the team the same weight as for a bot).
 
-	// Just distribute bot think frames evenly for non-team gametypes
-	if( !GS_TeamBasedGametype() ) {
-		unsigned chosenOffset = 0;
-		for( unsigned i = 1; i < MAX_AFFINITY_OFFSET; ++i ) {
-			if( affinityOffsetsInUse[chosenOffset] > affinityOffsetsInUse[i] ) {
-				chosenOffset = i;
-			}
-		}
-		affinityOffsetsInUse[chosenOffset]++;
-		SetBotFrameAffinity( entNum, AffinityModulo(), chosenOffset );
-		return;
-	}
-
-	const unsigned modulo = AffinityModulo();
-	assert( modulo >= 1 && modulo <= 4 );
-
-	// This is the value that gets actually used.
-	// Older versions used to set think frames of every team bot one frame after the team thinks.
-	// It was expected that the team logic is going to be quite computational expensive.
-	// Actually it is not more expensive than logic of a single bot.
-	// Lets distribute frames evenly (giving the team the same weight as for a bot).
-	if( modulo == 4 ) {
 		// 0 for ALPHA, 2 for BETA
 		const auto teamOffset = 2 * (unsigned)( teamNum - TEAM_ALPHA );
 		assert( teamOffset == 0 || teamOffset == 2 );
 		unsigned chosenOffset = teamOffset;
 		// If more bots think at teamOffset frames (counting the team as a "bot" too)
-		if( affinityOffsetsInUse[teamOffset] + 1 > affinityOffsetsInUse[teamOffset + 1] ) {
+		if( m_affinityOffsetsInUse[teamOffset] + 1 > m_affinityOffsetsInUse[teamOffset + 1] ) {
 			chosenOffset = teamOffset + 1;
 		}
-		affinityOffsetsInUse[chosenOffset]++;
-		SetBotFrameAffinity( entNum, modulo, chosenOffset );
-		return;
-	}
-
-	// These modulo values are not really used but let's keep this code for various reasons.
-	// Just do not complicate things by trying distribute think frames evenly.
-
-	// If the think cycle consist of 3 frames:
-	if( modulo == 3 ) {
-		// AI teams think on frame 0, bots of team Alpha think on frame 1, bots of team Beta think on frame 2
-		SetBotFrameAffinity( entNum, modulo, 1 + (unsigned)teamNum - TEAM_ALPHA );
-		return;
-	}
-
-	// If the think cycle consist of 2 frames:
-	if( modulo == 2 ) {
-		// the Alpha AI team and team Alpha bots think on frame 0,
-		// the Beta AI team and team Beta bots think on frame 1
-		SetBotFrameAffinity( entNum, modulo, (unsigned)teamNum - TEAM_ALPHA );
-		return;
+		m_affinityOffsetsInUse[chosenOffset]++;
+		SetBotFrameAffinity( entNum, m_frameAffinityModulo, chosenOffset );
+	} else {
+		// Distribute bot think frames evenly for non-team gametypes
+		unsigned chosenOffset = 0;
+		for( unsigned i = 1; i < std::size( m_affinityOffsetsInUse ); ++i ) {
+			if( m_affinityOffsetsInUse[chosenOffset] > m_affinityOffsetsInUse[i] ) {
+				chosenOffset = i;
+			}
+		}
+		m_affinityOffsetsInUse[chosenOffset]++;
+		SetBotFrameAffinity( entNum, m_frameAffinityModulo, chosenOffset );
 	}
 }
 
 void AiBaseTeam::ReleaseBotFrameAffinity( int entNum ) {
-	unsigned offset = botAffinityOffsets[entNum];
-	botAffinityOffsets[entNum] = 0;
-	botAffinityModulo[entNum] = 0;
-	affinityOffsetsInUse[offset]--;
+	const unsigned offset = m_botAffinityOffsets[entNum];
+	m_botAffinityOffsets[entNum] = 0;
+	m_affinityOffsetsInUse[offset]--;
 }
 
 void AiBaseTeam::SetBotFrameAffinity( int entNum, unsigned modulo, unsigned offset ) {
-	botAffinityModulo[entNum] = (unsigned char)modulo;
-	botAffinityOffsets[entNum] = (unsigned char)offset;
-	game.edicts[entNum].bot->SetFrameAffinity( modulo, offset );
+	m_botAffinityOffsets[entNum] = (uint8_t)offset;
+	game.edicts[entNum].bot->m_frameAffinityModulo = modulo;
+	game.edicts[entNum].bot->m_frameAffinityOffset = offset;
 }
 
 void AiBaseTeam::Init() {

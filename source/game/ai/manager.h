@@ -8,7 +8,7 @@
 
 class Bot;
 
-class AiManager : public AiFrameAwareComponent {
+class AiManager {
 	static const unsigned MAX_ACTIONS = AiPlanner::MAX_ACTIONS;
 	static const unsigned MAX_GOALS = AiPlanner::MAX_GOALS;
 
@@ -54,8 +54,6 @@ protected:
 
 	static AiManager *instance;
 
-	void Frame() override;
-
 	bool CheckCanSpawnBots();
 	void CreateUserInfo( char *buffer, size_t bufferSize );
 	edict_t * ConnectFakeClient();
@@ -70,6 +68,8 @@ protected:
 
 	void FindHubAreas();
 public:
+	void Update();
+
 	void LinkBot( Bot *bot );
 	void UnlinkBot( Bot *bot );
 

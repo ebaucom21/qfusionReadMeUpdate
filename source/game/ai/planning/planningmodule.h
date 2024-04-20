@@ -120,10 +120,6 @@ public:
 		return itemsSelector.IsTopTierItem( navTarget );
 	}
 
-	void SetFrameAffinity( unsigned modulo, unsigned offset ) {
-		planner.SetFrameAffinity( modulo, offset );
-	}
-
 	bool IsPerformingPursuit() const;
 };
 

@@ -213,7 +213,7 @@ EnemiesTracker::~EnemiesTracker() noexcept {
 	}
 }
 
-void EnemiesTracker::Frame() {
+void EnemiesTracker::Update() {
 	const int64_t levelTime = level.time;
 
 	for( AttackStats *stats = m_trackedAttackerStatsHead, *next; stats; stats = next ) { next = stats->next;
@@ -247,33 +247,30 @@ void EnemiesTracker::Frame() {
 			}
 		}
 	}
-}
 
-void EnemiesTracker::Think() {
 	const auto reactionTime = (int64_t)wsw::min( 48.0f, 320.0f * ( 1.0f - m_bot->Skill() ) );
-	const int64_t levelTime = level.time;
 
-	// We have to introduce an intermediate variable and save the next link on each iteration
-	// first because the current variable gets unlinked and next link becomes invalid.
-	TrackedEnemy *nextEnemy = nullptr;
-	for( TrackedEnemy *enemy = m_trackedEnemiesHead; enemy; enemy = nextEnemy ) { nextEnemy = enemy->next;
-		// Remove not seen yet enemies
-		if( const auto diff = (int)( levelTime - enemy->LastSeenAt() ); diff > 15000 ) {
-			Debug( "has not seen %s for %d ms, should forget this enemy\n", enemy->Nick(), diff );
-			RemoveEnemy( enemy );
-			continue;
-		}
+	if( m_bot->PermitsDistributedUpdateThisFrame() ) {
+		TrackedEnemy *nextEnemy = nullptr;
+		for( TrackedEnemy *enemy = m_trackedEnemiesHead; enemy; enemy = nextEnemy ) { nextEnemy = enemy->next;
+			// Remove not seen yet enemies
+			if( const auto diff = (int)( levelTime - enemy->LastSeenAt() ); diff > 15000 ) {
+				Debug( "has not seen %s for %d ms, should forget this enemy\n", enemy->Nick(), diff );
+				RemoveEnemy( enemy );
+				continue;
+			}
 
-		// Do not forget, just skip
-		if( enemy->m_ent->flags & ( FL_NOTARGET | FL_BUSY ) ) {
-			continue;
-		}
-		// Skip during reaction time
-		if( enemy->m_registeredAt + reactionTime > levelTime ) {
-			continue;
-		}
+			// Do not forget, just skip
+			if( enemy->m_ent->flags & ( FL_NOTARGET | FL_BUSY ) ) {
+				continue;
+			}
+			// Skip during reaction time
+			if( enemy->m_registeredAt + reactionTime > levelTime ) {
+				continue;
+			}
 
-		UpdateEnemyWeight( enemy, reactionTime );
+			UpdateEnemyWeight( enemy, reactionTime );
+		}
 	}
 }
 

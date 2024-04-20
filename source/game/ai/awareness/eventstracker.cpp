@@ -333,9 +333,7 @@ EventsTracker::EventsTracker( Bot *bot ) : m_bot( bot ) {
 	SetEventHandler( EV_FALL, &EventsTracker::HandleGenericPlayerEntityEvent, 1024.0f );
 }
 
-void EventsTracker::Frame() {
-	AiFrameAwareComponent::Frame();
-
+void EventsTracker::Update() {
 	const edict_t *gameEdicts = game.edicts;
 	const int64_t levelTime   = level.time;
 
@@ -347,34 +345,31 @@ void EventsTracker::Frame() {
 			}
 		}
 	}
-}
 
-void EventsTracker::Think() {
-	// Report new origins of tracked players.
-	const edict_t *gameEdicts = game.edicts;
-	const int64_t levelTime   = level.time;
-	for( int clientNum = 0, maxClients = gs.maxclients; clientNum < maxClients; ++clientNum ) {
-		if( m_jumppadUserTrackingTimeoutAt[clientNum] > levelTime ) {
-			const edict_t *ent = gameEdicts + clientNum + 1;
-			// Check whether a player cannot be longer a valid entity
-			if( m_bot->IsDefinitelyNotAFeasibleEnemy( ent ) ) {
-				m_jumppadUserTrackingTimeoutAt[clientNum] = 0;
-			} else {
-				m_bot->OnEnemyOriginGuessed( ent, 384 );
+	if( m_bot->PermitsDistributedUpdateThisFrame() ) {
+		for( int clientNum = 0, maxClients = gs.maxclients; clientNum < maxClients; ++clientNum ) {
+			if( m_jumppadUserTrackingTimeoutAt[clientNum] > levelTime ) {
+				const edict_t *ent = gameEdicts + clientNum + 1;
+				// Check whether a player cannot be longer a valid entity
+				if( m_bot->IsDefinitelyNotAFeasibleEnemy( ent ) ) {
+					m_jumppadUserTrackingTimeoutAt[clientNum] = 0;
+				} else {
+					m_bot->OnEnemyOriginGuessed( ent, 384 );
+				}
 			}
 		}
-	}
 
-	// We have to validate detected enemies since the events queue
-	// has been accumulated during the Think() frames cycle
-	// and might contain outdated info (e.g. a player has changed its team).
-	for( const auto &[origin, entNum]: m_guessedEnemyOriginsQueue ) {
-		const edict_t *ent = gameEdicts + entNum;
-		if( !m_bot->IsDefinitelyNotAFeasibleEnemy( ent ) ) {
-			m_bot->OnEnemyOriginGuessed( ent, 96, origin.Data() );
+		// We have to validate detected enemies since the events queue
+		// has been accumulated during the Think() frames cycle
+		// and might contain outdated info (e.g. a player has changed its team).
+		for( const auto &[origin, entNum]: m_guessedEnemyOriginsQueue ) {
+			const edict_t *ent = gameEdicts + entNum;
+			if( !m_bot->IsDefinitelyNotAFeasibleEnemy( ent ) ) {
+				m_bot->OnEnemyOriginGuessed( ent, 96, origin.Data() );
+			}
 		}
-	}
 
-	m_guessedEnemyOriginsQueue.clear();
+		m_guessedEnemyOriginsQueue.clear();
+	}
 }
 

@@ -12,7 +12,7 @@
 class AiSquad;
 class Bot;
 
-class BotAwarenessModule: public AiFrameAwareComponent {
+class BotAwarenessModule {
 	friend class Bot;
 
 	Bot *const bot;
@@ -54,15 +54,6 @@ private:
 
 	Hazard triggeredPlanningHazard { nullptr };
 
-	void Frame() override;
-	void Think() override;
-
-	void SetFrameAffinity( unsigned modulo, unsigned offset ) override {
-		AiFrameAwareComponent::SetFrameAffinity( modulo, offset );
-		eventsTracker.SetFrameAffinity( modulo, offset );
-		enemiesTracker.SetFrameAffinity( modulo, offset );
-	}
-
 	void UpdateSelectedEnemy();
 	void UpdateBlockedAreasStatus();
 	void TryTriggerPlanningForNewHazard();
@@ -74,10 +65,12 @@ private:
 public:
 	BotAwarenessModule( Bot *bot_ );
 
+	void Update();
+
 	void OnAttachedToSquad( AiSquad *squad_ );
 	void OnDetachedFromSquad( AiSquad *squad_ );
 
-	void OnHurtByNewThreat( const edict_t *newThreat, const AiFrameAwareComponent *threatDetector );
+	void OnHurtByNewThreat( const edict_t *newThreat, const AiComponent *threatDetector );
 	void OnEnemyRemoved( const TrackedEnemy *enemy );
 
 	void OnEnemyOriginGuessed( const edict_t *enemy, unsigned minMillisSinceLastSeen, const float *guessedOrigin = nullptr );
@@ -129,7 +122,7 @@ public:
 
 	void EnableAutoAlert( const AiAlertSpot &alertSpot,
 						  AlertTracker::AlertCallback callback,
-						  AiFrameAwareComponent *receiver ) {
+						  AiComponent *receiver ) {
 		alertTracker.EnableAutoAlert( alertSpot, callback, receiver );
 	}
 

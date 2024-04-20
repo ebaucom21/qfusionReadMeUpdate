@@ -3,7 +3,7 @@
 
 #include "../component.h"
 
-class EntitiesPvsCache: public AiFrameAwareComponent {
+class EntitiesPvsCache {
 	// 2 bits per each other entity
 	static constexpr unsigned ENTITY_DATA_STRIDE = 2 * (MAX_EDICTS / 32);
 	// MAX_EDICTS strings per each entity
@@ -13,21 +13,16 @@ class EntitiesPvsCache: public AiFrameAwareComponent {
 
 	static EntitiesPvsCache instance;
 public:
-	EntitiesPvsCache() {
-		// Can't use virtual SetFrameAffinity() call here
-		// Schedule Think() for every 4-th frame
-		this->frameAffinityModulo = 4;
-		this->frameAffinityOffset = 0;
-	}
-
 	static EntitiesPvsCache *Instance() { return &instance; }
 
 	// We could avoid explicit clearing of the cache each frame by marking each entry by the computation timestamp.
 	// This approach is convenient and is widely for bot perception caches.
 	// However we have to switch to the explicit cleaning in this case
 	// to prevent excessive memory usage and cache misses.
-	void Think() override {
-		memset( &visStrings[0][0], 0, sizeof( visStrings ) );
+	void Update() {
+		if( ( level.framenum % 4 ) == 0 ) {
+			memset( &visStrings[0][0], 0, sizeof( visStrings ) );
+		}
 	}
 
 	bool AreInPvs( const edict_t *ent1, const edict_t *ent2 ) const;

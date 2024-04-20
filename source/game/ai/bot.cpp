@@ -189,7 +189,6 @@ bool Bot::CanHandleNavTargetTouch( const edict_t *ent ) {
 		return false;
 	}
 
-	lastNavTargetReachedAt = level.time;
 	return true;
 }
 
@@ -203,7 +202,6 @@ bool Bot::TryReachNavTargetByProximity() {
 	}
 
 	if( ( navTarget->Origin() - self->s.origin ).SquaredLength() < wsw::square( navTarget->RadiusOrDefault( 40.0f ) ) ) {
-		lastNavTargetReachedAt = level.time;
 		return true;
 	}
 
@@ -287,42 +285,6 @@ void Bot::OnBlockedTimeout() {
 	self->nextThink = level.time + 1;
 }
 
-void Bot::GhostingFrame() {
-	m_selectedEnemy = std::nullopt;
-	m_lostEnemy     = std::nullopt;
-
-	planningModule.ClearGoalAndPlan();
-
-	m_movementSubsystem.Reset();
-
-	navTarget           = nullptr;
-	m_selectedNavEntity = std::nullopt;
-	blockedTimeoutAt    = level.time + BLOCKED_TIMEOUT;
-
-	// wait 3 seconds after entering the level
-	if( self->r.client->levelTimestamp + 3000 < level.time && level.canSpawnEntities ) {
-		bool trySpawning;
-		if( self->r.client->team == TEAM_SPECTATOR ) {
-			trySpawning = false;
-			if( !self->r.client->queueTimeStamp && self == level.think_client_entity ) {
-				G_Teams_JoinAnyTeam( self, false );
-				if( self->r.client->team != TEAM_SPECTATOR ) {
-					trySpawning = true;
-				}
-			}
-		} else {
-			// ask for respawn if the minimum bot respawning time passed
-			trySpawning = level.time > self->deathTimeStamp + 3000;
-		}
-
-		if( trySpawning ) {
-			m_pendingClientThinkInput = BotInput {};
-			m_pendingClientThinkInput->isUcmdSet = true;
-			m_pendingClientThinkInput->SetAttackButton( true );
-		}
-	}
-}
-
 void Bot::OnRespawn() {
 	VectorClear( self->r.client->ps.pmove.delta_angles );
 	self->r.client->last_activity = level.time;
@@ -337,42 +299,24 @@ void Bot::OnRespawn() {
 	m_selectedNavEntity = std::nullopt;
 }
 
-void Bot::Think() {
-	assert( !m_selectedEnemy || !m_selectedEnemy->ShouldInvalidate() );
+void Bot::Update() {
+	// We should update weapons status each frame since script weapons may be changed each frame.
+	// These statuses are used by firing methods, so actual weapon statuses are required.
+	weaponsUsageModule.UpdateScriptWeaponsStatus();
 
-	// Call superclass method first
-	AiFrameAwareComponent::Think();
+	const int weakAmmoShift   = (int)AMMO_GUNBLADE - (int)WEAP_GUNBLADE;
+	const int strongAmmoShift = (int)AMMO_WEAK_GUNBLADE - (int)WEAP_GUNBLADE;
+	const auto *inventory     = self->r.client->ps.inventory;
 
-	if( !G_ISGHOSTING( self ) ) {
-		// TODO: Check whether we are camping/holding a spot
-		if( !self->groundentity ) {
-			blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
-		} else if( self->groundentity->use == Use_Plat && VectorLengthSquared( self->groundentity->velocity ) > wsw::square( 1 ) ) {
-			blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
-		} else if( VectorLengthSquared( self->velocity ) > wsw::square( 30 ) ) {
-			blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
-		} else {
-			// if completely stuck somewhere
-			if( blockedTimeoutAt < level.time ) {
-				OnBlockedTimeout();
-			}
+	hasOnlyGunblade = true;
+	for( int weapon = WEAP_GUNBLADE + 1; weapon < WEAP_TOTAL; ++weapon ) {
+		if( inventory[weapon] && ( inventory[weapon + strongAmmoShift] || inventory[weapon + weakAmmoShift] ) ) {
+			hasOnlyGunblade = false;
+			break;
 		}
 	}
 
-	if( !G_ISGHOSTING( self ) ) {
-		// TODO: Let the weapons usage module decide?
-		if( CanChangeWeapons() ) {
-			weaponsUsageModule.Think( planningModule.CachedWorldState() );
-			ChangeWeapons( weaponsUsageModule.GetSelectedWeapons() );
-		}
-	}
-}
-
-void Bot::Frame() {
 	m_pendingClientThinkInput = std::nullopt;
-
-	// Call superclass method first
-	AiFrameAwareComponent::Frame();
 
 	if( !G_ISGHOSTING( self ) ) {
 		entityPhysicsState->UpdateFromEntity( self );
@@ -383,46 +327,95 @@ void Bot::Frame() {
 	}
 
 	if( G_ISGHOSTING( self ) ) {
-		GhostingFrame();
+		m_selectedEnemy = std::nullopt;
+		m_lostEnemy     = std::nullopt;
+
+		planningModule.ClearGoalAndPlan();
+
+		m_movementSubsystem.Reset();
+
+		navTarget           = nullptr;
+		m_selectedNavEntity = std::nullopt;
+		blockedTimeoutAt    = level.time + BLOCKED_TIMEOUT;
+
+		// wait 3 seconds after entering the level
+		if( self->r.client->levelTimestamp + 3000 < level.time && level.canSpawnEntities ) {
+			bool trySpawning;
+			if( self->r.client->team == TEAM_SPECTATOR ) {
+				trySpawning = false;
+				if( !self->r.client->queueTimeStamp && self == level.think_client_entity ) {
+					G_Teams_JoinAnyTeam( self, false );
+					if( self->r.client->team != TEAM_SPECTATOR ) {
+						trySpawning = true;
+					}
+				}
+			} else {
+				// ask for respawn if the minimum bot respawning time passed
+				trySpawning = level.time > self->deathTimeStamp + 3000;
+			}
+
+			if( trySpawning ) {
+				m_pendingClientThinkInput = BotInput {};
+				m_pendingClientThinkInput->isUcmdSet = true;
+				m_pendingClientThinkInput->SetAttackButton( true );
+			}
+		}
 	} else {
-		ActiveFrame();
+		//get ready if in the game
+		if( GS_MatchState() <= MATCH_STATE_WARMUP && !IsReady() && self->r.client->teamStateTimestamp + 4000 < level.time ) {
+			G_Match_Ready( self, {} );
+		}
+
+		awarenessModule.Update();
+		// Awareness stuff must be up-to date for planning.
+		planner->Update();
+
+		weaponsUsageModule.Frame( planningModule.CachedWorldState() );
+
+		m_pendingClientThinkInput = BotInput {};
+
+		// Might modify botInput
+		m_movementSubsystem.Frame( std::addressof( *m_pendingClientThinkInput ) );
+
+		CheckTargetProximity();
+
+		// Might modify botInput
+		if( ShouldAttack() ) {
+			weaponsUsageModule.TryFire( std::addressof( *m_pendingClientThinkInput ) );
+		}
+
+		// Apply modified botInput
+		m_movementSubsystem.ApplyInput( std::addressof( *m_pendingClientThinkInput ) );
 	}
 
 	assert( !m_selectedEnemy || !m_selectedEnemy->ShouldInvalidate() );
-}
 
-void Bot::ActiveFrame() {
-	//get ready if in the game
-	if( GS_MatchState() <= MATCH_STATE_WARMUP && !IsReady() && self->r.client->teamStateTimestamp + 4000 < level.time ) {
-		G_Match_Ready( self, {} );
+	if( PermitsDistributedUpdateThisFrame() ) {
+		if( !G_ISGHOSTING( self ) ) {
+			// TODO: Check whether we are camping/holding a spot
+			if( !self->groundentity ) {
+				blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
+			} else if( self->groundentity->use == Use_Plat && VectorLengthSquared( self->groundentity->velocity ) > wsw::square( 1 ) ) {
+				blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
+			} else if( VectorLengthSquared( self->velocity ) > wsw::square( 30 ) ) {
+				blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
+			} else {
+				// if completely stuck somewhere
+				if( blockedTimeoutAt < level.time ) {
+					OnBlockedTimeout();
+				}
+			}
+		}
+
+		if( !G_ISGHOSTING( self ) ) {
+			// TODO: Let the weapons usage module decide?
+			if( CanChangeWeapons() ) {
+				weaponsUsageModule.Think( planningModule.CachedWorldState() );
+				ChangeWeapons( weaponsUsageModule.GetSelectedWeapons() );
+			}
+		}
 	}
 
-	// Always calls Frame() and calls Think() if needed.
-	awarenessModule.Update();
-
-	// Always calls Frame() and calls Think() if needed.
-	// Awareness stuff must be up-to date for planning.
-	planner->Update();
-
-	weaponsUsageModule.Frame( planningModule.CachedWorldState() );
-
-	m_pendingClientThinkInput = BotInput {};
-
-	// Might modify botInput
-	m_movementSubsystem.Frame( std::addressof( *m_pendingClientThinkInput ) );
-
-	CheckTargetProximity();
-
-	// Might modify botInput
-	if( ShouldAttack() ) {
-		weaponsUsageModule.TryFire( std::addressof( *m_pendingClientThinkInput ) );
-	}
-
-	// Apply modified botInput
-	m_movementSubsystem.ApplyInput( std::addressof( *m_pendingClientThinkInput ) );
-}
-
-void Bot::PostFrame() {
 	if( m_pendingClientThinkInput ) {
 		usercmd_t ucmd {};
 
@@ -669,30 +662,6 @@ bool Bot::TryGetVitalComputationQuota() const {
 
 bool Bot::TryGetExpensiveThinkCallQuota() const {
 	return AiManager::Instance()->TryGetExpensiveThinkCallQuota( this );
-}
-
-void Bot::PreFrame() {
-	// We should update weapons status each frame since script weapons may be changed each frame.
-	// These statuses are used by firing methods, so actual weapon statuses are required.
-	weaponsUsageModule.UpdateScriptWeaponsStatus();
-
-	const int weakAmmoShift   = (int)AMMO_GUNBLADE - (int)WEAP_GUNBLADE;
-	const int strongAmmoShift = (int)AMMO_WEAK_GUNBLADE - (int)WEAP_GUNBLADE;
-	const auto *inventory     = self->r.client->ps.inventory;
-
-	hasOnlyGunblade = true;
-	for( int weapon = WEAP_GUNBLADE + 1; weapon < WEAP_TOTAL; ++weapon ) {
-		if( inventory[weapon] && ( inventory[weapon + strongAmmoShift] || inventory[weapon + weakAmmoShift] ) ) {
-			hasOnlyGunblade = false;
-			break;
-		}
-	}
-}
-
-void Bot::SetFrameAffinity( unsigned modulo, unsigned offset ) {
-	AiFrameAwareComponent::SetFrameAffinity( modulo, offset );
-	planningModule.SetFrameAffinity( modulo, offset );
-	awarenessModule.SetFrameAffinity( modulo, offset );
 }
 
 float Bot::GetChangedAngle( float oldAngle, float desiredAngle, unsigned frameTime,

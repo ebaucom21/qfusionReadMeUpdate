@@ -20,14 +20,3 @@ void AiComponent::FailWith( const char *format, ... ) const {
 	AI_FailWithv( tag, format, va );
 	va_end( va );
 }
-
-void AiFrameAwareComponent::Update() {
-	PreFrame();
-	Frame();
-	if( !ShouldSkipThinkFrame() ) {
-		PreThink();
-		Think();
-		PostThink();
-	}
-	PostFrame();
-}

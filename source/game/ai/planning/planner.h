@@ -164,7 +164,7 @@ public:
 	virtual PlannerNode *TryApply( const WorldState &worldState ) = 0;
 };
 
-class AiPlanner : public AiFrameAwareComponent {
+class AiPlanner : public AiComponent {
 	friend class Ai;
 	friend class AiManager;
 	friend class AiBaseTeam;
@@ -206,12 +206,12 @@ protected:
 
 	void SetGoalAndPlan( AiGoal *goal_, AiActionRecord *planHead_ );
 
-	void Think() override;
-
 	virtual void BeforePlanning() {}
 	virtual void AfterPlanning() {}
 public:
 	bool HasPlan() const { return planHead != nullptr; }
+
+	void Update();
 
 	void ClearGoalAndPlan();
 

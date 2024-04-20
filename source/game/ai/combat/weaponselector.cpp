@@ -57,7 +57,7 @@ bool BotWeaponSelector::checkFastWeaponSwitchAction() {
 
 	if( bot->Skill() < 0.66f ) {
 		// Mid-skill bots do these actions in non-think frames occasionally
-		if( bot->ShouldSkipThinkFrame() && random() > bot->Skill() ) {
+		if( !bot->PermitsDistributedUpdateThisFrame() && random() > bot->Skill() ) {
 			return false;
 		}
 	}

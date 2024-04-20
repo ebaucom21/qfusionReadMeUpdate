@@ -351,21 +351,23 @@ WeightsPair *AiObjectiveBasedTeam::ObjectiveSpotImpl::FindWeightsForBot( const B
 	return nullptr;
 }
 
-void AiObjectiveBasedTeam::Think() {
+void AiObjectiveBasedTeam::Update() {
 	// Call super method first, it contains an obligatory logic
-	AiSquadBasedTeam::Think();
+	AiSquadBasedTeam::Update();
 
-	Candidates candidates;
-	FindAllCandidates( candidates );
+	if( PermitsDistributedUpdateThisFrame() ) {
+		Candidates candidates;
+		FindAllCandidates( candidates );
 
-	// First reset all candidates statuses to default values
-	for( auto &botAndScore: candidates ) {
-		ResetBotOrders( botAndScore.bot );
+		// First reset all candidates statuses to default values
+		for( auto &botAndScore: candidates ) {
+			ResetBotOrders( botAndScore.bot );
+		}
+
+		// Defenders must be assigned first
+		AssignBots( defenceSpots.Head(), defenceSpots.size, candidates );
+		AssignBots( offenseSpots.Head(), offenseSpots.size, candidates );
 	}
-
-	// Defenders must be assigned first
-	AssignBots( defenceSpots.Head(), defenceSpots.size, candidates );
-	AssignBots( offenseSpots.Head(), offenseSpots.size, candidates );
 }
 
 void AiObjectiveBasedTeam::ResetBotOrders( Bot *bot ) {

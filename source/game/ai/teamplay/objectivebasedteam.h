@@ -396,7 +396,7 @@ public:
 
 	const std::pair<float, float> *GetEntityWeights( const Bot *bot, const NavEntity *navEntity ) const override;
 
-	void Think() override;
+	void Update() override;
 };
 
 #endif
