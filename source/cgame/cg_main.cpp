@@ -3141,7 +3141,8 @@ static void CG_UpdatePlayerState() {
 		}
 	}
 
-	if( tmpIndicesForTwoTilePanes[0].size() + tmpIndicesForTwoTilePanes[1].size() > 0 ) {
+	// Don't even try making tile view indices unless there are at least two views
+	if( tmpIndicesForTwoTilePanes[0].size() + tmpIndicesForTwoTilePanes[1].size() > 1 ) {
 		wsw::StaticVector<float, 8> allowedAspectRatio;
 		const auto primaryRatio     = (float)cgs.vidWidth / (float)cgs.vidHeight;
 		bool addedThePrimaryRatio   = false;
@@ -5413,7 +5414,7 @@ std::optional<unsigned> CG_GetPlayerNumForViewState( unsigned viewStateIndex ) {
 }
 
 bool CG_IsViewAttachedToPlayer() {
-	if( cg.chaseMode == CAM_TILED ) {
+	if( CG_UsesTiledView() ) {
 		return false;
 	}
 	if( cgs.demoPlaying && cg.isDemoCamFree ) {
@@ -5544,8 +5545,8 @@ bool CG_GrabsMouseMovement() {
 }
 
 bool CG_UsesTiledView() {
-	// Don't actually use the tiled mode unless there are at least 2 available povs
-	return cg.chaseMode == CAM_TILED && cg.tileMiniviewViewStateIndices.size() > 1;
+	assert( cg.tileMiniviewViewStateIndices.empty() || cg.tileMiniviewViewStateIndices.size() > 1 );
+	return cg.chaseMode == CAM_TILED && !cg.tileMiniviewViewStateIndices.empty();
 }
 
 void CG_SwitchToPlayerNum( unsigned playerNum ) {
