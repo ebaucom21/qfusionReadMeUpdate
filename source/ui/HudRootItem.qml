@@ -33,6 +33,8 @@ Item {
         commonDataModel: Hud.commonDataModel
         povDataModel: Hud.povDataModel
         miniviewAllocator: rootItem
+        // Ensure that it is on top of miniviews and their huds (the primary hud contains chat popups along with other things)
+        z: +1
     }
 
     Component.onCompleted: {

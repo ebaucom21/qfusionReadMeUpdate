@@ -266,98 +266,110 @@ auto getViewStateForEntity( int number ) -> ViewState * {
 	return &cg.viewStates[cg.chasedViewportIndex];
 }
 
+[[nodiscard]]
+bool shouldHandleChatLikeCommandOfViewState( ViewState *viewState ) {
+	if( cgs.demoPlaying ) {
+		return viewState == getPrimaryViewState() && !CG_UsesTiledView();
+	} else {
+		return viewState == getOurClientViewState();
+	}
+}
+
 static void CG_SC_Print( ViewState *viewState, const CmdArgs &cmdArgs ) {
-	CG_LocalPrint( viewState, "%s", Cmd_Argv( 1 ) );
+	if( shouldHandleChatLikeCommandOfViewState( viewState ) ) {
+		CG_LocalPrint( "%s", Cmd_Argv( 1 ) );
+	}
 }
 
 static void CG_SC_ChatPrint( ViewState *viewState, const CmdArgs &cmdArgs ) {
-	const wsw::StringView commandName( Cmd_Argv( 0 ) );
-	const bool teamonly = commandName.startsWith( 't' );
-	std::optional<uint64_t> sendCommandNum;
-	int whoArgNum = 1;
-	if( commandName.endsWith( 'a' ) ) {
-		if( ( sendCommandNum = wsw::toNum<uint64_t>( wsw::StringView( Cmd_Argv( 1 ) ) ) ) ) {
-			whoArgNum = 2;
+	if( shouldHandleChatLikeCommandOfViewState( viewState ) ) {
+		const wsw::StringView commandName( Cmd_Argv( 0 ) );
+		const bool teamonly = commandName.startsWith( 't' );
+		std::optional<uint64_t> sendCommandNum;
+		int whoArgNum = 1;
+		if( commandName.endsWith( 'a' ) ) {
+			if( ( sendCommandNum = wsw::toNum<uint64_t>( wsw::StringView( Cmd_Argv( 1 ) ) ) ) ) {
+				whoArgNum = 2;
+			} else {
+				// TODO??? What to do in this case?
+				return;
+			}
+		}
+
+		const int who    = atoi( Cmd_Argv( whoArgNum ) );
+		const char *name = ( who && who == bound( 1, who, MAX_CLIENTS ) ? cgs.clientInfo[who - 1].name : "console" );
+		const char *text = Cmd_Argv( whoArgNum + 1 );
+
+		const wsw::StringView nameView( name );
+		const wsw::StringView textView( text );
+
+		if( teamonly ) {
+			CG_LocalPrint( S_COLOR_YELLOW "[%s]" S_COLOR_WHITE "%s" S_COLOR_YELLOW ": %s\n",
+						   viewState->snapPlayerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ? "SPEC" : "TEAM", name, text );
+			wsw::ui::UISystem::instance()->addToTeamChat( { nameView, textView, sendCommandNum } );
 		} else {
-			// TODO??? What to do in this case?
-			return;
+			CG_LocalPrint( "%s" S_COLOR_GREEN ": %s\n", name, text );
+			wsw::ui::UISystem::instance()->addToChat( { nameView, textView, sendCommandNum } );
 		}
-	}
 
-	const int who = atoi( Cmd_Argv( whoArgNum ) );
-	const char *name = ( who && who == bound( 1, who, MAX_CLIENTS ) ? cgs.clientInfo[who - 1].name : "console" );
-	const char *text = Cmd_Argv( whoArgNum + 1 );
-
-	const wsw::StringView nameView( name );
-	const wsw::StringView textView( text );
-
-	if( teamonly ) {
-		CG_LocalPrint( viewState, S_COLOR_YELLOW "[%s]" S_COLOR_WHITE "%s" S_COLOR_YELLOW ": %s\n",
-					   viewState->snapPlayerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ? "SPEC" : "TEAM", name, text );
-		// TODO: What view state should we check?
-		if( viewState == getPrimaryViewState() ) {
-			wsw::ui::UISystem::instance()->addToTeamChat( {nameView, textView, sendCommandNum } );
+		if( v_chatBeep.get() ) {
+			SoundSystem::instance()->startLocalSound( cgs.media.sndChat, 1.0f );
 		}
-	} else {
-		CG_LocalPrint( viewState, "%s" S_COLOR_GREEN ": %s\n", name, text );
-		// TODO: What view state should we check?
-		if( viewState == getPrimaryViewState() ) {
-			wsw::ui::UISystem::instance()->addToChat( {nameView, textView, sendCommandNum } );
-		}
-	}
-
-	if( v_chatBeep.get() ) {
-		SoundSystem::instance()->startLocalSound( cgs.media.sndChat, 1.0f );
 	}
 }
 
 static void CG_SC_IgnoreCommand( ViewState *viewState, const CmdArgs &cmdArgs ) {
-	const char *firstArg = Cmd_Argv( 1 );
-	// TODO: Is there a more generic method of setting client vars?
-	// In fact this is actually a safer alternative so it should be kept
-	if( !Q_stricmp( "setVar", firstArg ) ) {
-		v_chatFilter.setImmediately( atoi(Cmd_Argv( 2 ) ) );
-		return;
-	}
+	if( shouldHandleChatLikeCommandOfViewState( viewState ) ) {
+		const char *firstArg = Cmd_Argv( 1 );
+		// TODO: Is there a more generic method of setting client vars?
+		// In fact this is actually a safer alternative so it should be kept
+		if( !Q_stricmp( "setVar", firstArg ) ) {
+			v_chatFilter.setImmediately( atoi(Cmd_Argv( 2 ) ) );
+			return;
+		}
 
-	if( !v_chatShowIgnored.get() ) {
-		return;
-	}
+		if( !v_chatShowIgnored.get() ) {
+			return;
+		}
 
-	const int who = ::atoi( firstArg );
-	if( !who ) {
-		return;
-	}
+		const int who = ::atoi( firstArg );
+		if( !who ) {
+			return;
+		}
 
-	if( who != bound( 1, who, MAX_CLIENTS ) ) {
-		return;
-	}
+		if( who != bound( 1, who, MAX_CLIENTS ) ) {
+			return;
+		}
 
-	const char *format = S_COLOR_GREY "A message from " S_COLOR_WHITE "%s" S_COLOR_GREY " was ignored\n";
-	CG_LocalPrint( viewState, format, cgs.clientInfo[who - 1].name );
+		const char *format = S_COLOR_GREY "A message from " S_COLOR_WHITE "%s" S_COLOR_GREY " was ignored\n";
+		CG_LocalPrint( format, cgs.clientInfo[who - 1].name );
+	}
 }
 
 static void CG_SC_MessageFault( ViewState *viewState, const CmdArgs &cmdArgs ) {
-	const char *const commandNumString = Cmd_Argv( 1 );
-	const char *const faultKindString  = Cmd_Argv( 2 );
-	const char *const timeoutString    = Cmd_Argv( 3 );
-	if( commandNumString && faultKindString && timeoutString ) {
-		if( const auto maybeCommandNum = wsw::toNum<uint64_t>( commandNumString ) ) {
-			if( const auto maybeFaultKind = wsw::toNum<unsigned>( wsw::StringView( faultKindString ) ) ) {
-				// Check timeout values for sanity by specifying a lesser type
-				if( const auto maybeTimeoutValue = wsw::toNum<uint16_t>( wsw::StringView( timeoutString ) ) ) {
-					if( *maybeFaultKind >= MessageFault::kMaxKind && *maybeFaultKind <= MessageFault::kMaxKind ) {
-						const auto kind    = (MessageFault::Kind)*maybeFaultKind;
-						const auto timeout = *maybeTimeoutValue;
-						if( kind == MessageFault::Flood ) {
-							const auto secondsLeft = (int)( *maybeTimeoutValue / 1000 ) + 1;
-							CG_LocalPrint( viewState, "Flood protection. You can talk again in %d second(s)\n", secondsLeft );
-						} else if( kind == MessageFault::Muted ) {
-							CG_LocalPrint( viewState, "You are muted on this server\n" );
-						} else {
-							wsw::failWithLogicError( "unreachable" );
+	if( shouldHandleChatLikeCommandOfViewState( viewState ) ) {
+		// TODO: Check what view state does it belong to
+		const char *const commandNumString = Cmd_Argv( 1 );
+		const char *const faultKindString  = Cmd_Argv( 2 );
+		const char *const timeoutString    = Cmd_Argv( 3 );
+		if( commandNumString && faultKindString && timeoutString ) {
+			if( const auto maybeCommandNum = wsw::toNum<uint64_t>( commandNumString ) ) {
+				if( const auto maybeFaultKind = wsw::toNum<unsigned>( wsw::StringView( faultKindString ) ) ) {
+					// Check timeout values for sanity by specifying a lesser type
+					if( const auto maybeTimeoutValue = wsw::toNum<uint16_t>( wsw::StringView( timeoutString ) ) ) {
+						if( *maybeFaultKind >= MessageFault::kMaxKind && *maybeFaultKind <= MessageFault::kMaxKind ) {
+							const auto kind    = (MessageFault::Kind)*maybeFaultKind;
+							const auto timeout = *maybeTimeoutValue;
+							if( kind == MessageFault::Flood ) {
+								const auto secondsLeft = (int)( *maybeTimeoutValue / 1000 ) + 1;
+								CG_LocalPrint( "Flood protection. You can talk again in %d second(s)\n", secondsLeft );
+							} else if( kind == MessageFault::Muted ) {
+								CG_LocalPrint( "You are muted on this server\n" );
+							} else {
+								wsw::failWithLogicError( "unreachable" );
+							}
+							wsw::ui::UISystem::instance()->handleMessageFault( { *maybeCommandNum, kind, timeout } );
 						}
-						wsw::ui::UISystem::instance()->handleMessageFault( { *maybeCommandNum, kind, timeout } );
 					}
 				}
 			}
@@ -850,9 +862,9 @@ static const svcmd_t cg_svcmds[] = {
 	{ NULL }
 };
 
-void CG_GameCommand( ViewState *viewState, const char *command ) {
+void CG_GameCommand( ViewState *viewState, const wsw::StringView &fullText ) {
 	static CmdArgsSplitter argsSplitter;
-	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( command ) );
+	const CmdArgs &cmdArgs = argsSplitter.exec( fullText );
 
 	for( const svcmd_t *cmd = cg_svcmds; cmd->name; cmd++ ) {
 		if( !strcmp( cmdArgs[0].data(), cmd->name ) ) {
@@ -3313,22 +3325,19 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 
 	for( int commandIndex = 0; commandIndex < cg.frame.numgamecommands; commandIndex++ ) {
 		const auto &gameCommand = cg.frame.gamecommands[commandIndex];
+		const wsw::StringView cmdView( cg.frame.gamecommandsData + gameCommand.commandOffset );
 		if( gameCommand.all ) {
 			// Dispatch to each target
 			for( unsigned viewStateIndex = 0; viewStateIndex < cg.numSnapViewStates; ++viewStateIndex ) {
-				CG_GameCommand( cg.viewStates + viewStateIndex, cg.frame.gamecommandsData + gameCommand.commandOffset );
+				CG_GameCommand( cg.viewStates + viewStateIndex, cmdView );
 			}
 		} else {
-			unsigned foundIndex = ~0u;
+			wsw::StaticVector<unsigned, MAX_CLIENTS> targetViewStateIndices;
 			for( unsigned viewStateIndex = 0; viewStateIndex < cg.numSnapViewStates; ++viewStateIndex ) {
-				const int viewStateTarget = (int)cg.viewStates[viewStateIndex].snapPlayerState.POVnum - 1;
-				if( gameCommand.targets[viewStateTarget >> 3] & ( 1 << ( viewStateTarget & 7 ) ) ) {
-					foundIndex = viewStateIndex;
-					break;
+				const int playerBitIndex = (int)cg.viewStates[viewStateIndex].snapPlayerState.playerNum;
+				if( gameCommand.targets[playerBitIndex >> 3] & ( 1 << ( playerBitIndex & 7 ) ) ) {
+					CG_GameCommand( cg.viewStates + viewStateIndex, cmdView );
 				}
-			}
-			if( foundIndex != ~0u ) {
-				CG_GameCommand( cg.viewStates + foundIndex, cg.frame.gamecommandsData + gameCommand.commandOffset );
 			}
 		}
 	}
@@ -5607,7 +5616,7 @@ void CG_Error( const char *format, ... ) {
 	Com_Error( ERR_DROP, "%s\n", msg );
 }
 
-void CG_LocalPrint( ViewState *viewState, const char *format, ... ) {
+void CG_LocalPrint( const char *format, ... ) {
 	va_list argptr;
 	char msg[GAMECHAT_STRING_SIZE];
 
@@ -5615,13 +5624,15 @@ void CG_LocalPrint( ViewState *viewState, const char *format, ... ) {
 	const int res = Q_vsnprintfz( msg, sizeof( msg ), format, argptr );
 	va_end( argptr );
 
-	const wsw::StringView msgView( msg, wsw::min( (size_t)res, sizeof( msg ) ) );
-	wsw::ui::UISystem::instance()->addToMessageFeed( viewState->snapPlayerState.playerNum, msgView.trim() );
-
-	// TODO: Is it the right condition?
-	if( viewState == getPrimaryViewState() ) {
-		Con_PrintSilent( msg );
+	unsigned playerNum = cgs.playerNum;
+	if( ViewState *primaryViewState = getPrimaryViewState(); primaryViewState != getOurClientViewState() ) {
+		playerNum = primaryViewState->predictedPlayerState.playerNum;
 	}
+
+	const wsw::StringView msgView( msg, wsw::min( (size_t)res, sizeof( msg ) ) );
+	wsw::ui::UISystem::instance()->addToMessageFeed( playerNum, msgView.trim() );
+
+	Con_PrintSilent( msg );
 }
 
 static void *CG_GS_Malloc( size_t size ) {

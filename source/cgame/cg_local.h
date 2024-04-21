@@ -793,10 +793,10 @@ void CG_ValidateItemDef( int tag, const char *name );
 
 #ifndef _MSC_VER
 void CG_Error( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) ) __attribute__( ( noreturn ) );
-void CG_LocalPrint( ViewState *viewState, const char *format, ... ) __attribute__( ( format( printf, 2, 3 ) ) );
+void CG_LocalPrint( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
 #else
 __declspec( noreturn ) void CG_Error( _Printf_format_string_ const char *format, ... );
-void CG_LocalPrint( ViewState *viewState, _Printf_format_string_ const char *format, ... );
+void CG_LocalPrint( _Printf_format_string_ const char *format, ... );
 #endif
 
 void CG_Precache( void );

@@ -1914,22 +1914,34 @@ bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
 		return true;
 	}
 
-	// To allow propagation of events to the cgame view switching logic,
-	// don't handle other keys when the demo playback menu is on.
-	if( propagateToCGameIfNotAccepted ) {
+	const std::optional<Qt::Key> maybeQtKey = convertQuakeKeyToQtKey( quakeKey );
+	if( !maybeQtKey ) {
+		// TODO: What should we do in this case
 		return false;
 	}
 
-	const std::optional<Qt::Key> maybeQtKey = convertQuakeKeyToQtKey( quakeKey );
-	if( !maybeQtKey ) {
-		return true;
-	}
-
+	bool hasAccepted = false;
 	const Qt::KeyboardModifiers modifiers = getPressedKeyboardModifiers();
 	for( unsigned i = 0; i < numTargetWindows; ++i ) {
 		const QEvent::Type type = keyDown ? QEvent::KeyPress : QEvent::KeyRelease;
 		QKeyEvent keyEvent( type, *maybeQtKey, modifiers );
-		QCoreApplication::sendEvent( targetWindows[i], &keyEvent );
+		const bool sent = QCoreApplication::sendEvent( targetWindows[i], &keyEvent );
+		// Hacks: If we set event.accepted to key events of input controls in Qml, we do not actually get any input.
+		// Let us assume that events get accepted if the currenly focused item is some kind of a text input control.
+		if( sent && propagateToCGameIfNotAccepted ) {
+			if( const QQuickItem *activeFocusItem = targetWindows[i]->activeFocusItem() ) {
+				const char *className = activeFocusItem->metaObject()->className();
+				for( const char *knownName: { "TextInput", "TextEdit", "TextField", "TextArea" } ) {
+					if( ::strstr( className, knownName ) ) {
+						hasAccepted = true;
+						break;
+					}
+				}
+			}
+		}
+	}
+	if( propagateToCGameIfNotAccepted ) {
+		return hasAccepted;
 	}
 	return true;
 }
