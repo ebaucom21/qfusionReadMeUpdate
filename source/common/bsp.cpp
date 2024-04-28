@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "bsp.h"
 #include "wswstringview.h"
 #include "wswstringsplitter.h"
+#include "wswpodvector.h"
 #include "wswvector.h"
 #include "wswtonum.h"
 #include "wswfs.h"
@@ -153,7 +154,7 @@ private:
 	};
 
 	[[nodiscard]]
-	static auto loadDataFromFile( const wsw::StringView &filePath ) -> std::optional<wsw::Vector<char>>;
+	static auto loadDataFromFile( const wsw::StringView &filePath ) -> std::optional<wsw::PodVector<char>>;
 
 	// The return type should've been Either<ErrorString, Pair<String, UInt>>
 	[[nodiscard]]
@@ -161,16 +162,16 @@ private:
 	-> std::pair<const char *, std::optional<std::pair<wsw::StringView, unsigned>>>;
 
 	[[maybe_unused]]
-	static auto putZeroByteAfterStringView( wsw::Vector<char> *fileData, const wsw::StringView &view ) -> const char *;
+	static auto putZeroByteAfterStringView( wsw::PodVector<char> *fileData, const wsw::StringView &view ) -> const char *;
 
 	bool m_triedLoading { false };
 
-	wsw::Vector<char> m_rawFileData;
-	wsw::Vector<ClassEntry> m_classEntries;
+	wsw::PodVector<char> m_rawFileData;
+	wsw::PodVector<ClassEntry> m_classEntries;
 	std::unordered_map<wsw::StringView, CacheEntry> m_lookupCache;
 };
 
-auto SurfExtraFlagsCache::putZeroByteAfterStringView( wsw::Vector<char> *fileData,
+auto SurfExtraFlagsCache::putZeroByteAfterStringView( wsw::PodVector<char> *fileData,
 													  const wsw::StringView &view ) -> const char * {
 	const auto viewOffset = (size_t)( view.data() - fileData->data() );
 	assert( viewOffset + view.length() < fileData->size() );
@@ -187,10 +188,10 @@ void SurfExtraFlagsCache::loadIfNeeded() {
 
 	// TODO: Allow multiple files, allow overriding non-pure content
 	// TODO: Add sanity limits
-	if( std::optional<wsw::Vector<char>> maybeFileData = loadDataFromFile( "maps/custom_surf_params.txt"_asView ) ) {
+	if( std::optional<wsw::PodVector<char>> maybeFileData = loadDataFromFile( "maps/custom_surf_params.txt"_asView ) ) {
 		const wsw::CharLookup lineSeparators( "\0\r\n"_asView );
 		const wsw::CharLookup tokenSeparators( []( char ch ) { return ::isspace( ch ); } );
-		wsw::Vector<char> fileData( std::move( *maybeFileData ) );
+		wsw::PodVector<char> fileData( std::move( *maybeFileData ) );
 		wsw::StringSplitter lineSplitter( wsw::StringView( fileData.data(), fileData.size() ) );
 		while( const auto maybeLineTokenAndLineNum = lineSplitter.getNextWithNum( lineSeparators ) ) {
 			auto [lineToken, lineNum] = *maybeLineTokenAndLineNum;
@@ -291,10 +292,10 @@ auto SurfExtraFlagsCache::tryParsingLine( const wsw::StringView &line, const wsw
 	return { nullptr, std::make_optional( std::make_pair( parsedString, parsedFlags ) ) };
 }
 
-auto SurfExtraFlagsCache::loadDataFromFile( const wsw::StringView &filePath ) -> std::optional<wsw::Vector<char>> {
+auto SurfExtraFlagsCache::loadDataFromFile( const wsw::StringView &filePath ) -> std::optional<wsw::PodVector<char>> {
 	if( std::optional<wsw::fs::ReadHandle> maybeHandle = wsw::fs::openAsReadHandle( filePath ) ) {
 		if( const size_t size = maybeHandle->getInitialFileSize() ) {
-			wsw::Vector<char> result;
+			wsw::PodVector<char> result;
 			result.resize( size + 1 );
 			if( maybeHandle->readExact( result.data(), size ) ) {
 				result[size] = '\0';

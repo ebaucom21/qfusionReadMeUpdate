@@ -112,8 +112,8 @@ uint8_t *Mod_ClusterPVS( int cluster, model_t *model ) {
 
 class RecastPolyMeshBuilder {
 public:
-	RecastPolyMeshBuilder( wsw::Vector<Vec3> *tmpVerticesBuffer, wsw::Vector<int> *tmpIndicesBuffer,
-						   wsw::Vector<uint8_t> *tmpAreaFlagsBuffer )
+	RecastPolyMeshBuilder( wsw::PodVector<Vec3> *tmpVerticesBuffer, wsw::PodVector<int> *tmpIndicesBuffer,
+						   wsw::PodVector<uint8_t> *tmpAreaFlagsBuffer )
 		: m_verticesBuffer( tmpVerticesBuffer )
 		, m_indicesBuffer( tmpIndicesBuffer )
 		, m_areaFlagsBuffer( tmpAreaFlagsBuffer ) {
@@ -246,22 +246,22 @@ public:
 private:
 	rcContext m_context;
 	BoundsBuilder m_verticesBoundsBuilder;
-	wsw::Vector<Vec3> *const m_verticesBuffer;
-	wsw::Vector<int> *const m_indicesBuffer;
-	wsw::Vector<uint8_t> *const m_areaFlagsBuffer;
+	wsw::PodVector<Vec3> *const m_verticesBuffer;
+	wsw::PodVector<int> *const m_indicesBuffer;
+	wsw::PodVector<uint8_t> *const m_areaFlagsBuffer;
 	rcHeightfield *m_heightfield { nullptr };
 	rcCompactHeightfield *m_compactHeightfield { nullptr };
 	rcContourSet *m_contourSet { nullptr };
 	rcPolyMesh *m_polyMesh { nullptr };
 };
 
-static wsw::Vector<Vec3> g_tmpVerticesBuffer;
-static wsw::Vector<int> g_tmpIndicesBuffer;
-static wsw::Vector<uint8_t> g_tmpAreaFlagsBuffer;
+static wsw::PodVector<Vec3> g_tmpVerticesBuffer;
+static wsw::PodVector<int> g_tmpIndicesBuffer;
+static wsw::PodVector<uint8_t> g_tmpAreaFlagsBuffer;
 
-static bool Mod_AddOccludersFromListOfSurfs( const wsw::Vector<const msurface_t *> &surfs,
-											 wsw::Vector<OccluderBoundsEntry> *occluderBoundsEntries,
-											 wsw::Vector<OccluderDataEntry> *occluderDataEntries ) {
+static bool Mod_AddOccludersFromListOfSurfs( const wsw::PodVector<const msurface_t *> &surfs,
+											 wsw::PodVector<OccluderBoundsEntry> *occluderBoundsEntries,
+											 wsw::PodVector<OccluderDataEntry> *occluderDataEntries ) {
 	BoundsBuilder boundsBuilder;
 	for( const msurface_t *surf: surfs ) {
 		boundsBuilder.addPoint( surf->mins );
@@ -382,7 +382,7 @@ namespace std {
 }
 
 static void Mod_BuildOccluders( model_t *model ) {
-	std::unordered_map<PlaneKey, wsw::Vector<const msurface_t *>> surfsBinnedByPlanes;
+	std::unordered_map<PlaneKey, wsw::PodVector<const msurface_t *>> surfsBinnedByPlanes;
 
 	mbrushmodel_t *const loadbmodel = ( ( mbrushmodel_t * )model->extradata );
 	for( unsigned i = 0; i < loadbmodel->numModelSurfaces; i++ ) {
@@ -398,12 +398,12 @@ static void Mod_BuildOccluders( model_t *model ) {
 		if( it != surfsBinnedByPlanes.end() ) {
 			it->second.push_back( surf );
 		} else {
-			surfsBinnedByPlanes.insert( std::make_pair( planeKey, wsw::Vector<const msurface_t *> { surf } ) );
+			surfsBinnedByPlanes.insert( std::make_pair( planeKey, wsw::PodVector<const msurface_t *> { surf } ) );
 		}
 	}
 
-	std::vector<OccluderBoundsEntry> occluderBoundsEntries;
-	std::vector<OccluderDataEntry> occluderDataEntries;
+	wsw::PodVector<OccluderBoundsEntry> occluderBoundsEntries;
+	wsw::PodVector<OccluderDataEntry> occluderDataEntries;
 
 	unsigned numSuitableSurfGroups = 0;
 	for( const auto &[_, listOfSurfs]: surfsBinnedByPlanes ) {

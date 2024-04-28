@@ -63,9 +63,9 @@ public:
 	virtual void unregisterSystemCommands();
 
 	static void classifyExecutableCmdArgs( int argc, char **argv,
-										   wsw::Vector<wsw::StringView> *setArgs,
-										   wsw::Vector<wsw::StringView> *setAndExecArgs,
-										   wsw::Vector<std::optional<wsw::StringView>> *otherArgs );
+										   wsw::PodVector<wsw::StringView> *setArgs,
+										   wsw::PodVector<wsw::StringView> *setAndExecArgs,
+										   wsw::PodVector<std::optional<wsw::StringView>> *otherArgs );
 
 	void appendEarlySetCommands( std::span<const wsw::StringView> args );
 	void appendEarlySetAndExecCommands( std::span<const wsw::StringView> args );
@@ -101,7 +101,7 @@ protected:
 		auto fetchNextCmd() -> std::optional<wsw::StringView>;
 		void shrinkToFit();
 	private:
-		wsw::Vector<char> m_data;
+		wsw::PodVector<char> m_data;
 		unsigned m_headOffset { 0 };
 	};
 

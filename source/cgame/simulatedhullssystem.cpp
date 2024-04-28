@@ -294,9 +294,9 @@ private:
 		m_neighbours.shrink_to_fit();
 	}
 
-	wsw::Vector<Vertex> m_vertices;
-	wsw::Vector<Face> m_faces;
-	wsw::Vector<Neighbours> m_neighbours;
+	wsw::PodVector<Vertex> m_vertices;
+	wsw::PodVector<Face> m_faces;
+	wsw::PodVector<Neighbours> m_neighbours;
 
 	wsw::StaticVector<IcosphereData, kMaxSubdivLevel + 1> m_icospheresForLevels;
 };
@@ -2621,7 +2621,7 @@ auto SimulatedHullsSystem::HullDynamicMesh::getOverrideColorsCheckingSiblingCach
 	// If a dynamic allocation is worth it
 	if( m_shared->hasSibling ) {
 		// Allocate some room within the global buffer for frame colors allocation.
-		wsw::Vector<uint32_t> *const sharedBuffer = m_shared->overrideColorsBuffer;
+		wsw::PodVector<uint32_t> *const sharedBuffer = m_shared->overrideColorsBuffer;
 		const auto offset = sharedBuffer->size();
 		const auto length = ::basicHullsHolder.getIcosphereForLevel( m_shared->simulatedSubdivLevel ).vertices.size();
 		sharedBuffer->resize( sharedBuffer->size() + length );

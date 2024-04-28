@@ -22,9 +22,8 @@
 #define WSW_43c64bed_a1ec_442c_a8cb_2fa107edfa89_H
 
 #include "../common/q_keycodes.h"
-
+#include "../common/wswpodvector.h"
 #include "../common/wswstaticvector.h"
-#include "../common/wswstring.h"
 
 template <typename> class SingletonHolder;
 
@@ -75,8 +74,7 @@ class KeyBindingsSystem {
 	KeysAndNames m_keysAndNames;
 
 	static constexpr unsigned kMaxBindings = 256u;
-	// This is fine to have as a small string optimization is used by every sane implementation.
-	wsw::String m_bindings[kMaxBindings];
+	wsw::PodVector<char> m_bindings[kMaxBindings];
 
 	int m_numConsoleBindings { 0 };
 	bool m_isModified { false };

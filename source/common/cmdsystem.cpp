@@ -106,8 +106,13 @@ bool CmdSystem::registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) 
 		return false;
 	}
 
-	assert( name.isZeroTerminated() );
-	if( Cvar_String( name.data() )[0] ) {
+	wsw::PodVector<char> ztNameChars;
+	const char *nameChars = name.data();
+	if( !name.isZeroTerminated() ) {
+		ztNameChars.assign( name.data(), name.size() );
+		nameChars = ztNameChars.data();
+	}
+	if( Cvar_String( nameChars )[0] ) {
 		comError() << "Failed to register a command:" << name << "is already defined as a var";
 		return false;
 	}
@@ -221,9 +226,9 @@ void CmdSystem::unregisterSystemCommands() {
 }
 
 void CmdSystem::classifyExecutableCmdArgs( int argc, char **argv,
-										   wsw::Vector<wsw::StringView> *setArgs,
-										   wsw::Vector<wsw::StringView> *setAndExecArgs,
-										   wsw::Vector<std::optional<wsw::StringView>> *otherArgs ) {
+										   wsw::PodVector<wsw::StringView> *setArgs,
+										   wsw::PodVector<wsw::StringView> *setAndExecArgs,
+										   wsw::PodVector<std::optional<wsw::StringView>> *otherArgs ) {
 	for( int i = 1; i < argc; ++i ) {
 		const wsw::StringView arg( argv[i] );
 		if( arg.startsWith( "+set"_asView ) ) {
@@ -290,7 +295,7 @@ void CmdSystem::appendLateCommands( std::span<const std::optional<wsw::StringVie
 
 	assert( !args.empty() );
 
-	wsw::String text;
+	wsw::PodVector<char> text;
 	for( size_t i = 0; i < args.size(); ++i ) {
 		const std::optional<wsw::StringView> &argOrNewCmdSeparator = args[i];
 		if( argOrNewCmdSeparator.has_value() ) {
@@ -301,7 +306,7 @@ void CmdSystem::appendLateCommands( std::span<const std::optional<wsw::StringVie
 			text.push_back( '\n' );
 		}
 	}
-	if( !text.ends_with( '\n' ) ) {
+	if( text.empty() || text.back() != '\n' ) {
 		text.push_back( '\n' );
 	}
 

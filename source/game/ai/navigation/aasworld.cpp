@@ -38,7 +38,7 @@ using wsw::operator""_asView;
 
 template<typename T>
 class BufferBuilder {
-	wsw::Vector<T> m_underlying;
+	wsw::PodVector<T> m_underlying;
 public:
 	explicit BufferBuilder( size_t initialSizeHint ) {
 		m_underlying.reserve( initialSizeHint );
@@ -48,7 +48,7 @@ public:
 
 	void Clear() {
 		// Preserve the old semantics that used to release memory
-		wsw::Vector<T> tmp;
+		wsw::PodVector<T> tmp;
 		std::swap( m_underlying, tmp );
 	}
 
@@ -61,6 +61,7 @@ public:
 
 	T *FlattenResult() const {
 		static_assert( std::is_trivial_v<T> );
+		// TODO: take the pointer
 		const size_t sizeInBytes = sizeof( T ) * m_underlying.size();
 		auto *const result = (T *)Q_malloc( sizeInBytes );
 		std::memcpy( result, m_underlying.data(), sizeInBytes );

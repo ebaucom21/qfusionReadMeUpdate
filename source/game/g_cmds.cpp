@@ -369,7 +369,7 @@ static void Cmd_CvarInfo_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	}
 
 	// see if the gametype script is requesting this info
-	if( !GT_asCallGameCommand( ent->r.client, "cvarinfo", trap_Cmd_Args(), trap_Cmd_Argc() - 1 ) ) {
+	if( !GT_asCallGameCommand( ent->r.client, "cvarinfo"_asView, cmdArgs.argsString, cmdArgs.size() - 1 ) ) {
 		// if the gametype script wasn't interested in this command, print the output to console
 		G_Printf( "%s%s's cvar '%s' is '%s%s'\n", ent->r.client->netname.data(), S_COLOR_WHITE, trap_Cmd_Argv( 1 ), trap_Cmd_Argv( 2 ), S_COLOR_WHITE );
 	}
@@ -1288,11 +1288,12 @@ ClientCommandsHandler *ClientCommandsHandler::instance() {
 }
 
 void ClientCommandsHandler::precacheCommands() {
+	wsw::PodVector<char> ztName;
 	int i = 0;
 	for( Callback *callback = m_listHead; callback; callback = callback->nextInList() ) {
-		const auto name( callback->getName() );
-		assert( name.isZeroTerminated() );
-		trap_ConfigString( CS_GAMECOMMANDS + i, name.data() );
+		ztName.assign( callback->getName() );
+		ztName.append( '\0' );
+		trap_ConfigString( CS_GAMECOMMANDS + i, ztName.data() );
 		i++;
 	}
 	for(; i < MAX_GAMECOMMANDS; ++i ) {
@@ -1325,7 +1326,7 @@ void ClientCommandsHandler::addBuiltin( const wsw::HashedStringView &name,
 void ClientCommandsHandler::addScriptCommand( const wsw::StringView &name ) {
 	if( checkNotWriteProtected( name ) ) {
 		void *const mem = m_allocator.allocOrNull();
-		auto *const callback = new( mem )ScriptCommandCallback( wsw::String( name.data(), name.size() ) );
+		auto *const callback = new( mem )ScriptCommandCallback( wsw::PodVector<char>( name.data(), name.size() ) );
 		addAndNotify( callback, true );
 	}
 }
@@ -1426,15 +1427,15 @@ void ClientCommandsHandler::addAndNotify( Callback *newCallback, [[maybe_unused]
 			G_Error( "Too many game commands\n" );
 		}
 		if( level.canSpawnEntities ) {
+			wsw::PodVector<char> ztName( newCallback->getName() );
+			ztName.append( '\0' );
 			// Update the configstring if the precache process was already done
-			trap_ConfigString( CS_GAMECOMMANDS + ( m_size - 1 ), newCallback->getName().data() );
+			trap_ConfigString( CS_GAMECOMMANDS + ( m_size - 1 ), ztName.data() );
 		}
 	}
 }
 
 bool ClientCommandsHandler::ScriptCommandCallback::operator()( edict_t *ent, uint64_t, const CmdArgs &cmdArgs ) {
-	const auto name( getName() );
-	assert( name.isZeroTerminated() );
-	return GT_asCallGameCommand( ent->r.client, name.data(), trap_Cmd_Args(), trap_Cmd_Argc() - 1 );
+	return GT_asCallGameCommand( ent->r.client, getName(), cmdArgs.argsString, cmdArgs.size() - 1 );
 }
 

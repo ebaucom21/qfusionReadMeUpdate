@@ -6,8 +6,8 @@
 #include "../common/common.h"
 #include "../common/wswstringview.h"
 #include "../common/wswstaticstring.h"
+#include "../common/wswpodvector.h"
 #include "../common/wswstaticvector.h"
-#include "../common/wswstring.h"
 
 namespace wsw::ui {
 
@@ -21,7 +21,7 @@ class ActionRequestsModel : public QAbstractListModel {
 		int64_t timeoutAt { 0 };
 		// (command (off, len), key)
 		std::pair<std::pair<unsigned, unsigned>, int> actions[9];
-		wsw::String actionsDataBuffer;
+		wsw::PodVector<char> actionsDataBuffer;
 		unsigned numActions;
 
 		[[nodiscard]]

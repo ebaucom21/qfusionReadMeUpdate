@@ -95,7 +95,7 @@ void ActionRequestsModel::touch( const wsw::StringView &tag, unsigned timeout,
 		const auto off = (unsigned)entry->actionsDataBuffer.size();
 		assert( command.isZeroTerminated() );
 		entry->actionsDataBuffer.append( command.data(), command.size() + 1 );
-		entry->actions[i] = { { off, entry->actionsDataBuffer.size() }, key };
+		entry->actions[i] = { { off, entry->actionsDataBuffer.size() - 1 }, key };
 	}
 
 	endInsertRows();

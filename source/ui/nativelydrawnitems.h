@@ -7,7 +7,6 @@
 #include <QRectF>
 
 #include "../common/common.h"
-#include "../common/wswvector.h"
 // TODO:
 #include "../cgame/cg_local.h"
 
@@ -28,7 +27,7 @@ protected:
 	QQuickItem *m_selfAsItem { nullptr };
 	unsigned m_reloadRequestMask { 0 };
 
-	static wsw::Vector<shader_s *> s_materialsToRecycle;
+	static wsw::PodVector<shader_s *> s_materialsToRecycle;
 public:
 	int m_nativeZ { 0 };
 	NativelyDrawn *next { nullptr };

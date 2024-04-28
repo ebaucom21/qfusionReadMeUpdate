@@ -622,31 +622,32 @@ static void CL_CreateNewUserCommand( int realMsec ) {
 	}
 }
 
-auto SoundSystem::getPathForName( const char *name, wsw::String *reuse ) -> const char * {
-	if( !name ) {
-		return "";
-	}
-	if( COM_FileExtension( name ) ) {
-		return name;
-	}
-
-	reuse->clear();
-	reuse->append( name );
-
-	if( const char *extension = FS_FirstExtension( name, SOUND_EXTENSIONS, NUM_SOUND_EXTENSIONS ) ) {
-		reuse->append( extension );
+auto SoundSystem::getPathForName( const wsw::StringView &name ) -> wsw::PodVector<char> {
+	wsw::PodVector<char> result;
+	if( name.empty() ) {
+		result.append( '\0' );
+		return result;
 	}
 
-	// if not found, we just pass it without the extension
-	return reuse->c_str();
-}
-
-auto SoundSystem::getPathForName( const wsw::StringView &name, wsw::String *reuse ) -> wsw::StringView {
-	if( name.isZeroTerminated() ) {
-		return wsw::StringView( getPathForName( name.data(), reuse ) );
+	result.append( name );
+	result.append( '\0' );
+	if( wsw::fs::getExtension( name ) != std::nullopt ) {
+		return result;
 	}
-	wsw::StringView tmp( name.data(), name.size() );
-	return wsw::StringView( getPathForName( tmp.data(), reuse ) );
+
+	wsw::StaticVector<wsw::StringView, 4> allowedExtensions;
+	for( size_t i = 0; i < NUM_SOUND_EXTENSIONS; ++i ) {
+		allowedExtensions.push_back( wsw::StringView( SOUND_EXTENSIONS[i] ) );
+	}
+
+	const wsw::StringView ztName( result.data(), result.size() - 1, wsw::StringView::ZeroTerminated );
+	if( auto maybeNameAndExtension = wsw::fs::findFirstExtension( ztName, allowedExtensions.begin(), allowedExtensions.end() ) ) {
+		result.pop_back();
+		result.append( maybeNameAndExtension->second );
+		result.append( '\0' );
+	}
+
+	return result;
 }
 
 // TODO: We need generic FS facilities for things like this
@@ -674,8 +675,9 @@ bool SoundSystem::getPathListForPattern( const wsw::StringView &pattern, wsw::St
 	}
 
 	// For now, we limit patterns to basename
-	const wsw::String ztPattern( baseName.data(), baseName.size() );
-	wsw::String ztBaseName;
+	wsw::PodVector<char> ztPattern( baseName.data(), baseName.size() );
+	ztPattern.append( '\0' );
+	wsw::PodVector<char> ztBaseName;
 
 	wsw::fs::SearchResultHolder searchResultHolder;
 	if( const auto maybeSearchResult = searchResultHolder.findDirFiles( dirName, extension ) ) {
@@ -683,6 +685,7 @@ bool SoundSystem::getPathListForPattern( const wsw::StringView &pattern, wsw::St
 			bool isAcceptedByPattern = false;
 			if( const std::optional<wsw::StringView> maybeBaseName = wsw::fs::stripExtension( fileName ) ) {
 				ztBaseName.assign( maybeBaseName->data(), maybeBaseName->size() );
+				ztBaseName.append( '\0' );
 				if( Com_GlobMatch( ztPattern.data(), ztBaseName.data(), false ) ) {
 					isAcceptedByPattern = true;
 				}
@@ -2354,7 +2357,7 @@ static void HandleOob_Reject( const socket_t *socket, const netadr_t *address, m
 	// Skip the legacy reject flag
 	std::ignore = MSG_ReadStringLine( msg );
 
-	const wsw::String rejectMessage( MSG_ReadStringLine( msg ) );
+	const wsw::PodVector<char> rejectMessage( wsw::StringView( MSG_ReadStringLine( msg ) ) );
 	clNotice() << "Connection refused" << rejectMessage;
 
 	auto connectionDropStage = ConnectionDropStage::EstablishingFailed;
@@ -4631,21 +4634,22 @@ static bool TryStartingPureFileDownloadIfNeeded() {
 }
 
 [[nodiscard]]
-static bool CheckPureFiles( wsw::String *errorMessage ) {
+static bool CheckPureFiles( wsw::PodVector<char> *errorMessage ) {
 	errorMessage->clear();
 
 	purelist_t *purefile = cls.purelist;
 	while( purefile ) {
 		Com_DPrintf( "Adding pure file: %s\n", purefile->filename );
 		if( !FS_AddPurePak( purefile->checksum ) ) {
-			errorMessage->append( " " );
-			errorMessage->append( purefile->filename );
+			errorMessage->append( ' ' );
+			errorMessage->append( wsw::StringView( purefile->filename ) );
 		}
 		purefile = purefile->next;
 	}
 
 	if( !errorMessage->empty() ) {
-		errorMessage->insert( 0, "Pure check failed:" );
+		errorMessage->insert( errorMessage->begin(), "Pure check failed:"_asView );
+		errorMessage->append( '\0' );
 		return false;
 	}
 	return true;
@@ -4766,7 +4770,7 @@ void CL_RequestNextDownload( void ) {
 			}
 		}
 		if( precache_pure == -1 ) {
-			wsw::String errorMessage;
+			wsw::PodVector<char> errorMessage;
 			if( !CheckPureFiles( &errorMessage ) ) {
 				Com_Error( ERR_DROP, "%s", errorMessage.data() );
 				return;
@@ -5890,7 +5894,7 @@ public:
 private:
 	[[nodiscard]]
 	auto findTagsEntryByCmdName( const wsw::HashedStringView &cmdName )
-		-> wsw::Vector<std::pair<wsw::StringView, wsw::HashedStringView>>::iterator {
+		-> wsw::PodVector<std::pair<wsw::StringView, wsw::HashedStringView>>::iterator {
 		const auto cmp = [&]( const std::pair<wsw::StringView, wsw::HashedStringView> &entry ) {
 			return entry.second.equalsIgnoreCase( cmdName );
 		};
@@ -5914,7 +5918,9 @@ private:
 			}
 		}
 		trie_dump_s *dump = nullptr;
-		Trie_Dump( trie, wsw::String( partial.data(), partial.size() ).data(), TRIE_DUMP_BOTH, &dump );
+		wsw::PodVector<char> ztPartial( partial.data(), partial.size() );
+		ztPartial.append( '\0' );
+		Trie_Dump( trie, ztPartial.data(), TRIE_DUMP_BOTH, &dump );
 		CompletionResult result;
 		for( unsigned i = 0; i < dump->size; ++i ) {
 			result.add( wsw::StringView( dump->key_value_vector[i].key, (uintptr_t)dump->key_value_vector[i].value ) );
@@ -5953,7 +5959,7 @@ private:
 	std::unordered_map<wsw::HashedStringView, CompletionEntry> m_completionEntries;
 	// A band-aid workaround for lack of tags in the base facilities
 	// Tags are assumed to have 'static lifetime
-	wsw::Vector<std::pair<wsw::StringView, wsw::HashedStringView>> m_namesForTags;
+	wsw::PodVector<std::pair<wsw::StringView, wsw::HashedStringView>> m_namesForTags;
 };
 
 static SingletonHolder<CLCmdSystem> g_clCmdSystemHolder;

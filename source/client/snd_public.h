@@ -27,7 +27,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //===============================================================
 
-#include "../common/wswstring.h"
 #include "../common/wswstringview.h"
 #include "../common/stringspanstorage.h"
 #include <initializer_list>
@@ -144,10 +143,10 @@ public:
 	virtual void prevBackgroundTrack() = 0;
 	virtual void pauseBackgroundTrack() = 0;
 
+	// TODO: A zero-terminated string container is more appropriate here
 	[[nodiscard]]
-	static auto getPathForName( const char *name, wsw::String *reuse ) -> const char *;
-	[[nodiscard]]
-	static auto getPathForName( const wsw::StringView &name, wsw::String *reuse ) -> wsw::StringView;
+	static auto getPathForName( const wsw::StringView &name ) -> wsw::PodVector<char>;
+
 	[[nodiscard]]
 	static bool getPathListForPattern( const wsw::StringView &pattern, wsw::StringSpanStorage<unsigned, unsigned> *pathListStorage );
 };

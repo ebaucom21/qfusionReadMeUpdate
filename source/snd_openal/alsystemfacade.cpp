@@ -181,8 +181,8 @@ void ALSoundSystem::addLoopSound( const SoundSet *sound, int entNum, uintptr_t i
 }
 
 void ALSoundSystem::startBackgroundTrack( const char *intro, const char *loop, int mode ) {
-	const char *introPath = getPathForName( intro, &m_tmpPathBuffer1 );
-	const char *loopPath  = getPathForName( loop, &m_tmpPathBuffer2 );
+	wsw::PodVector<char> introPath( getPathForName( intro ? wsw::StringView( intro ) : wsw::StringView() ) );
+	wsw::PodVector<char> loopPath( getPathForName( loop ? wsw::StringView( loop ) : wsw::StringView() ) );
 
 	callMethodOverPipe( m_pipe, &m_backend, &Backend::startBackgroundTrack, introPath, loopPath, mode );
 }

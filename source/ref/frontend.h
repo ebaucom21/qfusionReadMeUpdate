@@ -146,7 +146,7 @@ private:
 		refdef_t refdef;
 
 		// TODO: We don't really need a growable vector, preallocate at it start
-		wsw::Vector<sortedDrawSurf_t> *sortList;
+		wsw::PodVector<sortedDrawSurf_t> *sortList;
 
 		PodBufferHolder<unsigned> *visibleLeavesBuffer;
 		PodBufferHolder<unsigned> *occluderPassFullyVisibleLeavesBuffer;
@@ -490,14 +490,14 @@ private:
 		float p2[3];
 		int color;
 	};
-	wsw::Vector<DebugLine> m_debugLines;
+	wsw::PodVector<DebugLine> m_debugLines;
 
 	struct StateForCameraStorage { uint8_t data[sizeof( StateForCamera )]; };
 	alignas( alignof( StateForCamera ) ) StateForCameraStorage m_buffersForStateForCamera[2];
 
 	// Use separate temporary buffers for a primary camera and for camerae of portals
 
-	wsw::Vector<sortedDrawSurf_t> m_meshSortList[2];
+	wsw::PodVector<sortedDrawSurf_t> m_meshSortList[2];
 
 	PodBufferHolder<unsigned> m_visibleLeavesBuffer[2];
 	PodBufferHolder<unsigned> m_occluderPassFullyVisibleLeavesBuffer[2];

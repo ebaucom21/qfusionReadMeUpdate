@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/gs_public.h"
 
 #include <variant>
+#include <string>
 #include <span>
 
 using wsw::operator""_asView;
@@ -2302,28 +2303,30 @@ static void HandleClientCommand_BeginDownload( client_t *client, const CmdArgs &
 
 		Com_Printf( "Offering %s to %s\n", client->download.name, client->name );
 
-		wsw::String url;
+		wsw::PodVector<char> url;
 		if( FS_CheckPakExtension( uploadname ) && ( local_http || sv_uploads_baseurl->string[0] != 0 ) ) {
 			// .pk3 and .pak download from the web
 			if( local_http ) {
-				url.assign( "files/" );
+				url.append( "files/"_asView );
 				url.resize( url.size() + strlen( uploadname ) * 3 );
 				Q_urlencode_unsafechars( uploadname, url.data() + 6, url.size() + 1 - 6 );
 			} else {
-				url.append( sv_uploads_baseurl->string );
+				url.append( wsw::StringView( sv_uploads_baseurl->string ) );
 				url.push_back( '/' );
 			}
 		} else if( SV_IsDemoDownloadRequest( requestname ) && ( local_http || sv_uploads_demos_baseurl->string[0] != 0 ) ) {
 			// demo file download from the web
 			if( local_http ) {
-				url.assign( "files/" );
+				url.append( "files/"_asView );
 				url.resize( url.size() + strlen( uploadname ) * 3 );
 				Q_urlencode_unsafechars( uploadname, url.data() + 6, url.size() + 1 - 6 );
 			} else {
-				url.append( sv_uploads_demos_baseurl->string );
+				url.append( wsw::StringView( sv_uploads_demos_baseurl->string ) );
 				url.push_back( '/' );
 			}
 		}
+
+		url.append( '\0' );
 
 		SV_InitClientMessage( client, &tmpMessage, NULL, 0 );
 		SV_SendServerCommand( client, "initdownload \"%s\" %i %u %i \"%s\"", client->download.name,
@@ -3804,8 +3807,9 @@ static void SV_ResolveInfoServers() {
 
 	wsw::StringSplitter stringSplitter( wsw::StringView( sv_infoservers->string ) );
 	while( const std::optional<wsw::StringView> address = stringSplitter.getNext() ) {
-		wsw::String ztAddress( address->data(), address->size() );
-		SV_AddInfoServer_f( ztAddress.c_str(), false );
+		wsw::PodVector<char> ztAddress( address->data(), address->size() );
+		ztAddress.append( '\0' );
+		SV_AddInfoServer_f( ztAddress.data(), false );
 	}
 
 	svc.lastInfoServerResolve = Sys_Milliseconds();
@@ -4770,7 +4774,7 @@ void SV_Demo_Purge_f( const CmdArgs &cmdArgs ) {
 
 	const wsw::StringView demoDir( SV_DEMO_DIR );
 	const wsw::StringView extension( APP_DEMO_EXTENSION_STR );
-	wsw::String path;
+	wsw::PodVector<char> path;
 
 	wsw::fs::SearchResultHolder searchResultHolder;
 	if( const auto maybeSearchResult = searchResultHolder.findDirFiles( demoDir, extension ) ) {
@@ -4789,6 +4793,7 @@ void SV_Demo_Purge_f( const CmdArgs &cmdArgs ) {
 					path.push_back( '/' );
 					path.append( fileName.data(), fileName.size() );
 					svNotice() << "Removing old autorecord demo:" << path;
+					path.append( '\0' );
 					if( !FS_RemoveFile( path.data() ) ) {
 						svNotice() << "Couldn't remove file\n" << path;
 					} else {
@@ -4824,8 +4829,8 @@ void HandleClientCommand_Demolist( client_t *client, const CmdArgs &cmdArgs ) {
 		}
 	}
 
-	wsw::String message;
-	message.append( "pr \"Available demos:\n----------------\n" );
+	wsw::PodVector<char> message;
+	message.append( "pr \"Available demos:\n----------------\n"_asView );
 
 	const wsw::StringView demoDir( SV_DEMO_DIR );
 	const wsw::StringView extension( APP_DEMO_EXTENSION_STR );
@@ -4847,21 +4852,21 @@ void HandleClientCommand_Demolist( client_t *client, const CmdArgs &cmdArgs ) {
 				if( skippedCount < from ) {
 					skippedCount++;
 				} else if( writtenCount == DEMOS_PER_VIEW ) {
-					message.append( "...\n" );
+					message.append( "...\n"_asView );
 					break;
 				} else {
 					// Should not happen?
 					assert( !fileName.contains( '"' ) );
 					// TODO: Don't append extension
 					if( fileName.length() < MAX_STRING_CHARS ) {
-						if( fileName.length() + message.length() >= MAX_STRING_CHARS ) {
+						if( fileName.length() + message.size() >= MAX_STRING_CHARS ) {
 							message.push_back( '"' );
 							SV_AddGameCommand( client, message.data() );
-							message.append( "pr \"" );
+							message.append( "pr \""_asView );
 						}
 						const wsw::StringView withoutExtension = fileName.dropRight( extension.length() );
 						message.append( std::to_string( from + writtenCount + 1 ) );
-						message.append( ": " );
+						message.append( ": "_asView );
 						message.append( withoutExtension.data(), withoutExtension.length() );
 						message.push_back( '\n' );
 						writtenCount++;
@@ -4871,14 +4876,15 @@ void HandleClientCommand_Demolist( client_t *client, const CmdArgs &cmdArgs ) {
 				}
 			}
 		} else {
-			message.append( "None\n" );
+			message.append( "None\n"_asView );
 		}
 	} else {
-		message.append( "Server demo retrieval error\n" );
+		message.append( "Server demo retrieval error\n"_asView );
 	}
 
 	if( !message.empty() ) {
 		message.push_back( '"' );
+		message.push_back( '\0' );
 		SV_AddGameCommand( client, message.data() );
 	}
 }
@@ -4894,8 +4900,8 @@ void HandleClientCommand_Demoget( client_t *client, const CmdArgs &cmdArgs ) {
 	const wsw::StringView demoDir( SV_DEMO_DIR );
 	const wsw::StringView extension( APP_DEMO_EXTENSION_STR );
 
-	wsw::String message;
-	message.append( "demoget \"");
+	wsw::PodVector<char> message;
+	message.append( wsw::StringView( "demoget \"" ) );
 	message.append( demoDir.data(), demoDir.size() );
 	message.push_back( '/' );
 
@@ -4922,6 +4928,7 @@ void HandleClientCommand_Demoget( client_t *client, const CmdArgs &cmdArgs ) {
 
 	if( found ) {
 		message.push_back( '"' );
+		message.push_back( '\0' );
 		SV_AddGameCommand( client, message.data() );
 	}
 }
@@ -5303,7 +5310,7 @@ void SV_Cmd_ExecuteNow( const char *text ) {
 	g_svCmdSystemHolder.instance()->executeNow( wsw::StringView( text ) );
 }
 
-void SV_Cmd_ExecuteNow2( const wsw::String &text ) {
+void SV_Cmd_ExecuteNow2( const wsw::PodVector<char> &text ) {
 	g_svCmdSystemHolder.instance()->executeNow( wsw::StringView( text.data(), text.size() ) );
 }
 

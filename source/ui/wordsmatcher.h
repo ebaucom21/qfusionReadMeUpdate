@@ -3,9 +3,8 @@
 
 #include "../common/common.h"
 #include "../common/wswstaticvector.h"
+#include "../common/wswpodvector.h"
 #include "../common/wswstringview.h"
-#include "../common/wswstring.h"
-#include "../common/wswvector.h"
 
 #include <functional>
 
@@ -14,9 +13,9 @@ namespace wsw::ui {
 class WordsMatcher {
 	// Use a holder to circumvent initialization order issues
 	wsw::StaticVector<std::boyer_moore_searcher<const char *>, 1> m_exactMatcherHolder;
-	wsw::Vector<unsigned> m_distanceBuffer;
-	wsw::String m_stringDataBuffer;
-	wsw::String m_inputBuffer;
+	wsw::PodVector<unsigned> m_distanceBuffer;
+	wsw::PodVector<char> m_stringDataBuffer;
+	wsw::PodVector<char> m_inputBuffer;
 public:
 	struct Match {
 		unsigned editDistance;

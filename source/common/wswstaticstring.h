@@ -3,7 +3,6 @@
 
 #include "wswstringview.h"
 #include <cinttypes>
-#include <iterator>
 
 namespace wsw {
 

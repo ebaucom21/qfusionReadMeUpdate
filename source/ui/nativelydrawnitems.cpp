@@ -8,7 +8,7 @@
 
 namespace wsw::ui {
 
-wsw::Vector<shader_s *> NativelyDrawn::s_materialsToRecycle;
+wsw::PodVector<shader_s *> NativelyDrawn::s_materialsToRecycle;
 
 void NativelyDrawn::recycleResourcesInMainContext() {
 	for( auto *material: s_materialsToRecycle ) {

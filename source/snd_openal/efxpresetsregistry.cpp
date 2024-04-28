@@ -1,6 +1,7 @@
 #include "efxpresetsregistry.h"
 #include "snd_local.h"
 #include "../common/wswbasicmath.h"
+#include <array>
 
 // TODO: Switch to using OpenAL SOFT headers across the entire codebase?
 #include "../../third-party/openal-soft/include/AL/efx-presets.h"

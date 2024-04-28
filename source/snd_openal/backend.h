@@ -3,7 +3,6 @@
 
 // TODO: lift it to the top level
 #include "../game/ai/vec3.h"
-#include "../common/wswstring.h"
 #include "../common/wswstaticvector.h"
 #include "../common/freelistallocator.h"
 #include "../common/randomgenerator.h"
@@ -47,7 +46,7 @@ public:
 	void startRelativeSound( const SoundSet *sound, int entNum, int channel, float volume, float attenuation );
 	void addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float volume, float attenuation );
 
-	void startBackgroundTrack( const wsw::String &intro, const wsw::String &loop, int mode );
+	void startBackgroundTrack( const wsw::PodVector<char> &intro, const wsw::PodVector<char> &loop, int mode );
 	void stopBackgroundTrack();
 	void lockBackgroundTrack( bool lock );
 	void advanceBackgroundTrack( int value );
@@ -75,7 +74,6 @@ private:
 	PodBufferHolder<uint8_t> m_resamplingBuffer;
 
 	wsw::StringSpanStorage<unsigned, unsigned> m_tmpPathListStorage;
-	wsw::String m_tmpPath, m_tmpPath2;
 
 	wsw::RandomGenerator m_rng;
 

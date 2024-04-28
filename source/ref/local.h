@@ -72,7 +72,7 @@ typedef struct superLightStyle_s {
 #include "glimp.h"
 #include "surface.h"
 
-#include "../common/wswvector.h"
+#include "../common/wswpodvector.h"
 
 enum {
 	IT_NONE

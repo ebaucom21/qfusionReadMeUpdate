@@ -215,7 +215,7 @@ auto KeyBindingsSystem::KeysAndNames::getNameForKey( int key ) const -> std::opt
 auto KeyBindingsSystem::getBindingForKey( int key ) const -> std::optional<wsw::StringView> {
 	if( (unsigned)key < kMaxBindings ) {
 		if( const auto &b = m_bindings[key]; !b.empty() ) {
-			return wsw::StringView( b.data(), b.size(), wsw::StringView::ZeroTerminated );
+			return wsw::StringView( b.data(), b.size() - 1, wsw::StringView::ZeroTerminated );
 		}
 	}
 	return std::nullopt;
@@ -234,8 +234,10 @@ void KeyBindingsSystem::setBinding( int key, const wsw::StringView &binding ) {
 		return;
 	}
 
-	const auto &old = m_bindings[key];
-	wsw::StringView oldView( old.data(), old.size() );
+	wsw::StringView oldView = wsw::StringView();
+	if( const auto &old = m_bindings[key]; !old.empty() ) {
+		oldView = wsw::StringView( old.data(), old.size() - 1, wsw::StringView::ZeroTerminated );
+	}
 	if( oldView.equalsIgnoreCase( binding ) ) {
 		return;
 	}
@@ -245,6 +247,7 @@ void KeyBindingsSystem::setBinding( int key, const wsw::StringView &binding ) {
 	}
 
 	m_bindings[key].assign( binding.data(), binding.size() );
+	m_bindings[key].append( '\0' );
 
 	if( binding.equalsIgnoreCase( kToggleConsole ) ) {
 		m_numConsoleBindings++;

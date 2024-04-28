@@ -58,9 +58,6 @@ public:
 private:
 	void flushEntitySpatialParams();
 
-	wsw::String m_tmpPathBuffer1;
-	wsw::String m_tmpPathBuffer2;
-
 	Backend::EntitySpatialParamsBatch m_spatialParamsBatch;
 
 	qthread_s *m_thread { nullptr };

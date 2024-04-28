@@ -480,7 +480,7 @@ class MaterialSource {
 	friend class MaterialCache;
 	friend class MaterialSourceTest;
 
-	using Placeholders = wsw::Vector<PlaceholderSpan>;
+	using Placeholders = wsw::PodVector<PlaceholderSpan>;
 
 	std::optional<Placeholders> m_placeholders;
 
@@ -502,8 +502,8 @@ class MaterialSource {
 	};
 
 	struct ExpansionState {
-		wsw::String &expansionBuffer;
-		wsw::Vector<TokenSpan> &resultingTokens;
+		wsw::PodVector<char> &expansionBuffer;
+		wsw::PodVector<TokenSpan> &resultingTokens;
 		size_t tokenStart { 1 };
 		size_t lastOffsetInSpan { 0 };
 	};
@@ -532,12 +532,12 @@ public:
 	auto preparePlaceholders() -> std::optional<Placeholders>;
 
 	static void findPlaceholdersInToken( const wsw::StringView &token, unsigned tokenNum,
-										 wsw::Vector<PlaceholderSpan> &spans );
+										 wsw::PodVector<PlaceholderSpan> &spans );
 
 	[[nodiscard]]
 	bool expandTemplate( const wsw::StringView *args, size_t numArgs,
-						 wsw::String &expansionBuffer,
-						 wsw::Vector<TokenSpan> &resultingTokens );
+						 wsw::PodVector<char> &expansionBuffer,
+						 wsw::PodVector<TokenSpan> &resultingTokens );
 };
 
 // MSVC: Keep it defined as struct for now
@@ -562,8 +562,8 @@ class MaterialFactory {
 	friend class MaterialCache;
 
 	MaterialCache *const m_materialCache;
-	wsw::String m_expansionBuffer;
-	wsw::Vector<TokenSpan> m_templateTokenSpans;
+	wsw::PodVector<char> m_expansionBuffer;
+	wsw::PodVector<TokenSpan> m_templateTokenSpans;
 	wsw::StaticVector<TokenStream, 1> m_templateTokenStreamHolder;
 	wsw::StaticVector<MaterialLexer, 1> m_templateLexerHolder;
 	wsw::StaticVector<TokenStream, 1> m_primaryTokenStreamHolder;
@@ -630,14 +630,14 @@ class MaterialCache {
 
 	Skin *m_skinsHead { nullptr };
 
-	wsw::String m_pathNameBuffer;
-	wsw::String m_cleanNameBuffer;
-	wsw::String m_fileContentsBuffer;
+	wsw::PodVector<char> m_pathNameBuffer;
+	wsw::PodVector<char> m_cleanNameBuffer;
+	wsw::PodVector<char> m_fileContentsBuffer;
 
-	wsw::Vector<TokenSpan> m_fileTokenSpans;
+	wsw::PodVector<TokenSpan> m_fileTokenSpans;
 
-	wsw::Vector<wsw::StringView> m_fileMaterialNames;
-	wsw::Vector<std::pair<unsigned, unsigned>> m_fileSourceSpans;
+	wsw::PodVector<wsw::StringView> m_fileMaterialNames;
+	wsw::PodVector<std::pair<unsigned, unsigned>> m_fileSourceSpans;
 
 	wsw::StaticVector<uint16_t, MAX_SHADERS> m_freeMaterialIds;
 
@@ -646,7 +646,7 @@ class MaterialCache {
 	[[nodiscard]]
 	auto loadFileContents( const wsw::StringView &fileName ) -> MaterialFileContents *;
 	[[nodiscard]]
-	auto readRawContents( const wsw::StringView &fileName ) -> const wsw::String *;
+	auto readRawContents( const wsw::StringView &fileName ) -> const wsw::PodVector<char> *;
 
 	void loadDirContents( const wsw::StringView &dir );
 

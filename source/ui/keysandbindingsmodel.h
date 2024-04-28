@@ -7,11 +7,11 @@
 #include <QJsonObject>
 
 #include <array>
+#include <string>
 #include <unordered_map>
 
 #include "../common/common.h"
-#include "../common/wswstring.h"
-#include "../common/wswvector.h"
+#include "../common/wswpodvector.h"
 
 class QQuickItem;
 
@@ -145,14 +145,14 @@ private:
 	void reloadColumnCommandBindings( QJsonArray &columns, const wsw::StringView &changedSignal );
 
 	[[nodiscard]]
-	auto registerKnownCommands( std::unordered_map<wsw::String, int> &dest,
+	auto registerKnownCommands( std::unordered_map<std::string, int> &dest,
 							    const CommandsColumnEntry *begin,
 							    const CommandsColumnEntry *end,
 							    BindingGroup bindingGroup,
 							    int startFromNum ) -> int;
 
 	template <typename Array>
-	auto registerKnownCommands( std::unordered_map<wsw::String, int> &dest,
+	auto registerKnownCommands( std::unordered_map<std::string, int> &dest,
 								const Array &commands,
 								BindingGroup bindingGroup,
 								int startFromNum ) -> int;
@@ -180,18 +180,17 @@ private:
 	static constexpr auto kMaxCommands = 48;
 	std::array<BindingGroup, kMaxCommands> m_commandBindingGroups;
 
-	std::unordered_map<wsw::String, int> m_otherBindingNums;
-	std::unordered_map<wsw::String, int> m_weaponBindingNums;
-	std::unordered_map<wsw::String, int> m_respectBindingNums;
+	std::unordered_map<std::string, int> m_otherBindingNums;
+	std::unordered_map<std::string, int> m_weaponBindingNums;
+	std::unordered_map<std::string, int> m_respectBindingNums;
 
 	std::array<wsw::StringView, kMaxCommands> m_commandsForGlobalNums;
 	std::array<wsw::StringView, kMaxCommands> m_commandsDescForGlobalNums;
 
 	// TODO: Optimize
-	std::array<wsw::Vector<int>, kMaxCommands> m_boundKeysForCommand;
+	std::array<wsw::PodVector<int>, kMaxCommands> m_boundKeysForCommand;
 
-	// This is not that bad as the small strings optimization should work for the most part
-	std::array<wsw::String, 256> m_lastKeyBindings;
+	std::array<std::string, 256> m_lastKeyBindings;
 
 	bool m_isTrackingUpdates { false };
 };

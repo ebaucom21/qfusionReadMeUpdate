@@ -131,7 +131,7 @@ int Cvar_Flags( const char *var_name ) {
 [[nodiscard]]
 static auto getCorrectedValue( const cvar_t *var, const char *string ) -> char * {
 	if( DeclaredConfigVar *const controller = var->controller ) {
-		wsw::String tmpBuffer;
+		wsw::PodVector<char> tmpBuffer;
 		const wsw::StringView stringView( string );
 		if( const auto maybeCorrectedValue = controller->correctValue( stringView, &tmpBuffer ) ) {
 			assert( maybeCorrectedValue->isZeroTerminated() );
@@ -147,7 +147,7 @@ static auto getCorrectedValue( const cvar_t *var, const char *string ) -> char *
 
 static void setValueString( cvar_t *var, const char *string ) {
 	if( DeclaredConfigVar *const controller = var->controller ) {
-		wsw::String tmpBuffer;
+		wsw::PodVector<char> tmpBuffer;
 		const wsw::StringView stringView( string );
 		if( const auto maybeCorrectedValue = controller->handleValueChanges( stringView, &tmpBuffer ) ) {
 			assert( maybeCorrectedValue->isZeroTerminated() );
@@ -781,7 +781,8 @@ static int Cvar_NotDeveloper( void *cvar, void *nothing ) {
 #endif
 
 CompletionResult Cvar_CompleteBuildList( const wsw::StringView &partial ) {
-	const wsw::String ztPartial( partial.data(), partial.size() );
+	wsw::PodVector<char> ztPartial( partial.data(), partial.size() );
+	ztPartial.push_back( '\0' );
 
 	assert( cvar_trie );
 	QMutex_Lock( cvar_mutex );
@@ -805,7 +806,8 @@ CompletionResult Cvar_CompleteBuildList( const wsw::StringView &partial ) {
 }
 
 static CompletionResult Cvar_CompleteBuildListWithFlag( const wsw::StringView &partial, cvar_flag_t flag ) {
-	const wsw::String ztPartial( partial.data(), partial.size() );
+	wsw::PodVector<char> ztPartial( partial.data(), partial.size() );
+	ztPartial.push_back( '\0' );
 
 	assert( cvar_trie );
 	QMutex_Lock( cvar_mutex );

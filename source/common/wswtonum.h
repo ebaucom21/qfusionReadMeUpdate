@@ -2,6 +2,7 @@
 #define WSW_WSWTONUM_H
 
 #include <cassert>
+#include <cerrno>
 #include <climits>
 #include <cmath>
 #include <optional>

@@ -191,11 +191,11 @@ static void redirectCmdExecutionToBuiltinServer( const CmdArgs &cmdArgs ) {
 	}
 	text[text.size() - 1] = '\n';
 
-	const wsw::String boxedText( text.data(), text.size() );
+	wsw::PodVector<char> boxedText( text );
 	callOverPipe( g_svCmdPipe, &SV_Cmd_ExecuteNow2, boxedText );
 }
 
-static void executeCmdCompletionByBuiltinServer( unsigned requestId, const wsw::String &partial, CompletionQueryFunc queryFunc ) {
+static void executeCmdCompletionByBuiltinServer( unsigned requestId, const wsw::PodVector<char> &partial, CompletionQueryFunc queryFunc ) {
 	// The point is in executing the queryFunc safely in the server thread in a robust fashion
 	CompletionResult queryResult = queryFunc( wsw::StringView { partial.data(), partial.size() } );
 	callOverPipe( g_clCmdPipe, Con_AcceptCompletionResult, requestId, queryResult );
@@ -203,13 +203,12 @@ static void executeCmdCompletionByBuiltinServer( unsigned requestId, const wsw::
 
 static void redirectCmdCompletionToBuiltinServer( const wsw::StringView &, unsigned requestId,
 												  const wsw::StringView &partial, CompletionQueryFunc queryFunc ) {
-	wsw::String boxedPartial { partial.data(), partial.size() };
-
+	wsw::PodVector<char> boxedPartial( partial );
 	callOverPipe( g_svCmdPipe, executeCmdCompletionByBuiltinServer, requestId, boxedPartial, queryFunc );
 }
 
-static void registerBuiltinServerCmdOnClientSide( const wsw::String &name, CompletionQueryFunc completionFunc ) {
-	const wsw::StringView nameView( name.data(), name.size(), wsw::StringView::ZeroTerminated );
+static void registerBuiltinServerCmdOnClientSide( const wsw::PodVector<char> &name, CompletionQueryFunc completionFunc ) {
+	const wsw::StringView nameView( name.data(), name.size() );
 	if( completionFunc ) {
 		CL_RegisterCmdWithCompletion( nameView, redirectCmdExecutionToBuiltinServer, completionFunc,
 									  redirectCmdCompletionToBuiltinServer );
@@ -218,8 +217,8 @@ static void registerBuiltinServerCmdOnClientSide( const wsw::String &name, Compl
 	}
 }
 
-static void unregisterBuiltinServerCmdOnClientSide( const wsw::String &name ) {
-	CL_GetCmdSystem()->unregisterCommand( wsw::StringView { name.data(), name.size(), wsw::StringView::ZeroTerminated } );
+static void unregisterBuiltinServerCmdOnClientSide( const wsw::PodVector<char> &name ) {
+	CL_GetCmdSystem()->unregisterCommand( wsw::StringView { name.data(), name.size() } );
 }
 
 // TODO: !!!!! We should merge this thread with the sound background thread
@@ -303,9 +302,9 @@ void Qcommon_Init( int argc, char **argv ) {
 		Sys_Error( "Error during initialization: %s", com_errormsg );
 	}
 
-	wsw::Vector<wsw::StringView> setArgs;
-	wsw::Vector<wsw::StringView> setAndExecArgs;
-	wsw::Vector<std::optional<wsw::StringView>> otherArgs;
+	wsw::PodVector<wsw::StringView> setArgs;
+	wsw::PodVector<wsw::StringView> setAndExecArgs;
+	wsw::PodVector<std::optional<wsw::StringView>> otherArgs;
 	CmdSystem::classifyExecutableCmdArgs( argc, argv, &setArgs, &setAndExecArgs, &otherArgs );
 
 	QThreads_Init();
@@ -584,14 +583,14 @@ void Cmd_PreInit( void ) {
 void SV_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionFunc ) {
 	SV_GetCmdSystem()->registerCommand( name, cmdFunc );
 #ifndef DEDICATED_ONLY
-	callOverPipe( g_clCmdPipe, registerBuiltinServerCmdOnClientSide, wsw::String { name.data(), name.size() }, completionFunc );
+	callOverPipe( g_clCmdPipe, registerBuiltinServerCmdOnClientSide, wsw::PodVector<char>( name.data(), name.size() ), completionFunc );
 #endif
 }
 
 void SV_Cmd_Unregister( const wsw::StringView &name ) {
 	SV_GetCmdSystem()->unregisterCommand( name );
 #ifndef DEDICATED_ONLY
-	callOverPipe( g_clCmdPipe, unregisterBuiltinServerCmdOnClientSide, wsw::String( name.data(), name.size() ) );
+	callOverPipe( g_clCmdPipe, unregisterBuiltinServerCmdOnClientSide, wsw::PodVector<char>( name.data(), name.size() ) );
 #endif
 }
 

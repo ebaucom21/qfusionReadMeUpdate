@@ -8,6 +8,7 @@
 #include "q_shared.h"
 
 #include <atomic>
+#include <string>
 
 template <typename T>
 [[nodiscard]]
@@ -55,15 +56,16 @@ auto DeclaredConfigVar::modificationId() const -> uint64_t {
 }
 
 void DeclaredConfigVar::failOnOp( const char *op ) const {
-	wsw::String message( "Attempt to" );
-	message.append( op );
-	message.append( "a value of an uninitailized var" );
+	wsw::PodVector<char> message;
+	message.append( "Attempt to"_asView );
+	message.append( wsw::StringView( op ) );
+	message.append( "a value of an uninitailized var"_asView );
 	message.append( m_name.data(), m_name.size() );
 	wsw::failWithRuntimeError( message.data() );
 }
 
 void DeclaredConfigVar::registerAllVars( DeclaredConfigVar *head ) {
-	wsw::String defaultValueBuffer;
+	wsw::PodVector<char> defaultValueBuffer;
 
 	for( DeclaredConfigVar *var = head; var; var = var->m_next ) {
 		if( var->m_underlying ) {
@@ -72,6 +74,9 @@ void DeclaredConfigVar::registerAllVars( DeclaredConfigVar *head ) {
 		
 		defaultValueBuffer.clear();
 		var->getDefaultValueText( &defaultValueBuffer );
+		if( defaultValueBuffer.empty() || defaultValueBuffer.back() != '\0' ) {
+			defaultValueBuffer.push_back( '\0' );
+		}
 
 		var->m_underlying = Cvar_Get( var->m_name.data(), defaultValueBuffer.data(), var->m_registrationFlags, var );
 	}
@@ -143,12 +148,22 @@ static auto convertValueUsingBounds( GivenType givenValue,
 BoolConfigVar::BoolConfigVar( const wsw::StringView &name, Params &&params )
 	: DeclaredConfigVar( name, params.flags ), m_params( params ) {}
 
-void BoolConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
+void BoolConfigVar::getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
 	defaultValueBuffer->push_back( m_params.byDefault ? '1' : '0' );
 }
 
-auto BoolConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
+// TODO: This is for backward compatibility, purge it once cvar caller code gets rewritten
+[[nodiscard]]
+static auto asZeroTerminatedView( wsw::PodVector<char> *chars ) -> wsw::StringView {
+	const size_t size = chars->size();
+	if( chars->empty() || chars->back() != '\0' ) {
+		chars->push_back( '\0' );
+	}
+	return wsw::StringView( chars->data(), size, wsw::StringView::ZeroTerminated );
+}
+
+auto BoolConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> {
 	if( const auto maybeNum = wsw::toNum<int64_t>( newValue ) ) {
 		if( maybeNum == 0 ) {
 			storeToOpaqueStorage( &m_cachedValue, false );
@@ -158,7 +173,7 @@ auto BoolConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::St
 			storeToOpaqueStorage( &m_cachedValue, true );
 			assert( tmpBuffer->empty() );
 			tmpBuffer->push_back( '1' );
-			return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+			return asZeroTerminatedView( tmpBuffer );
 		}
 	} else {
 		if( newValue.equalsIgnoreCase( "true"_asView ) ) {
@@ -169,24 +184,24 @@ auto BoolConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::St
 			storeToOpaqueStorage( &m_cachedValue, m_params.byDefault );
 			assert( tmpBuffer->empty() );
 			tmpBuffer->push_back( m_cachedValue ? '1' : '0' );
-			return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+			return asZeroTerminatedView( tmpBuffer );
 		}
 	}
 	return std::nullopt;
 }
 
-auto BoolConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
+auto BoolConfigVar::correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> {
 	if( const auto maybeNum = wsw::toNum<int64_t>( newValue ) ) {
 		if( maybeNum != 0 && maybeNum != 1 ) {
 			assert( tmpBuffer->empty() );
 			tmpBuffer->push_back( '1' );
-			return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+			return asZeroTerminatedView( tmpBuffer );
 		}
 	} else {
 		if( !newValue.equalsIgnoreCase( "true"_asView ) && !newValue.equalsIgnoreCase( "false"_asView ) ) {
 			assert( tmpBuffer->empty() );
 			tmpBuffer->push_back( m_params.byDefault ? '1' : '0' );
-			return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+			return asZeroTerminatedView( tmpBuffer );
 		}
 	}
 	return std::nullopt;
@@ -215,13 +230,13 @@ IntConfigVar::IntConfigVar( const wsw::StringView &name, Params &&params )
 	assert( convertValueUsingBounds( m_params.byDefault, m_params.min, m_params.max ) == m_params.byDefault );
 }
 
-void IntConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
+void IntConfigVar::getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
 	// Should not allocate in this case
 	defaultValueBuffer->append( std::to_string( m_params.byDefault ) );
 }
 
-auto IntConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
+auto IntConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> {
 	// Note: the double parsing kind of sucks, but it reduces implementation complexity
 	// and strings are still the primary serialization/exchange form of config vars data.
 	if( const std::optional<wsw::StringView> &correctedValueView = correctValue( newValue, tmpBuffer ) ) {
@@ -233,18 +248,18 @@ auto IntConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::Str
 	}
 }
 
-auto IntConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
+auto IntConfigVar::correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> {
 	if( const std::optional<int64_t> maybeNum = wsw::toNum<int64_t>( newValue ) ) {
 		const int correctedValue = convertValueUsingBounds( *maybeNum, m_params.min, m_params.max );
 		if( (int64_t)correctedValue != *maybeNum ) {
 			assert( tmpBuffer->empty() );
 			tmpBuffer->append( std::to_string( correctedValue ) );
-			return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+			return asZeroTerminatedView( tmpBuffer );
 		}
 	} else {
 		assert( tmpBuffer->empty() );
 		tmpBuffer->append( std::to_string( m_params.byDefault ) );
-		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+		return asZeroTerminatedView( tmpBuffer );
 	}
 	return std::nullopt;
 }
@@ -273,13 +288,13 @@ UnsignedConfigVar::UnsignedConfigVar( const wsw::StringView &name, Params &&para
 	assert( convertValueUsingBounds( m_params.byDefault, m_params.min, m_params.max ) == m_params.byDefault );
 }
 
-void UnsignedConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
+void UnsignedConfigVar::getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
 	// Should not allocate in this case
 	defaultValueBuffer->append( std::to_string( m_params.byDefault ) );
 }
 
-auto UnsignedConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
+auto UnsignedConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> {
 	// See IntConfigVar remarks
 	if( const std::optional<wsw::StringView> &correctedValueView = correctValue( newValue, tmpBuffer ) ) {
 		storeToOpaqueStorage( &m_cachedValue, wsw::toNum<unsigned>( *correctedValueView ).value() );
@@ -290,18 +305,18 @@ auto UnsignedConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw
 	}
 }
 
-auto UnsignedConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
+auto UnsignedConfigVar::correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> {
 	if( const std::optional<uint64_t> maybeNum = wsw::toNum<uint64_t>( newValue ) ) {
 		const unsigned correctedValue = convertValueUsingBounds( *maybeNum, m_params.min, m_params.max );
 		if( correctedValue != *maybeNum ) {
 			assert( tmpBuffer->empty() );
 			tmpBuffer->append( std::to_string( correctedValue ) );
-			return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+			return asZeroTerminatedView( tmpBuffer );
 		}
 	} else {
 		assert( tmpBuffer->empty() );
 		tmpBuffer->append( std::to_string( m_params.byDefault ) );
-		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+		return asZeroTerminatedView( tmpBuffer );
 	}
 	return std::nullopt;
 }
@@ -330,12 +345,12 @@ FloatConfigVar::FloatConfigVar( const wsw::StringView &name, Params &&params )
 	assert( convertValueUsingBounds( m_params.byDefault, m_params.min, m_params.max ) == m_params.byDefault );
 }
 
-void FloatConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
+void FloatConfigVar::getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
 	defaultValueBuffer->append( std::to_string( m_params.byDefault ) );
 }
 
-auto FloatConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
+auto FloatConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> {
 	// See IntConfigVar remarks
 	if( const std::optional<wsw::StringView> &correctedValueView = correctValue( newValue, tmpBuffer ) ) {
 		storeToOpaqueStorage( &m_cachedValue, wsw::toNum<float>( *correctedValueView ).value() );
@@ -346,18 +361,18 @@ auto FloatConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::S
 	}
 }
 
-auto FloatConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
+auto FloatConfigVar::correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> {
 	if( const std::optional<float> maybeNum = wsw::toNum<float>( newValue ); maybeNum && std::isfinite( *maybeNum ) ) {
 		const float correctedValue = convertValueUsingBounds( *maybeNum, m_params.min, m_params.max );
 		if( correctedValue != *maybeNum ) {
 			assert( tmpBuffer->empty() );
 			tmpBuffer->append( std::to_string( correctedValue ) );
-			return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+			return asZeroTerminatedView( tmpBuffer );
 		}
 	} else {
 		assert( tmpBuffer->empty() );
 		tmpBuffer->append( std::to_string( m_params.byDefault ) );
-		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+		return asZeroTerminatedView( tmpBuffer );
 	}
 	return std::nullopt;
 }
@@ -383,17 +398,17 @@ void FloatConfigVar::helperOfSet( float value, bool force ) {
 StringConfigVar::StringConfigVar( const wsw::StringView &name, Params &&params )
 	: DeclaredConfigVar( name, params.flags ), m_params( params ) {}
 
-void StringConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
+void StringConfigVar::getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
 	defaultValueBuffer->append( m_params.byDefault.data(), m_params.byDefault.size() );
 }
 
-auto StringConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String * ) -> std::optional<wsw::StringView> {
+auto StringConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> * ) -> std::optional<wsw::StringView> {
 	// TODO: What should we do for strings?
 	return std::nullopt;
 }
 
-auto StringConfigVar::correctValue( const wsw::StringView &newValue, wsw::String * ) const -> std::optional<wsw::StringView> {
+auto StringConfigVar::correctValue( const wsw::StringView &newValue, wsw::PodVector<char> * ) const -> std::optional<wsw::StringView> {
 	// TODO: What should we do for strings?
 	return std::nullopt;
 }
@@ -412,7 +427,8 @@ void StringConfigVar::helperOfSet( const wsw::StringView &value, bool force ) {
 		if( value.isZeroTerminated() ) {
 			Cvar_Set2( m_name.data(), value.data(), force );
 		} else {
-			wsw::String ztValue( m_name.data(), m_name.size() );
+			wsw::PodVector ztValue( m_name.data(), m_name.size() );
+			ztValue.push_back( '\0' );
 			Cvar_Set2( m_name.data(), ztValue.data(), force );
 		}
 	} else {
@@ -462,12 +478,12 @@ static auto parseColor( const wsw::StringView &string ) -> std::optional<int> {
 ColorConfigVar::ColorConfigVar( const wsw::StringView &name, Params &&params )
 	: DeclaredConfigVar( name, params.flags ), m_params( params ) {}
 
-void ColorConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
+void ColorConfigVar::getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
 	colorToString( m_params.byDefault & kRgbMask, defaultValueBuffer );
 }
 
-auto ColorConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
+auto ColorConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> {
 	if( const std::optional<int> maybeColor = parseColor( newValue ) ) {
 		storeToOpaqueStorage( &m_cachedValue, *maybeColor );
 		return std::nullopt;
@@ -475,15 +491,15 @@ auto ColorConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::S
 		assert( tmpBuffer->empty() );
 		storeToOpaqueStorage( &m_cachedValue, m_params.byDefault & kRgbMask );
 		colorToString( m_params.byDefault & kRgbMask, tmpBuffer );
-		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+		return asZeroTerminatedView( tmpBuffer );
 	}
 }
 
-auto ColorConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
+auto ColorConfigVar::correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> {
 	if( !parseColor( newValue ) ) {
 		assert( tmpBuffer->empty() );
 		colorToString( m_params.byDefault & kRgbMask, tmpBuffer );
-		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+		return asZeroTerminatedView( tmpBuffer );
 	}
 	return std::nullopt;
 }
@@ -512,9 +528,9 @@ void ColorConfigVar::helperOfSet( int value, bool force ) {
 
 UntypedEnumValueConfigVar::UntypedEnumValueConfigVar( const wsw::StringView &name, int registrationFlags,
 													  MatcherObj matcherObj, MatcherFn matcherFn,
-													  wsw::Vector<int> &&enumValues, int defaultValue )
+													  wsw::PodVector<int> &&enumValues, int defaultValue )
 	: DeclaredConfigVar( name, registrationFlags ), m_matcherObj( matcherObj ), m_matcherFn( matcherFn )
-	, m_enumValues( std::forward<wsw::Vector<int>>( enumValues ) ), m_defaultValue( defaultValue ) {
+	, m_enumValues( std::forward<wsw::PodVector<int>>( enumValues ) ), m_defaultValue( defaultValue ) {
 	assert( !m_enumValues.empty() );
 	m_minEnumValue = std::numeric_limits<int>::max();
 	m_maxEnumValue = std::numeric_limits<int>::min();
@@ -544,12 +560,12 @@ void UntypedEnumValueConfigVar::helperOfSet( int value, bool force ) {
 	}
 }
 
-void UntypedEnumValueConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
+void UntypedEnumValueConfigVar::getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
 	defaultValueBuffer->append( std::to_string( m_defaultValue ) );
 }
 
-auto UntypedEnumValueConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
+auto UntypedEnumValueConfigVar::correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> {
 	std::optional<int> validatedValue;
 	if( const auto maybeNum = wsw::toNum<int>( newValue ) ) {
 		if( isAValidValue( *maybeNum ) ) {
@@ -559,10 +575,10 @@ auto UntypedEnumValueConfigVar::correctValue( const wsw::StringView &newValue, w
 		return std::nullopt;
 	}
 	getDefaultValueText( tmpBuffer );
-	return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+	return asZeroTerminatedView( tmpBuffer );
 }
 
-auto UntypedEnumValueConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
+auto UntypedEnumValueConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> {
 	std::optional<int> validatedValue;
 	if( const auto maybeNum = wsw::toNum<int>( newValue ) ) {
 		if( isAValidValue( *maybeNum ) ) {
@@ -577,7 +593,7 @@ auto UntypedEnumValueConfigVar::handleValueChanges( const wsw::StringView &newVa
 	} else {
 		storeToOpaqueStorage( &m_cachedValue, m_defaultValue );
 		getDefaultValueText( tmpBuffer );
-		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+		return asZeroTerminatedView( tmpBuffer );
 	}
 }
 
@@ -590,10 +606,10 @@ bool UntypedEnumValueConfigVar::isAValidValue( int value ) const {
 
 UntypedEnumFlagsConfigVar::UntypedEnumFlagsConfigVar( const wsw::StringView &name, int registrationFlags,
 													  MatcherObj matcherObj, MatcherFn matcherFn,
-													  wsw::Vector<unsigned> &&enumValues,
+													  wsw::PodVector<unsigned> &&enumValues,
 													  size_t typeSizeInBytes, unsigned defaultValue )
 	: DeclaredConfigVar( name, registrationFlags ), m_matcherObj( matcherObj ), m_matcherFn( matcherFn )
-	, m_enumValues( std::forward<wsw::Vector<unsigned>>( enumValues ) ) {
+	, m_enumValues( std::forward<wsw::PodVector<unsigned>>( enumValues ) ) {
 	assert( !m_enumValues.empty() );
 	m_allBitsInEnumValues = 0;
 	m_hasZeroInValues     = false;
@@ -612,7 +628,7 @@ UntypedEnumFlagsConfigVar::UntypedEnumFlagsConfigVar( const wsw::StringView &nam
 	}
 }
 
-void UntypedEnumFlagsConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
+void UntypedEnumFlagsConfigVar::getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
 	// TODO: retrieve the default value string using the matcher?
 	if( m_defaultValue != m_allBitsSetValueForType && m_defaultValue != m_allBitsInEnumValues ) {
@@ -625,7 +641,7 @@ void UntypedEnumFlagsConfigVar::getDefaultValueText( wsw::String *defaultValueBu
 
 // Note: We do not correct "-1", despite internally truncating it. Let users type "-1" without hassle.
 
-auto UntypedEnumFlagsConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
+auto UntypedEnumFlagsConfigVar::correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> {
 	std::optional<unsigned> validatedValue;
 	if( const auto maybeNum = wsw::toNum<unsigned>( newValue ) ) {
 		if( isAnAcceptableValue( *maybeNum ) ) {
@@ -638,10 +654,10 @@ auto UntypedEnumFlagsConfigVar::correctValue( const wsw::StringView &newValue, w
 		}
 	}
 	getDefaultValueText( tmpBuffer );
-	return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+	return asZeroTerminatedView( tmpBuffer );
 }
 
-auto UntypedEnumFlagsConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
+auto UntypedEnumFlagsConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> {
 	std::optional<unsigned> validatedValue;
 	if( const auto maybeNum = wsw::toNum<unsigned>( newValue ) ) {
 		if( isAnAcceptableValue( *maybeNum ) ) {
@@ -660,7 +676,7 @@ auto UntypedEnumFlagsConfigVar::handleValueChanges( const wsw::StringView &newVa
 	} else {
 		storeToOpaqueStorage( &m_cachedValue, m_defaultValue );
 		getDefaultValueText( tmpBuffer );
-		return wsw::StringView( tmpBuffer->data(), tmpBuffer->size(), wsw::StringView::ZeroTerminated );
+		return asZeroTerminatedView( tmpBuffer );
 	}
 }
 

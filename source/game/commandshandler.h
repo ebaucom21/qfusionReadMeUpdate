@@ -3,7 +3,6 @@
 
 #include "../common/freelistallocator.h"
 #include "../common/wswstringview.h"
-#include "../common/wswstring.h"
 #include "../common/commandshandler.h"
 #include "../common/cmdargs.h"
 
@@ -15,7 +14,7 @@ class ClientCommandsHandler : public wsw::CommandsHandler<wsw::VarArgCommandCall
 
 	class ScriptCommandCallback final : public Callback {
 	public:
-		explicit ScriptCommandCallback( wsw::String &&name ): Callback( kScriptTag, std::move( name ) ) {}
+		explicit ScriptCommandCallback( wsw::PodVector<char> &&name ): Callback( kScriptTag, std::move( name ) ) {}
 		[[nodiscard]]
 		bool operator()( edict_t *arg, uint64_t, const CmdArgs &cmdArgs ) override;
 	};

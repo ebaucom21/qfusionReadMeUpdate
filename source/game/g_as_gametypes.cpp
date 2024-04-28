@@ -279,7 +279,7 @@ edict_t *GT_asCallSelectSpawnPoint( edict_t *ent ) {
 }
 
 //"bool GT_Command( Client @client, String &cmdString, String &argsString, int argc )"
-bool GT_asCallGameCommand( Client *client, const char *cmd, const char *args, int argc ) {
+bool GT_asCallGameCommand( Client *client, const wsw::StringView &cmd, const wsw::StringView &args, int argc ) {
 	int error;
 	asIScriptContext *ctx;
 	asstring_t *s1, *s2;
@@ -290,7 +290,7 @@ bool GT_asCallGameCommand( Client *client, const char *cmd, const char *args, in
 	}
 
 	// check for having any command to parse
-	if( !cmd || !cmd[0] ) {
+	if( cmd.empty() ) {
 		return false;
 	}
 
@@ -302,8 +302,8 @@ bool GT_asCallGameCommand( Client *client, const char *cmd, const char *args, in
 	}
 
 	// Now we need to pass the parameters to the script function.
-	s1 = qasStringFactoryBuffer( cmd, strlen( cmd ) );
-	s2 = qasStringFactoryBuffer( args, strlen( args ) );
+	s1 = qasStringFactoryBuffer( cmd.data(), cmd.size() );
+	s2 = qasStringFactoryBuffer( args.data(), args.size() );
 
 	ctx->SetArgObject( 0, client );
 	ctx->SetArgObject( 1, s1 );

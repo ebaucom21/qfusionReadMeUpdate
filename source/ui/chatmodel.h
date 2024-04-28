@@ -8,7 +8,7 @@
 #include "../common/q_arch.h"
 #include "../common/q_shared.h"
 #include "../common/wswstaticstring.h"
-#include "../common/wswvector.h"
+#include "../common/wswpodvector.h"
 #include "../common/freelistallocator.h"
 
 // TODO we can use a specialized one based on a freelist allocator
@@ -148,7 +148,7 @@ class ChatProxy : public QObject, protected ChatModelsShared {
 	wsw::HeapBasedFreelistAllocator m_linesAllocator { kFullLineSize, kMaxLines, alignof( Line ) };
 	std::deque<Line *> m_lineRefs;
 
-	wsw::Vector<uint64_t> m_pendingCommandNums;
+	wsw::PodVector<uint64_t> m_pendingCommandNums;
 
 	QDate m_lastMessageQtDate;
 	int m_lastMessageTimeHours { 0 };

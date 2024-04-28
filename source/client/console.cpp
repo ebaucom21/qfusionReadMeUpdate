@@ -31,6 +31,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/wswvector.h"
 #include "../common/wswfs.h"
 
+#include <cctype>
 #include <mutex>
 
 using wsw::operator""_asView;
@@ -101,7 +102,7 @@ public:
 	void acceptCommandCompletionResult( unsigned requestId, CompletionResult &&result );
 
 	[[nodiscard]]
-	auto dumpLinesToBuffer() const -> wsw::Vector<char>;
+	auto dumpLinesToBuffer() const -> wsw::PodVector<char>;
 private:
 	static constexpr unsigned kMaxLines                = 1024u;
 	static constexpr unsigned kUseDefaultHeapLineLimit = 128u;
@@ -320,14 +321,14 @@ private:
 		[[nodiscard]]
 		auto getFinalSpans() -> std::span<const wsw::StringView>;
 	private:
-		wsw::Vector<wsw::StringView> m_tmpSpans;
-		wsw::Vector<unsigned> m_tmpOffsets;
-		wsw::Vector<char> m_tmpChars;
+		wsw::PodVector<wsw::StringView> m_tmpSpans;
+		wsw::PodVector<unsigned> m_tmpOffsets;
+		wsw::PodVector<char> m_tmpChars;
 		unsigned m_charsSizeAtLineStart { 0 };
 	};
 
 	DrawnLinesBuilder m_drawnLinesBuilder;
-	wsw::Vector<char> m_tmpCompletionTokenPrefixColors;
+	wsw::PodVector<char> m_tmpCompletionTokenPrefixColors;
 };
 
 static SingletonHolder<Console> g_console;
@@ -780,7 +781,7 @@ void Console::drawPane( unsigned width, unsigned height ) {
 	}
 
 	// TODO: Get rid of this copying, allow supplying spans directly
-	wsw::String scrDrawStringBuffer;
+	static wsw::PodVector<char> scrDrawStringBuffer;
 
 	// draw from the bottom up
 	unsigned numSkippedLines = 0;
@@ -806,6 +807,7 @@ void Console::drawPane( unsigned width, unsigned height ) {
 			const auto end = std::make_reverse_iterator( spansToDraw.begin() );
 			for(; it != end; ++it ) {
 				scrDrawStringBuffer.assign( it->data(), it->size() );
+				scrDrawStringBuffer.push_back( '\0' );
 				SCR_DrawString( sideMargin, lineY, ALIGN_LEFT_TOP, scrDrawStringBuffer.data(), cls.consoleFont, colorWhite, 0 );
 				lineY -= smallCharHeight;
 				if( lineY < -smallCharHeight ) {
@@ -1761,7 +1763,7 @@ void Console::handlePositionPageAtEndAction() {
 }
 
 void Console::handleClipboardCopyKeyAction() {
-	const wsw::Vector<char> &lines = dumpLinesToBuffer();
+	const wsw::PodVector<char> &lines = dumpLinesToBuffer();
 	CL_SetClipboardData( lines.data() );
 }
 
@@ -1932,7 +1934,7 @@ void Console::handleCharInputEvent( int key ) {
 	}
 }
 
-auto Console::dumpLinesToBuffer() const -> wsw::Vector<char> {
+auto Console::dumpLinesToBuffer() const -> wsw::PodVector<char> {
 	[[maybe_unused]] volatile std::lock_guard lock( m_mutex );
 
 	size_t bufferSize = 0;
@@ -1940,7 +1942,7 @@ auto Console::dumpLinesToBuffer() const -> wsw::Vector<char> {
 		bufferSize += entry->getRequiredCapacityForDumping();
 	}
 
-	wsw::Vector<char> result;
+	wsw::PodVector<char> result;
 	result.resize( bufferSize + 1 );
 
 	char *writePtr = result.data();
@@ -2048,19 +2050,19 @@ static void Con_Dump_f( const CmdArgs &cmdArgs ) {
 		return;
 	}
 
-	wsw::String name;
+	wsw::PodVector<char> name;
 	name.resize( 16, '\0' );
 	name.insert( name.begin(), cmdArgs[1].begin(), cmdArgs[1].end() );
 	COM_DefaultExtension( name.data(), ".txt", name.size() );
 	COM_SanitizeFilePath( name.data() );
-	name.erase( std::strlen( name.data() ) );
+	name.erase( name.begin() + std::strlen( name.data() ), name.end() );
 
 	if( !COM_ValidateRelativeFilename( name.data() ) ) {
 		clNotice() << "Invalid filename";
 	} else {
 		const wsw::StringView nameView( name.data(), name.size(), wsw::StringView::ZeroTerminated );
 		if( auto maybeHandle = wsw::fs::openAsWriteHandle( nameView ) ) {
-			const wsw::Vector<char> &dump = g_console.instance()->dumpLinesToBuffer();
+			const wsw::PodVector<char> &dump = g_console.instance()->dumpLinesToBuffer();
 			if( !maybeHandle->write( dump.data(), dump.size() - 1 ) ) {
 				clWarning() << "Failed to write" << name;
 			} else {

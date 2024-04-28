@@ -2,7 +2,7 @@
 #define WSW_b8181ad3_2c0a_441c_86e9_6c3241ea0535_H
 
 #include "../client/serverlist.h"
-#include "../common/wswvector.h"
+#include "../common/wswpodvector.h"
 #include <QAbstractTableModel>
 
 namespace wsw::ui {
@@ -31,7 +31,7 @@ class ServerListModel : public QAbstractTableModel, public ServerListListener {
 		SpectatorsList
 	};
 
-	wsw::Vector<const PolledGameServer *> m_servers;
+	wsw::PodVector<const PolledGameServer *> m_servers;
 
 	[[nodiscard]]
 	auto getServerAtIndex( int index ) const -> const PolledGameServer *;

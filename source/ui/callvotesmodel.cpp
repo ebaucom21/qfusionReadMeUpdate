@@ -337,7 +337,7 @@ auto CallvotesModelProxy::parseAndAddOptions( const wsw::StringView &encodedOpti
 		return std::nullopt;
 	}
 
-	wsw::String content;
+	wsw::PodVector<char> content;
 	content.resize( 1u << 15u );
 
 	uLong unpackedDataLen = content.size();
@@ -349,7 +349,7 @@ auto CallvotesModelProxy::parseAndAddOptions( const wsw::StringView &encodedOpti
 
 	content.resize( unpackedDataLen );
 
-	wsw::Vector<std::pair<uint16_t, uint16_t>> spans;
+	wsw::PodVector<std::pair<uint16_t, uint16_t>> spans;
 	wsw::StringSplitter splitter( wsw::StringView( content.data(), content.size() ) );
 	while( auto maybeToken = splitter.getNext() ) {
 		const auto token = *maybeToken;

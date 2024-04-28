@@ -264,7 +264,7 @@ private:
 	DelayedEffect *m_delayedEffectsHead { nullptr };
 
 	// TODO: Replace by a fixed vector/fixed buffer
-	wsw::Vector<uint8_t> m_cachedSmokeBulgeMasksBuffer;
+	wsw::PodVector<uint8_t> m_cachedSmokeBulgeMasksBuffer;
 
 	unsigned m_explosionCompoundMeshCounter { 0 };
 

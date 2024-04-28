@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/wswstaticvector.h"
 #include "ai/vec3.h"
 
+#include <string>
 #include <span>
 
 /*
@@ -918,10 +919,10 @@ void SplashPropagationSolver::applyDamage( const DamageParams &params ) {
 		} else if( ent->s.type == ET_WAVE ) {
 			W_Detonate_Wave( ent, m_inflictor, nullptr, 0 );
 		} else {
-			wsw::String message;
-			message.append( "Unknown entity type " );
+			wsw::PodVector<char> message;
+			message.append( wsw::StringView( "Unknown entity type " ) );
 			message.append( std::to_string( ent->s.type ) );
-			message.append( " for ent->takedamage == 0" );
+			message.append( wsw::StringView( " for ent->takedamage == 0" ) );
 			wsw::failWithLogicError( message.data() );
 		}
 	}

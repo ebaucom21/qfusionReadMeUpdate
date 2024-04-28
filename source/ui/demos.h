@@ -3,6 +3,7 @@
 
 #include "../common/common.h"
 #include "../common/stringspanstorage.h"
+#include "../common/wswvector.h"
 #include "local.h"
 
 #include <QAbstractListModel>
@@ -27,8 +28,8 @@ class DemosResolver : public QObject {
 	int m_turn { 0 };
 	bool m_isReady { true };
 
-	wsw::Vector<unsigned> m_addedNew;
-	wsw::Vector<unsigned> m_goneOld;
+	wsw::PodVector<unsigned> m_addedNew;
+	wsw::PodVector<unsigned> m_goneOld;
 
 	using StringSpan = std::pair<uint32_t, uint8_t>;
 	using StringDataStorage = wsw::StringSpanStorage<uint32_t, uint8_t>;
@@ -85,12 +86,12 @@ class DemosResolver : public QObject {
 
 	unsigned m_numPendingTasks { 0 };
 	unsigned m_numCompletedTasks { 0 };
-	wsw::Vector<ResolveTaskResult *> m_taskResultsToProcess;
+	wsw::PodVector<ResolveTaskResult *> m_taskResultsToProcess;
 
 	ResolveTaskResult *m_taskResultsHead { nullptr };
-	wsw::Vector<const MetadataEntry *> m_entries;
+	wsw::PodVector<const MetadataEntry *> m_entries;
 
-	wsw::Vector<uint64_t> m_lastQueryResults;
+	wsw::PodVector<uint64_t> m_lastQueryResults;
 	wsw::StaticString<30> m_lastQuery;
 
 	[[nodiscard]]

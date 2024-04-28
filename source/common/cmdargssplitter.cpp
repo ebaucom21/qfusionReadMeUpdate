@@ -103,11 +103,12 @@ auto CmdArgsSplitter::exec( const wsw::StringView &cmdString ) -> CmdArgs {
 
 	if( argsStringStart ) {
 		const wsw::StringView trimmedArgsString = argsStringStart->trimRight();
-		m_argsStringBuffer.assign( trimmedArgsString.data(), trimmedArgsString.size() );
+		m_argsStringBuffer.append( trimmedArgsString.data(), trimmedArgsString.size() );
 	}
+	m_argsStringBuffer.push_back( '\0' );
 
 	return CmdArgs {
 		.allArgs    = m_argsViewsBuffer,
-		.argsString = { m_argsStringBuffer.data(), m_argsStringBuffer.size(), wsw::StringView::ZeroTerminated },
+		.argsString = { m_argsStringBuffer.data(), m_argsStringBuffer.size() - 1, wsw::StringView::ZeroTerminated },
 	};
 }

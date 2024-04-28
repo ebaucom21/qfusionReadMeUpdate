@@ -29,8 +29,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "wswstringsplitter.h"
 #include "wswstringview.h"
 #include "wswstaticstring.h"
-#include "wswvector.h"
-#include "wswstring.h"
 #include "wswfs.h"
 
 using wsw::operator""_asView;
@@ -155,23 +153,24 @@ static void ML_InitFromCache( wsw::fs::BufferedReader &reader ) {
 		return;
 	}
 
-	wsw::Vector<wsw::StringView> existingFileNames;
+	wsw::PodVector<wsw::StringView> existingFileNames;
 	existingFileNames.reserve( maybeCallResult->getNumFiles() );
-	wsw::String existingFileNameData;
-	existingFileNameData.reserve( maybeCallResult->getNumFiles() * MAX_QPATH );
+	wsw::PodVector<char> existingFileNameData;
+	existingFileNameData.reserve( maybeCallResult->getNumFiles() * MAX_QPATH + 1 );
 
 	for( const wsw::StringView &fileName: *maybeCallResult ) {
-		const size_t oldDataLen = existingFileNameData.length();
+		const size_t oldDataLen = existingFileNameData.size();
 		existingFileNameData.append( fileName.data(), fileName.size() );
+		existingFileNameData.append( '\0' );
 
 		char *cleanName = existingFileNameData.data() + oldDataLen;
 		COM_StripExtension( cleanName );
 		const size_t cleanNameLen = std::strlen( cleanName );
 
-		existingFileNameData.erase( oldDataLen + cleanNameLen );
-		existingFileNameData.push_back( '\0' );
+		existingFileNameData.erase( existingFileNameData.begin() + oldDataLen + cleanNameLen, existingFileNameData.end() );
+		existingFileNameData.append( '\0' );
 
-		existingFileNames.push_back( wsw::StringView( cleanName, cleanNameLen, wsw::StringView::ZeroTerminated ) );
+		existingFileNames.append( wsw::StringView( cleanName, cleanNameLen, wsw::StringView::ZeroTerminated ) );
 	}
 
 	constexpr size_t kBufferSize = 1024;
@@ -291,7 +290,8 @@ static void ML_MapListCmd( const CmdArgs &cmdArgs ) {
 }
 
 CompletionResult ML_CompleteBuildList( const wsw::StringView &partial ) {
-	const wsw::String ztPartial( partial.data(), partial.size() );
+	wsw::PodVector<char> ztPartial( partial.data(), partial.size() );
+	ztPartial.append( '\0' );
 
 	assert( mlist_filenames_trie );
 

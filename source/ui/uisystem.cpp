@@ -470,18 +470,18 @@ private:
 	std::unique_ptr<QOpenGLContext> m_externalContext;
 
 	// For tracking changes
-	wsw::Vector<QRectF> m_oldHudOccluders;
-	wsw::Vector<QRectF> m_hudOccluders;
+	wsw::PodVector<QRectF> m_oldHudOccluders;
+	wsw::PodVector<QRectF> m_hudOccluders;
 
-	wsw::Vector<NativelyDrawn *> m_nativelyDrawnItems;
-	wsw::Vector<NativelyDrawn *> m_nativelyDrawnUnderlayHeap;
-	wsw::Vector<NativelyDrawn *> m_nativelyDrawnOverlayHeap;
-	wsw::Vector<QRectF> m_occludersOfNativelyDrawnItems;
+	wsw::PodVector<NativelyDrawn *> m_nativelyDrawnItems;
+	wsw::PodVector<NativelyDrawn *> m_nativelyDrawnUnderlayHeap;
+	wsw::PodVector<NativelyDrawn *> m_nativelyDrawnOverlayHeap;
+	wsw::PodVector<QRectF> m_occludersOfNativelyDrawnItems;
 
-	wsw::Vector<QPair<QRectF, qreal>> m_boundsOfDrawnHudItems;
+	wsw::PodVector<QPair<QRectF, qreal>> m_boundsOfDrawnHudItems;
 	// Avoid using std::vector<bool>
-	wsw::Vector<uint8_t> m_drawnCellsMaskOfHudImage;
-	wsw::Vector<QPair<unsigned, unsigned>> m_columnRangesOfCellGridRows;
+	wsw::PodVector<uint8_t> m_drawnCellsMaskOfHudImage;
+	wsw::PodVector<QPair<unsigned, unsigned>> m_columnRangesOfCellGridRows;
 
 	wsw::Vector<QPair<QString, QVariant>> m_pendingCVarChanges;
 

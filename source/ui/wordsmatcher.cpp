@@ -145,7 +145,7 @@ auto WordsMatcher::match( const wsw::StringView &rawInput, unsigned maxDist ) ->
 
 	std::boyer_moore_searcher<const char *> &matcher = m_exactMatcherHolder.front();
 	if( matcher( input.begin(), input.end() ).first != input.end() ) {
-		return Match { 0u, (unsigned)m_stringDataBuffer.length() };
+		return Match { 0u, (unsigned)m_stringDataBuffer.size() };
 	}
 
 	// Only if a fuzzy match is allowed

@@ -116,8 +116,8 @@ public:
 	};
 private:
 	struct OptionTokens {
-		wsw::String content;
-		wsw::Vector<std::pair<uint16_t, uint16_t>> spans;
+		wsw::PodVector<char> content;
+		wsw::PodVector<std::pair<uint16_t, uint16_t>> spans;
 	};
 
 	wsw::Vector<Entry> m_entries;

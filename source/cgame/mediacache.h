@@ -7,7 +7,7 @@
 #include "../common/gs_public.h"
 
 #include "../common/wswstringview.h"
-#include "../common/wswvector.h"
+#include "../common/wswpodvector.h"
 #include "../common/stringspanstorage.h"
 #include "../client/snd_public.h"
 

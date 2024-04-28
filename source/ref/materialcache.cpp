@@ -192,7 +192,7 @@ auto MaterialCache::makeCleanName( const wsw::StringView &name ) -> wsw::HashedS
 		hash = hashBackup;
 	}
 
-	return wsw::HashedStringView( m_cleanNameBuffer.data(), m_cleanNameBuffer.length(), hash );
+	return wsw::HashedStringView( m_cleanNameBuffer.data(), m_cleanNameBuffer.size(), hash );
 }
 
 /*
@@ -380,10 +380,12 @@ void R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, 
 	TextureCache::instance()->getUnderlyingFactory()->replaceFontMaskSamples( baseImage, x, y, width, height, data );
 }
 
-auto MaterialCache::readRawContents( const wsw::StringView &fileName ) -> const wsw::String * {
-	wsw::String &pathName = m_pathNameBuffer;
+static const wsw::StringView kScriptsPrefix( "scripts/"_asView );
+
+auto MaterialCache::readRawContents( const wsw::StringView &fileName ) -> const wsw::PodVector<char> * {
+	wsw::PodVector<char> &pathName = m_pathNameBuffer;
 	pathName.clear();
-	pathName.append( "scripts/" );
+	pathName.append( kScriptsPrefix.data(), kScriptsPrefix.size() );
 	pathName.append( fileName.data(), fileName.size() );
 
 	if ( r_showShaderCache && r_showShaderCache->integer ) {
@@ -408,7 +410,7 @@ auto MaterialCache::readRawContents( const wsw::StringView &fileName ) -> const 
 }
 
 auto MaterialCache::loadFileContents( const wsw::StringView &fileName ) -> MaterialFileContents * {
-	const wsw::String *rawContents = readRawContents( fileName );
+	const wsw::PodVector<char> *rawContents = readRawContents( fileName );
 	if( !rawContents ) {
 		return nullptr;
 	}
@@ -516,7 +518,7 @@ bool MaterialCache::tryAddingFileContents( const MaterialFileContents *contents 
 			}
 		}
 
-		m_fileMaterialNames.emplace_back( *maybeNameToken );
+		m_fileMaterialNames.push_back( *maybeNameToken );
 		assert( tokenNum > shaderSpanStart );
 		// Exclude the closing brace from the range
 		m_fileSourceSpans.emplace_back( std::make_pair( shaderSpanStart, tokenNum - shaderSpanStart - 1 ) );

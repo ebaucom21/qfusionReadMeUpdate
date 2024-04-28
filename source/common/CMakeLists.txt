@@ -12,6 +12,7 @@ file(GLOB WSWCOMMON_SOURCES
     "textstreamwriter.cpp"
     "wswexceptions.cpp"
     "wswfs.cpp"
+    "wswpodvector.cpp"
     "wswsortbyfield.cpp"
     "wswstringview.cpp"
     "userinfo.cpp")
@@ -24,6 +25,7 @@ file(GLOB WSWCOMMON_HEADERS
     "gs_*.h"
     "q_*.h"
     "wswexceptions.h"
+    "wswpodvector.h"
     "wswsortbyfield.h"
     "wswstringview.h")
 

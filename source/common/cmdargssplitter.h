@@ -24,8 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cmdargs.h"
 
-#include "wswvector.h"
-#include "wswstring.h"
+#include "wswpodvector.h"
 #include <utility>
 
 // Instances hold temporary buffers and are supposed to be reused.
@@ -35,11 +34,11 @@ public:
 	[[nodiscard]]
 	auto exec( const wsw::StringView &cmdString ) -> CmdArgs;
 private:
-	wsw::Vector<wsw::StringView> m_argsViewsBuffer;
-	wsw::Vector<std::pair<unsigned, unsigned>> m_tmpSpansBuffer;
-	wsw::Vector<char> m_tmpStringBuffer;
-	wsw::Vector<char> m_argsDataBuffer;
-	wsw::String m_argsStringBuffer;
+	wsw::PodVector<wsw::StringView> m_argsViewsBuffer;
+	wsw::PodVector<std::pair<unsigned, unsigned>> m_tmpSpansBuffer;
+	wsw::PodVector<char> m_tmpStringBuffer;
+	wsw::PodVector<char> m_argsDataBuffer;
+	wsw::PodVector<char> m_argsStringBuffer;
 };
 
 #endif

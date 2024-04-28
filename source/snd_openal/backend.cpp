@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "snd_env_sampler.h"
 #include "alsystemfacade.h"
 #include "../common/links.h"
+#include <algorithm>
 #include <span>
 
 extern int s_registration_sequence;
@@ -416,7 +417,8 @@ void Backend::forceLoading( SoundSet *soundSet ) {
 
 	bool succeeded = false;
 	if( const auto *exactName = std::get_if<SoundSetProps::Exact>( &soundSet->props.name ) ) {
-		const wsw::StringView &filePath = SoundSystem::getPathForName( exactName->value, &m_tmpPath );
+		const wsw::PodVector<char> filePathData = SoundSystem::getPathForName( exactName->value );
+		const wsw::StringView filePath( filePathData.data(), filePathData.size() - 1, wsw::StringView::ZeroTerminated );
 		if( !filePath.empty() ) {
 			ALuint buffer = 0, stereoBuffer = 0;
 			unsigned durationMillis = 0;
@@ -496,9 +498,11 @@ static void runResamplingLoop( const T *__restrict in, T *__restrict out, size_t
 bool Backend::loadBuffersFromFile( const wsw::StringView &filePath, ALuint *buffer, ALuint *stereoBuffer, unsigned *durationMillis ) {
 	sDebug() << "Loading buffers for" << filePath;
 
-	m_tmpPath2.assign( filePath.data(), filePath.size() );
+	wsw::PodVector<char> ztFilePath( filePath );
+	ztFilePath.append( '\0' );
+
 	snd_info_t fileInfo;
-	if( !S_LoadSound( m_tmpPath2.data(), &m_fileDataBuffer, &fileInfo ) ) {
+	if( !S_LoadSound( ztFilePath.data(), &m_fileDataBuffer, &fileInfo ) ) {
 		// It produces verbose output on its own
 		return false;
 	}
@@ -694,8 +698,8 @@ void Backend::addLoopSound( const SoundSet *sound, int entNum, uintptr_t identif
 	}
 }
 
-void Backend::startBackgroundTrack( const wsw::String &intro, const wsw::String &loop, int mode ) {
-	S_StartBackgroundTrack( intro.c_str(), loop.c_str(), mode );
+void Backend::startBackgroundTrack( const wsw::PodVector<char> &intro, const wsw::PodVector<char> &loop, int mode ) {
+	S_StartBackgroundTrack( intro.data(), loop.data(), mode );
 }
 
 void Backend::stopBackgroundTrack() {

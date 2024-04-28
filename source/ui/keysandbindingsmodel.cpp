@@ -327,10 +327,10 @@ bool KeysAndBindingsModel::reloadRowKeyEntry( QJsonValueRef ref ) {
 		return false;
 	}
 
-	wsw::String &lastBinding = m_lastKeyBindings[quakeKey];
+	std::string &lastBinding = m_lastKeyBindings[quakeKey];
 	if( const auto maybeCurrBinding = wsw::cl::KeyBindingsSystem::instance()->getBindingForKey( quakeKey ) ) {
 		const wsw::StringView currBinding( *maybeCurrBinding );
-		const wsw::StringView lastBindingView( lastBinding.data(), lastBinding.size(), wsw::StringView::ZeroTerminated );
+		const wsw::StringView lastBindingView( lastBinding.data(), lastBinding.size() );
 		const auto maybeCommand = getCommandNum( currBinding );
 		if( maybeCommand ) {
 			m_boundKeysForCommand[*maybeCommand].push_back( quakeKey );
@@ -408,7 +408,7 @@ void KeysAndBindingsModel::reloadColumnCommandBindings( QJsonArray &column, cons
 		QJsonObject obj( ref.toObject() );
 		const int commandNum = obj["commandNum"].toInt();
 		assert( (unsigned)commandNum < (unsigned)kMaxCommands );
-		const wsw::Vector<int> &boundKeys = m_boundKeysForCommand[commandNum];
+		const wsw::PodVector<int> &boundKeys = m_boundKeysForCommand[commandNum];
 		const bool isActuallyBound = !boundKeys.empty();
 		if( obj["isBound"].toBool() != isActuallyBound ) {
 			obj["isBound"] = isActuallyBound;
@@ -428,13 +428,13 @@ static const wsw::StringView kSayPrefix( "say"_asView );
 
 auto KeysAndBindingsModel::getCommandNum( const wsw::StringView &bindingView ) const -> std::optional<int> {
 	// TODO: Eliminate this copy...
-	wsw::String binding( bindingView.data(), bindingView.size() );
+	std::string binding( bindingView.data(), bindingView.size() );
 	if( auto it = m_otherBindingNums.find( binding ); it != m_otherBindingNums.end() ) {
 		return it->second;
 	}
 
 	const wsw::StringView prefixes[2] = { kUsePrefix, kSayPrefix };
-	const std::unordered_map<wsw::String, int> *mapsOfNums[2] = { &m_weaponBindingNums, &m_respectBindingNums };
+	const std::unordered_map<std::string, int> *mapsOfNums[2] = { &m_weaponBindingNums, &m_respectBindingNums };
 	for( int i = 0; i < 2; ++i ) {
 		if( !bindingView.startsWith( prefixes[i] ) ) {
 			continue;
@@ -442,7 +442,7 @@ auto KeysAndBindingsModel::getCommandNum( const wsw::StringView &bindingView ) c
 		wsw::StringView v( bindingView );
 		v = v.drop( prefixes[i].length() ).trimLeft();
 		// TODO: Eliminate this copy...
-		wsw::String s( v.data(), v.size() );
+		std::string s( v.data(), v.size() );
 		if( auto it = mapsOfNums[i]->find( s ); it != mapsOfNums[i]->end() ) {
 			return it->second;
 		}
@@ -564,7 +564,7 @@ static CommandsColumnEntry kRespectCommandsColumn2[] {
 	{ "Say lol!", "say lol" }
 };
 
-auto KeysAndBindingsModel::registerKnownCommands( std::unordered_map<wsw::String, int> &dest,
+auto KeysAndBindingsModel::registerKnownCommands( std::unordered_map<std::string, int> &dest,
 												  const CommandsColumnEntry *begin,
 												  const CommandsColumnEntry *end,
 												  BindingGroup bindingGroup,
@@ -577,7 +577,7 @@ auto KeysAndBindingsModel::registerKnownCommands( std::unordered_map<wsw::String
 			commandView = commandView.drop( 4 );
 		}
 
-		dest.insert( std::make_pair( wsw::String( commandView.data(), commandView.size() ), num ) );
+		dest.insert( std::make_pair( std::string( commandView.data(), commandView.size() ), num ) );
 
 		assert( (size_t)num < sizeof( m_commandBindingGroups ) );
 		assert( m_commandBindingGroups[num] == UnknownGroup );
@@ -596,7 +596,7 @@ auto KeysAndBindingsModel::registerKnownCommands( std::unordered_map<wsw::String
 }
 
 template <typename Array>
-auto KeysAndBindingsModel::registerKnownCommands( std::unordered_map<wsw::String, int> &dest,
+auto KeysAndBindingsModel::registerKnownCommands( std::unordered_map<std::string, int> &dest,
 												  const Array &commands,
 												  BindingGroup bindingGroup,
 												  int startFromNum ) -> int {

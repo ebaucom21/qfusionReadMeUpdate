@@ -7,7 +7,7 @@
 #include "../common/randomgenerator.h"
 #include "../common/freelistallocator.h"
 #include "../common/podbufferholder.h"
-#include "../common/wswvector.h"
+#include "../common/wswpodvector.h"
 
 struct CMShapeList;
 
@@ -153,7 +153,7 @@ private:
 	// We have to supply solid and cloud parts separately for a proper handling of surface sorting in the renderer.
 	// Still, they share many properties.
 	struct SharedMeshData {
-		wsw::Vector<uint32_t> *overrideColorsBuffer { nullptr };
+		wsw::PodVector<uint32_t> *overrideColorsBuffer { nullptr };
 		// Must be reset each frame
 		std::optional<std::variant<std::pair<unsigned, unsigned>, std::monostate>> cachedOverrideColorsSpanInBuffer;
 		std::optional<std::variant<unsigned, std::monostate>> cachedChosenSolidSubdivLevel;
@@ -654,7 +654,7 @@ private:
 	wsw::HeapBasedFreelistAllocator m_waveHullsAllocator { sizeof( WaveHull ), kMaxWaveHulls };
 
 	// Can't specify byte_vec4_t as the template parameter
-	wsw::Vector<uint32_t> m_frameSharedOverrideColorsBuffer;
+	wsw::PodVector<uint32_t> m_frameSharedOverrideColorsBuffer;
 
 	// We may submit solid and cloud meshes for each layer, so it's twice as much as the number of layers
 	static constexpr unsigned kMaxMeshesPerHullGeneral = ( 2 * kMaxHullLayers );

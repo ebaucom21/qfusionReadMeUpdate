@@ -19,14 +19,14 @@ struct GenericCommandCallback {
 	Derived *next[2] { nullptr, nullptr };
 
 protected:
-	wsw::String m_nameBuffer;
+	wsw::PodVector<char> m_nameBuffer;
 	const wsw::StringView m_tag;
 	wsw::HashedStringView m_name;
 	unsigned m_binIndex { ~0u };
 
-	GenericCommandCallback( const wsw::StringView &tag, wsw::String &&name_ )
+	GenericCommandCallback( const wsw::StringView &tag, wsw::PodVector<char> &&name_ )
 		: m_nameBuffer( std::move( name_ ) ), m_tag( tag )
-		, m_name( wsw::StringView( m_nameBuffer.data(), m_nameBuffer.length(), wsw::StringView::ZeroTerminated ) ) {}
+		, m_name( wsw::StringView( m_nameBuffer.data(), m_nameBuffer.size() ) ) {}
 
 	GenericCommandCallback( const wsw::StringView &tag, const wsw::HashedStringView &name )
 		: m_nameBuffer( name.data(), name.size() ), m_tag( tag )
@@ -157,7 +157,7 @@ class VarArgCommandCallback : public GenericCommandCallback<VarArgCommandCallbac
 protected:
 	VarArgCommandCallback( const wsw::StringView &tag, const wsw::HashedStringView &cmd )
 		: GenericCommandCallback<VarArgCommandCallback<Result, Args...>>( tag, cmd ) {}
-	VarArgCommandCallback( const wsw::StringView &tag, wsw::String &&cmd )
+	VarArgCommandCallback( const wsw::StringView &tag, wsw::PodVector<char> &&cmd )
 		: GenericCommandCallback<VarArgCommandCallback<Result, Args...>>( tag, std::move( cmd ) ) {}
 public:
 	[[nodiscard]]

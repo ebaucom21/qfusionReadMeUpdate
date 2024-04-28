@@ -221,9 +221,10 @@ static auto calcTravelTimeWalkingOrFallingShort( AiAasRouteCache *routeCache, co
 	}
 }
 
+// TODO: We can add functionality for taking the pointer out of the PodVector
 template <typename T>
 [[nodiscard]]
-static wsw_forceinline auto makeHeapAllocCopy( const wsw::Vector<T> &data ) -> T * {
+static wsw_forceinline auto makeHeapAllocCopy( const wsw::PodVector<T> &data ) -> T * {
 	auto *const result = (T *)Q_malloc( sizeof( T ) * data.size() );
 	std::memcpy( result, data.data(), sizeof( T ) * data.size() );
 	return result;
@@ -231,8 +232,8 @@ static wsw_forceinline auto makeHeapAllocCopy( const wsw::Vector<T> &data ) -> T
 
 template <typename T>
 struct NumsAndEntriesBuilder {
-	wsw::Vector<uint16_t> nums;
-	wsw::Vector<T> entries;
+	wsw::PodVector<uint16_t> nums;
+	wsw::PodVector<T> entries;
 	uint64_t totalNumEntriesInSpans { 0 };
 	uint64_t maxNumEntriesInSpans { 0 };
 	uint16_t minNum { 0 }, maxNum { 0 };
@@ -298,7 +299,7 @@ bool AasStaticRouteTable::compute() {
 	NumsAndEntriesBuilder<AreaEntry> preferredBuilder;
 	NumsAndEntriesBuilder<AreaEntry> allowedBuilder;
 	NumsAndEntriesBuilder<uint16_t> walkingBuilder;
-	wsw::Vector<BufferSpansForFlags> spans;
+	wsw::PodVector<BufferSpansForFlags> spans;
 
 	spans.reserve( numAreas );
 	// Put dummy values for area 0, so we don't have to apply offsets to fromAreaNum during retrieval

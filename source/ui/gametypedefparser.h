@@ -7,7 +7,6 @@
 
 #include "../common/wswstringview.h"
 #include "../common/wswfs.h"
-#include "../common/wswvector.h"
 #include "../common/stringspanstorage.h"
 
 namespace wsw::ui {
@@ -39,7 +38,7 @@ private:
 		std::optional<std::pair<unsigned, unsigned>> numPlayers;
 	};
 
-	wsw::Vector<MapInfo> m_mapInfoList;
+	wsw::PodVector<MapInfo> m_mapInfoList;
 
 	unsigned m_nameSpanIndex { ~0u };
 	unsigned m_titleSpanIndex { ~0u };

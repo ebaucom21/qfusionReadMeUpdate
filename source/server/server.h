@@ -242,7 +242,7 @@ void SV_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQu
 void SV_Cmd_Unregister( const wsw::StringView &name );
 
 void SV_Cmd_ExecuteNow( const char *text );
-void SV_Cmd_ExecuteNow2( const wsw::String &text );
+void SV_Cmd_ExecuteNow2( const wsw::PodVector<char> &text );
 
 void SV_Cbuf_AppendCommand( const char *text );
 

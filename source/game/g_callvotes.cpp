@@ -25,7 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/configstringstorage.h"
 #include "../common/wswstringsplitter.h"
 #include "../common/wswstaticstring.h"
-#include "../common/wswstring.h"
 #include "../common/wswvector.h"
 
 using wsw::operator""_asView;
@@ -167,9 +166,9 @@ static void G_VoteMapExtraHelp( edict_t *ent, const CmdArgs &cmdArgs ) {
 }
 
 class StringListEncoder {
-	wsw::String m_rawStrings;
-	wsw::Vector<uint8_t> m_zipBuffer;
-	wsw::String m_base64;
+	wsw::PodVector<char> m_rawStrings;
+	wsw::PodVector<uint8_t> m_zipBuffer;
+	wsw::PodVector<char> m_base64;
 public:
 	void reserve( size_t size ) {
 		m_rawStrings.reserve( size );
@@ -182,7 +181,7 @@ public:
 		m_rawStrings.append( string.data(), string.size() );
 	}
 
-	auto encode() -> const wsw::String & {
+	auto encode() -> const wsw::PodVector<char> & {
 		m_zipBuffer.resize( 1u << 15u );
 		size_t compressedSize = m_zipBuffer.size();
 		if( !GAME_IMPORT.Compress( m_zipBuffer.data(), &compressedSize, m_rawStrings.data(), m_rawStrings.size() ) ) {
@@ -236,11 +235,12 @@ static void G_VoteMapDescribeClientArgs( int configStringIndex ) {
 	StringListEncoder encoder;
 	addMapListToEncode( encoder );
 
-	const wsw::String &base64 = encoder.encode();
-	wsw::String buffer;
-	buffer.reserve( base64.length() + 16 );
-	buffer.append( "maplist " );
+	const wsw::PodVector<char> &base64 = encoder.encode();
+	wsw::PodVector<char> buffer;
+	buffer.reserve( base64.size() + 16 );
+	buffer.append( wsw::StringView( "maplist " ) );
 	buffer.append( base64 );
+	buffer.append( '\0' );
 
 	trap_ConfigString( configStringIndex, buffer.data() );
 }
@@ -451,9 +451,11 @@ static void G_VoteGametypeDescribeClientArgs( int configStringIndex ) {
 		}
 	}
 
-	wsw::String configString;
-	configString.append( "options " );
-	configString.append( encoder.encode() );
+	wsw::PodVector<char> configString;
+	configString.append( wsw::StringView( "options " ) );
+	const wsw::PodVector<char> &encodedOptions = encoder.encode();
+	configString.append( encodedOptions.data(), encodedOptions.size() );
+	configString.append( '\0' );
 	trap_ConfigString( configStringIndex, configString.data() );
 }
 
@@ -2092,7 +2094,7 @@ static bool G_VoteFromScriptValidate( callvotedata_t *vote, bool first ) {
 		Q_strncatz( argsString, va( " \"%s\"", vote->argv[i] ), MAX_STRING_CHARS );
 	}
 
-	return GT_asCallGameCommand( vote->caller->r.client, "callvotevalidate", argsString, vote->argc + 1 );
+	return GT_asCallGameCommand( vote->caller->r.client, "callvotevalidate"_asView, wsw::StringView( argsString ), vote->argc + 1 );
 }
 
 /*
@@ -2112,7 +2114,7 @@ static void G_VoteFromScriptPassed( callvotedata_t *vote ) {
 		Q_strncatz( argsString, va( " \"%s\"", vote->argv[i] ), MAX_STRING_CHARS );
 	}
 
-	GT_asCallGameCommand( vote->caller->r.client, "callvotepassed", argsString, vote->argc + 1 );
+	GT_asCallGameCommand( vote->caller->r.client, "callvotepassed"_asView, wsw::StringView( argsString ), vote->argc + 1 );
 }
 
 /*

@@ -2,6 +2,7 @@
 #include "g_local.h"
 #include "../common/singletonholder.h"
 #include "../common/wswstringview.h"
+#include "../common/wswvector.h"
 
 #include <cstdint>
 #include <sstream>
@@ -398,12 +399,12 @@ void RespectHandler::ClientEntry::announceMisconductBehaviour( const char *actio
 class RespectToken {
 	const wsw::StringView m_name;
 	const unsigned m_tokenNum;
-	const wsw::Vector<wsw::StringView> m_aliases;
+	const wsw::PodVector<wsw::StringView> m_aliases;
 
 	[[nodiscard]]
 	auto tryMatchingByAlias( const char *p, const wsw::StringView &alias ) const -> std::optional<unsigned>;
 public:
-	RespectToken( const wsw::StringView &name, unsigned tokenNum, wsw::Vector<wsw::StringView> &&aliases ) noexcept
+	RespectToken( const wsw::StringView &name, unsigned tokenNum, wsw::PodVector<wsw::StringView> &&aliases ) noexcept
 		: m_name( name ), m_tokenNum( tokenNum ), m_aliases( aliases ) {
 		assert( !m_aliases.empty() );
 		assert( std::all_of( m_aliases.begin(), m_aliases.end(), []( const wsw::StringView &a ) { return a.isZeroTerminated(); } ) );

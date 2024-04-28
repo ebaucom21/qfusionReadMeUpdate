@@ -27,7 +27,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/memspecbuilder.h"
 #include "../common/singletonholder.h"
 #include "../common/wswfs.h"
-#include "../common/wswstring.h"
 #include "../common/wswstringsplitter.h"
 #include "../common/textstreamwriterextras.h"
 
@@ -128,8 +127,8 @@ private:
 	auto loadFileEntryFromFile( const wsw::StringView &fileName ) -> FileEntry *;
 
 	[[nodiscard]]
-	static bool parseFileContents( const wsw::StringView &fileName, wsw::Vector<char> *stringData,
-								   wsw::Vector<LineSpan> *lineEntries, wsw::Vector<Include> *includes );
+	static bool parseFileContents( const wsw::StringView &fileName, wsw::PodVector<char> *stringData,
+								   wsw::PodVector<LineSpan> *lineEntries, wsw::PodVector<Include> *includes );
 
 	enum ParsingIncludeResult {
 		ParsingFailure,
@@ -139,14 +138,14 @@ private:
 
 	[[nodiscard]]
 	static auto parseIncludes( const wsw::StringView &lineToken, char *stringsBasePtr,
-							   wsw::Vector<Include> *includes ) -> ParsingIncludeResult;
+							   wsw::PodVector<Include> *includes ) -> ParsingIncludeResult;
 
 	[[nodiscard]]
 	auto loadBuiltin( const wsw::StringView &name ) -> KeyOfBuiltin;
 
-	wsw::Vector<LineSpan> m_tmpLineEntries;
-	wsw::Vector<char> m_tmpStringData;
-	wsw::Vector<Include> m_tmpIncludesData;
+	wsw::PodVector<LineSpan> m_tmpLineEntries;
+	wsw::PodVector<char> m_tmpStringData;
+	wsw::PodVector<Include> m_tmpIncludesData;
 
 	FileEntry *m_fileEntriesHead { nullptr };
 	FileEntry *m_fileEntryHashBins[97];
@@ -264,8 +263,8 @@ auto ProgramSourceFileCache::loadFileEntryFromFile( const wsw::StringView &fileN
 // TODO: This should be shared at the top level...
 static const wsw::CharLookup kLineSeparatorChars( wsw::StringView( "\r\n" ) );
 
-bool ProgramSourceFileCache::parseFileContents( const wsw::StringView &fileName, wsw::Vector<char> *stringData,
-												wsw::Vector<LineSpan> *lineEntries, wsw::Vector<Include> *includes ) {
+bool ProgramSourceFileCache::parseFileContents( const wsw::StringView &fileName, wsw::PodVector<char> *stringData,
+												wsw::PodVector<LineSpan> *lineEntries, wsw::PodVector<Include> *includes ) {
 	auto maybeFileHandle = wsw::fs::openAsReadHandle( fileName );
 	if( !maybeFileHandle ) {
 		return false;
@@ -345,7 +344,7 @@ static void sanitizeFilePath( char *chars, unsigned offset, unsigned length ) {
 }
 
 auto ProgramSourceFileCache::parseIncludes( const wsw::StringView &lineToken, char *stringsBasePtr,
-											wsw::Vector<Include> *includes ) -> ParsingIncludeResult {
+											wsw::PodVector<Include> *includes ) -> ParsingIncludeResult {
 	wsw::StringView lineLeftover = lineToken.trimLeft();
 	if( !lineLeftover.startsWith( '#' ) ) {
 		return NoIncludes;
@@ -433,7 +432,7 @@ auto ProgramSourceFileCache::loadBuiltin( const wsw::StringView &name ) -> KeyOf
 
 class ProgramSourceLoader {
 public:
-	ProgramSourceLoader( ProgramSourceFileCache *cache, wsw::Vector<const char *> *lines, wsw::Vector<int> *lengths )
+	ProgramSourceLoader( ProgramSourceFileCache *cache, wsw::PodVector<const char *> *lines, wsw::PodVector<int> *lengths )
 		: m_sourceFileCache( cache ), m_lines( lines ), m_lengths( lengths ) {}
 
 	[[nodiscard]]
@@ -451,8 +450,8 @@ private:
 
 	ProgramSourceFileCache *const m_sourceFileCache;
 
-	wsw::Vector<const char *> *const m_lines;
-	wsw::Vector<int> *const m_lengths;
+	wsw::PodVector<const char *> *const m_lines;
+	wsw::PodVector<int> *const m_lengths;
 
 	mutable wsw::StaticString<64> m_cachedRootFileDir;
 	wsw::StringView m_rootFileName;
@@ -663,11 +662,11 @@ private:
 	wsw::HeapBasedFreelistAllocator m_programsAllocator;
 	wsw::HeapBasedFreelistAllocator m_namesAllocator;
 
-	wsw::Vector<const char *> m_tmpCommonStrings;
-	wsw::Vector<int> m_tmpCommonOffsets;
+	wsw::PodVector<const char *> m_tmpCommonStrings;
+	wsw::PodVector<int> m_tmpCommonOffsets;
 
-	wsw::Vector<const char *> m_tmpShaderStrings;
-	wsw::Vector<int> m_tmpShaderLengths;
+	wsw::PodVector<const char *> m_tmpShaderStrings;
+	wsw::PodVector<int> m_tmpShaderLengths;
 
 	ShaderProgram *m_programListHead { nullptr };
 	ShaderProgram *m_programForIndex[MAX_GLSL_PROGRAMS];
@@ -1114,7 +1113,7 @@ static const glsl_feature_t * const glsl_programtypes_features[] =
 
 class ProgramSourceBuilder {
 public:
-	ProgramSourceBuilder( wsw::Vector<const char *> *strings, wsw::Vector<int> *lengths )
+	ProgramSourceBuilder( wsw::PodVector<const char *> *strings, wsw::PodVector<int> *lengths )
 		: m_strings( strings ), m_lengths( lengths ) {}
 
 	void addAll( std::span<const char *> strings, std::span<int> lengths ) {
@@ -1165,9 +1164,9 @@ public:
 
 private:
 	static_assert( std::is_same_v<GLchar, char> );
-	wsw::Vector<const char *> *const m_strings;
+	wsw::PodVector<const char *> *const m_strings;
 	static_assert( std::is_same_v<int, GLint> );
-	wsw::Vector<int> *const m_lengths;
+	wsw::PodVector<int> *const m_lengths;
 };
 
 void ProgramSourceFileCache::addBuiltinSourceLines( KeyOfBuiltin key, ProgramSourceBuilder *sourceBuilder ) const {

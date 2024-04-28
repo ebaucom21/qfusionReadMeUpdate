@@ -2,7 +2,8 @@
 #define WSW_d327d889_480b_4807_b7ac_ba3c44329664_H
 
 #include "wswstringview.h"
-#include "wswvector.h"
+#include "wswpodvector.h"
+#include <array>
 
 namespace wsw {
 
@@ -94,10 +95,11 @@ public:
 	template <typename DesiredType>
 	// TODO: A fixed vector/fixed heap-alloc array is sufficient
 	[[nodiscard]]
-	auto getEnumValues() -> wsw::Vector<DesiredType> {
+	auto getEnumValues() -> wsw::PodVector<DesiredType> {
 		static_assert( sizeof( DesiredType ) >= sizeof( Enum ) );
-		wsw::Vector<DesiredType> result;
-		// values->reserve( matcher->m_patterns.size() ); // turned off to reduce code size
+		wsw::PodVector<DesiredType> result;
+		// TODO: Just specify the initial capacity as an argument
+		result.reserve( m_patterns.size() );
 		for( const TokenPattern &pattern: m_patterns ) {
 			result.push_back( (DesiredType)pattern.value );
 		}
@@ -150,7 +152,7 @@ protected:
 		return std::nullopt;
 	}
 
-	wsw::Vector<TokenPattern> m_patterns;
+	wsw::PodVector<TokenPattern> m_patterns;
 	// We can't use pointers due to possible relocations of m_patterns data
 	int16_t m_smallLengthHeads[15];
 	int16_t m_largeLengthHead { -1 };

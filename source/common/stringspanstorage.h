@@ -4,17 +4,16 @@
 #include "wswstringview.h"
 #include "wswstaticstring.h"
 #include "wswstaticvector.h"
-#include "wswstring.h"
-#include "wswvector.h"
+#include "wswpodvector.h"
 #include <limits>
 
 namespace wsw {
 
 template <typename Off, typename Len,
-	typename CharBuffer = wsw::String,
+	typename CharBuffer = wsw::PodVector<char>,
 	// TODO: Use a more compact span storage as a default one?
 	typename InternalSpan = std::pair<Off, Len>,
-	typename SpanBuffer = wsw::Vector<InternalSpan>>
+	typename SpanBuffer = wsw::PodVector<InternalSpan>>
 class StringSpanStorage {
 protected:
 	CharBuffer m_charsBuffer;
@@ -58,7 +57,7 @@ public:
 		assert( len <= std::numeric_limits<Len>::max() );
 		const auto off = m_charsBuffer.size();
 		assert( off <= std::numeric_limits<Off>::max() );
-		m_charsBuffer.resize( m_charsBuffer.length() + len + 1 );
+		m_charsBuffer.resize( m_charsBuffer.size() + len + 1 );
 		assert( m_spansBuffer.size() < std::numeric_limits<unsigned>::max() );
 		auto resultSpanNum = (unsigned)m_spansBuffer.size();
 		m_spansBuffer.push_back( { (Off)off, (Len)len } );

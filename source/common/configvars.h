@@ -2,8 +2,7 @@
 #define WSW_a8647f1f_5b56_40a9_aaf5_811a1e2e3ee0_H
 
 #include "wswstringview.h"
-#include "wswstring.h"
-#include "wswvector.h"
+#include "wswpodvector.h"
 #include "q_cvar.h"
 
 #include <variant>
@@ -43,16 +42,16 @@ public:
 
 	// TODO: We require that the buffer is empty, should we, assuming that we can perfectly return a correct slice?
 	[[nodiscard]]
-	virtual auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> = 0;
+	virtual auto handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> = 0;
 	[[nodiscard]]
-	virtual auto correctValue( const wsw::StringView &value, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> = 0;
+	virtual auto correctValue( const wsw::StringView &value, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> = 0;
 
 	static DeclaredConfigVar *s_listHead;
 protected:
 	explicit DeclaredConfigVar( const wsw::StringView &name, int registrationFlags );
 
 	// TODO: There's inconsistency with handleValueChanges()/correctValue() with regard to signature
-	virtual void getDefaultValueText( wsw::String *defaultValueBuffer ) const = 0;
+	virtual void getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const = 0;
 
 	[[noreturn]]
 	void failOnSet() const { failOnOp( "set" ); }
@@ -105,11 +104,11 @@ public:
 	void set( bool value ) { helperOfSet( value, false ); }
 	void setImmediately( bool value ) { helperOfSet( value, true ); }
 private:
-	void getDefaultValueText( wsw::String *defaultValueBuffer ) const override;
+	void getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const override;
 	void helperOfSet( bool value, bool force );
 
-	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
-	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
+	auto handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> override;
+	auto correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
 	const Params m_params;
 	// Opaque storage for std::atomic<int>
@@ -133,11 +132,11 @@ public:
 	void set( int value ) { helperOfSet( value, false ); }
 	void setImmediately( int value ) { helperOfSet( value, true ); }
 private:
-	void getDefaultValueText( wsw::String *defaultValueBuffer ) const override;
+	void getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const override;
 	void helperOfSet( int value, bool force );
 
-	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
-	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
+	auto handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> override;
+	auto correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
 	const Params m_params;
 	// Opaque storage for std::atomic<int>
@@ -161,11 +160,11 @@ public:
 	void set( unsigned value ) { helperOfSet( value, false ); }
 	void setImmediately( unsigned value ) { helperOfSet( value, true ); }
 private:
-	void getDefaultValueText( wsw::String *defaultValueBuffer ) const override;
+	void getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const override;
 	void helperOfSet( unsigned value, bool force );
 
-	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
-	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
+	auto handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> override;
+	auto correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
 	const Params m_params;
 	// Opaque storage for std::atomic<unsigned>
@@ -189,11 +188,11 @@ public:
 	void set( float value ) { helperOfSet( value, false ); }
 	void setImmediately( float value ) { helperOfSet( value, true ); }
 private:
-	void getDefaultValueText( wsw::String *defaultValueBuffer ) const override;
+	void getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const override;
 	void helperOfSet( float value, bool force );
 
-	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
-	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
+	auto handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> override;
+	auto correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
 	const Params m_params;
 	// Opaque storage for std::atomic<float>
@@ -217,11 +216,11 @@ public:
 	void set( const wsw::StringView &value ) { helperOfSet( value, false ); }
 	void setImmediately( const wsw::StringView &value ) { helperOfSet( value, true ); }
 private:
-	void getDefaultValueText( wsw::String *defaultValueBuffer ) const override;
+	void getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const override;
 	void helperOfSet( const wsw::StringView &value, bool force );
 
-	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
-	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
+	auto handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> override;
+	auto correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
 	const Params m_params;
 };
@@ -244,11 +243,11 @@ public:
 private:
 	static constexpr int kRgbMask = ~( 0xFF << 24 );
 
-	void getDefaultValueText( wsw::String *defaultValueBuffer ) const override;
+	void getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const override;
 	void helperOfSet( int value, bool force );
 
-	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> override;
-	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> override;
+	auto handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> override;
+	auto correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> override;
 
 	const Params m_params;
 	// Opaque storage for std::atomic<int>
@@ -263,23 +262,23 @@ public:
 protected:
 	UntypedEnumValueConfigVar( const wsw::StringView &name, int registrationFlags,
 							   MatcherObj matcherObj, MatcherFn matcherFn,
-							   wsw::Vector<int> &&enumValues, int defaultValue );
+							   wsw::PodVector<int> &&enumValues, int defaultValue );
 
 	[[nodiscard]]
 	auto helperOfGet() const -> int;
 	void helperOfSet( int value, bool force );
 private:
-	void getDefaultValueText( wsw::String *defaultValueBuffer ) const final;
+	void getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const final;
 
-	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> final;
-	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> final;
+	auto handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> final;
+	auto correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> final;
 
 	[[nodiscard]]
 	bool isAValidValue( int value ) const;
 
 	const MatcherObj m_matcherObj;
 	const MatcherFn m_matcherFn;
-	const wsw::Vector<int> m_enumValues;
+	const wsw::PodVector<int> m_enumValues;
 	// Opaque storage for std::atomic<int>
 	alignas( kOpaqueAtomicAlignment ) volatile int m_cachedValue { 0 };
 	int m_minEnumValue { 0 };
@@ -326,16 +325,16 @@ public:
 protected:
 	UntypedEnumFlagsConfigVar( const wsw::StringView &name, int registrationFlags,
 							   MatcherObj matcherObj, MatcherFn matcherFn,
-							   wsw::Vector<unsigned> &&enumValues, size_t typeSizeInBytes, unsigned defaultValue );
+							   wsw::PodVector<unsigned> &&enumValues, size_t typeSizeInBytes, unsigned defaultValue );
 
 	[[nodiscard]]
 	auto helperOfGet() const -> unsigned;
 	void helperOfSet( unsigned value, bool force );
 private:
-	void getDefaultValueText( wsw::String *defaultValueBuffer ) const final;
+	void getDefaultValueText( wsw::PodVector<char> *defaultValueBuffer ) const final;
 
-	auto handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> final;
-	auto correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> final;
+	auto handleValueChanges( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) -> std::optional<wsw::StringView> final;
+	auto correctValue( const wsw::StringView &newValue, wsw::PodVector<char> *tmpBuffer ) const -> std::optional<wsw::StringView> final;
 
 	[[nodiscard]]
 	auto parseValueFromString( const wsw::StringView &string ) const -> std::optional<unsigned>;
@@ -344,7 +343,7 @@ private:
 
 	const MatcherObj m_matcherObj;
 	const MatcherFn m_matcherFn;
-	const wsw::Vector<unsigned> m_enumValues;
+	const wsw::PodVector<unsigned> m_enumValues;
 	// Opaque storage for std::atomic<unsigned>
 	alignas( kOpaqueAtomicAlignment ) volatile unsigned m_cachedValue { 0 };
 	unsigned m_defaultValue;

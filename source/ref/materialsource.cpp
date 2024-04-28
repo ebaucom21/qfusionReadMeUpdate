@@ -3,7 +3,7 @@
 #include <algorithm>
 
 auto MaterialSource::preparePlaceholders() -> std::optional<Placeholders> {
-	wsw::Vector<PlaceholderSpan> buffer;
+	wsw::PodVector<PlaceholderSpan> buffer;
 
 	auto [spans, numTokens] = getTokenSpans();
 	const char *data = getCharData();
@@ -17,7 +17,7 @@ auto MaterialSource::preparePlaceholders() -> std::optional<Placeholders> {
 }
 
 void MaterialSource::findPlaceholdersInToken( const wsw::StringView &token, unsigned tokenNum,
-											  wsw::Vector<PlaceholderSpan> &buffer ) {
+											  wsw::PodVector<PlaceholderSpan> &buffer ) {
 	size_t index = 0;
 
 	for(;; ) {
@@ -45,12 +45,11 @@ void MaterialSource::findPlaceholdersInToken( const wsw::StringView &token, unsi
 			// TODO: Show a warning
 		}
 		auto len = index - start;
-		PlaceholderSpan span = { (uint32_t)tokenNum, (uint16_t)start, (uint8_t)len, (uint8_t)num };
-		buffer.emplace_back( span );
+		buffer.emplace_back( PlaceholderSpan { (uint32_t)tokenNum, (uint16_t)start, (uint8_t)len, (uint8_t)num } );
 	}
 }
 
-bool MaterialSource::expandTemplate( const wsw::StringView *args, size_t numArgs, wsw::String &expansionBuffer, wsw::Vector<TokenSpan> &resultingTokens ) {
+bool MaterialSource::expandTemplate( const wsw::StringView *args, size_t numArgs, wsw::PodVector<char> &expansionBuffer, wsw::PodVector<TokenSpan> &resultingTokens ) {
 	if( !m_triedPreparingPlaceholders ) {
 		m_placeholders = preparePlaceholders();
 		m_triedPreparingPlaceholders = true;
