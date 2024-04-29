@@ -1,6 +1,7 @@
 #include "configvars.h"
 #include "local.h"
 #include "cvar.h"
+#include "wswalgorithm.h"
 #include "wswexceptions.h"
 #include "wswstringsplitter.h"
 #include "wswtonum.h"
@@ -599,7 +600,7 @@ auto UntypedEnumValueConfigVar::handleValueChanges( const wsw::StringView &newVa
 
 bool UntypedEnumValueConfigVar::isAValidValue( int value ) const {
 	if( value >= m_minEnumValue && value <= m_maxEnumValue ) {
-		return std::find( m_enumValues.begin(), m_enumValues.end(), value ) != m_enumValues.end();
+		return wsw::contains( m_enumValues.begin(), m_enumValues.end(), value );
 	}
 	return false;
 }
@@ -693,7 +694,7 @@ auto UntypedEnumFlagsConfigVar::parseValueFromString( const wsw::StringView &str
 	while( const auto maybeNextToken = splitter.getNext( '|' ) ) {
 		if( const auto maybeTokenNum = wsw::toNum<unsigned>( *maybeNextToken ) ) {
 			// Match against individual values TODO: Check range for doing lookups fast?
-			if( std::find( m_enumValues.begin(), m_enumValues.end(), *maybeTokenNum ) != m_enumValues.end() ) {
+			if( wsw::contains( m_enumValues.begin(), m_enumValues.end(), *maybeTokenNum ) ) {
 				newValueBits |= *maybeTokenNum;
 			} else {
 				return std::nullopt;

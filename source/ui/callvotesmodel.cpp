@@ -2,6 +2,7 @@
 #include "../client/client.h"
 #include "../common/base64.h"
 #include "../common/compression.h"
+#include "../common/wswalgorithm.h"
 #include "../common/wswstringsplitter.h"
 #include "local.h"
 
@@ -106,7 +107,7 @@ void CallvotesListModel::endReloading() {
 }
 
 void CallvotesListModel::notifyOfChangesAtNum( int num ) {
-	const auto it = std::find( m_displayedEntryNums.begin(), m_displayedEntryNums.end(), num );
+	const auto it = wsw::find( m_displayedEntryNums.begin(), m_displayedEntryNums.end(), num );
 	if( it != m_displayedEntryNums.end() ) {
 		const auto index = (int)( it - m_displayedEntryNums.begin() );
 		QModelIndex modelIndex( createIndex( index, 0 ) );

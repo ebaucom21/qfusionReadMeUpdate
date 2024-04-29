@@ -4,11 +4,9 @@
 #include "../navigation/aasroutecache.h"
 #include "../combat/advantageproblemsolver.h"
 #include "../bot.h"
-#include "../../../common/links.h"
+#include "../../../common/wswalgorithm.h"
 
 #include <cmath>
-#include <cstdlib>
-#include <algorithm>
 
 template <typename Spot, unsigned N, typename ScriptSpot>
 AiObjectiveBasedTeam::SpotsContainer<Spot, N, ScriptSpot>::SpotsContainer( const char *itemName_ )
@@ -462,7 +460,7 @@ void AiObjectiveBasedTeam::AssignBots( ObjectiveSpotImpl *spotsListHead, int num
 		// Compute effective bot defender scores for this spot
 		spot->ComputeEffectiveScores( candidates );
 		// Sort candidates so best candidates are last
-		std::sort( candidates.begin(), candidates.end() );
+		wsw::sortPodNonSpeedCritical( candidates.begin(), candidates.end() );
 
 		// Reserve minimal number of assigned bots
 		unsigned numBotsToAssign = spot->MinAssignedBots();

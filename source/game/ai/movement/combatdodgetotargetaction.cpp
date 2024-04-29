@@ -1,8 +1,6 @@
 #include "combatdodgetotargetaction.h"
 #include "movementlocal.h"
 
-#include <algorithm>
-
 [[nodiscard]]
 static inline auto makeMoveDir( const float *__restrict fractions, const Vec3 &__restrict forwardDir,
 								const Vec3 &__restrict rightDir ) {
@@ -73,7 +71,7 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( PredictionContext
 			}
 
 			// Give a preference to dirs with larger scores
-			std::sort( std::begin( dirsAndScores ), std::end( dirsAndScores ) );
+			wsw::sortByFieldDescending( std::begin( dirsAndScores ), std::end( dirsAndScores ), &DirAndScore::score );
 			for( unsigned i = 0; i < kMaxSideDirs; ++i ) {
 				this->dirIndices[i] = dirsAndScores[i].dir;
 			}

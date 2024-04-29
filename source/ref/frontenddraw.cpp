@@ -441,7 +441,9 @@ auto Frontend::setupStateForCamera( CameraStateGroup stateGroup, const refdef_t 
 	stateForCamera->bspDrawSurfacesBuffer                    = &m_bspDrawSurfacesBuffer[stateIndex];
 	stateForCamera->visTestedModelsBuffer                    = &m_visTestedModelsBuffer[stateIndex];
 	stateForCamera->leafLightBitsOfSurfacesBuffer            = &m_leafLightBitsOfSurfacesBuffer[stateIndex];
-	stateForCamera->particleDrawSurfaces                     = m_particleDrawSurfacesBuffer[stateIndex].get();
+
+	m_particleDrawSurfacesBuffer[stateIndex].reserve( Scene::kMaxParticleAggregates * Scene::kMaxParticlesInAggregate );
+	stateForCamera->particleDrawSurfaces = m_particleDrawSurfacesBuffer[stateIndex].get( 0 );
 	
 	stateForCamera->refdef      = *fd;
 	stateForCamera->farClip     = getDefaultFarClip( fd );

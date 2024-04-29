@@ -21,12 +21,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../ui/uisystem.h"
 #include "../common/wswstaticvector.h"
 #include "../common/wswstaticstring.h"
+#include "../common/wswalgorithm.h"
 #include "../common/singletonholder.h"
 #include "../common/cmdargs.h"
 #include "../common/cmdcompat.h"
-
-#include <tuple>
-#include <algorithm>
 
 using wsw::operator""_asView;
 
@@ -61,7 +59,8 @@ auto KeyBindingsSystem::instance() -> KeyBindingsSystem * {
 KeyBindingsSystem::KeysAndNames::KeysAndNames() {
 	for( unsigned i = 33; i < 127; ++i ) {
 		char *const data = m_printableKeyNames[i - 33].data;
-		std::tie( data[0], data[1] ) = std::make_pair( (char)i, '\0' );
+		data[0] = (char)i;
+		data[1] = '\0';
 	}
 
 	addKeyName( K_TAB, "TAB"_asView );
@@ -471,7 +470,7 @@ bool KeyHandlingSystem::isAnAutoRepeatKey( int key ) {
 	if( key >= 32 && key <= 126 ) {
 		return key != '`';
 	}
-	return std::find( std::begin( kAutoRepeatKeys ), std::end( kAutoRepeatKeys ), key ) != std::end( kAutoRepeatKeys );
+	return wsw::contains( std::begin( kAutoRepeatKeys ), std::end( kAutoRepeatKeys ), key );
 }
 
 bool KeyHandlingSystem::updateAutoRepeatStatus( int key, bool down ) {

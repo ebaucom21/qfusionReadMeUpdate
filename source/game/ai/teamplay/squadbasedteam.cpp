@@ -4,11 +4,12 @@
 #include "../groundtracecache.h"
 #include "../bot.h"
 #include "../../../common/links.h"
+#include "../../../common/wswalgorithm.h"
+#include "../../../common/wswsortbyfield.h"
 
 #include <limits>
 #include <cmath>
 #include <cstdlib>
-#include <algorithm>
 
 /**
  * While {@code AiAasRouteCache} is fairly efficient at retrieval of cached results,
@@ -374,7 +375,6 @@ void ExtendedWeaponDefsCache::Initialize() {
 		int weapon, tier;
 		WeaponAndTier(): weapon( 0 ), tier( 0 ) {}
 		WeaponAndTier( int weapon_, int tier_ ) : weapon( weapon_ ), tier( tier_ ) {}
-		bool operator<( const WeaponAndTier &that ) const { return tier > that.tier; }
 	};
 
 	WeaponAndTier weaponTiers[WEAP_TOTAL];
@@ -395,7 +395,7 @@ void ExtendedWeaponDefsCache::Initialize() {
 		tiersForWeapon[weapon] = weaponTiers[weapon].tier;
 	}
 
-	std::sort( weaponTiers, weaponTiers + WEAP_TOTAL );
+	wsw::sortByFieldDescending( weaponTiers, weaponTiers + WEAP_TOTAL, &WeaponAndTier::tier );
 	for( int i = 0; i < WEAP_TOTAL; ++i ) {
 		sortedByTierWeapons[i] = weaponTiers[i].weapon;
 	}
@@ -573,7 +573,7 @@ bool AiSquad::ShouldNotDropItemsNow() const {
 				const auto cmp = [&]( const TrackedEnemy *e ) {
 					return e->m_ent == enemy->m_ent;
 				};
-				auto it = std::find_if( mergedBotEnemies.begin(), mergedBotEnemies.end(), cmp );
+				auto it = wsw::find_if( mergedBotEnemies.begin(), mergedBotEnemies.end(), cmp );
 				if( it != mergedBotEnemies.end() ) {
 					// Replace by a more actual record
 					if( const TrackedEnemy *existing = *it; existing->LastSeenAt() < enemy->LastSeenAt() ) {
@@ -664,7 +664,7 @@ bool AiSquad::ShouldNotDropItemsNow() const {
 	}
 
 	// Sort all stealers based on last seen time (recently seen first)
-	std::sort( maybeStealers.begin(), maybeStealers.end() );
+	wsw::sortPodNonSpeedCritical( maybeStealers.begin(), maybeStealers.end() );
 
 	// Check not more than 4 most recently seen stealers.
 	// Use trace instead of path travel time estimation because pathfinder may fail to find a path.
@@ -737,7 +737,7 @@ void AiSquad::FindSupplierCandidates( Bot *consumer, Bot **suppliersListHead ) c
 	}
 
 	// Sort mates, most suitable item suppliers first
-	std::sort( candidates.begin(), candidates.end() );
+	wsw::sortPodNonSpeedCritical( candidates.begin(), candidates.end() );
 
 	*suppliersListHead = nullptr;
 	for( BotAndScore &botAndScore: candidates ) {
@@ -1231,7 +1231,7 @@ void AiSquadBasedTeam::SetupSquads() {
 
 sortPairs:
 	// Sort pairs so closest pairs are first
-	std::sort( candidatePairs.begin(), candidatePairs.end() );
+	wsw::sortByFieldDescending( candidatePairs.begin(), candidatePairs.end(), &CandidatePair::score );
 
 	bool isClientAssigned[MAX_CLIENTS];
 	std::fill( std::begin( isClientAssigned ), std::end( isClientAssigned ), false );

@@ -2,6 +2,7 @@
 #include "../common/demometadata.h"
 #include "../common/common.h"
 #include "../common/links.h"
+#include "../common/wswalgorithm.h"
 #include "../common/wswtonum.h"
 #include "../common/version.h"
 #include "../common/wswfs.h"
@@ -153,7 +154,8 @@ static const wsw::StringView kSearchPathRoot( "demos" );
 static const wsw::StringView kDemoExtension( APP_DEMO_EXTENSION_STR );
 
 template <typename Container>
-static bool contains( Container &c, const wsw::StringView &v ) {
+[[nodiscard]]
+static bool containsIgnoringCase( Container &c, const wsw::StringView &v ) {
 	for( const wsw::StringView &existing: c ) {
 		if( existing.equalsIgnoreCase( v ) ) {
 			return true;
@@ -184,12 +186,12 @@ void DemosResolver::enumerateFiles() {
 
 	// TODO: Rewrite to use a "hash-join" (RDBMS-like)
 	for( unsigned i = 0; i < newFileNames.size(); ++i ) {
-		if( !contains( oldFileNames, newFileNames[i] ) ) {
+		if( !containsIgnoringCase( oldFileNames, newFileNames[i] ) ) {
 			m_addedNew.push_back( i );
 		}
 	}
 	for( unsigned i = 0; i < oldFileNames.size(); ++i ) {
-		if( !contains( newFileNames, oldFileNames[i] ) ) {
+		if( !containsIgnoringCase( newFileNames, oldFileNames[i] ) ) {
 			m_goneOld.push_back( i );
 		}
 	}
@@ -381,8 +383,7 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 	}
 
 	StorageAdapter adapter { stringData };
-	const auto valuesEnd = parsedMandatoryValues + std::size( parsedMandatoryValues );
-	if( std::find( parsedMandatoryValues, valuesEnd, std::nullopt ) == valuesEnd ) {
+	if( !wsw::contains( parsedMandatoryValues, parsedMandatoryValues + std::size( parsedMandatoryValues ), std::nullopt ) ) {
 		if( const auto maybeTimestamp = wsw::toNum<uint64_t>( *parsedMandatoryValues[1] ) ) {
 			if( const auto maybeDuration = wsw::toNum<int>( *parsedMandatoryValues[2] ) ) {
 				const uint32_t fileNameHash = wsw::HashedStringView( fileName ).getHash();

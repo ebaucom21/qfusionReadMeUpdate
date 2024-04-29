@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "snd_env_sampler.h"
 #include "alsystemfacade.h"
 #include "../common/links.h"
-#include <algorithm>
+#include "../common/wswalgorithm.h"
 #include <span>
 
 extern int s_registration_sequence;
@@ -626,7 +626,7 @@ auto Backend::getBufferForPlayback( const SoundSet *soundSet, bool preferStereo 
 			// Looks like it is originally a mono sound
 			if( !chosenBuffer ) {
 				[[maybe_unused]] const ALuint *const end = soundSet->stereoBuffers + soundSet->numBuffers;
-				assert( std::find_if( soundSet->stereoBuffers, end, []( ALuint b ) { return b != 0; } ) == end );
+				assert( !wsw::any_of( soundSet->stereoBuffers, end, []( ALuint b ) { return b != 0; } ) );
 				chosenBuffer = soundSet->buffers[index];
 			}
 		} else {

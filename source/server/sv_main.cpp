@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/demometadata.h"
 #include "../common/wswtonum.h"
 #include "../common/wswfs.h"
+#include "../common/wswalgorithm.h"
 #include "../common/wswstringsplitter.h"
 #include "../common/gs_public.h"
 
@@ -3535,7 +3536,7 @@ static void SNAP_BuildSnapEntitiesList( cmodel_state_t *cms, ginfo_t *gi,
 		bool shouldAdd = true;
 		if( !frame->allentities ) {
 			// If it's not in the list of povs
-			if( std::find( povEntities, povEntities + numPovEntities, ent ) == povEntities + numPovEntities ) {
+			if( !wsw::contains( povEntities, povEntities + numPovEntities, ent ) ) {
 				if( earlyCullingResults[entNum] == 0 ) [[likely]] {
 					if( SNAP_SnapCullEntityForMultiPovs( cms, ent, povEntities, viewOrigins, numPovEntities, fatpvs ) ) {
 						shouldAdd = false;

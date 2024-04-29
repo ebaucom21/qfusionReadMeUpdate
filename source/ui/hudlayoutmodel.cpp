@@ -1,6 +1,6 @@
 #include "hudlayoutmodel.h"
 #include "local.h"
-#include "../common/wswexceptions.h"
+#include "../common/wswalgorithm.h"
 #include "../common/wswfs.h"
 #include "../common/wswtonum.h"
 #include "../common/wswstaticvector.h"
@@ -455,7 +455,7 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 				uiWarning() << "An element of kind" << selfProps.name << "is anchored to itself";
 				return std::nullopt;
 			}
-			const auto it = std::find_if( entries.begin(), entries.end(), [&]( const FileEntry &e ) {
+			const auto it = wsw::find_if( entries.begin(), entries.end(), [&]( const FileEntry &e ) {
 				return e.selfKind == *entry.otherKind;
 			});
 			assert( it != entries.end() );
@@ -712,7 +712,7 @@ bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 		entry.selfAnchors = fileEntry.selfAnchors;
 		entry.anchorItemAnchors = fileEntry.otherAnchors;
 		if( fileEntry.otherKind ) {
-			const auto it = std::find_if( fileEntries.begin(), fileEntries.end(), [&]( const FileEntry &e ) {
+			const auto it = wsw::find_if( fileEntries.begin(), fileEntries.end(), [&]( const FileEntry &e ) {
 				return e.selfKind == *fileEntry.otherKind;
 			});
 			assert( it != fileEntries.end() );
@@ -951,7 +951,7 @@ public:
 	[[nodiscard]]
 	auto end() const { return m_nums.end(); }
 	void add( int num ) {
-		if( std::find( m_nums.begin(), m_nums.end(), num ) == m_nums.end() ) {
+		if( !wsw::contains( m_nums, num ) ) {
 			m_nums.push_back( num );
 		}
 	}
@@ -1338,7 +1338,7 @@ bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 		assert( fileEntry.selfKind && fileEntry.selfKind < std::size( kEditorPropsForKind ) + 1 );
 		AnchorItem anchorItem = AnchorItem::forToolbox();
 		if( fileEntry.otherKind ) {
-			const auto it = std::find_if( fileEntries.begin(), fileEntries.end(), [&]( const FileEntry &e ) {
+			const auto it = wsw::find_if( fileEntries.begin(), fileEntries.end(), [&]( const FileEntry &e ) {
 				return e.selfKind == *fileEntry.otherKind;
 			});
 			assert( it != fileEntries.end() );
@@ -1384,7 +1384,7 @@ bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 			if( entry.anchorItem.isOtherItem() ) {
 				const int unpatchedIndex  = entry.anchorItem.toItemIndex();
 				const Kind anchorItemKind = kindsForOriginalIndices[unpatchedIndex];
-				const auto it = std::find_if( m_entries.begin(), m_entries.end(), [&]( const Entry &e ) {
+				const auto it = wsw::find_if( m_entries.begin(), m_entries.end(), [&]( const Entry &e ) {
 					return e.kind == anchorItemKind;
 				});
 				const auto newActualIndex = (unsigned)( it - m_entries.begin() );

@@ -3,6 +3,7 @@
 #include "local.h"
 #include "../common/q_shared.h"
 #include "../common/gs_public.h"
+#include "../common/wswalgorithm.h"
 #include "../common/wswstringsplitter.h"
 #include "../common/wswtonum.h"
 #include "../client/client.h"
@@ -113,9 +114,9 @@ bool Scoreboard::parseLayoutKind( const wsw::StringView &token ) {
 		return false;
 	}
 	const auto kind = (ColumnKind)*maybeValue;
-	if( std::find( uniqueFields.begin(), uniqueFields.end(), kind ) != uniqueFields.end() ) {
+	if( wsw::contains( uniqueFields, kind ) ) {
 		// Disallow multiple columns of these kinds
-		if( std::find( m_columnKinds.begin(), m_columnKinds.end(), kind ) != m_columnKinds.end() ) {
+		if( wsw::contains( m_columnKinds, kind ) ) {
 			return false;
 		}
 		// Disallow empty titles for these kinds
@@ -273,7 +274,7 @@ auto Scoreboard::checkAndGetUpdates( const RawData &currData, PlayerUpdatesList 
 			if( !( updatesMask & (unsigned)UpdateFlags::Challengers ) ) {
 				const uint8_t *const queueBegin = std::begin( currData.challengersQueue );
 				const uint8_t *const queueEnd   = std::end( currData.challengersQueue );
-				if( std::find( queueBegin, queueEnd, playerNum + 1 ) != queueEnd ) {
+				if( wsw::contains( queueBegin, queueEnd, playerNum + 1 ) ) {
 					updatesMask |= (unsigned)UpdateFlags::Challengers;
 				}
 			}

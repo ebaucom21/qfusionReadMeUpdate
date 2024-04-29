@@ -1,8 +1,5 @@
 #include "tacticalspotsregistry.h"
 
-#include <memory>
-#include <algorithm>
-
 #include "../rewriteme.h"
 #include "../bot.h"
 #include "../../../common/links.h"
@@ -609,7 +606,7 @@ void TacticalSpotsBuilder::FindCandidateAreas() {
 	}
 
 	// Sort areas so best (with higher connectivity score) are first
-	std::sort( candidateAreas, candidateAreas + numCandidateAreas );
+	wsw::sortByFieldDescending( candidateAreas, candidateAreas + numCandidateAreas, &AreaAndScore::score );
 }
 
 void TacticalSpotsBuilder::FindCandidatePoints() {
@@ -1161,39 +1158,4 @@ void TacticalSpotsRegistry::SpotsGridBuilder::CopyTo( PrecomputedSpotsGrid *prec
 			AI_FailWith( "SpotsGridBuilder::CopyTo()", "List ptr went out of bounds\n" );
 		}
 	}
-}
-
-template <typename V>
-V &TacticalSpotsRegistry::cleanAndGetVector( std::unique_ptr<V> *holder ) const {
-	if( !*holder ) {
-		*holder = std::make_unique<V>();
-	} else {
-		( *holder )->clear();
-	}
-	return *( *holder );
-}
-
-TacticalSpotsRegistry::SpotsQueryVector &TacticalSpotsRegistry::cleanAndGetSpotsQueryVector() const {
-	return cleanAndGetVector( &spotsQueryVectorHolder );
-}
-
-TacticalSpotsRegistry::SpotsAndScoreVector &TacticalSpotsRegistry::cleanAndGetSpotsAndScoreVector() const {
-	return cleanAndGetVector( &spotsAndScoreVectorHolder );
-}
-
-TacticalSpotsRegistry::OriginAndScoreVector &TacticalSpotsRegistry::cleanAndGetOriginAndScoreVector() const {
-	return cleanAndGetVector( &originAndScoreVectorHolder );
-}
-
-TacticalSpotsRegistry::CriteriaScoresVector &TacticalSpotsRegistry::cleanAndGetCriteriaScoresVector() const {
-	return cleanAndGetVector( &criteriaScoresVectorHolder );
-}
-
-bool *TacticalSpotsRegistry::cleanAndGetExcludedSpotsMask() {
-	if( !excludedSpotsMaskHolder ) {
-		excludedSpotsMaskHolder = std::make_unique<bool[]>( MAX_SPOTS );
-	}
-	bool *result = excludedSpotsMaskHolder.get();
-	memset( result, 0, MAX_SPOTS * sizeof( bool ) );
-	return result;
 }

@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/common.h"
 #include "../common/cmdargs.h"
 #include "../common/cmdcompat.h"
+#include "../common/wswalgorithm.h"
 #include "../common/wswfs.h"
 #include "../common/configvars.h"
 
@@ -1336,8 +1337,8 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 						drawGfx = false;
 						if( cg.chaseMode != CAM_TILED && cg.numSnapViewStates > 0 ) {
 							// Check if its a HUD-hosted miniview
-							for( const auto &indices: cg.hudControlledMiniviewViewStateIndicesForPane ) {
-								if( std::find( indices.begin(), indices.end(), viewStateIndices[viewNum] ) != indices.end() ) {
+							for( const auto &paneViewStateIndices: cg.hudControlledMiniviewViewStateIndicesForPane ) {
+								if( wsw::contains( paneViewStateIndices, viewStateIndices[viewNum] ) ) {
 									drawGfx = true;
 									break;
 								}

@@ -1,3 +1,23 @@
+/*
+Copyright (C) 2022-2024 Chasseur de bots
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+
+*/
+
 #ifndef WSW_71c96eea_c1cf_4f13_bb23_3d22d2b4b7e5_H
 #define WSW_71c96eea_c1cf_4f13_bb23_3d22d2b4b7e5_H
 
@@ -43,6 +63,8 @@ inline void sortByField( T *begin, T *end, Field T::*fieldPtr ) {
 		wsw::_details::sortStructsByInt32Field( begin, end, sizeof( T ), alignof( T ), fieldOffset );
 	} else if constexpr( std::is_same_v<Field, uint32_t> ) {
 		wsw::_details::sortStructsByUInt32Field( begin, end, sizeof( T ), alignof( T ), fieldOffset );
+	} else {
+		assert( false );
 	}
 }
 
@@ -64,6 +86,8 @@ inline void sortByFieldDescending( T *begin, T *end, Field T::*fieldPtr ) {
 		wsw::_details::sortStructsByInt32FieldDescending( begin, end, sizeof( T ), alignof( T ), fieldOffset );
 	} else if constexpr( std::is_same_v<Field, uint32_t> ) {
 		wsw::_details::sortStructsByUInt32FieldDescending( begin, end, sizeof( T ), alignof( T ), fieldOffset );
+	} else {
+		assert( false );
 	}
 }
 

@@ -31,6 +31,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/hash.h"
 #include "../common/q_trie.h"
 #include "../common/textstreamwriterextras.h"
+#include "../common/wswalgorithm.h"
 #include "../common/wswtonum.h"
 #include "../common/wswfs.h"
 #include "../ui/uisystem.h"
@@ -5898,7 +5899,7 @@ private:
 		const auto cmp = [&]( const std::pair<wsw::StringView, wsw::HashedStringView> &entry ) {
 			return entry.second.equalsIgnoreCase( cmdName );
 		};
-		return std::find_if( m_namesForTags.begin(), m_namesForTags.end(), cmp );
+		return wsw::find_if( m_namesForTags.begin(), m_namesForTags.end(), cmp );
 	}
 
 	template <typename Entry, unsigned N>

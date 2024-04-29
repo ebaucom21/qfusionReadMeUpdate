@@ -3,6 +3,8 @@
 #include "wswstaticstring.h"
 #include "wswexceptions.h"
 
+#include <array>
+
 namespace wsw::fs {
 
 void IOHandle::destroyHandle( int underlying ) {

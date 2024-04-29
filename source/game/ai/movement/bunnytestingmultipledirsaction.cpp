@@ -1,7 +1,6 @@
 #include "bunnytestingmultipledirsaction.h"
 #include "movementlocal.h"
-
-#include <algorithm>
+#include "../../../common/wswalgorithm.h"
 
 void BunnyTestingMultipleLookDirsAction::BeforePlanning() {
 	BunnyHopAction::BeforePlanning();
@@ -119,7 +118,7 @@ public:
 			4.0f, 8.0f, 12.0f, 20.0f, 16.0f, 28.0f, 24.0f, 32.0f, 36.0f,
 			40.0f, 45.0f, 55.0f, 65.0f, 75.0f, 85.0f, 95.0f, 105.0f, 120.0f
 		};
-		static_assert( std::max_element( std::begin( angles ), std::end( angles ) ) == std::end( angles ) - 1 );
+		static_assert( wsw::max_element( std::begin( angles ), std::end( angles ) ) == std::end( angles ) - 1 );
 		constexpr const float maxAngle = std::end( angles )[-1];
 		constexpr const float minPenaltyAngle = 30.0f;
 		for( float angle : angles ) {

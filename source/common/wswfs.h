@@ -3,11 +3,11 @@
 
 #include <cstdint>
 #include <optional>
-#include <functional>
 
 #include "q_arch.h"
 #include "q_shared.h"
 
+#include "wswfunction.h"
 #include "wswstringview.h"
 #include "wswstaticstring.h"
 
@@ -294,7 +294,7 @@ public:
 	auto findDirFiles( const wsw::StringView &dir, const wsw::StringView &ext ) -> std::optional<CallResult>;
 };
 
-using WalkDirVisitor = std::function<void( const wsw::StringView &dir, const wsw::StringView &entryName )>;
+using WalkDirVisitor = wsw::Function<void( const wsw::StringView &dir, const wsw::StringView &entryName )>;
 
 enum WalkErrorPolicy : uint8_t {
 	InterruptOnError,

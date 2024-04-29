@@ -21,8 +21,6 @@ public:
 	using difference_type = ptrdiff_t;
 	using iterator = char *;
 	using const_iterator = const char *;
-	using reverse_iterator = std::reverse_iterator<iterator>;
-	using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
 	static constexpr unsigned npos = ~0u;
 

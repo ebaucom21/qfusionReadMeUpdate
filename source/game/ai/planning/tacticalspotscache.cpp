@@ -226,7 +226,7 @@ void BotTacticalSpotsCache::findReachableClassEntities( const Vec3 &origin, floa
 	}
 
 	// Sort entities so best entities are first
-	std::sort( result.begin(), result.end() );
+	wsw::sortByFieldDescending( result.begin(), result.end(), &EntAndScore::score );
 }
 
 int BotTacticalSpotsCache::findMostFeasibleEntityAasArea( const edict_t *ent, const AiAasWorld *aasWorld ) const {

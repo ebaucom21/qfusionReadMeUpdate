@@ -1,9 +1,9 @@
 #ifndef WSW_4ea8b521_0c4d_4316_9c48_bfd9aee07092_H
 #define WSW_4ea8b521_0c4d_4316_9c48_bfd9aee07092_H
 
-#include <stdexcept>
-#include <stdint.h>
-#include <assert.h>
+#include <cassert>
+#include <cstdint>
+#include <utility>
 
 #ifndef WSW_ASAN_LOCK
 // TODO: Eliminate duplication of this block over the codebase

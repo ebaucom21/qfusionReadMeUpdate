@@ -376,8 +376,7 @@ void AiManager::FindHubAreas() {
 		}
 	}
 
-	std::sort( bestAreasHeap.begin(), bestAreasHeap.end() );
-
+	wsw::sortByFieldDescending( bestAreasHeap.begin(), bestAreasHeap.end(), &AreaAndScore::score );
 	for( unsigned i = 0; i < bestAreasHeap.size(); ++i ) {
 		this->hubAreas[i] = bestAreasHeap[i].areaNum;
 	}

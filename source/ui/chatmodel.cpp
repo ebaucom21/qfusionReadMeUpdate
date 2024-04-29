@@ -4,6 +4,7 @@
 
 #include "local.h"
 #include "../client/client.h"
+#include "../common/wswalgorithm.h"
 
 namespace wsw::ui {
 
@@ -192,7 +193,7 @@ void ChatProxy::clear() {
 
 bool ChatProxy::removeFromPendingCommands( uint64_t commandNum ) {
 	// TODO: Use some kind of a specialized set
-	auto it = std::find( m_pendingCommandNums.begin(), m_pendingCommandNums.end(), commandNum );
+	auto it = wsw::find( m_pendingCommandNums.begin(), m_pendingCommandNums.end(), commandNum );
 	if( it != m_pendingCommandNums.end() ) {
 		*it = m_pendingCommandNums.back();
 		m_pendingCommandNums.pop_back();

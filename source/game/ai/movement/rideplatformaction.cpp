@@ -1,5 +1,6 @@
 #include "rideplatformaction.h"
 #include "movementlocal.h"
+#include "../../../common/wswalgorithm.h"
 
 void RidePlatformAction::BeforePlanning() {
 	BaseAction::BeforePlanning();
@@ -272,10 +273,8 @@ bool RidePlatformAction::DetermineStageAndProperties( PredictionContext *context
 		const wsw::StaticVector<int, 24> &sourceAreas    = turn ? startBoxAreas : endBoxAreas;
 		const wsw::StaticVector<int, 24> &checkedInAreas = turn ? endBoxAreas : startBoxAreas;
 		for( const int areaNum: sourceAreas ) {
-			if( std::find( checkedInAreas.begin(), checkedInAreas.end(), areaNum ) != checkedInAreas.end() ) {
-				if( std::find( sharedAreas.begin(), sharedAreas.end(), areaNum ) == sharedAreas.end() ) {
-					sharedAreas.push_back( areaNum );
-				}
+			if( wsw::contains( checkedInAreas, areaNum ) && !wsw::contains( sharedAreas, areaNum ) ) {
+				sharedAreas.push_back( areaNum );
 			}
 		}
 	}
@@ -283,7 +282,7 @@ bool RidePlatformAction::DetermineStageAndProperties( PredictionContext *context
 	if( !sharedAreas.empty() ) {
 		for( wsw::StaticVector<int, 24> *areas: { &startBoxAreas, &endBoxAreas } ) {
 			for( unsigned i = 0; i < areas->size(); ) {
-				if( std::find( sharedAreas.begin(), sharedAreas.end(), areas->operator[]( i ) ) != sharedAreas.end() ) {
+				if( wsw::contains( sharedAreas, areas->operator[]( i ) ) ) {
 					areas->operator[]( i ) = areas->back();
 					areas->pop_back();
 				} else {

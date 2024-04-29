@@ -6,8 +6,7 @@
 #include "../../../common/wswstaticvector.h"
 #include "../bot.h"
 #include "../../../common/links.h"
-
-#include <memory>
+#include "../../../common/podbufferholder.h"
 
 enum class SpotSortCriterion {
 	GenericScore,
@@ -140,25 +139,36 @@ public:
 		}
 	};
 
-	using SpotsAndScoreVector = wsw::StaticVector<SpotAndScore, MAX_SPOTS>;
+	using SpotsAndScoreVector  = wsw::StaticVector<SpotAndScore, MAX_SPOTS>;
 	using OriginAndScoreVector = wsw::StaticVector<OriginAndScore, MAX_SPOTS>;
 	using CriteriaScoresVector = wsw::StaticVector<CriteriaScores, MAX_SPOTS>;
 
-	SpotsQueryVector &cleanAndGetSpotsQueryVector() const;
-	SpotsAndScoreVector &cleanAndGetSpotsAndScoreVector() const;
-	OriginAndScoreVector &cleanAndGetOriginAndScoreVector() const;
-	CriteriaScoresVector &cleanAndGetCriteriaScoresVector() const;
-	bool *cleanAndGetExcludedSpotsMask();
+	SpotsQueryVector &cleanAndGetSpotsQueryVector() const {
+		spotsQueryVectorHolder.clear();
+		return spotsQueryVectorHolder;
+	}
+	SpotsAndScoreVector &cleanAndGetSpotsAndScoreVector() const {
+		spotsAndScoreVectorHolder.clear();
+		return spotsAndScoreVectorHolder;
+	}
+	OriginAndScoreVector &cleanAndGetOriginAndScoreVector() const {
+		originAndScoreVectorHolder.clear();
+		return originAndScoreVectorHolder;
+	}
+	CriteriaScoresVector &cleanAndGetCriteriaScoresVector() const {
+		criteriaScoresVectorHolder.clear();
+		return criteriaScoresVectorHolder;
+	}
+	bool *cleanAndGetExcludedSpotsMask() const {
+		return excludedSpotsMaskHolder.reserveZeroedAndGet( MAX_SPOTS );
+	}
 private:
 	// TODO: Move all this stuff to some helper object?
-	mutable std::unique_ptr<SpotsQueryVector> spotsQueryVectorHolder;
-	mutable std::unique_ptr<SpotsAndScoreVector> spotsAndScoreVectorHolder;
-	mutable std::unique_ptr<OriginAndScoreVector> originAndScoreVectorHolder;
-	mutable std::unique_ptr<CriteriaScoresVector> criteriaScoresVectorHolder;
-	mutable std::unique_ptr<bool[]> excludedSpotsMaskHolder;
-
-	template <typename V>
-	V &cleanAndGetVector( std::unique_ptr<V> *holder ) const;
+	mutable SpotsQueryVector spotsQueryVectorHolder;
+	mutable SpotsAndScoreVector spotsAndScoreVectorHolder;
+	mutable OriginAndScoreVector originAndScoreVectorHolder;
+	mutable CriteriaScoresVector criteriaScoresVectorHolder;
+	mutable PodBufferHolder<bool> excludedSpotsMaskHolder;
 
 	static constexpr uint16_t MAX_SPOTS_PER_QUERY = 768;
 	static constexpr uint16_t MIN_GRID_CELL_SIDE = 512;

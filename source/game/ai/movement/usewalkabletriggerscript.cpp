@@ -1,5 +1,6 @@
 #include "usewalkabletriggerscript.h"
 #include "movementlocal.h"
+#include "triggerareanumscache.h"
 #include "../combat/tacticalspotsregistry.h"
 
 void UseWalkableTriggerScript::GetSteeringTarget( vec3_t target ) {

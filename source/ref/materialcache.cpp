@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/links.h"
 #include "../common/memspecbuilder.h"
 #include "../common/singletonholder.h"
+#include "../common/wswalgorithm.h"
 #include "../common/wswstringsplitter.h"
 #include "../common/wswfs.h"
 #include "materiallocal.h"
@@ -102,7 +103,7 @@ void MaterialCache::freeUnusedMaterialsByType( const std::span<shaderType_e> &ty
 		for( shader_s *material = m_materialsHead; material; material = nextMaterial ) {
 			nextMaterial = material->next[shader_t::ListLinks];
 			if( material->registrationSequence != registrationSequence ) {
-				if( std::find( types.begin(), types.end(), material->type ) != types.end() ) {
+				if( wsw::contains( types, material->type ) ) {
 					unlinkAndFree( material );
 				}
 			}

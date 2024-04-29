@@ -512,10 +512,7 @@ private:
 	PodBufferHolder<VisTestedModel> m_visTestedModelsBuffer[2];
 	PodBufferHolder<uint32_t> m_leafLightBitsOfSurfacesBuffer[2];
 
-	std::unique_ptr<ParticleDrawSurface[]> m_particleDrawSurfacesBuffer[2] {
-		std::make_unique<ParticleDrawSurface[]>( Scene::kMaxParticlesInAggregate * Scene::kMaxParticleAggregates ),
-		std::make_unique<ParticleDrawSurface[]>( Scene::kMaxParticleAggregates * Scene::kMaxParticleAggregates ),
-	};
+	PodBufferHolder<ParticleDrawSurface> m_particleDrawSurfacesBuffer[2];
 };
 
 }

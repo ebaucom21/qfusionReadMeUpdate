@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "glob.h"
 #include "qfiles.h"
 #include "bsp.h"
+#include "wswalgorithm.h"
 #include "wswstringview.h"
 #include "wswstringsplitter.h"
 #include "wswpodvector.h"
@@ -259,8 +260,8 @@ auto SurfExtraFlagsCache::tryParsingLine( const wsw::StringView &line, const wsw
 						return pair.first.equalsIgnoreCase( token );
 					};
 					const auto end = std::end( kSurfImpactMaterialNames );
-					if( const auto it  = std::find_if( std::begin( kSurfImpactMaterialNames ), end, cmp ); it != end ) {
-						parsedFlags |= it->second << kSurfImpactMaterialShift;
+					if( const auto it = wsw::find_if( std::begin( kSurfImpactMaterialNames ), end, cmp ); it != end ) {
+						parsedFlags |= ( it->second << kSurfImpactMaterialShift );
 					} else {
 						error = "Unknown flags bit name";
 						break;

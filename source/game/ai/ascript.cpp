@@ -6,8 +6,7 @@
 #include "../g_as_local.h"
 #include "../ascript/addon/addon_any.h"
 #include "manager.h"
-
-#include <algorithm>
+#include "../../common/wswalgorithm.h"
 
 // We have to declare a prototype first (GCC cannot apply attributes to a definition)
 #ifndef _MSC_VER
@@ -140,7 +139,7 @@ public:
         maskedTypeId &= asTYPEID_MASK_OBJECT | asTYPEID_MASK_SEQNBR;
         if (anyRef->value.valueObj)
         {
-            if (std::find(subtypesIds.begin(), subtypesIds.end(), maskedTypeId) != subtypesIds.end())
+			if (wsw::contains(subtypesIds, maskedTypeId))
                 return anyRef->value.valueObj;
         }
 

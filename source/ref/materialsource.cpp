@@ -1,6 +1,5 @@
 #include "materiallocal.h"
-
-#include <algorithm>
+#include "../common/wswalgorithm.h"
 
 auto MaterialSource::preparePlaceholders() -> std::optional<Placeholders> {
 	wsw::PodVector<PlaceholderSpan> buffer;
@@ -21,7 +20,7 @@ void MaterialSource::findPlaceholdersInToken( const wsw::StringView &token, unsi
 	size_t index = 0;
 
 	for(;; ) {
-		auto *p = std::find( token.data() + index, token.data() + token.size(), '$' );
+		auto *p = wsw::find( token.data() + index, token.data() + token.size(), '$' );
 		if( p == token.data() + token.size() ) {
 			return;
 		}

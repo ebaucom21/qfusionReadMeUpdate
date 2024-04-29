@@ -1,11 +1,10 @@
 #include "fastroutingresultscache.h"
 #include "../../../common/links.h"
-
-#include <algorithm>
+#include "../../../common/wswalgorithm.h"
 
 void FastRoutingResultsCache::reset() {
-	std::fill( std::begin( m_nodes ), std::end( m_nodes ), Node {} );
-	std::fill( std::begin( m_hashBins ), std::end( m_hashBins ), -1 );
+	wsw::fill( std::begin( m_nodes ), std::end( m_nodes ), Node {} );
+	wsw::fill( std::begin( m_hashBins ), std::end( m_hashBins ), -1 );
 	m_cursorIndex = 0;
 
 	// Make all zeroed nodes linked to the zero hash bin

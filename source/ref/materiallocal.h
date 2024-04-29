@@ -11,11 +11,12 @@
 #include "glimp.h"
 #include "../common/wswstaticvector.h"
 #include "../common/stringspanstorage.h"
-
-using wsw::operator""_asView;
+#include "../common/freelistallocator.h"
 
 #include <optional>
 #include <span>
+
+using wsw::operator""_asView;
 
 enum class PassKey {
 	RgbGen,
@@ -458,8 +459,6 @@ public:
 	auto getBool() -> std::optional<bool>;
 };
 
-#include "../common/freelistallocator.h"
-#include <vector>
 
 struct PlaceholderSpan {
 	uint32_t tokenNum;

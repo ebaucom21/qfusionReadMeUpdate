@@ -38,7 +38,7 @@ using wsw::operator""_asHView;
 
 TextureFactory::TextureFactory() {
 	// Cubemap names are put after material ones in the same chunk
-	m_nameDataStorage.reset( new char[( kMaxMaterialTextures + kMaxMaterialCubemaps ) * kNameDataStride] );
+	m_nameDataStorage.reserve( ( kMaxMaterialTextures + kMaxMaterialCubemaps ) * kNameDataStride );
 
 	qglPixelStorei( GL_PACK_ALIGNMENT, 1 );
 	qglPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
@@ -402,7 +402,7 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 auto TextureFactory::internTextureName( unsigned storageIndex,
 										const wsw::HashedStringView &name ) -> wsw::HashedStringView {
 	assert( name.length() <= kMaxNameLen );
-	char *const data = m_nameDataStorage.get() + kNameDataStride * storageIndex;
+	char *const data = m_nameDataStorage.get( 0 ) + kNameDataStride * storageIndex;
 	std::memcpy( data, name.data(), name.length() );
 	data[name.length()] = '\0';
 	return wsw::HashedStringView( data, name.length(), name.getHash(), wsw::StringView::ZeroTerminated );

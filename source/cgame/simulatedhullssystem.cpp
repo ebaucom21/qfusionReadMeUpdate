@@ -4,6 +4,7 @@
 #include "../client/client.h"
 #include "../common/memspecbuilder.h"
 #include "../common/mmcommon.h"
+#include "../common/wswalgorithm.h"
 #include "../cgame/cg_local.h"
 
 #include <memory>
@@ -143,7 +144,7 @@ private:
 				uint16_t *const indicesBegin = neighbourFaces[vertexNum].data;
 				uint16_t *const indicesEnd   = indicesBegin + *countForVertex;
 				// TODO: Is this search really needed?
-				if( std::find( indicesBegin, indicesEnd, faceNum ) == indicesEnd ) {
+				if( !wsw::contains( indicesBegin, indicesEnd, faceNum ) ) {
 					( *countForVertex )++;
 					*indicesEnd = (uint16_t)faceNum;
 					// The neighbours list becomes complete

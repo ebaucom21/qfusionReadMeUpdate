@@ -73,6 +73,9 @@ typedef struct superLightStyle_s {
 #include "surface.h"
 
 #include "../common/wswpodvector.h"
+#include "../common/wswstaticstring.h"
+#include "../common/freelistallocator.h"
+#include "../common/podbufferholder.h"
 
 enum {
 	IT_NONE
@@ -268,11 +271,6 @@ public:
 	RenderTargetDepthBuffer *depthBuffer { nullptr };
 };
 
-#include "../common/wswstaticstring.h"
-#include "../common/freelistallocator.h"
-
-#include <memory>
-
 class TextureCache;
 class ImageBuffer;
 
@@ -334,8 +332,7 @@ private:
 	static constexpr unsigned kMaxNameLen = 63;
 	static constexpr unsigned kNameDataStride = kMaxNameLen + 1;
 
-	// TODO: Request OS pages directly
-	std::unique_ptr<char[]> m_nameDataStorage;
+	PodBufferHolder<char> m_nameDataStorage;
 
 	TextureFilter m_textureFilter { Trilinear };
 	int m_anisoLevel { 1 };

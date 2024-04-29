@@ -42,6 +42,7 @@
 #include <clocale>
 #include <span>
 #include "../common/common.h"
+#include "../common/wswalgorithm.h"
 
 #ifdef _WIN32
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
@@ -2097,7 +2098,7 @@ void QtUISystem::supplyNativelyDrawnItem( QQuickItem *item ) {
 		wsw::failWithLogicError( "An item is not an instance of NativelyDrawn" );
 	}
 	assert( nativelyDrawn->m_selfAsItem == item );
-	assert( std::find( m_nativelyDrawnItems.begin(), m_nativelyDrawnItems.end(), nativelyDrawn ) == m_nativelyDrawnItems.end() );
+	assert( !wsw::contains( m_nativelyDrawnItems, nativelyDrawn ) );
 	m_nativelyDrawnItems.push_back( nativelyDrawn );
 }
 

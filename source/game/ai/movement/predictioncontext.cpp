@@ -1,5 +1,6 @@
 #include "predictioncontext.h"
 #include "movementlocal.h"
+#include "triggerareanumscache.h"
 #include "../classifiedentitiescache.h"
 
 void PredictionContext::NextReachNumAndTravelTimeToNavTarget( int *reachNum, int *travelTimeToNavTarget ) {

@@ -19,7 +19,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "aasworld.h"
 #include "aaselementsmask.h"
 #include "aasareaswalker.h"
-#include "../../../common/wswstaticvector.h"
+#include "../../../common/wswalgorithm.h"
+#include "../../../common/wswsortbyfield.h"
 #include "../../../common/wswvector.h"
 #include "../../../common/wswfs.h"
 #include "../ailocal.h"
@@ -27,12 +28,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../../../common/md5.h"
 #include "../../../common/base64.h"
 
-#include <memory>
-#include <tuple>
-
-#include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <tuple>
 
 using wsw::operator""_asView;
 
@@ -1629,7 +1627,7 @@ bool StairsClusterBuilder::Build( int startAreaNum ) {
 		averageDimensions[j] *= 1.0f / areasAndHeights.size();
 	}
 
-	std::sort( areasAndHeights.begin(), areasAndHeights.end() );
+	wsw::sortByFieldDescending( areasAndHeights.begin(), areasAndHeights.end(), &AreaAndScore::score );
 
 	// Chop first/last areas if they do not conform to average dimensions
 	// This prevents inclusion of huge entrance/exit areas to the cluster
@@ -2243,7 +2241,7 @@ bool AiAasWorld::computeVisibilityForClustersPair( int floorClusterNum1, int flo
 		if( outerVisList.size() < 24 && innerAreaNums.size() < 24 ) {
 			// For every inner area try finding an inner area num in the vis list
 			for( const uint16_t innerAreaNum : innerAreaNums ) {
-				if( std::find( outerVisList.begin(), outerVisList.end(), innerAreaNum ) != outerVisList.end() ) {
+				if( wsw::contains( outerVisList, innerAreaNum ) ) {
 					return true;
 				}
 			}
@@ -2573,13 +2571,13 @@ void AiAasWorld::computeAreasVisibility( uint32_t *offsetsDataSize, uint32_t *li
 		}
 		// For every area not in the list a table bit must be zero
 		for( int areaNum = 1; areaNum < numAreas; ++areaNum ) {
-			if( std::find( list, list + size, areaNum ) != list + size ) {
+			if( wsw::contains( list, list + size, areaNum ) ) {
 				continue;
 			}
 			assert( !row[SparseVisTable::AreaRowOffset( areaNum )] );
 		}
 		// Make sure all areas in the list are valid
-		assert( std::find( list, list + size, 0 ) == list + size );
+		assert( !wsw::contains( list, list + size, 0 ) );
 	}
 #endif
 

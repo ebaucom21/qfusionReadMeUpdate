@@ -1,7 +1,6 @@
 #include "landonsavedareasaction.h"
 #include "movementlocal.h"
-
-#include <algorithm>
+#include "../../../common/wswsortbyfield.h"
 
 int LandOnSavedAreasAction::FindJumppadAreaNum( const edict_t *jumppadEntity ) {
 	// TODO: This can be precomputed at level start
@@ -159,7 +158,7 @@ float LandOnSavedAreasAction::SaveJumppadLandingAreas( const edict_t *jumppadEnt
 	}
 
 	// Sort areas so best areas are first
-	std::sort( filteredAreas.begin(), filteredAreas.end() );
+	wsw::sortByFieldDescending( filteredAreas.begin(), filteredAreas.end(), &AreaAndScore::score );
 
 	return SaveFilteredCandidateAreas( jumppadEntity, 0, filteredAreas );
 }
@@ -242,7 +241,7 @@ float LandOnSavedAreasAction::SaveLandingAreasForJumppadTargetArea( const edict_
 	}
 
 	// Sort filtered areas so best areas are first
-	std::sort( filteredAreas.begin(), filteredAreas.end() );
+	wsw::sortByFieldDescending( filteredAreas.begin(), filteredAreas.end(), &AreaAndScore::score );
 
 	return SaveFilteredCandidateAreas( jumppadEntity, jumppadTargetAreaNum, filteredAreas );
 }

@@ -5,8 +5,7 @@
 #include "../groundtracecache.h"
 #include "../navigation/aasworld.h"
 #include "../../../common/q_collision.h"
-
-#include <algorithm>
+#include "../../../common/wswalgorithm.h"
 
 PlannerNode *AiAction::newNodeForRecord( AiActionRecord *record, const WorldState &worldState, float cost ) {
 	if( !record ) {
@@ -167,7 +166,7 @@ bool AiPlanner::FindNewGoalAndPlan( const WorldState &currWorldState ) {
 	}
 
 	// Sort goals so most relevant goals are first
-	std::sort( relevantGoals.begin(), relevantGoals.end() );
+	wsw::sortPodNonSpeedCritical( relevantGoals.begin(), relevantGoals.end() );
 
 	// For each relevant goal try find a plan that satisfies it
 	for( const GoalRef &goalRef: relevantGoals ) {
@@ -219,7 +218,7 @@ bool AiPlanner::UpdateGoalAndPlan( const WorldState &currWorldState ) {
 	}
 
 	// Sort goals so most relevant goals are first
-	std::sort( relevantGoals.begin(), relevantGoals.end() );
+	wsw::sortPodNonSpeedCritical( relevantGoals.begin(), relevantGoals.end() );
 
 	// The active goal is no relevant anymore
 	if( !activeRelevantGoal ) {

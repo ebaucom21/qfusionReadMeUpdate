@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/cmdargs.h"
 #include "../common/configvars.h"
 #include "../common/wswtonum.h"
+#include "../common/wswalgorithm.h"
 
 using wsw::operator""_asView;
 
@@ -173,7 +174,7 @@ void CommandKeyState::handleDownCmd( const CmdArgs &cmdArgs ) {
 	const int key = wsw::toNum<int>( cmdArgs[1] ).value_or( -1 );
 	if( key != m_keysHeldDown[0] && key != m_keysHeldDown[1] ) {
 		// If there are free slots for this "down" key
-		if( auto end = m_keysHeldDown + 2, it = std::find( m_keysHeldDown, end, 0 ); it != end ) {
+		if( auto end = m_keysHeldDown + 2, it = wsw::find( m_keysHeldDown, end, 0 ); it != end ) {
 			*it = key;
 			// If was not down
 			if( !isDown() ) {
@@ -194,7 +195,7 @@ void CommandKeyState::handleDownCmd( const CmdArgs &cmdArgs ) {
 void CommandKeyState::handleUpCmd( const CmdArgs &cmdArgs ) {
 	if( const std::optional<int> key = wsw::toNum<int>( cmdArgs[1] ) ) {
 		// Find slot of this key
-		if( auto end = m_keysHeldDown + 2, it = std::find( m_keysHeldDown, end, *key ); it != end ) {
+		if( auto end = m_keysHeldDown + 2, it = wsw::find( m_keysHeldDown, end, *key ); it != end ) {
 			*it = 0;
 			// If it cannot longer be considered down
 			if( !m_keysHeldDown[0] && !m_keysHeldDown[1] ) {
