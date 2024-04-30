@@ -184,29 +184,34 @@ static void G_GS_Trace( trace_t *tr, const vec3_t start, const vec3_t mins, cons
 	G_Trace4D( tr, start, mins, maxs, end, passent, contentmask, timeDelta );
 }
 
+gs_state_t *ggs { nullptr };
+// TODO: Fix AS declarations
+extern gs_state_t g_gsStorage;
+
 /*
 * G_InitGameShared
 * give common access to some utilities
 */
 static void G_InitGameShared( void ) {
-	memset( &gs, 0, sizeof( gs_state_t ) );
-	gs.module = GS_MODULE_GAME;
+	ggs = &g_gsStorage;
+	ggs->clear();
+	ggs->module = GS_MODULE_GAME;
 
-	gs.maxclients = atoi( trap_GetConfigString( CS_MAXCLIENTS ) );
-	if( gs.maxclients < 1 || gs.maxclients > MAX_EDICTS ) {
-		G_Error( "Invalid maxclients value %i\n", gs.maxclients );
+	ggs->maxclients = atoi( trap_GetConfigString( CS_MAXCLIENTS ) );
+	if( ggs->maxclients < 1 || ggs->maxclients > MAX_EDICTS ) {
+		G_Error( "Invalid maxclients value %i\n", ggs->maxclients );
 	}
 
-	module_PredictedEvent = G_PredictedEvent;
-	module_Error = G_Error;
-	module_Printf = G_Printf;
-	module_Malloc = G_GS_Malloc;
-	module_Free = G_GS_Free;
-	module_Trace = G_GS_Trace;
-	module_GetEntityState = G_GetEntityStateForDeltaTime;
-	module_PointContents = G_PointContents4D;
-	module_PMoveTouchTriggers = G_PMoveTouchTriggers;
-	module_GetConfigString = trap_GetConfigString;
+	ggs->PredictedEvent = G_PredictedEvent;
+	ggs->Error = G_Error;
+	ggs->Printf = G_Printf;
+	ggs->Malloc = G_GS_Malloc;
+	ggs->Free = G_GS_Free;
+	ggs->Trace = G_GS_Trace;
+	ggs->GetEntityState = G_GetEntityStateForDeltaTime;
+	ggs->PointContents = G_PointContents4D;
+	ggs->PMoveTouchTriggers = G_PMoveTouchTriggers;
+	ggs->GetConfigString = trap_GetConfigString;
 }
 
 /*
@@ -354,15 +359,15 @@ void G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char
 	game.edicts = ( edict_t * )Q_malloc( game.maxentities * sizeof( game.edicts[0] ) );
 
 	// initialize all clients for this game
-	game.clients = ( Client * )Q_malloc( gs.maxclients * sizeof( game.clients[0] ) );
+	game.clients = ( Client * )Q_malloc( ggs->maxclients * sizeof( game.clients[0] ) );
 	// call clients constructors since this is no longer a POD type
-	for( int i = 0; i < gs.maxclients; ++i ) {
+	for( int i = 0; i < ggs->maxclients; ++i ) {
 		new( game.clients + i )Client;
 	}
 
 	ChatHandlersChain::init();
 
-	game.numentities = gs.maxclients + 1;
+	game.numentities = ggs->maxclients + 1;
 
 	trap_LocateEntities( game.edicts, sizeof( game.edicts[0] ), game.numentities, game.maxentities );
 
@@ -370,7 +375,7 @@ void G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char
 	G_AddServerCommands();
 
 	// weapon items
-	GS_InitWeapons();
+	GS_InitWeapons( ggs );
 
 	// AS initialization implies having an initialized scoreboard so we can pass the instance address
 	wsw::g::Scoreboard::init();
@@ -423,7 +428,7 @@ void G_Shutdown( void ) {
 	Q_free( game.edicts );
 	game.edicts = nullptr;
 
-	for( i = 0; i < gs.maxclients; ++i ) {
+	for( i = 0; i < ggs->maxclients; ++i ) {
 		game.clients[i].~Client();
 	}
 
@@ -672,7 +677,7 @@ void G_ExitLevel( void ) {
 
 	auto *const chatHandlersChain = ChatHandlersChain::instance();
 	// clear some things before going to next level
-	for( i = 0; i < gs.maxclients; i++ ) {
+	for( i = 0; i < ggs->maxclients; i++ ) {
 		ent = game.edicts + 1 + i;
 		chatHandlersChain->resetForClient( i );
 		if( !ent->r.inuse ) {

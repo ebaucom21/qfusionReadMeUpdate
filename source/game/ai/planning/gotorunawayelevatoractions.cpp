@@ -54,7 +54,7 @@ AiActionRecord::Status DoRunAwayViaElevatorActionRecord::UpdateStatus( const Wor
 		Debug( "Bot is too high above the ground (if any)\n" );
 		return INVALID;
 	}
-	if( selfTrace.ent <= gs.maxclients || game.edicts[selfTrace.ent].use != Use_Plat ) {
+	if( selfTrace.ent <= ggs->maxclients || game.edicts[selfTrace.ent].use != Use_Plat ) {
 		Debug( "Bot is not above a platform\n" );
 		return INVALID;
 	}

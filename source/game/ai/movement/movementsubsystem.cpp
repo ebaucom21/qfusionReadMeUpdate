@@ -104,7 +104,7 @@ void MovementSubsystem::CheckBlockingDueToInputRotation() {
 
 	float threshold = self->r.client->ps.stats[PM_STAT_MAXSPEED] - 30.0f;
 	if( threshold < 0 ) {
-		threshold = DEFAULT_PLAYERSPEED - 30.0f;
+		threshold = GS_DefaultPlayerSpeed( *ggs ) - 30.0f;
 	}
 
 	if( self->velocity[0] * self->velocity[0] + self->velocity[1] * self->velocity[1] > threshold * threshold ) {

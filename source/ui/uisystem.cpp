@@ -1598,7 +1598,7 @@ void QtUISystem::refreshProperties() {
 	const bool hadTeamChat = m_hasTeamChat;
 	m_hasTeamChat = false;
 	if( CL_Cmd_Exists( "say_team"_asView ) ) {
-		m_hasTeamChat = ( CG_RealClientTeam() == TEAM_SPECTATOR ) || ( GS_TeamBasedGametype() && !GS_IndividualGameType() );
+		m_hasTeamChat = ( CG_RealClientTeam() == TEAM_SPECTATOR ) || ( GS_TeamBasedGametype( *cggs ) && !GS_IndividualGametype( *cggs ) );
 	}
 
 	if( hadTeamChat != m_hasTeamChat ) {
@@ -1615,7 +1615,7 @@ void QtUISystem::refreshProperties() {
 		shouldShowChatPopup     = m_isRequestedToShowChatPopup;
 		shouldShowTeamChatPopup = m_isRequestedToShowTeamChatPopup;
 		shouldShowScoreboard    = m_isRequestedToShowScoreboard;
-		if( !shouldShowScoreboard && actualClientState == CA_ACTIVE && GS_MatchState() > MATCH_STATE_PLAYTIME ) {
+		if( !shouldShowScoreboard && actualClientState == CA_ACTIVE && GS_MatchState( *cggs ) > MATCH_STATE_PLAYTIME ) {
 			shouldShowScoreboard = true;
 		}
 	}
@@ -1687,11 +1687,11 @@ void QtUISystem::refreshProperties() {
 	m_canSpectate = m_canJoin = m_canJoinAlpha = m_canJoinBeta = false;
 	m_isInChallengersQueue = m_canToggleChallengerStatus = false;
 	if( actualClientState == CA_ACTIVE ) {
-		const bool hasChallengersQueue = GS_HasChallengers();
+		const bool hasChallengersQueue = GS_HasChallengers( *cggs );
 		const int team = CG_MyRealTeam();
 		m_canSpectate = ( team != TEAM_SPECTATOR );
 		m_isInChallengersQueue = CG_IsChallenger();
-		if( GS_MatchState() <= MATCH_STATE_PLAYTIME ) {
+		if( GS_MatchState( *cggs ) <= MATCH_STATE_PLAYTIME ) {
 			if( hasChallengersQueue ) {
 				m_canToggleChallengerStatus = true;
 			} else {
@@ -1817,7 +1817,7 @@ void QtUISystem::handleEscapeKey() {
 	bool didSpecialHandling = false;
 
 	if( m_clientState == CA_ACTIVE ) {
-		const bool isPostmatch = GS_MatchState() > MATCH_STATE_PLAYTIME;
+		const bool isPostmatch = GS_MatchState( *cggs ) > MATCH_STATE_PLAYTIME;
 
 		// The scoreboard is always shown post-match so we can't handle the ket by toggling it
 		if( !isPostmatch ) {

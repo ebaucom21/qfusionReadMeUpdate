@@ -105,7 +105,7 @@ void HazardsDetector::Exec() {
 		{ &maybeVisibleDangerousWaves,   &maybeVisibleOtherWaves,   entsCache->getAllWaves(),   kWaveDetectionRadius }
 	};
 
-	const bool isTeamBasedGametype = GS_TeamBasedGametype();
+	const bool isTeamBasedGametype = GS_TeamBasedGametype( *ggs );
 	const bool allowTeamDamage = g_allow_teamdamage->integer != 0;
 
 	for( auto &[dangerous, other, entNums, distanceThreshold]: regularEntitiesToTest ) {
@@ -127,7 +127,7 @@ void HazardsDetector::Exec() {
 	}
 
 	if( const auto grenadeNumsSpan = entsCache->getAllGrenades(); !grenadeNumsSpan.empty() ) {
-		const auto timeout = GS_GetWeaponDef( WEAP_GRENADELAUNCHER )->firedef.timeout;
+		const auto timeout = GS_GetWeaponDef( ggs, WEAP_GRENADELAUNCHER )->firedef.timeout;
 		const bool allowSelfDamage = g_allow_selfdamage->integer != 0;
 		for( const auto entNum: grenadeNumsSpan ) {
 			const auto *ent = gameEnts + entNum;

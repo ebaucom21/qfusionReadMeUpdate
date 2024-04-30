@@ -61,7 +61,7 @@ void G_PlayerAward( const edict_t *ent, const char *awardMsg ) {
 	//StatsowFacade::Instance()->AddAward( ent, awardMsg );
 
 	// add it to every player who's chasing this player
-	for( edict_t *other = game.edicts + 1; PLAYERNUM( other ) < gs.maxclients; other++ ) {
+	for( edict_t *other = game.edicts + 1; PLAYERNUM( other ) < ggs->maxclients; other++ ) {
 		if( !other->r.client || !other->r.inuse || !other->r.client->chase.active ) {
 			continue;
 		}
@@ -212,7 +212,7 @@ void G_AwardResetPlayerComboStats( edict_t *ent ) {
 	// combo from LB can be cancelled only if player's dead, if he missed or if he hasnt shot with LB for too long
 	resetvalue = ( G_IsDead( ent ) ? 0 : COMBO_FLAG( WEAP_LASERGUN ) );
 
-	for( i = 0; i < gs.maxclients; i++ )
+	for( i = 0; i < ggs->maxclients; i++ )
 		game.clients[i].awardInfo.combo[PLAYERNUM( ent )] &= resetvalue;
 }
 
@@ -225,7 +225,7 @@ void G_AwardPlayerMissedElectrobolt( edict_t *self, int mod ) {
 void G_AwardPlayerMissedLasergun( edict_t *self, int mod ) {
 	int i;
 	if( mod == MOD_LASERGUN_W || mod == MOD_LASERGUN_S ) {
-		for( i = 0; i < gs.maxclients; i++ )  // cancelling lasergun combo award
+		for( i = 0; i < ggs->maxclients; i++ )  // cancelling lasergun combo award
 			game.clients[i].awardInfo.combo[PLAYERNUM( self )] &= ~COMBO_FLAG( WEAP_LASERGUN );
 	}
 }

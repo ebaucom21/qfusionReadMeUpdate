@@ -22,25 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define __GS_PUBLIC_H
 
 #include "gs_ref.h"
-
-// shared callbacks
-
-#ifndef _MSC_VER
-extern void ( *module_Printf )( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
-extern void ( *module_Error )( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) ) __attribute__( ( noreturn ) );
-#else
-extern void ( *module_Printf )( _Printf_format_string_ const char *format, ... );
-extern void ( *module_Error )( _Printf_format_string_ const char *format, ... );
-#endif
-
-extern void *( *module_Malloc )( size_t size );
-extern void ( *module_Free )( void *data );
-extern void ( *module_Trace )( trace_t *t, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int ignore, int contentmask, int timeDelta );
-extern entity_state_t *( *module_GetEntityState )( int entNum, int deltaTime );
-extern int ( *module_PointContents )( const vec3_t point, int timeDelta );
-extern void ( *module_PredictedEvent )( int entNum, int ev, int parm );
-extern void ( *module_PMoveTouchTriggers )( pmove_t *pm, const vec3_t previous_origin );
-extern const char *( *module_GetConfigString )( int index );
+#include "wswpodvector.h"
 
 //===============================================================
 //		WARSOW player AAboxes sizes
@@ -130,47 +112,40 @@ enum {
 #define GAMESTAT_FLAG_ISTUTORIAL ( 1 << 16LL )
 #define GAMESTAT_FLAG_CANDROPWEAPON ( 1 << 17LL )
 
-typedef struct {
-	int module;
-	int maxclients;
-	char gametypeName[MAX_CONFIGSTRING_CHARS];
-	game_state_t gameState;
-} gs_state_t;
+struct gs_state_t;
 
-extern gs_state_t gs;
+#define GS_GamestatSetFlag( gs, flag, b ) ( b ? ( ( gs ).gameState.stats[GAMESTAT_FLAGS] |= flag ) : ( ( gs ).gameState.stats[GAMESTAT_FLAGS] &= ~flag ) )
+#define GS_Instagib( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_INSTAGIB ) ? true : false )
+#define GS_FallDamage( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_FALLDAMAGE ) ? true : false )
+#define GS_ShootingDisabled( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_INHIBITSHOOTING ) ? true : false )
+#define GS_HasChallengers( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_HASCHALLENGERS ) ? true : false )
+#define GS_TeamBasedGametype( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_ISTEAMBASED ) ? true : false )
+#define GS_RaceGametype( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_ISRACE ) ? true : false )
+#define GS_MatchPaused( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_PAUSED ) ? true : false )
+#define GS_MatchWaiting( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_WAITING ) ? true : false )
+#define GS_MatchExtended( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_MATCHEXTENDED ) ? true : false )
+#define GS_SelfDamage( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_SELFDAMAGE ) ? true : false )
+#define GS_Countdown( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_COUNTDOWN ) ? true : false )
+#define GS_InfiniteAmmo( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_INFINITEAMMO ) ? true : false )
+#define GS_CanForceModels( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_CANFORCEMODELS ) ? true : false )
+#define GS_CanShowMinimap( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_CANSHOWMINIMAP ) ? true : false )
+#define GS_TeamOnlyMinimap( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_TEAMONLYMINIMAP ) ? true : false )
+#define GS_MMCompatible( gs ) ( ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_MMCOMPATIBLE ) ? true : false )
+#define GS_TutorialGametype( gs ) ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_ISTUTORIAL ? true : false )
+#define GS_CanDropWeapon( gs ) ( ( gs ).gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_CANDROPWEAPON ? true : false )
 
-#define GS_GamestatSetFlag( flag, b ) ( b ? ( gs.gameState.stats[GAMESTAT_FLAGS] |= flag ) : ( gs.gameState.stats[GAMESTAT_FLAGS] &= ~flag ) )
-#define GS_Instagib() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_INSTAGIB ) ? true : false )
-#define GS_FallDamage() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_FALLDAMAGE ) ? true : false )
-#define GS_ShootingDisabled() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_INHIBITSHOOTING ) ? true : false )
-#define GS_HasChallengers() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_HASCHALLENGERS ) ? true : false )
-#define GS_TeamBasedGametype() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_ISTEAMBASED ) ? true : false )
-#define GS_RaceGametype() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_ISRACE ) ? true : false )
-#define GS_MatchPaused() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_PAUSED ) ? true : false )
-#define GS_MatchWaiting() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_WAITING ) ? true : false )
-#define GS_MatchExtended() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_MATCHEXTENDED ) ? true : false )
-#define GS_SelfDamage() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_SELFDAMAGE ) ? true : false )
-#define GS_Countdown() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_COUNTDOWN ) ? true : false )
-#define GS_InfiniteAmmo() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_INFINITEAMMO ) ? true : false )
-#define GS_CanForceModels() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_CANFORCEMODELS ) ? true : false )
-#define GS_CanShowMinimap() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_CANSHOWMINIMAP ) ? true : false )
-#define GS_TeamOnlyMinimap() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_TEAMONLYMINIMAP ) ? true : false )
-#define GS_MMCompatible() ( ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_MMCOMPATIBLE ) ? true : false )
-#define GS_TutorialGametype() ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_ISTUTORIAL ? true : false )
-#define GS_CanDropWeapon() ( gs.gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_CANDROPWEAPON ? true : false )
+#define GS_MatchState( gs ) ( ( gs ).gameState.stats[GAMESTAT_MATCHSTATE] )
+#define GS_MaxPlayersInTeam( gs ) ( ( gs ).gameState.stats[GAMESTAT_MAXPLAYERSINTEAM] )
+#define GS_IndividualGametype( gs )  ( GS_MaxPlayersInTeam( gs ) == 1 ? true : false )
 
-#define GS_MatchState() ( gs.gameState.stats[GAMESTAT_MATCHSTATE] )
-#define GS_MaxPlayersInTeam() ( gs.gameState.stats[GAMESTAT_MAXPLAYERSINTEAM] )
-#define GS_IndividualGameType() ( GS_MaxPlayersInTeam() == 1 ? true : false )
+#define GS_MatchDuration( gs ) ( ( gs ).gameState.stats[GAMESTAT_MATCHDURATION] )
+#define GS_MatchStartTime( gs ) ( ( gs ).gameState.stats[GAMESTAT_MATCHSTART] )
+#define GS_MatchEndTime( gs ) ( ( gs ).gameState.stats[GAMESTAT_MATCHDURATION] ? ( gs ).gameState.stats[GAMESTAT_MATCHSTART] + ( gs ).gameState.stats[GAMESTAT_MATCHDURATION] : 0 )
+#define GS_MatchClockOverride( gs ) ( ( gs ).gameState.stats[GAMESTAT_CLOCKOVERRIDE] )
 
-#define GS_MatchDuration() ( gs.gameState.stats[GAMESTAT_MATCHDURATION] )
-#define GS_MatchStartTime() ( gs.gameState.stats[GAMESTAT_MATCHSTART] )
-#define GS_MatchEndTime() ( gs.gameState.stats[GAMESTAT_MATCHDURATION] ? gs.gameState.stats[GAMESTAT_MATCHSTART] + gs.gameState.stats[GAMESTAT_MATCHDURATION] : 0 )
-#define GS_MatchClockOverride() ( gs.gameState.stats[GAMESTAT_CLOCKOVERRIDE] )
+#define GS_ColorCorrection( gs ) ( ( gs ).gameState.stats[GAMESTAT_COLORCORRECTION] )
 
-#define GS_ColorCorrection() ( gs.gameState.stats[GAMESTAT_COLORCORRECTION] )
-
-#define DEFAULT_PLAYERSPEED ( GS_RaceGametype() ? DEFAULT_PLAYERSPEED_RACE : ( GS_Instagib() ? DEFAULT_PLAYERSPEED_INSTAGIB : DEFAULT_PLAYERSPEED_STANDARD ) )
+#define GS_DefaultPlayerSpeed( gs ) ( GS_RaceGametype( gs ) ? DEFAULT_PLAYERSPEED_RACE : ( GS_Instagib( gs ) ? DEFAULT_PLAYERSPEED_INSTAGIB : DEFAULT_PLAYERSPEED_STANDARD ) )
 
 //==================================================================
 
@@ -242,7 +217,7 @@ typedef struct {
 	int touchents[MAXTOUCH];
 } move_t;
 
-int GS_SlideMove( move_t *move );
+int GS_SlideMove( const gs_state_t *gs, move_t *move );
 void GS_ClipVelocity( vec3_t in, vec3_t normal, vec3_t out, float overbounce );
 
 int GS_LinearMovement( const entity_state_t *ent, int64_t time, vec3_t dest );
@@ -264,7 +239,7 @@ enum {
 	GS_MAXBUNNIES
 };
 
-void Pmove( pmove_t *pmove );
+void Pmove( const gs_state_t *gs, pmove_t *pmove );
 
 //===============================================================
 
@@ -530,17 +505,17 @@ typedef struct gitem_s {
 	const char *precache_images;
 } gsitem_t;
 
-extern gsitem_t itemdefs[];
+extern std::initializer_list<gsitem_t> kDefaultItemDefs;
 
-gsitem_t *GS_FindItemByTag( int tag );
-gsitem_t *GS_FindItemByClassname( const char *classname );
-gsitem_t *GS_FindItemByName( const char *name );
-gsitem_t *GS_Cmd_UseItem( player_state_t *playerState, const char *string, int typeMask );
-gsitem_t *GS_Cmd_NextWeapon_f( player_state_t *playerState, int predictedWeaponSwitch );
-gsitem_t *GS_Cmd_PrevWeapon_f( player_state_t *playerState, int predictedWeaponSwitch );
-int GS_Armor_TagForCount( float armorcount );
-int GS_Armor_MaxCountForTag( int tag );
-int GS_Armor_PickupCountForTag( int tag );
+const gsitem_t *GS_FindItemByTag( const gs_state_t *gs, int tag );
+const gsitem_t *GS_FindItemByClassname( const gs_state_t *gs, const char *classname );
+const gsitem_t *GS_FindItemByName( const gs_state_t *gs, const char *name );
+const gsitem_t *GS_Cmd_UseItem( const gs_state_t *gs, player_state_t *playerState, const char *string, int typeMask );
+const gsitem_t *GS_Cmd_NextWeapon_f( const gs_state_t *gs, player_state_t *playerState, int predictedWeaponSwitch );
+const gsitem_t *GS_Cmd_PrevWeapon_f( const gs_state_t *gs, player_state_t *playerState, int predictedWeaponSwitch );
+int GS_Armor_TagForCount( const gs_state_t *gs, float armorcount );
+int GS_Armor_MaxCountForTag( const gs_state_t *gs, int tag );
+int GS_Armor_PickupCountForTag( const gs_state_t *gs, int tag );
 
 //===============================================================
 
@@ -558,16 +533,16 @@ enum {
 };
 
 // teams
-const char *GS_TeamName( int team );
-const char *GS_DefaultTeamName( int team );
+const char *GS_TeamName( const gs_state_t *gs, int team );
+const char *GS_DefaultTeamName( const gs_state_t *gs, int team );
 
 namespace wsw { class StringView; }
 
 [[nodiscard]]
-auto GS_TeamSkinName( int team ) -> std::optional<wsw::StringView>;
+auto GS_TeamSkinName( const gs_state_t *gs, int team ) -> std::optional<wsw::StringView>;
 
-int GS_Teams_TeamFromName( const char *teamname );
-bool GS_IsTeamDamage( const entity_state_t *targ, const entity_state_t *attacker );
+int GS_Teams_TeamFromName( const gs_state_t *gs, const char *teamname );
+bool GS_IsTeamDamage( const gs_state_t *gs, const entity_state_t *targ, const entity_state_t *attacker );
 
 //===============================================================
 
@@ -581,11 +556,11 @@ typedef enum {
 } matchmessage_t;
 
 // gs_misc.c
-void GS_SetGametypeName( const char *name );
+void GS_SetGametypeName( gs_state_t *gs, const char *name );
 void GS_Obituary( void *victim, int gender, void *attacker, int mod, char *message, char *message2 );
-void GS_TouchPushTrigger( player_state_t *playerState, entity_state_t *pusher );
-int GS_WaterLevel( entity_state_t *state, vec3_t mins, vec3_t maxs );
-void GS_BBoxForEntityState( entity_state_t *state, vec3_t mins, vec3_t maxs );
+void GS_TouchPushTrigger( const gs_state_t *gs, player_state_t *playerState, entity_state_t *pusher );
+int GS_WaterLevel( const gs_state_t *gs, entity_state_t *state, vec3_t mins, vec3_t maxs );
+void GS_BBoxForEntityState( const gs_state_t *gs, entity_state_t *state, vec3_t mins, vec3_t maxs );
 float GS_FrameForTime( int *frame, int64_t curTime, int64_t startTimeStamp, float frametime, int firstframe, int lastframe, int loopingframes, bool forceLoop );
 
 //===============================================================
@@ -1055,15 +1030,17 @@ typedef struct {
 	firedef_t firedef_weak;
 } gs_weapon_definition_t;
 
-gs_weapon_definition_t *GS_GetWeaponDef( int weapon );
-gs_weapon_definition_t *GS_GetWeaponDefExt( int weapon, bool race );
-void GS_InitWeapons( void );
-int GS_SelectBestWeapon( player_state_t *playerState );
-bool GS_CheckAmmoInWeapon( player_state_t *playerState, int checkweapon );
-const firedef_t *GS_FiredefForPlayerState( const player_state_t *playerState, int checkweapon );
-int GS_ThinkPlayerWeapon( player_state_t *playerState, int buttons, int msecs, int timeDelta );
-trace_t *GS_TraceBullet( trace_t    *trace, vec3_t start, vec3_t dir, float r, float u, int range, int ignore, int timeDelta );
-void GS_TraceLaserBeam( trace_t *trace, vec3_t origin, vec3_t angles, float range, int ignore, int timeDelta, void ( *impact )( trace_t *tr, vec3_t dir ) );
+const gs_weapon_definition_t *GS_GetWeaponDef( const gs_state_t *gs, int weapon );
+gs_weapon_definition_t *GS_GetWeaponDefExt( gs_state_t *gs, int weapon, bool race );
+
+void GS_InitWeapons( gs_state_t *gs );
+
+int GS_SelectBestWeapon( const gs_state_t *gs, player_state_t *playerState );
+bool GS_CheckAmmoInWeapon( const gs_state_t *gs, player_state_t *playerState, int checkweapon );
+const firedef_t *GS_FiredefForPlayerState( const gs_state_t *gs, const player_state_t *playerState, int checkweapon );
+int GS_ThinkPlayerWeapon( const gs_state_t *gs, player_state_t *playerState, int buttons, int msecs, int timeDelta );
+trace_t *GS_TraceBullet( const gs_state_t *gs, trace_t *trace, trace_t *waterTrace, vec3_t start, vec3_t dir, float r, float u, int range, int ignore, int timeDelta );
+void GS_TraceLaserBeam( const gs_state_t *gs, trace_t *trace, vec3_t origin, vec3_t angles, float range, int ignore, int timeDelta, void ( *impact )( trace_t *tr, vec3_t dir ) );
 
 #define CURVELASERBEAM_SUBDIVISIONS ( 12 )
 #define MAX_CURVELASERBEAM_SUBDIVISIONS ( 24 )
@@ -1081,8 +1058,46 @@ typedef struct {
 	int head;
 }gs_laserbeamtrail_t;
 
-void GS_AddLaserbeamPoint( gs_laserbeamtrail_t *trail, player_state_t *playerState, int64_t timeStamp );
+void GS_AddLaserbeamPoint( const gs_state_t *gs, gs_laserbeamtrail_t *trail, player_state_t *playerState, int64_t timeStamp );
 bool G_GetLaserbeamPoint( gs_laserbeamtrail_t *trail, player_state_t *playerState, int64_t timeStamp, vec3_t out );
+
+struct gs_state_t {
+	int module;
+	int maxclients;
+	char gametypeName[MAX_CONFIGSTRING_CHARS];
+	game_state_t gameState;
+
+	mutable wsw::PodVector<gsitem_t> itemDefs;
+	mutable wsw::PodVector<gs_weapon_definition_t> weaponDefs;
+	mutable wsw::PodVector<gs_weapon_definition_t> raceWeaponDefs;
+
+	void clear() {
+		module = 0;
+		maxclients = 0;
+		gametypeName[0] = '\0';
+		memset( &gameState, 0, sizeof( gameState ) );
+		itemDefs.clear();
+		weaponDefs.clear();
+		raceWeaponDefs.clear();
+	}
+
+#ifndef _MSC_VER
+	void ( *Printf )( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
+	void ( *Error )( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) ) __attribute__( ( noreturn ) );
+#else
+	void ( *Printf )( _Printf_format_string_ const char *format, ... );
+	void ( *Error )( _Printf_format_string_ const char *format, ... );
+#endif
+
+	void *( *Malloc )( size_t size );
+	void ( *Free )( void *data );
+	void ( *Trace )( trace_t *t, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int ignore, int contentmask, int timeDelta );
+	entity_state_t *( *GetEntityState )( int entNum, int deltaTime );
+	int ( *PointContents )( const vec3_t point, int timeDelta );
+	void ( *PredictedEvent )( int entNum, int ev, int parm );
+	void ( *PMoveTouchTriggers )( pmove_t *pm, const vec3_t previous_origin );
+	const char *( *GetConfigString )( int index );
+};
 
 //===============================================================
 // gs_weapondefs.c

@@ -164,7 +164,7 @@ static void GS_ClipVelocityToClippingPlanes( move_t *move ) {
 /*
 * GS_AddClippingPlane
 */
-static void GS_AddClippingPlane( move_t *move, const vec3_t planeNormal ) {
+static void GS_AddClippingPlane( const gs_state_t *gs, move_t *move, const vec3_t planeNormal ) {
 	int i;
 
 	// see if we are already clipping to this plane
@@ -175,7 +175,7 @@ static void GS_AddClippingPlane( move_t *move, const vec3_t planeNormal ) {
 	}
 
 	if( move->numClipPlanes + 1 == MAX_SLIDEMOVE_CLIP_PLANES ) {
-		module_Error( "GS_AddTouchPlane: MAX_SLIDEMOVE_CLIP_PLANES reached\n" );
+		gs->Error( "GS_AddTouchPlane: MAX_SLIDEMOVE_CLIP_PLANES reached\n" );
 	}
 
 	// add the plane
@@ -186,13 +186,13 @@ static void GS_AddClippingPlane( move_t *move, const vec3_t planeNormal ) {
 /*
 * GS_SlideMoveClipMove
 */
-static int GS_SlideMoveClipMove( move_t *move /*, const bool stepping*/ ) {
+static int GS_SlideMoveClipMove( const gs_state_t *gs, move_t *move /*, const bool stepping*/ ) {
 	vec3_t endpos;
 	trace_t trace;
 	int blockedmask = 0;
 
 	VectorMA( move->origin, move->remainingTime, move->velocity, endpos );
-	module_Trace( &trace, move->origin, move->mins, move->maxs, endpos, move->passent, move->contentmask, 0 );
+	gs->Trace( &trace, move->origin, move->mins, move->maxs, endpos, move->passent, move->contentmask, 0 );
 	if( trace.allsolid ) {
 		if( trace.ent > 0 ) {
 			GS_AddTouchEnt( move, trace.ent );
@@ -227,7 +227,7 @@ static int GS_SlideMoveClipMove( move_t *move /*, const bool stepping*/ ) {
 			//}
 		}
 
-		GS_AddClippingPlane( move, trace.plane.normal );
+		GS_AddClippingPlane( gs, move, trace.plane.normal );
 	}
 
 	return blockedmask;
@@ -236,7 +236,7 @@ static int GS_SlideMoveClipMove( move_t *move /*, const bool stepping*/ ) {
 /*
 * GS_SlideMove
 */
-int GS_SlideMove( move_t *move ) {
+int GS_SlideMove( const gs_state_t *gs, move_t *move ) {
 #define MAX_SLIDEMOVE_ATTEMPTS  8
 	int count;
 	int blockedmask = 0;
@@ -259,12 +259,12 @@ int GS_SlideMove( move_t *move ) {
 		// get the original velocity and clip it to all the planes we got in the list
 		VectorCopy( originalVelocity, move->velocity );
 		GS_ClipVelocityToClippingPlanes( move );
-		blockedmask = GS_SlideMoveClipMove( move /*, stepping*/ );
+		blockedmask = GS_SlideMoveClipMove( gs, move /*, stepping*/ );
 
 #ifdef CHECK_TRAPPED
 		{
 			trace_t trace;
-			module_Trace( &trace, move->origin, move->mins, move->maxs, move->origin, move->passent, move->contentmask, 0 );
+			gs->Trace( &trace, move->origin, move->mins, move->maxs, move->origin, move->passent, move->contentmask, 0 );
 			if( trace.startsolid ) {
 				blockedmask |= SLIDEMOVEFLAG_TRAPPED;
 			}
@@ -274,7 +274,7 @@ int GS_SlideMove( move_t *move ) {
 		// can't continue
 		if( blockedmask & SLIDEMOVEFLAG_TRAPPED ) {
 #ifdef CHECK_TRAPPED
-			module_Printf( "GS_SlideMove SLIDEMOVEFLAG_TRAPPED\n" );
+			gs->Printf( "GS_SlideMove SLIDEMOVEFLAG_TRAPPED\n" );
 #endif
 			move->remainingTime = 0.0f;
 			VectorCopy( lastValidOrigin, move->origin );
@@ -290,7 +290,7 @@ int GS_SlideMove( move_t *move ) {
 
 		// if it didn't touch anything the move should be completed
 		if( move->remainingTime > 0.0f ) {
-			module_Printf( "slidemove finished with remaining time\n" );
+			gs->Printf( "slidemove finished with remaining time\n" );
 			move->remainingTime = 0.0f;
 		}
 

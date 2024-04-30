@@ -1,5 +1,6 @@
 #include "huddatamodel.h"
 #include "local.h"
+#include "cgameimports.h"
 #include "../common/common.h"
 #include "../common/configvars.h"
 #include "../common/gs_public.h"
@@ -1094,12 +1095,12 @@ void HudCommonDataModel::checkPropertyChanges( int64_t currTime ) {
 	}
 
 	const QByteArray *newMatchStateString = &kNoMatchState;
-	const int rawMatchState = GS_MatchState();
+	const int rawMatchState = GS_MatchState( *cggs );
 	if( rawMatchState == MATCH_STATE_WARMUP ) {
 		newMatchStateString = &kWarmup;
 	} else if( rawMatchState == MATCH_STATE_COUNTDOWN ) {
 		newMatchStateString = &kCountdown;
-	} else if( GS_MatchExtended() ) {
+	} else if( GS_MatchExtended( *cggs ) ) {
 		newMatchStateString = &kOvertime;
 	}
 	if( m_matchStateString.compare( *newMatchStateString ) != 0 ) {
@@ -1432,7 +1433,7 @@ void HudCommonDataModel::updateTeamPlayerStatuses( const ReplicatedScoreboardDat
 	m_pendingIndividualAlphaPlayerNum = std::nullopt;
 	m_pendingIndividualBetaPlayerNum = std::nullopt;
 
-	if( GS_IndividualGameType() ) {
+	if( GS_IndividualGametype( *cggs ) ) {
 		for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
 			if( scoreboardData.isPlayerConnected( i ) ) {
 				if( const int team = scoreboardData.getPlayerTeam( i ); team > TEAM_PLAYERS ) {

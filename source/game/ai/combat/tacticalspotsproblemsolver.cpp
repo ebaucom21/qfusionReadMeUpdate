@@ -261,7 +261,7 @@ void TacticalSpotsProblemSolver::applyEnemiesInfluence( SpotsAndScoreVector &can
 			if( squareDistanceToSpot > 384 * 384 ) {
 				toSpotDir *= Q_RSqrt( squareDistanceToSpot );
 				if( toSpotDir.Dot( enemyData.lookDir ) < 0 ) {
-					if( enemyData.speed2D >= DEFAULT_PLAYERSPEED ) {
+					if( enemyData.speed2D >= GS_DefaultPlayerSpeed( *ggs ) ) {
 						if( toSpotDir.Dot( enemyData.velocityDir2D ) < 0 ) {
 							continue;
 						}

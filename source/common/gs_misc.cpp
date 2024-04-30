@@ -25,30 +25,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "q_collision.h"
 #include "gs_public.h"
 
-#ifndef _MSC_VER
-void ( *module_Printf )( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
-void ( *module_Error)( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) ) __attribute__( ( noreturn ) );
-#else
-void ( *module_Printf )( const char *format, ... );
-void ( *module_Error )( const char *format, ... );
-#endif
-
-void *( *module_Malloc )( size_t size );
-void ( *module_Free )( void *data );
-void ( *module_Trace )( trace_t *t, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int ignore, int contentmask, int timeDelta );
-entity_state_t *( *module_GetEntityState )( int entNum, int deltaTime );
-int ( *module_PointContents )( const vec3_t point, int timeDelta );
-void ( *module_PredictedEvent )( int entNum, int ev, int parm );
-void ( *module_PMoveTouchTriggers )( pmove_t *pm, const vec3_t previous_origin );
-const char *( *module_GetConfigString )( int index );
-
-// TEMP MOVE ME
-gs_state_t gs;
-
 /*
 * GS_TouchPushTrigger
 */
-void GS_TouchPushTrigger( player_state_t *playerState, entity_state_t *pusher ) {
+void GS_TouchPushTrigger( const gs_state_t *gs, player_state_t *playerState, entity_state_t *pusher ) {
 	// spectators don't use jump pads
 	if( playerState->pmove.pm_type != PM_NORMAL ) {
 		return;
@@ -60,13 +40,13 @@ void GS_TouchPushTrigger( player_state_t *playerState, entity_state_t *pusher ) 
 	playerState->pmove.pm_flags &= ~PMF_WALLJUMPCOUNT;
 	playerState->pmove.pm_flags |= PMF_JUMPPAD_TIME;
 	playerState->pmove.pm_flags &= ~PMF_ON_GROUND;
-	module_PredictedEvent( playerState->POVnum, EV_JUMP_PAD, 0 );
+	gs->PredictedEvent( playerState->POVnum, EV_JUMP_PAD, 0 );
 }
 
 /*
 * GS_WaterLevel
 */
-int GS_WaterLevel( entity_state_t *state, vec3_t mins, vec3_t maxs ) {
+int GS_WaterLevel( const gs_state_t *gs, entity_state_t *state, vec3_t mins, vec3_t maxs ) {
 	vec3_t point;
 	int cont;
 	int waterlevel;
@@ -76,15 +56,15 @@ int GS_WaterLevel( entity_state_t *state, vec3_t mins, vec3_t maxs ) {
 	point[0] = state->origin[0];
 	point[1] = state->origin[1];
 	point[2] = state->origin[2] + mins[2] + 1;
-	cont = module_PointContents( point, 0 );
+	cont = gs->PointContents( point, 0 );
 	if( cont & MASK_WATER ) {
 		waterlevel = 1;
 		point[2] += 26;
-		cont = module_PointContents( point, 0 );
+		cont = gs->PointContents( point, 0 );
 		if( cont & MASK_WATER ) {
 			waterlevel = 2;
 			point[2] += 22;
-			cont = module_PointContents( point, 0 );
+			cont = gs->PointContents( point, 0 );
 			if( cont & MASK_WATER ) {
 				waterlevel = 3;
 			}
@@ -97,12 +77,12 @@ int GS_WaterLevel( entity_state_t *state, vec3_t mins, vec3_t maxs ) {
 /*
 * GS_BBoxForEntityState
 */
-void GS_BBoxForEntityState( entity_state_t *state, vec3_t mins, vec3_t maxs ) {
+void GS_BBoxForEntityState( const gs_state_t *gs, entity_state_t *state, vec3_t mins, vec3_t maxs ) {
 	int x, zd, zu;
 
 	if( state->solid == SOLID_BMODEL ) {
 		// FIXME: This is wrong, we don't have access to bmodels at common (simply didn't add it)
-		module_Error( "GS_BBoxForEntityState: called for a brush model\n" );
+		gs->Error( "GS_BBoxForEntityState: called for a brush model\n" );
 		//cmodel = trap_CM_InlineModel( state->modelindex );
 	} else {                          // encoded bbox
 		x = 8 * ( state->solid & 31 );
@@ -174,8 +154,8 @@ float GS_FrameForTime( int *frame, int64_t curTime, int64_t startTimeStamp, floa
 /*
 * GS_SetGametypeName
 */
-void GS_SetGametypeName( const char *name ) {
-	Q_strncpyz( gs.gametypeName, name, sizeof( gs.gametypeName ) );
+void GS_SetGametypeName( gs_state_t *gs, const char *name ) {
+	Q_strncpyz( gs->gametypeName, name, sizeof( gs->gametypeName ) );
 }
 
 /*

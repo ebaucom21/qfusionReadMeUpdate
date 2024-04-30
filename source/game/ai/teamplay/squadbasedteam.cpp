@@ -66,10 +66,10 @@ public:
 int ClientToClientTable::GetTravelTime( int fromEntNum, int toEntNum ) const {
 #ifdef _DEBUG
 	constexpr const char *tag = "ClientToClientTable::GetTravelTime()";
-	if( fromEntNum < 1 || fromEntNum > gs.maxclients ) {
+	if( fromEntNum < 1 || fromEntNum > ggs->maxclients ) {
 		AI_FailWith( tag, "`fromEntNum` #%d does not correspond to a client\n", fromEntNum );
 	}
-	if( toEntNum < 1 || toEntNum > gs.maxclients ) {
+	if( toEntNum < 1 || toEntNum > ggs->maxclients ) {
 		AI_FailWith( tag, "`toEntNum` #%d does not correspond to a client\n", fromEntNum );
 	}
 #endif
@@ -401,7 +401,7 @@ void ExtendedWeaponDefsCache::Initialize() {
 	}
 
 	for( int weapon = WEAP_NONE; weapon < WEAP_TOTAL; ++weapon ) {
-		weaponDefs[weapon] = GS_GetWeaponDef( weapon );
+		weaponDefs[weapon] = GS_GetWeaponDef( ggs, weapon );
 	}
 }
 
@@ -695,7 +695,7 @@ void AiSquad::FindSupplierCandidates( Bot *consumer, Bot **suppliersListHead ) c
 	// If a bot moves fast, modify score for mates depending of the bot velocity direction
 	// (try to avoid stopping a fast-moving bot)
 	bool applyDirectionFactor = false;
-	if( squareBotSpeed > DEFAULT_PLAYERSPEED * DEFAULT_PLAYERSPEED ) {
+	if( squareBotSpeed > wsw::square( GS_DefaultPlayerSpeed( *ggs ) ) ) {
 		botVelocityDir *= Q_RSqrt( squareBotSpeed );
 		applyDirectionFactor = true;
 	}
@@ -885,7 +885,7 @@ edict_t *AiSquad::TryDropAmmo( Bot *consumer, Bot *supplier, int weapon ) {
 		return nullptr;
 	}
 
-	edict_t *dropped = G_DropItem( supplier->Self(), GS_FindItemByTag( fireDef.ammo_id ) );
+	edict_t *dropped = G_DropItem( supplier->Self(), GS_FindItemByTag( ggs, fireDef.ammo_id ) );
 	if( dropped ) {
 		G_Say_Team( supplier->Self(), va( "Dropped %%d at %%D for %s", consumer->Nick() ) );
 	}
@@ -930,7 +930,7 @@ edict_t *AiSquad::TryDropWeapon( Bot *consumer, Bot *supplier, int weapon, const
 	}
 
 	// Try drop a weapon
-	edict_t *dropped = G_DropItem( supplier->Self(), GS_FindItemByTag( weapon ) );
+	edict_t *dropped = G_DropItem( supplier->Self(), GS_FindItemByTag( ggs, weapon ) );
 	if( dropped ) {
 		G_Say_Team( supplier->Self(), va( "Dropped %%d at %%D for %s", consumer->Nick() ) );
 	}

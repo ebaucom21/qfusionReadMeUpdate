@@ -54,7 +54,7 @@ bool SideStepDodgeProblemSolver::findSingle( vec_t *spotOrigin ) {
 			testedAreaNum = areaNums[0];
 			if( !originEntity->groundentity ) {
 				float speed = entityPhysicsState->Speed();
-				if( speed > DEFAULT_PLAYERSPEED ) {
+				if( speed > GS_DefaultPlayerSpeed( *ggs ) ) {
 					velocityInfluence = 0.75f;
 				} else if( speed > 1 ) {
 					velocityInfluence = 0.5f;

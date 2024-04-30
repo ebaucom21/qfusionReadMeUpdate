@@ -164,7 +164,7 @@ bool TraceArcInSolidWorld( const vec3_t from, const vec3_t to ) {
 	}
 
 	// Assume a default ground movement speed
-	const float timeToMidPoint = Q_Sqrt( squareDistanceToMidPoint ) * Q_Rcp( DEFAULT_PLAYERSPEED );
+	const float timeToMidPoint = Q_Sqrt( squareDistanceToMidPoint ) * Q_Rcp( GS_DefaultPlayerSpeed( *ggs ) );
 	// Assume an almost default jump speed
 	float deltaZ = ( 0.75f * DEFAULT_JUMPSPEED ) * timeToMidPoint;
 	deltaZ -= 0.5f * level.gravity * ( timeToMidPoint * timeToMidPoint );

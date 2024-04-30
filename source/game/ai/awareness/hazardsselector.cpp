@@ -271,7 +271,7 @@ void PlasmaBeamsBuilder::findMostHazardousBeams( HazardsSelector *hazardsSelecto
 		list.buildBeams();
 	}
 
-	const auto *const weaponDef  = GS_GetWeaponDef( WEAP_PLASMAGUN );
+	const auto *const weaponDef  = GS_GetWeaponDef( ggs, WEAP_PLASMAGUN );
 	const auto *const gameEnts   = game.edicts;
 	const float *const botOrigin = m_bot->s.origin;
 
@@ -363,7 +363,7 @@ void PlasmaBeamsBuilder::findMostHazardousBeams( HazardsSelector *hazardsSelecto
 
 void HazardsSelector::FindWaveHazards( const EntNumsVector &entNums ) {
 	auto *const gameEdicts = game.edicts;
-	const auto *weaponDef = GS_GetWeaponDef( WEAP_SHOCKWAVE );
+	const auto *weaponDef = GS_GetWeaponDef( ggs, WEAP_SHOCKWAVE );
 	const edict_t *self = game.edicts + bot->EntNum();
 	trace_t trace;
 	for( auto entNum: entNums ) {

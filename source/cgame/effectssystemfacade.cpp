@@ -695,7 +695,7 @@ static const RgbaLifespan kElectroParticlesColors[1] {
 
 [[nodiscard]]
 auto getTeamForOwner( int ownerNum ) -> int {
-	if( ownerNum && ownerNum < gs.maxclients + 1 ) [[likely]] {
+	if( ownerNum && ownerNum < cggs->maxclients + 1 ) [[likely]] {
 		return cg_entities[ownerNum].current.team;
 	}
 	return TEAM_SPECTATOR;
@@ -2732,7 +2732,7 @@ auto EffectsSystemFacade::spawnBulletTracer( int owner, const float *to ) -> uns
 
 	unsigned resultTimeout = 0;
 
-	const unsigned numAlts = owner > 0 && owner <= gs.maxclients ? 2 : 1;
+	const unsigned numAlts = owner > 0 && owner <= cggs->maxclients ? 2 : 1;
 	// 0 = generic, 1 - pov-dependent
 	for( unsigned altNum = 0; altNum < numAlts; ++altNum ) {
 		orientation_t tagProjection;
@@ -2801,7 +2801,7 @@ void EffectsSystemFacade::spawnPelletTracers( int owner, std::span<const vec3_t>
 
 	CG_PModel_GetProjectionSource( owner, &tagProjections[0], nullptr );
 
-	if( owner > 0 && owner <= gs.maxclients ) {
+	if( owner > 0 && owner <= cggs->maxclients ) {
 		if( const ViewState *viewState = getViewStateForEntity( owner ) ) {
 			CG_PModel_GetProjectionSource( owner, &tagProjections[1], viewState );
 

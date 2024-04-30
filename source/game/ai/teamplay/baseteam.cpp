@@ -13,7 +13,7 @@ void AiBaseTeam::Debug( const char *format, ... ) {
 #ifdef _DEBUG
 	va_list va;
 	va_start( va, format );
-	AI_Debugv( GS_TeamName( teamNum ), format, va );
+	AI_Debugv( GS_TeamName( ggs, teamNum ), format, va );
 	va_end( va );
 #endif
 }
@@ -91,7 +91,7 @@ void AiBaseTeam::TransferStateFrom( AiBaseTeam *that ) {
 }
 
 void AiBaseTeam::AcquireBotFrameAffinity( int entNum ) {
-	if( GS_TeamBasedGametype() ) {
+	if( GS_TeamBasedGametype( *ggs ) ) {
 		assert( m_frameAffinityModulo == 4 );
 		// Older versions used to set think frames of every team bot one frame after the team thinks.
 		// It was expected that the team logic is going to be quite computational expensive.
@@ -142,7 +142,7 @@ void AiBaseTeam::Init() {
 	}
 #endif
 
-	if( GS_TeamBasedGametype() ) {
+	if( GS_TeamBasedGametype( *ggs ) ) {
 		for( int team = TEAM_ALPHA; team < GS_MAX_TEAMS; ++team ) {
 			CreateTeam( team );
 		}
@@ -187,7 +187,7 @@ void AiBaseTeam::ReleaseTeam( int teamNum ) {
 
 AiBaseTeam *AiBaseTeam::InstantiateTeam( int teamNum ) {
 	// Delegate construction to AiSquadBasedTeam
-	if( GS_TeamBasedGametype() && !GS_IndividualGameType() ) {
+	if( GS_TeamBasedGametype( *ggs ) && !GS_IndividualGametype( *ggs ) ) {
 		return AiSquadBasedTeam::InstantiateTeam( teamNum );
 	}
 

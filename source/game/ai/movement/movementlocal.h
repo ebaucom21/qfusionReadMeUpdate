@@ -46,7 +46,7 @@ inline float PredictionContext::GetDashSpeed() const {
 }
 
 inline float PredictionContext::GetRunSpeed() const {
-	return GetPMoveStatValue( &this->currMinimalPlayerState->pmove, PM_STAT_MAXSPEED, DEFAULT_PLAYERSPEED );
+	return GetPMoveStatValue( &this->currMinimalPlayerState->pmove, PM_STAT_MAXSPEED, GS_DefaultPlayerSpeed( *ggs ) );
 }
 
 inline unsigned PredictionContext::DefaultFrameTime() const {

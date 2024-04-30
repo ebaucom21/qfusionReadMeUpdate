@@ -156,7 +156,7 @@ bool CG_PModelForCentity( centity_t *cent, pmodelinfo_t **pmodelinfo, struct Ski
 		*skin = cgs.skinPrecache[cent->current.skinnum];
 	}
 
-	if( GS_CanForceModels() && ( ownerNum < ( unsigned )( gs.maxclients + 1 ) ) ) {
+	if( GS_CanForceModels( *cggs ) && ( ownerNum < ( unsigned )( cggs->maxclients + 1 ) ) ) {
 		if( ( team == TEAM_ALPHA ) || ( team == TEAM_BETA ) ||
 
 		    // Don't force the model for the local player in non-team modes to distinguish the sounds from enemies'
@@ -358,7 +358,7 @@ uint8_t *_ColorForEntity( int entNum, byte_vec4_t color, bool player ) {
 		Vector4Set( color, COLOR_R( rgbcolor ), COLOR_G( rgbcolor ), COLOR_B( rgbcolor ), 255 );
 	}
 	// user defined colors if it's a player
-	else if( ( player && ( owner->current.number - 1 < gs.maxclients ) ) && cent->current.type != ET_CORPSE ) {
+	else if( ( player && ( owner->current.number - 1 < cggs->maxclients ) ) && cent->current.type != ET_CORPSE ) {
 		Vector4Copy( cgs.clientInfo[owner->current.number - 1].color, color );
 	}
 	// Make corpses grey

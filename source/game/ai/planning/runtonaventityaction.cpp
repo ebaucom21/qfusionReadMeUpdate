@@ -76,7 +76,7 @@ bool RunToNavEntityActionRecord::ShouldUseSneakyBehaviour( const WorldState &cur
 
 	const float *const velocity = targetEnt->velocity;
 	// Check whether the leader seems to be using a sneaky movement
-	const float maxSpeedThreshold = DEFAULT_PLAYERSPEED * 1.5f;
+	const float maxSpeedThreshold = GS_DefaultPlayerSpeed( *ggs ) * 1.5f;
 	const float squareVelocity2D = velocity[0] * velocity[0] + velocity[1] * velocity[1];
 	if( squareVelocity2D > maxSpeedThreshold * maxSpeedThreshold ) {
 		return false;

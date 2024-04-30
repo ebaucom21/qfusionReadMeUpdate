@@ -170,7 +170,7 @@ int G_Projectile_HitStyle( edict_t *projectile, edict_t *target ) {
 		G_Trace4D( &trace, target->s.origin, target->r.mins, target->r.maxs, end, target, MASK_DEADSOLID, 0 );
 		if( ( trace.ent != -1 || trace.startsolid ) && ISWALKABLEPLANE( &trace.plane ) ) {
 			// add directhit and airhit to awards counter
-			if( attacker && !GS_IsTeamDamage( &attacker->s, &target->s ) && G_ModToAmmo( projectile->style ) != AMMO_NONE ) {
+			if( attacker && !GS_IsTeamDamage( ggs, &attacker->s, &target->s ) && G_ModToAmmo( projectile->style ) != AMMO_NONE ) {
 				projectile->r.owner->r.client->stats.accuracy_hits_direct[G_ModToAmmo( projectile->style ) - AMMO_GUNBLADE]++;
 				teamlist[projectile->r.owner->s.team].stats.accuracy_hits_direct[G_ModToAmmo( projectile->style ) - AMMO_GUNBLADE]++;
 
@@ -183,7 +183,7 @@ int G_Projectile_HitStyle( edict_t *projectile, edict_t *target ) {
 	}
 
 	// add directhit to awards counter
-	if( attacker && !GS_IsTeamDamage( &attacker->s, &target->s ) && G_ModToAmmo( projectile->style ) != AMMO_NONE ) {
+	if( attacker && !GS_IsTeamDamage( ggs, &attacker->s, &target->s ) && G_ModToAmmo( projectile->style ) != AMMO_NONE ) {
 		projectile->r.owner->r.client->stats.accuracy_hits_direct[G_ModToAmmo( projectile->style ) - AMMO_GUNBLADE]++;
 		teamlist[projectile->r.owner->s.team].stats.accuracy_hits_direct[G_ModToAmmo( projectile->style ) - AMMO_GUNBLADE]++;
 	}
@@ -252,7 +252,7 @@ static edict_t *W_Fire_LinearProjectile( edict_t *self, vec3_t start, vec3_t ang
 	projectile->movetype = MOVETYPE_LINEARPROJECTILE;
 
 	projectile->r.solid = SOLID_YES;
-	projectile->r.clipmask = ( !GS_RaceGametype() ) ? MASK_SHOT : MASK_SOLID;
+	projectile->r.clipmask = ( !GS_RaceGametype( *ggs ) ) ? MASK_SHOT : MASK_SOLID;
 
 	projectile->r.svflags = SVF_PROJECTILE;
 
@@ -311,7 +311,7 @@ static edict_t *W_Fire_TossProjectile( edict_t *self, vec3_t start, vec3_t angle
 	projectile->movetype = MOVETYPE_BOUNCEGRENADE;
 
 	// make missile fly through players in race
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		projectile->r.clipmask = MASK_SOLID;
 	} else {
 		projectile->r.clipmask = MASK_SHOT;
@@ -364,14 +364,14 @@ void W_Fire_Blade( edict_t *self, int range, vec3_t start, vec3_t angles, float 
 	vec3_t dir;
 	int dmgflags = 0;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
 	AngleVectors( angles, dir, NULL, NULL );
 	VectorMA( start, range, dir, end );
 
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		mask = MASK_SOLID;
 	}
 
@@ -449,7 +449,7 @@ static void W_Touch_GunbladeBlast( edict_t *ent, edict_t *other, cplane_t *plane
 edict_t *W_Fire_GunbladeBlast( edict_t *self, vec3_t start, vec3_t angles, float damage, int minKnockback, int maxKnockback, int stun, int minDamage, int radius, int speed, int timeout, int mod, int timeDelta ) {
 	edict_t *blast;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -476,10 +476,10 @@ void W_Fire_Bullet( edict_t *self, vec3_t start, vec3_t angles, int seed, int ra
 	edict_t *event;
 	float r, u;
 	double alpha, s;
-	trace_t trace;
+	trace_t trace, waterTrace;
 	int dmgflags = DAMAGE_STUN_CLAMP | DAMAGE_KNOCKBACK_SOFT;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -498,7 +498,7 @@ void W_Fire_Bullet( edict_t *self, vec3_t start, vec3_t angles, int seed, int ra
 	r = s * cos( alpha ) * hspread;
 	u = s * sin( alpha ) * vspread;
 
-	GS_TraceBullet( &trace, start, dir, r, u, range, ENTNUM( self ), timeDelta );
+	GS_TraceBullet( ggs, &trace, &waterTrace, start, dir, r, u, range, ENTNUM( self ), timeDelta );
 
 	if( trace.ent != -1 ) {
 		if( game.edicts[trace.ent].takedamage ) {
@@ -517,14 +517,14 @@ static void G_Fire_SunflowerPattern( edict_t *self, vec3_t start, vec3_t dir, in
 	float r;
 	float u;
 	float fi;
-	trace_t trace;
+	trace_t trace, waterTrace;
 
 	for( i = 0; i < count; i++ ) {
 		fi = i * 2.4; //magic value creating Fibonacci numbers
 		r = cos( (float)*seed + fi ) * hspread * sqrt( fi );
 		u = sin( (float)*seed + fi ) * vspread * sqrt( fi );
 
-		GS_TraceBullet( &trace, start, dir, r, u, range, ENTNUM( self ), timeDelta );
+		GS_TraceBullet( ggs, &trace, &waterTrace, start, dir, r, u, range, ENTNUM( self ), timeDelta );
 
 		if( trace.ent != -1 ) {
 			if( game.edicts[trace.ent].takedamage ) {
@@ -568,7 +568,7 @@ void W_Fire_Riotgun( edict_t *self, vec3_t start, vec3_t angles, int seed, int r
 	edict_t *event;
 	int dmgflags = 0;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -637,16 +637,16 @@ static void W_Touch_Grenade( edict_t *ent, edict_t *other, cplane_t *plane, int 
 
 	// don't explode on doors and plats that take damage
 	// except for doors and plats that take damage in race
-	if( !other->takedamage || ( !GS_RaceGametype() && ISBRUSHMODEL( other->s.modelindex ) ) ) {
+	if( !other->takedamage || ( !GS_RaceGametype( *ggs ) && ISBRUSHMODEL( other->s.modelindex ) ) ) {
 		// race - make grenades bounce twice
-		if( GS_RaceGametype() ) {
+		if( GS_RaceGametype( *ggs ) ) {
 			if( ent->s.effects & EF_STRONG_WEAPON ) {
 				ent->health -= 1;
 			}
 			if( !( ent->s.effects & EF_STRONG_WEAPON ) || ( ( VectorLength( ent->velocity ) && Q_rint( ent->health ) > 0 ) || ent->timeStamp + 350 > level.time ) ) {
 				// kill some velocity on each bounce
 				float friction = 0.85;
-				gs_weapon_definition_t *weapondef = GS_GetWeaponDef( WEAP_GRENADELAUNCHER );
+				const gs_weapon_definition_t *weapondef = GS_GetWeaponDef( ggs, WEAP_GRENADELAUNCHER );
 				if( weapondef ) {
 					friction = bound( 0, weapondef->firedef.friction, 2 );
 				}
@@ -694,7 +694,7 @@ edict_t *W_Fire_Grenade( edict_t *self, vec3_t start, vec3_t angles, int speed, 
 						 int timeout, int mod, int timeDelta, bool aim_up ) {
 	edict_t *grenade;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -712,8 +712,8 @@ edict_t *W_Fire_Grenade( edict_t *self, vec3_t start, vec3_t angles, int speed, 
 	grenade->think = W_Grenade_Explode;
 	grenade->classname = "grenade";
 	grenade->enemy = NULL;
-	if( GS_RaceGametype() ) {
-		gs_weapon_definition_t *weapondef = GS_GetWeaponDef( WEAP_GRENADELAUNCHER );
+	if( GS_RaceGametype( *ggs ) ) {
+		const gs_weapon_definition_t *weapondef = GS_GetWeaponDef( ggs, WEAP_GRENADELAUNCHER );
 		if( weapondef->firedef.gravity ) {
 			grenade->gravity = weapondef->firedef.gravity;
 		}
@@ -722,7 +722,7 @@ edict_t *W_Fire_Grenade( edict_t *self, vec3_t start, vec3_t angles, int speed, 
 	if( mod == MOD_GRENADE_S ) {
 		grenade->s.modelindex = trap_ModelIndex( PATH_GRENADE_STRONG_MODEL );
 		grenade->s.effects |= EF_STRONG_WEAPON;
-		if( GS_RaceGametype() ) {
+		if( GS_RaceGametype( *ggs ) ) {
 			// bounce count
 			grenade->health = 2;
 		}
@@ -808,11 +808,11 @@ edict_t *W_Fire_Rocket( edict_t *self, vec3_t start, vec3_t angles, int speed, f
 	edict_t *rocket;
 
 	// in race, rockets are slower in water
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		speed = self->waterlevel > 1 ? speed * 0.5 : speed;
 	}
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -883,7 +883,7 @@ static void W_Touch_Plasma( edict_t *ent, edict_t *other, cplane_t *plane, int s
 		}
 
 		// race - hack for plasma shooters which shoot on buttons
-		if( GS_RaceGametype() && (surfFlags & SURF_NOIMPACT) ) {
+		if( GS_RaceGametype( *ggs ) && (surfFlags & SURF_NOIMPACT) ) {
 			G_Damage( other, ent, ent->r.owner, dir, ent->velocity, ent->s.origin, ent->projectileInfo.maxDamage, 0, 0, DAMAGE_NO_KNOCKBACK, ent->style );
 			G_FreeEdict( ent );
 			return;
@@ -903,7 +903,7 @@ void W_Plasma_Backtrace( edict_t *ent, const vec3_t start ) {
 	vec3_t oldorigin;
 	vec3_t mins = { -2, -2, -2 }, maxs = { 2, 2, 2 };
 
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		return;
 	}
 
@@ -978,7 +978,7 @@ static void W_AutoTouch_Plasma( edict_t *ent, edict_t *other, cplane_t *plane, i
 edict_t *W_Fire_Plasma( edict_t *self, vec3_t start, vec3_t angles, float damage, int minKnockback, int maxKnockback, int stun, int minDamage, int radius, int speed, int timeout, int mod, int timeDelta ) {
 	edict_t *plasma;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -1102,7 +1102,7 @@ void W_Fire_Electrobolt_Combined( edict_t *self, vec3_t start, vec3_t angles, fl
 	fireMode = FIRE_MODE_STRONG;
 #endif
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		maxdamage = mindamage = 9999;
 	}
 
@@ -1114,7 +1114,7 @@ void W_Fire_Electrobolt_Combined( edict_t *self, vec3_t start, vec3_t angles, fl
 	hit = damaged = NULL;
 
 	mask = MASK_SHOT;
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		mask = MASK_SOLID;
 	}
 
@@ -1157,7 +1157,7 @@ void W_Fire_Electrobolt_Combined( edict_t *self, vec3_t start, vec3_t angles, fl
 
 			G_Damage( hit, self, self, dir, dir, tr.endpos, damage, knockback, stun, dmgflags, mod );
 
-			if( GS_RaceGametype() ) {
+			if( GS_RaceGametype( *ggs ) ) {
 				// race - hit check for shootable buttons
 				if( hit->movetype == MOVETYPE_NONE || hit->movetype == MOVETYPE_PUSH ) {
 					break;
@@ -1195,9 +1195,9 @@ void W_Fire_Electrobolt_Combined( edict_t *self, vec3_t start, vec3_t angles, fl
 	VectorScale( dir, 1024, event->s.origin2 );
 	event->s.firemode = fireMode;
 
-	if( !GS_Instagib() && tr.ent == -1 ) {  // didn't touch anything, not even a wall
+	if( !GS_Instagib( *ggs ) && tr.ent == -1 ) {  // didn't touch anything, not even a wall
 		edict_t *bolt;
-		gs_weapon_definition_t *weapondef = GS_GetWeaponDef( self->s.weapon );
+		const gs_weapon_definition_t *weapondef = GS_GetWeaponDef( ggs, self->s.weapon );
 
 		// fire a weak EB from the end position
 		bolt = W_Fire_Electrobolt_Weak( self, end, angles, weapondef->firedef_weak.speed, mindamage, minknockback, minknockback, stun, weapondef->firedef_weak.timeout, mod, timeDelta );
@@ -1216,7 +1216,7 @@ void W_Fire_Electrobolt_FullInstant( edict_t *self, vec3_t start, vec3_t angles,
 
 #define FULL_DAMAGE_RANGE g_projectile_prestep->value
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		maxdamage = mindamage = 9999;
 	}
 
@@ -1228,7 +1228,7 @@ void W_Fire_Electrobolt_FullInstant( edict_t *self, vec3_t start, vec3_t angles,
 	hit = NULL;
 
 	mask = MASK_SHOT;
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		mask = MASK_SOLID;
 	}
 
@@ -1285,7 +1285,7 @@ void W_Fire_Electrobolt_FullInstant( edict_t *self, vec3_t start, vec3_t angles,
 
 			G_Damage( hit, self, self, dir, dir, tr.endpos, damage, knockback, stun, dmgflags, mod );
 
-			if( GS_RaceGametype() ) {
+			if( GS_RaceGametype( *ggs ) ) {
 				// race - hit check for shootable buttons
 				if( hit->movetype == MOVETYPE_NONE || hit->movetype == MOVETYPE_PUSH ) {
 					break;
@@ -1329,7 +1329,7 @@ void W_Fire_Electrobolt_FullInstant( edict_t *self, vec3_t start, vec3_t angles,
 edict_t *W_Fire_Electrobolt_Weak( edict_t *self, vec3_t start, vec3_t angles, float speed, float damage, int minKnockback, int maxKnockback, int stun, int timeout, int mod, int timeDelta ) {
 	edict_t *bolt;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -1359,9 +1359,9 @@ static void W_Think_Wave( edict_t *ent ) {
 	// Check whether the corona damage has not been activated yet
 	const firedef_t *firedef;
 	if( ent->style == MOD_SHOCKWAVE_S ) {
-		firedef = &GS_GetWeaponDef( WEAP_SHOCKWAVE )->firedef;
+		firedef = &GS_GetWeaponDef( ggs, WEAP_SHOCKWAVE )->firedef;
 	} else {
-		firedef = &GS_GetWeaponDef( WEAP_SHOCKWAVE )->firedef_weak;
+		firedef = &GS_GetWeaponDef( ggs, WEAP_SHOCKWAVE )->firedef_weak;
 	}
 
 	if( level.time - ent->timeStamp < ( ( 1000 * firedef->splash_radius ) / firedef->speed ) + 64 ) {
@@ -1491,7 +1491,7 @@ void W_Detonate_Wave( edict_t *ent, const edict_t *ignore, const cplane_t *plane
 edict_t *W_Fire_Shockwave( edict_t *self, vec3_t start, vec3_t angles, int speed, float damage, int minKnockback, int maxKnockback, int stun, int minDamage, int radius, int timeout, int mod, int timeDelta ) {
 	edict_t *wave;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -1532,7 +1532,7 @@ void W_Fire_Instagun( edict_t *self, vec3_t start, vec3_t angles, float damage, 
 	bool missed = true;
 	int dmgflags = 0;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -1541,7 +1541,7 @@ void W_Fire_Instagun( edict_t *self, vec3_t start, vec3_t angles, float damage, 
 	VectorCopy( start, from );
 	ignore = self;
 	mask = MASK_SHOT;
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		mask = MASK_SOLID;
 	}
 
@@ -1636,7 +1636,7 @@ void G_HideLaser( edict_t *ent ) {
 static void G_Laser_Think( edict_t *ent ) {
 	edict_t *owner;
 
-	if( ent->s.ownerNum < 1 || ent->s.ownerNum > gs.maxclients ) {
+	if( ent->s.ownerNum < 1 || ent->s.ownerNum > ggs->maxclients ) {
 		G_FreeEdict( ent );
 		return;
 	}
@@ -1687,7 +1687,7 @@ static edict_t *_FindOrSpawnLaser( edict_t *owner, int entType, bool *newLaser )
 	*newLaser = false;
 	laser = NULL;
 	ownerNum = ENTNUM( owner );
-	for( i = gs.maxclients + 1; i < game.maxentities; i++ ) {
+	for( i = ggs->maxclients + 1; i < game.maxentities; i++ ) {
 		e = &game.edicts[i];
 		if( !e->r.inuse ) {
 			continue;
@@ -1728,7 +1728,7 @@ edict_t *W_Fire_Lasergun( edict_t *self, vec3_t start, vec3_t angles, float dama
 	trace_t tr;
 	vec3_t dir;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -1747,7 +1747,7 @@ edict_t *W_Fire_Lasergun( edict_t *self, vec3_t start, vec3_t angles, float dama
 	laser_mod = mod;
 	laser_missed = true;
 
-	GS_TraceLaserBeam( &tr, start, angles, range, ENTNUM( self ), timeDelta, _LaserImpact );
+	GS_TraceLaserBeam( ggs, &tr, start, angles, range, ENTNUM( self ), timeDelta, _LaserImpact );
 
 	laser->r.svflags |= SVF_FORCEOWNER;
 	VectorCopy( start, laser->s.origin );
@@ -1777,7 +1777,7 @@ edict_t *W_Fire_Lasergun_Weak( edict_t *self, vec3_t start, vec3_t end, float da
 	bool newLaser;
 	trace_t trace;
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		damage = 9999;
 	}
 
@@ -1809,7 +1809,7 @@ edict_t *W_Fire_Lasergun_Weak( edict_t *self, vec3_t start, vec3_t end, float da
 		VectorSubtract( segmentTo, segmentFrom, segmentDir );
 		VecToAngles( segmentDir, tmpangles );
 
-		GS_TraceLaserBeam( &trace, segmentFrom, tmpangles, DistanceFast( segmentFrom, segmentTo ), passthrough, 0, _LaserImpact );
+		GS_TraceLaserBeam( ggs, &trace, segmentFrom, tmpangles, DistanceFast( segmentFrom, segmentTo ), passthrough, 0, _LaserImpact );
 		if( trace.fraction != 1.0f ) {
 			break;
 		}
@@ -1848,7 +1848,7 @@ void W_Plasma_Backtrace( edict_t *ent, const vec3_t start );
 
 void Use_Weapon( edict_t *ent, const gsitem_t *item ) {
 	int ammocount, weakammocount;
-	gs_weapon_definition_t *weapondef;
+	const gs_weapon_definition_t *weapondef;
 
 	//invalid weapon item
 	if( item->tag < WEAP_NONE || item->tag >= WEAP_TOTAL ) {
@@ -1860,7 +1860,7 @@ void Use_Weapon( edict_t *ent, const gsitem_t *item ) {
 		return;
 	}
 
-	weapondef = GS_GetWeaponDef( item->tag );
+	weapondef = GS_GetWeaponDef( ggs, item->tag );
 
 	if( !g_select_empty->integer && !( item->type & IT_AMMO ) ) {
 		if( weapondef->firedef.usage_count ) {
@@ -1894,11 +1894,11 @@ void Use_Weapon( edict_t *ent, const gsitem_t *item ) {
 }
 
 bool Pickup_Weapon( edict_t *other, const gsitem_t *item, int flags, int ammo_count ) {
-	const auto *weapondef = GS_GetWeaponDef( item->tag );
+	const auto *weapondef = GS_GetWeaponDef( ggs, item->tag );
 
 	if( !( flags & DROPPED_ITEM ) ) {
 		// weapons stay in race
-		if( GS_RaceGametype() && ( other->r.client->ps.inventory[item->tag] != 0 ) ) {
+		if( GS_RaceGametype( *ggs ) && ( other->r.client->ps.inventory[item->tag] != 0 ) ) {
 			return false;
 		}
 	}
@@ -1914,12 +1914,12 @@ bool Pickup_Weapon( edict_t *other, const gsitem_t *item, int flags, int ammo_co
 	if( !( flags & DROPPED_ITEM ) ) {
 		// give them some ammo with it
 		if( ammo_tag ) {
-			Add_Ammo( other->r.client, GS_FindItemByTag( ammo_tag ), weapondef->firedef_weak.weapon_pickup, true );
+			Add_Ammo( other->r.client, GS_FindItemByTag( ggs, ammo_tag ), weapondef->firedef_weak.weapon_pickup, true );
 		}
 	} else {
 		// it's a dropped weapon
 		if( ammo_count && ammo_tag ) {
-			Add_Ammo( other->r.client, GS_FindItemByTag( ammo_tag ), ammo_count, true );
+			Add_Ammo( other->r.client, GS_FindItemByTag( ggs, ammo_tag ), ammo_count, true );
 		}
 	}
 
@@ -1951,8 +1951,8 @@ edict_t *Drop_Weapon( edict_t *ent, const gsitem_t *item ) {
 		ent->r.client->ps.inventory[item->tag]--;
 
 		if( !ent->r.client->ps.inventory[item->tag] ) {
-			otherweapon = GS_SelectBestWeapon( &ent->r.client->ps );
-			Use_Weapon( ent, GS_FindItemByTag( otherweapon ) );
+			otherweapon = GS_SelectBestWeapon( ggs, &ent->r.client->ps );
+			Use_Weapon( ent, GS_FindItemByTag( ggs, otherweapon ) );
 		}
 	}
 	return drop;
@@ -1984,7 +1984,7 @@ static void G_ProjectileDistancePrestep( edict_t *projectile, float distance ) {
 
 	mask = ( projectile->r.clipmask ) ? projectile->r.clipmask : MASK_SHOT; // race trick should come set up inside clipmask
 
-	if( GS_RaceGametype() && projectile->movetype == MOVETYPE_LINEARPROJECTILE ) {
+	if( GS_RaceGametype( *ggs ) && projectile->movetype == MOVETYPE_LINEARPROJECTILE ) {
 		VectorCopy( projectile->s.linearMovementBegin, projectile->s.origin );
 	}
 
@@ -1995,7 +1995,7 @@ static void G_ProjectileDistancePrestep( edict_t *projectile, float distance ) {
 	VectorMA( projectile->s.origin, distance, dir, dest );
 	G_Trace4D( &trace, projectile->s.origin, projectile->r.mins, projectile->r.maxs, dest, projectile->r.owner, mask, projectile->timeDelta );
 
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		for( i = 0; i < 3; i++ ) {
 			projectile->s.origin[i] = projectile->s.linearMovementBegin[i] = projectile->olds.origin[i] = projectile->olds.linearMovementBegin[i] = trace.endpos[i];
 		}
@@ -2036,7 +2036,7 @@ static void G_ProjectileTimePrestep( edict_t *projectile, int timeOffset ) {
 	VectorCopy( projectile->s.origin, projectile->s.linearMovementBegin );
 }
 
-static edict_t *G_Fire_Gunblade_Knife( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner ) {
+static edict_t *G_Fire_Gunblade_Knife( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner ) {
 	int range, knockback, stun, mod;
 	float damage;
 	int timeDelta;
@@ -2089,7 +2089,7 @@ static void G_LocalSpread( vec3_t angles, int spread, int seed ) {
 	VecToAngles( dir, angles );
 }
 
-static edict_t *G_Fire_Gunblade_Blast( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_Gunblade_Blast( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int speed, knockback, stun, minDamage, minKnockback, radius, mod;
 	float damage;
 	int timeDelta;
@@ -2121,7 +2121,7 @@ static edict_t *G_Fire_Gunblade_Blast( vec3_t origin, vec3_t angles, firedef_t *
 								 radius, speed, firedef->timeout, mod, timeDelta );
 }
 
-static edict_t *G_Fire_Rocket( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_Rocket( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int speed, knockback, stun, minDamage, minKnockback, radius, mod;
 	float damage;
 	int timeDelta;
@@ -2155,7 +2155,7 @@ static edict_t *G_Fire_Rocket( vec3_t origin, vec3_t angles, firedef_t *firedef,
 						  radius, firedef->timeout, mod, timeDelta );
 }
 
-static edict_t *G_Fire_Machinegun( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_Machinegun( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int range, knockback, stun, mod;
 	float damage;
 	int timeDelta;
@@ -2183,7 +2183,7 @@ static edict_t *G_Fire_Machinegun( vec3_t origin, vec3_t angles, firedef_t *fire
 	return NULL;
 }
 
-static edict_t *G_Fire_Riotgun( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_Riotgun( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int range, knockback, stun, mod;
 	float damage;
 	int timeDelta;
@@ -2211,7 +2211,7 @@ static edict_t *G_Fire_Riotgun( vec3_t origin, vec3_t angles, firedef_t *firedef
 	return NULL;
 }
 
-static edict_t *G_Fire_Grenade( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_Grenade( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int speed, minKnockback, knockback, stun, minDamage, radius, mod;
 	float damage;
 	int timeDelta;
@@ -2246,7 +2246,7 @@ static edict_t *G_Fire_Grenade( vec3_t origin, vec3_t angles, firedef_t *firedef
 						   minDamage, radius, firedef->timeout, mod, timeDelta, true );
 }
 
-static edict_t *G_Fire_Plasma( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_Plasma( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int speed, knockback, stun, minDamage, minKnockback, radius, mod;
 	float damage;
 	int timeDelta;
@@ -2280,7 +2280,7 @@ static edict_t *G_Fire_Plasma( vec3_t origin, vec3_t angles, firedef_t *firedef,
 						  speed, firedef->timeout, mod, timeDelta );
 }
 
-static edict_t *G_Fire_Lasergun( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_Lasergun( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int range, knockback, stun, mod;
 	float damage;
 	int timeDelta;
@@ -2326,7 +2326,7 @@ static edict_t *G_Fire_Lasergun( vec3_t origin, vec3_t angles, firedef_t *firede
 								 mod, timeDelta );
 }
 
-static edict_t *G_Fire_WeakBolt( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_WeakBolt( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int speed, maxknockback, minknockback, stun, mod;
 	float maxdamage, mindamage;
 	int timeDelta;
@@ -2359,7 +2359,7 @@ static edict_t *G_Fire_WeakBolt( vec3_t origin, vec3_t angles, firedef_t *firede
 									firedef->timeout, mod, timeDelta );
 }
 
-static edict_t *G_Fire_StrongBolt( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_StrongBolt( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int minDamageRange, stun, mod;
 	float maxdamage, mindamage, maxknockback, minknockback;
 	int timeDelta;
@@ -2396,7 +2396,7 @@ static edict_t *G_Fire_StrongBolt( vec3_t origin, vec3_t angles, firedef_t *fire
 	return NULL;
 }
 
-static edict_t *G_Fire_Shockwave( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_Shockwave( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int speed, knockback, stun, minDamage, minKnockback, radius, mod;
 	float damage;
 	int timeDelta;
@@ -2430,7 +2430,7 @@ static edict_t *G_Fire_Shockwave( vec3_t origin, vec3_t angles, firedef_t *fired
 							 radius, firedef->timeout, mod, timeDelta );
 }
 
-static edict_t *G_Fire_Instagun( vec3_t origin, vec3_t angles, firedef_t *firedef, edict_t *owner, int seed ) {
+static edict_t *G_Fire_Instagun( vec3_t origin, vec3_t angles, const firedef_t *firedef, edict_t *owner, int seed ) {
 	int range, knockback, stun, radius, mod;
 	float damage;
 	int timeDelta;
@@ -2467,8 +2467,8 @@ void G_FireWeapon( edict_t *ent, int parm ) {
 	vec3_t viewoffset = { 0, 0, 0 };
 	int ucmdSeed;
 
-	auto *const weapondef = GS_GetWeaponDef( ( parm >> 1 ) & 0x3f );
-	auto *const firedef = ( parm & 0x1 ) ? &weapondef->firedef : &weapondef->firedef_weak;
+	const auto *const weapondef = GS_GetWeaponDef( ggs, ( parm >> 1 ) & 0x3f );
+	const auto *const firedef = ( parm & 0x1 ) ? &weapondef->firedef : &weapondef->firedef_weak;
 
 	// find this shot projection source
 	if( ent->r.client ) {
@@ -2551,7 +2551,7 @@ void G_FireWeapon( edict_t *ent, int parm ) {
 		return;
 	}
 
-	if( GS_RaceGametype() && firedef->prestep != 0 ) {
+	if( GS_RaceGametype( *ggs ) && firedef->prestep != 0 ) {
 		G_ProjectileDistancePrestep( projectile, firedef->prestep );
 	} else {
 		G_ProjectileDistancePrestep( projectile, g_projectile_prestep->value );
@@ -2583,7 +2583,7 @@ void G_FireWeapon( edict_t *ent, int parm ) {
 		return;
 	}
 
-	if( !GS_RaceGametype() ) {
+	if( !GS_RaceGametype( *ggs ) ) {
 		timeOffset = wsw::min( game.snapFrameTime, timeOffset );
 	}
 

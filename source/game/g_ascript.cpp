@@ -843,31 +843,31 @@ static bool objectMatch_suddenDeathFinished( match_t *self ) {
 }
 
 static bool objectMatch_isPaused( match_t *self ) {
-	return GS_MatchPaused();
+	return GS_MatchPaused( *ggs );
 }
 
 static bool objectMatch_isWaiting( match_t *self ) {
-	return GS_MatchWaiting();
+	return GS_MatchWaiting( *ggs );
 }
 
 static bool objectMatch_isExtended( match_t *self ) {
-	return GS_MatchExtended();
+	return GS_MatchExtended( *ggs );
 }
 
 static unsigned int objectMatch_duration( match_t *self ) {
-	return GS_MatchDuration();
+	return GS_MatchDuration( *ggs );
 }
 
 static int64_t objectMatch_startTime( match_t *self ) {
-	return GS_MatchStartTime();
+	return GS_MatchStartTime( *ggs );
 }
 
 static int64_t objectMatch_endTime( match_t *self ) {
-	return GS_MatchEndTime();
+	return GS_MatchEndTime( *ggs );
 }
 
 static int objectMatch_getState( match_t *self ) {
-	return GS_MatchState();
+	return GS_MatchState( *ggs );
 }
 
 static asstring_t *objectMatch_getName( match_t *self ) {
@@ -899,7 +899,7 @@ static void objectMatch_setScore( asstring_t *name, match_t *self ) {
 }
 
 static void objectMatch_setClockOverride( int64_t time, match_t *self ) {
-	gs.gameState.stats[GAMESTAT_CLOCKOVERRIDE] = time;
+	ggs->gameState.stats[GAMESTAT_CLOCKOVERRIDE] = time;
 }
 
 static const asFuncdef_t match_Funcdefs[] =
@@ -975,7 +975,7 @@ static void objectGametypeDescriptor_setTitle( asstring_t *other, gametype_descr
 }
 
 static asstring_t *objectGametypeDescriptor_getName( gametype_descriptor_t *self ) {
-	return qasStringFactoryBuffer( gs.gametypeName, strlen( gs.gametypeName ) );
+	return qasStringFactoryBuffer( ggs->gametypeName, strlen( ggs->gametypeName ) );
 }
 
 static asstring_t *objectGametypeDescriptor_getVersion( gametype_descriptor_t *self ) {
@@ -1017,19 +1017,19 @@ static void objectGametypeDescriptor_SetTeamSpawnsystem( int team, int spawnsyst
 }
 
 static bool objectGametypeDescriptor_isInstagib( gametype_descriptor_t *self ) {
-	return GS_Instagib();
+	return GS_Instagib( *ggs );
 }
 
 static bool objectGametypeDescriptor_hasFallDamage( gametype_descriptor_t *self ) {
-	return GS_FallDamage();
+	return GS_FallDamage( *ggs );
 }
 
 static bool objectGametypeDescriptor_hasSelfDamage( gametype_descriptor_t *self ) {
-	return GS_SelfDamage();
+	return GS_SelfDamage( *ggs );
 }
 
 static bool objectGametypeDescriptor_isInvidualGameType( gametype_descriptor_t *self ) {
-	return GS_IndividualGameType();
+	return GS_IndividualGametype( *ggs );
 }
 
 static const asFuncdef_t gametypedescr_Funcdefs[] =
@@ -1125,7 +1125,7 @@ static edict_t *objectTeamlist_GetPlayerEntity( int index, g_teamlist_t *obj ) {
 		return NULL;
 	}
 
-	if( obj->playerIndices[index] < 1 || obj->playerIndices[index] > gs.maxclients ) {
+	if( obj->playerIndices[index] < 1 || obj->playerIndices[index] > ggs->maxclients ) {
 		return NULL;
 	}
 
@@ -1133,13 +1133,13 @@ static edict_t *objectTeamlist_GetPlayerEntity( int index, g_teamlist_t *obj ) {
 }
 
 static asstring_t *objectTeamlist_getName( g_teamlist_t *obj ) {
-	const char *name = GS_TeamName( obj - teamlist );
+	const char *name = GS_TeamName( ggs, obj - teamlist );
 
 	return qasStringFactoryBuffer( name, name ? strlen( name ) : 0 );
 }
 
 static asstring_t *objectTeamlist_getDefaultName( g_teamlist_t *obj ) {
-	const char *name = GS_DefaultTeamName( obj - teamlist );
+	const char *name = GS_DefaultTeamName( ggs, obj - teamlist );
 
 	return qasStringFactoryBuffer( name, name ? strlen( name ) : 0 );
 }
@@ -1503,7 +1503,7 @@ static int objectGameClient_PlayerNum( Client *self ) {
 }
 
 static bool objectGameClient_isReady( Client *self ) {
-	return ( level.ready[self - game.clients] || GS_MatchState() == MATCH_STATE_PLAYTIME ) ? true : false;
+	return ( level.ready[self - game.clients] || GS_MatchState( *ggs ) == MATCH_STATE_PLAYTIME ) ? true : false;
 }
 
 static bool objectGameClient_isBot( Client *self ) {
@@ -1511,7 +1511,7 @@ static bool objectGameClient_isBot( Client *self ) {
 	const edict_t *ent;
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 && playerNum >= gs.maxclients ) {
+	if( playerNum < 0 && playerNum >= ggs->maxclients ) {
 		return false;
 	}
 
@@ -1524,7 +1524,7 @@ static Bot *objectGameClient_getBot( Client *self ) {
 	const edict_t *ent;
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 && playerNum >= gs.maxclients ) {
+	if( playerNum < 0 && playerNum >= ggs->maxclients ) {
 		return NULL;
 	}
 
@@ -1570,7 +1570,7 @@ static void objectGameClient_Respawn( bool ghost, Client *self ) {
 
 	playerNum = objectGameClient_PlayerNum( self );
 
-	if( playerNum >= 0 && playerNum < gs.maxclients ) {
+	if( playerNum >= 0 && playerNum < ggs->maxclients ) {
 		G_ClientRespawn( &game.edicts[playerNum + 1], ghost );
 	}
 }
@@ -1579,7 +1579,7 @@ static edict_t *objectGameClient_GetEntity( Client *self ) {
 	int playerNum;
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return NULL;
 	}
 
@@ -1595,13 +1595,13 @@ static int objectGameClient_InventoryCount( int index, Client *self ) {
 }
 
 static void objectGameClient_InventorySetCount( int index, int newcount, Client *self ) {
-	gsitem_t *it;
+	const gsitem_t *it;
 
 	if( index < 0 || index >= MAX_ITEMS ) {
 		return;
 	}
 
-	it = GS_FindItemByTag( index );
+	it = GS_FindItemByTag( ggs, index );
 	if( !it ) {
 		return;
 	}
@@ -1626,7 +1626,7 @@ static void objectGameClient_InventoryGiveItemExt( int index, int count, Client 
 		return;
 	}
 
-	it = GS_FindItemByTag( index );
+	it = GS_FindItemByTag( ggs, index );
 	if( !it ) {
 		return;
 	}
@@ -1636,7 +1636,7 @@ static void objectGameClient_InventoryGiveItemExt( int index, int count, Client 
 	}
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1659,16 +1659,16 @@ static bool objectGameClient_CanSelectWeapon( int index, Client *self ) {
 		return false;
 	}
 
-	return ( GS_CheckAmmoInWeapon( &self->ps, index ) ) == true;
+	return ( GS_CheckAmmoInWeapon( ggs, &self->ps, index ) ) == true;
 }
 
 static void objectGameClient_SelectWeapon( int index, Client *self ) {
 	if( index < WEAP_NONE || index >= WEAP_TOTAL ) {
-		self->ps.stats[STAT_PENDING_WEAPON] = GS_SelectBestWeapon( &self->ps );
+		self->ps.stats[STAT_PENDING_WEAPON] = GS_SelectBestWeapon( ggs, &self->ps );
 		return;
 	}
 
-	if( GS_CheckAmmoInWeapon( &self->ps, index ) ) {
+	if( GS_CheckAmmoInWeapon( ggs, &self->ps, index ) ) {
 		self->ps.stats[STAT_PENDING_WEAPON] = index;
 	}
 }
@@ -1681,7 +1681,7 @@ static void objectGameClient_addAward( asstring_t *msg, Client *self ) {
 	}
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1696,7 +1696,7 @@ static void objectGameClient_addMetaAward( asstring_t *msg, Client *self ) {
 	}
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1711,7 +1711,7 @@ static void objectGameClient_execGameCommand( asstring_t *msg, Client *self ) {
 	}
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1726,7 +1726,7 @@ static void objectGameClient_execServerCommand( asstring_t *msg, Client *self ) 
 	}
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1769,7 +1769,7 @@ static unsigned int objectGameClient_getPressedKeys( Client *self ) {
 
 static void objectGameClient_setPMoveMaxSpeed( float speed, Client *self ) {
 	if( speed < 0.0f ) {
-		self->ps.pmove.stats[PM_STAT_MAXSPEED] = (short)DEFAULT_PLAYERSPEED;
+		self->ps.pmove.stats[PM_STAT_MAXSPEED] = (short)GS_DefaultPlayerSpeed( *ggs );
 	} else {
 		self->ps.pmove.stats[PM_STAT_MAXSPEED] = ( (int)speed & 0xFFFF );
 	}
@@ -1823,7 +1823,7 @@ static void objectGameClient_printMessage( asstring_t *str, Client *self ) {
 	}
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1834,7 +1834,7 @@ static void objectGameClient_ChaseCam( asstring_t *str, bool teamonly, Client *s
 	int playerNum;
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1845,7 +1845,7 @@ static void objectGameClient_SetChaseActive( bool active, Client *self ) {
 	int playerNum;
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1861,7 +1861,7 @@ static void objectGameClient_NewRaceRun( int numSectors, Client *self ) {
 	int playerNum;
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1872,7 +1872,7 @@ static void objectGameClient_SetSectorTime( int sector, uint32_t time, Client *s
 	// TODO: Validate `self`
 	int playerNum = objectGameClient_PlayerNum( self );
 	// TODO: Throw a script exception at this!
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1882,7 +1882,7 @@ static void objectGameClient_SetSectorTime( int sector, uint32_t time, Client *s
 static RunStatusQuery *objectGameClient_CompleteRaceRun( uint32_t finalTime, Client *self ) {
 	int playerNum = objectGameClient_PlayerNum( self );
 	// TODO: Throw a script exception at this!
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return nullptr;
 	}
 
@@ -1893,7 +1893,7 @@ static RunStatusQuery *objectGameClient_CompleteRaceRun( uint32_t finalTime, Cli
 static RunStatusQuery *objectGameClient_CompleteRaceRun2( uint32_t finalTime, const asstring_t *tag, Client *self ) {
 	int playerNum = objectGameClient_PlayerNum( self );
 	// TODO: Throw a script exception at this!
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return nullptr;
 	}
 
@@ -1911,7 +1911,7 @@ static RunStatusQuery *objectGameClient_CompleteRaceRun2( uint32_t finalTime, co
 static void objectGameClient_AddToRacePlayTime( int64_t timeToAdd, Client *self ) {
 	int playerNum = objectGameClient_PlayerNum( self );
 	// TODO: Throw a script exception at this!
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1922,7 +1922,7 @@ static void objectGameClient_SetHelpMessage( unsigned int index, Client *self ) 
 	int playerNum;
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1937,7 +1937,7 @@ static void objectGameClient_SetQuickMenuItems( asstring_t *str, Client *self ) 
 	}
 
 	playerNum = objectGameClient_PlayerNum( self );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
+	if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 		return;
 	}
 
@@ -2276,7 +2276,7 @@ static void objectGameEntity_UseTargets( edict_t *activator, edict_t *self ) {
 }
 
 static edict_t *objectGameEntity_DropItemByTag( int tag, edict_t *self ) {
-	gsitem_t *item = GS_FindItemByTag( tag );
+	const gsitem_t *item = GS_FindItemByTag( ggs, tag );
 
 	if( !item ) {
 		return NULL;
@@ -2668,7 +2668,7 @@ static edict_t *asFunc_GetEntity( int entNum ) {
 }
 
 static Client *asFunc_GetClient( int clientNum ) {
-	if( clientNum < 0 || clientNum >= gs.maxclients ) {
+	if( clientNum < 0 || clientNum >= ggs->maxclients ) {
 		return NULL;
 	}
 
@@ -2683,16 +2683,16 @@ static g_teamlist_t *asFunc_GetTeamlist( int teamNum ) {
 	return &teamlist[teamNum];
 }
 
-static gsitem_t *asFunc_GS_FindItemByTag( int tag ) {
-	return GS_FindItemByTag( tag );
+static const gsitem_t *asFunc_GS_FindItemByTag( int tag ) {
+	return GS_FindItemByTag( ggs, tag );
 }
 
-static gsitem_t *asFunc_GS_FindItemByName( asstring_t *name ) {
-	return ( !name || !name->len ) ? NULL : GS_FindItemByName( name->buffer );
+static const gsitem_t *asFunc_GS_FindItemByName( asstring_t *name ) {
+	return ( !name || !name->len ) ? NULL : GS_FindItemByName( ggs, name->buffer );
 }
 
-static gsitem_t *asFunc_GS_FindItemByClassname( asstring_t *name ) {
-	return ( !name || !name->len ) ? NULL : GS_FindItemByClassname( name->buffer );
+static const gsitem_t *asFunc_GS_FindItemByClassname( asstring_t *name ) {
+	return ( !name || !name->len ) ? NULL : GS_FindItemByClassname( ggs, name->buffer );
 }
 
 static void asFunc_G_Match_RemoveProjectiles( edict_t *owner ) {
@@ -2998,7 +2998,7 @@ static void asFunc_SetConfigString( int index, asstring_t *str ) {
 
 		// never allow to change spectator and player teams names
 		if( index < CS_TEAM_ALPHA_NAME ) {
-			G_Printf( "WARNING: %s team name is write protected\n", GS_DefaultTeamName( index - CS_TEAM_SPECTATOR_NAME ) );
+			G_Printf( "WARNING: %s team name is write protected\n", GS_DefaultTeamName( ggs, index - CS_TEAM_SPECTATOR_NAME ) );
 			return;
 		}
 
@@ -3010,35 +3010,35 @@ static void asFunc_SetConfigString( int index, asstring_t *str ) {
 
 		// never allow to change alpha and beta team names to a different team default name
 		if( index == CS_TEAM_ALPHA_NAME ) {
-			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( TEAM_SPECTATOR ) ) ) {
+			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( ggs, TEAM_SPECTATOR ) ) ) {
 				forbidden = true;
 			}
 
-			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( TEAM_PLAYERS ) ) ) {
+			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( ggs, TEAM_PLAYERS ) ) ) {
 				forbidden = true;
 			}
 
-			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( TEAM_BETA ) ) ) {
+			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( ggs, TEAM_BETA ) ) ) {
 				forbidden = true;
 			}
 		}
 
 		if( index == CS_TEAM_BETA_NAME ) {
-			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( TEAM_SPECTATOR ) ) ) {
+			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( ggs, TEAM_SPECTATOR ) ) ) {
 				forbidden = true;
 			}
 
-			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( TEAM_PLAYERS ) ) ) {
+			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( ggs, TEAM_PLAYERS ) ) ) {
 				forbidden = true;
 			}
 
-			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( TEAM_ALPHA ) ) ) {
+			if( !Q_stricmp( str->buffer, GS_DefaultTeamName( ggs, TEAM_ALPHA ) ) ) {
 				forbidden = true;
 			}
 		}
 
 		if( forbidden ) {
-			G_Printf( "WARNING: %s team name can not be changed to %s\n", GS_DefaultTeamName( index - CS_TEAM_SPECTATOR_NAME ), str->buffer );
+			G_Printf( "WARNING: %s team name can not be changed to %s\n", GS_DefaultTeamName( ggs, index - CS_TEAM_SPECTATOR_NAME ), str->buffer );
 			return;
 		}
 	}
@@ -3098,7 +3098,7 @@ static void asFunc_G_LocalSound( Client *target, int channel, int soundindex ) {
 	if( target ) {
 		int playerNum = target - game.clients;
 
-		if( playerNum < 0 || playerNum >= gs.maxclients ) {
+		if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 			return;
 		}
 
@@ -3117,7 +3117,7 @@ static void asFunc_G_AnnouncerSound( Client *target, int soundindex, int team, b
 	if( target ) {
 		playerNum = target - game.clients;
 
-		if( playerNum < 0 || playerNum >= gs.maxclients ) {
+		if( playerNum < 0 || playerNum >= ggs->maxclients ) {
 			return;
 		}
 
@@ -3127,7 +3127,7 @@ static void asFunc_G_AnnouncerSound( Client *target, int soundindex, int team, b
 	if( ignore ) {
 		playerNum = ignore - game.clients;
 
-		if( playerNum >= 0 && playerNum < gs.maxclients ) {
+		if( playerNum >= 0 && playerNum < ggs->maxclients ) {
 			passent = game.edicts + playerNum + 1;
 		}
 	}
@@ -3193,7 +3193,7 @@ static unsigned asFunc_G_RegisterHelpMessage( asstring_t *str ) {
 }
 
 static void asFunc_G_SetColorCorrection( int index ) {
-	gs.gameState.stats[GAMESTAT_COLORCORRECTION] = index;
+	ggs->gameState.stats[GAMESTAT_COLORCORRECTION] = index;
 }
 
 static int asFunc_G_GetDefaultColorCorrection( void ) {
@@ -3294,6 +3294,10 @@ static const asglobfuncs_t asGameGlobFuncs[] =
 
 // ============================================================================
 
+// Hacks, we have to provide a constant address to the static declaration
+// TODO: Can we hide it behind some kind of a getter
+gs_state_t g_gsStorage;
+
 static const asglobproperties_t asGlobProps[] =
 {
 	{ "const int64 levelTime", &level.time },
@@ -3304,7 +3308,7 @@ static const asglobproperties_t asGlobProps[] =
 	{ "const int64 utcMatchStartTime", &game.utcMatchStartTime },
 	{ "const int maxEntities", &game.maxentities },
 	{ "const int numEntities", &game.numentities },
-	{ "const int maxClients", &gs.maxclients },
+	{ "const int maxClients", &g_gsStorage.maxclients },
 	{ "GametypeDesc gametype", &level.gametype },
 	{ "Match match", &level.gametype.match },
 

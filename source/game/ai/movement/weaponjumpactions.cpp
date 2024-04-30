@@ -91,7 +91,7 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( PredictionContext *context ) 
 
 	Assert( context->topOfStackIndex == 0, "This action can be applied only for the current state" );
 
-	if( GS_ShootingDisabled() ) {
+	if( GS_ShootingDisabled( *ggs ) ) {
 		this->SwitchOrRollback( context, defaultAction );
 		return;
 	}
@@ -548,7 +548,7 @@ void TryTriggerWeaponJumpAction::PlanPredictionStep( PredictionContext *context 
 	}
 
 	// If shooting has been disabled after we have scheduled the weaponjump
-	if( GS_ShootingDisabled() ) {
+	if( GS_ShootingDisabled( *ggs ) ) {
 		m_subsystem->ResetFailedWeaponJumpAttempt( context );
 		SwitchOrRollback( context, defaultAction );
 		return;
@@ -594,7 +594,7 @@ void CorrectWeaponJumpAction::PlanPredictionStep( PredictionContext *context ) {
 	}
 
 	// If shooting has been disabled after we have scheduled the weaponjump
-	if( GS_ShootingDisabled() ) {
+	if( GS_ShootingDisabled( *ggs ) ) {
 		m_subsystem->ResetFailedWeaponJumpAttempt( context );
 		SwitchOrRollback( context, defaultAction );
 		return;
@@ -673,7 +673,7 @@ void WeaponJumpableSpotDetector::GetVelocityForJumpingToSpot( vec3_t velocity, c
 
 void WeaponJumpWeaponsTester::SetupForWeapon( int weaponNum ) {
 	// TODO: Support weak ammo?
-	const float knockback = GS_GetWeaponDef( weaponNum )->firedef.knockback;
+	const float knockback = GS_GetWeaponDef( ggs, weaponNum )->firedef.knockback;
 	// TODO: We assume the default player mass
 	const float push = 1000.0f * ( (float)knockback / 200.0f );
 	const float *origin = detector.origin;

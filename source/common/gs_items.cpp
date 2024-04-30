@@ -48,7 +48,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 *
 */
 
-gsitem_t itemdefs[] =
+std::initializer_list<gsitem_t> kDefaultItemDefs
 {
 	{
 		NULL
@@ -1104,16 +1104,18 @@ gsitem_t itemdefs[] =
 /*
 * GS_FindItemByTag
 */
-gsitem_t *GS_FindItemByTag( int tag ) {
-	gsitem_t    *it;
-
+const gsitem_t *GS_FindItemByTag( const gs_state_t *gs, int tag ) {
 	if( tag <= 0 || tag >= GS_MAX_ITEM_TAGS ) {
 		return NULL;
 	}
 
-	for( it = &itemdefs[1]; it->classname; it++ ) {
-		if( tag == it->tag ) {
-			return it;
+	if( gs->itemDefs.empty() ) {
+		gs->itemDefs.assign( kDefaultItemDefs.begin(), kDefaultItemDefs.end() );
+	}
+
+	for( const gsitem_t &item: gs->itemDefs ) {
+		if( item.classname && tag == item.tag ) {
+			return &item;
 		}
 	}
 
@@ -1123,16 +1125,18 @@ gsitem_t *GS_FindItemByTag( int tag ) {
 /*
 * GS_FindItemByClassname
 */
-gsitem_t *GS_FindItemByClassname( const char *classname ) {
-	gsitem_t    *it;
-
+const gsitem_t *GS_FindItemByClassname( const gs_state_t *gs, const char *classname ) {
 	if( !classname ) {
 		return NULL;
 	}
 
-	for( it = &itemdefs[1]; it->classname; it++ ) {
-		if( !Q_stricmp( classname, it->classname ) ) {
-			return it;
+	if( gs->itemDefs.empty() ) {
+		gs->itemDefs.assign( kDefaultItemDefs.begin(), kDefaultItemDefs.end() );
+	}
+
+	for( const gsitem_t &item: gs->itemDefs ) {
+		if( item.classname && !Q_stricmp( classname, item.classname ) ) {
+			return &item;
 		}
 	}
 
@@ -1142,16 +1146,20 @@ gsitem_t *GS_FindItemByClassname( const char *classname ) {
 /*
 * GS_FindItemByName
 */
-gsitem_t *GS_FindItemByName( const char *name ) {
-	gsitem_t    *it;
-
+const gsitem_t *GS_FindItemByName( const gs_state_t *gs, const char *name ) {
 	if( !name ) {
 		return NULL;
 	}
 
-	for( it = &itemdefs[1]; it->classname; it++ ) {
-		if( !Q_stricmp( name, it->name ) || !Q_stricmp( name, it->shortname ) ) {
-			return it;
+	if( gs->itemDefs.empty() ) {
+		gs->itemDefs.assign( kDefaultItemDefs.begin(), kDefaultItemDefs.end() );
+	}
+
+	for( const gsitem_t &item: gs->itemDefs ) {
+		if( item.classname ) {
+			if( !Q_stricmp( name, item.name ) || !Q_stricmp( name, item.shortname ) ) {
+				return &item;
+			}
 		}
 	}
 
@@ -1161,8 +1169,8 @@ gsitem_t *GS_FindItemByName( const char *name ) {
 /*
 * GS_Cmd_UseItem
 */
-gsitem_t *GS_Cmd_UseItem( player_state_t *playerState, const char *string, int typeMask ) {
-	gsitem_t *item = NULL;
+const gsitem_t *GS_Cmd_UseItem( const gs_state_t *gs, player_state_t *playerState, const char *string, int typeMask ) {
+	const gsitem_t *item = NULL;
 
 	assert( playerState );
 
@@ -1176,9 +1184,9 @@ gsitem_t *GS_Cmd_UseItem( player_state_t *playerState, const char *string, int t
 
 	if( Q_isdigit( string ) ) {
 		int tag = atoi( string );
-		item = GS_FindItemByTag( tag );
+		item = GS_FindItemByTag( gs, tag );
 	} else {
-		item = GS_FindItemByName( string );
+		item = GS_FindItemByName( gs, string );
 	}
 
 	if( !item ) {
@@ -1191,8 +1199,8 @@ gsitem_t *GS_Cmd_UseItem( player_state_t *playerState, const char *string, int t
 
 	// we don't have this item in the inventory
 	if( !playerState->inventory[item->tag] ) {
-		if( gs.module == GS_MODULE_CGAME && !( item->type & IT_WEAPON ) ) {
-			module_Printf( "Item %s is not in inventory\n", item->name );
+		if( gs->module == GS_MODULE_CGAME && !( item->type & IT_WEAPON ) ) {
+			gs->Printf( "Item %s is not in inventory\n", item->name );
 		}
 		return NULL;
 	}
@@ -1214,7 +1222,7 @@ gsitem_t *GS_Cmd_UseItem( player_state_t *playerState, const char *string, int t
 
 		// check for need of any kind of ammo/fuel/whatever
 		if( item->ammo_tag != AMMO_NONE && item->weakammo_tag != AMMO_NONE ) {
-			gs_weapon_definition_t *weapondef = GS_GetWeaponDef( item->tag );
+			const gs_weapon_definition_t *weapondef = GS_GetWeaponDef( gs, item->tag );
 
 			if( weapondef ) {
 				// do we have any of these ammos ?
@@ -1251,8 +1259,8 @@ gsitem_t *GS_Cmd_UseItem( player_state_t *playerState, const char *string, int t
 /*
 * GS_Cmd_UseWeaponStep_f
 */
-static gsitem_t *GS_Cmd_UseWeaponStep_f( player_state_t *playerState, int step, int predictedWeaponSwitch ) {
-	gsitem_t *item;
+static const gsitem_t *GS_Cmd_UseWeaponStep_f( const gs_state_t *gs, player_state_t *playerState, int step, int predictedWeaponSwitch ) {
+	const gsitem_t *item;
 	int curSlot, newSlot;
 
 	assert( playerState );
@@ -1286,7 +1294,7 @@ static gsitem_t *GS_Cmd_UseWeaponStep_f( player_state_t *playerState, int step, 
 			newSlot = WEAP_TOTAL - 1;
 		}
 
-		if( ( item = GS_Cmd_UseItem( playerState, va( "%i", newSlot ), IT_WEAPON ) ) != NULL ) {
+		if( ( item = GS_Cmd_UseItem( gs, playerState, va( "%i", newSlot ), IT_WEAPON ) ) != NULL ) {
 			return item;
 		}
 	} while( newSlot != curSlot );
@@ -1297,28 +1305,28 @@ static gsitem_t *GS_Cmd_UseWeaponStep_f( player_state_t *playerState, int step, 
 /*
 * GS_Cmd_NextWeapon_f
 */
-gsitem_t *GS_Cmd_NextWeapon_f( player_state_t *playerState, int predictedWeaponSwitch ) {
-	return GS_Cmd_UseWeaponStep_f( playerState, 1, predictedWeaponSwitch );
+const gsitem_t *GS_Cmd_NextWeapon_f( const gs_state_t *gs, player_state_t *playerState, int predictedWeaponSwitch ) {
+	return GS_Cmd_UseWeaponStep_f( gs, playerState, 1, predictedWeaponSwitch );
 }
 
 /*
 * GS_Cmd_PrevWeapon_f
 */
-gsitem_t *GS_Cmd_PrevWeapon_f( player_state_t *playerState, int predictedWeaponSwitch ) {
-	return GS_Cmd_UseWeaponStep_f( playerState, -1, predictedWeaponSwitch );
+const gsitem_t *GS_Cmd_PrevWeapon_f( const gs_state_t *gs, player_state_t *playerState, int predictedWeaponSwitch ) {
+	return GS_Cmd_UseWeaponStep_f( gs, playerState, -1, predictedWeaponSwitch );
 }
 
 //=====================================
 //		ARMOR TYPES
 //=====================================
 
-int GS_Armor_TagForCount( float armorcount ) {
+int GS_Armor_TagForCount( const gs_state_t *gs, float armorcount ) {
 	int count = ARMOR_TO_INT( armorcount );
 
-	if( count > GS_FindItemByTag( ARMOR_YA )->inventory_max ) {
+	if( count > GS_FindItemByTag( gs, ARMOR_YA )->inventory_max ) {
 		return ARMOR_RA;
 	}
-	if( count > GS_FindItemByTag( ARMOR_GA )->inventory_max ) {
+	if( count > GS_FindItemByTag( gs, ARMOR_GA )->inventory_max ) {
 		return ARMOR_YA;
 	}
 	if( count ) {
@@ -1328,16 +1336,16 @@ int GS_Armor_TagForCount( float armorcount ) {
 	return ARMOR_NONE;
 }
 
-int GS_Armor_MaxCountForTag( int tag ) {
-	gsitem_t *item = GS_FindItemByTag( tag );
+int GS_Armor_MaxCountForTag( const gs_state_t *gs, int tag ) {
+	const gsitem_t *item = GS_FindItemByTag( gs, tag );
 	if( item ) {
 		return item->inventory_max;
 	}
 	return 255;
 }
 
-int GS_Armor_PickupCountForTag( int tag ) {
-	gsitem_t *item = GS_FindItemByTag( tag );
+int GS_Armor_PickupCountForTag( const gs_state_t *gs, int tag ) {
+	const gsitem_t *item = GS_FindItemByTag( gs, tag );
 	if( item ) {
 		return item->quantity;
 	}

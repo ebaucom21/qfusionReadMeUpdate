@@ -189,7 +189,7 @@ inline const char *Nick( const edict_t *ent ) {
 }
 
 inline const char *WeapName( int weapon ) {
-	return GS_GetWeaponDef( weapon )->name;
+	return GS_GetWeaponDef( ggs, weapon )->name;
 }
 
 //----------------------------------------------------------

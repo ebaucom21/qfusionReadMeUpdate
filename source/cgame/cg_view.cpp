@@ -290,16 +290,16 @@ bool CG_ChaseStep( int step ) {
 static void CG_AddLocalSounds() {
 	// Note: Most announcements are currently pov-dependent, so we should not play them in tiled mode.
 	// See also handling of announcements while processing player state events.
-	if( GS_Countdown() && getPrimaryViewState()->allowSounds ) {
-		if( GS_MatchDuration() ) {
-			const int64_t curtime = GS_MatchPaused() ? cg.frame.serverTime : cg.time;
-			int64_t duration = GS_MatchDuration();
+	if( GS_Countdown( *cggs ) && getPrimaryViewState()->allowSounds ) {
+		if( GS_MatchDuration( *cggs ) ) {
+			const int64_t curtime = GS_MatchPaused( *cggs ) ? cg.frame.serverTime : cg.time;
+			int64_t duration = GS_MatchDuration( *cggs );
 
-			if( duration + GS_MatchStartTime() < curtime ) {
-				duration = curtime - GS_MatchStartTime(); // avoid negative results
+			if( duration + GS_MatchStartTime( *cggs ) < curtime ) {
+				duration = curtime - GS_MatchStartTime( *cggs ); // avoid negative results
 			}
 
-			auto seconds = (float)( GS_MatchStartTime() + duration - curtime ) * 0.001f;
+			auto seconds = (float)( GS_MatchStartTime( *cggs ) + duration - curtime ) * 0.001f;
 			auto remainingSeconds = (unsigned)seconds;
 
 			if( remainingSeconds != lastSecond ) {
@@ -322,7 +322,7 @@ static void CG_AddLocalSounds() {
 	CG_ReleaseAnnouncerEvents();
 
 	// Stop background music in postmatch state
-	if( GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
+	if( GS_MatchState( *cggs ) >= MATCH_STATE_POSTMATCH ) {
 		if( !postmatchsilence_set && !demostream ) {
 			SoundSystem::instance()->stopBackgroundTrack();
 			postmatchsilence_set = true;
@@ -355,7 +355,7 @@ static void CG_FlashGameWindow() {
 	bool flash = false;
 
 	// notify player of important match states
-	const int newState = GS_MatchState();
+	const int newState = GS_MatchState( *cggs );
 	if( oldState != newState ) {
 		switch( newState ) {
 			case MATCH_STATE_COUNTDOWN:
@@ -376,7 +376,7 @@ static void CG_FlashGameWindow() {
 		oldAlphaScore = stats[STAT_TEAM_ALPHA_SCORE];
 		oldBetaScore  = stats[STAT_TEAM_BETA_SCORE];
 
-		flash = scoresSet && GS_TeamBasedGametype() && !GS_IndividualGameType();
+		flash = scoresSet && GS_TeamBasedGametype( *cggs ) && !GS_IndividualGametype( *cggs );
 		scoresSet = true;
 	}
 
@@ -454,7 +454,7 @@ static void CG_CalcViewBob( ViewState *viewState ) {
 			trace_t trace;
 
 			cent = &cg_entities[viewState->view.POVent];
-			GS_BBoxForEntityState( &cent->current, mins, maxs );
+			GS_BBoxForEntityState( cggs, &cent->current, mins, maxs );
 			maxs[2] = mins[2];
 			mins[2] -= ( 1.6f * STEPSIZE );
 
@@ -663,7 +663,7 @@ void CG_DamageIndicatorAdd( int damage, const vec3_t dir, ViewState *playerViewS
 		considerDistributedEqually = true;
 	} else if( v_damageIndicator.get() == 2 ) {
 		considerDistributedEqually = true;
-	} else if( GS_Instagib() ) {
+	} else if( GS_Instagib( *cggs ) ) {
 		considerDistributedEqually = true;
 	} else if( std::abs( DotProduct( dir, &playerAxis[AXIS_UP] ) ) > INDICATOR_EPSILON_UP ) {
 		considerDistributedEqually = true;
@@ -977,7 +977,7 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, bool thirdperson, Vie
 		}
 
 		// check for drawing gun
-		if( !view->thirdperson && view->POVent > 0 && view->POVent <= gs.maxclients ) {
+		if( !view->thirdperson && view->POVent > 0 && view->POVent <= cggs->maxclients ) {
 			if( ( cg_entities[view->POVent].serverFrame == cg.frame.serverFrame ) &&
 				( cg_entities[view->POVent].current.weapon != 0 ) ) {
 				view->drawWeapon = v_gun.get() && v_gunAlpha.get() > 0.0f;
@@ -1102,7 +1102,7 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type, bool thirdperson, Vie
 
 	view->refdef.colorCorrection = NULL;
 	if( v_colorCorrection.get() ) {
-		int colorCorrection = GS_ColorCorrection();
+		int colorCorrection = GS_ColorCorrection( *cggs );
 		if( ( colorCorrection > 0 ) && ( colorCorrection < MAX_IMAGES ) ) {
 			view->refdef.colorCorrection = cgs.imagePrecache[colorCorrection];
 		}
@@ -1680,7 +1680,7 @@ static void drawNamesAndBeacons( ViewState *viewState, std::optional<float> mini
 	};
 
 	const refdef_t &refdef = viewState->view.refdef;
-	for( int i = 0; i < gs.maxclients; i++ ) {
+	for( int i = 0; i < cggs->maxclients; i++ ) {
 		const centity_t *const cent = &cg_entities[i + 1];
 		bool mayBeProjectedToScreen = false;
 		if( cgs.clientInfo[i].name[0] && !viewState->isViewerEntity( i + 1 ) ) {
@@ -1775,7 +1775,7 @@ static void drawNamesAndBeacons( ViewState *viewState, std::optional<float> mini
 	if( hasBeaconsToDraw ) {
 		vec4_t color;
 		CG_TeamColor( viewState->predictedPlayerState.stats[STAT_TEAM], color );
-		for( int i = 0; i < gs.maxclients; ++i ) {
+		for( int i = 0; i < cggs->maxclients; ++i ) {
 			if( shouldDrawTeamBeacon[i] ) {
 				const int picSize = ( miniviewScale != std::nullopt ? 12 : 18 ) * cgs.vidHeight / 600;
 				assert( refdef.width > picSize && refdef.height > picSize );
@@ -1795,7 +1795,7 @@ static void drawNamesAndBeacons( ViewState *viewState, std::optional<float> mini
 	if( hasNamesToDraw ) {
 		// That's all we can do for now
 		qfontface_s *const font = miniviewScale != std::nullopt ? cgs.fontSystemSmall : cgs.fontSystemMedium;
-		for( int i = 0; i < gs.maxclients; ++i ) {
+		for( int i = 0; i < cggs->maxclients; ++i ) {
 			const vec4_t color { 1.0f, 1.0f, 1.0f, playerNameAlphaValues[i] };
 			const int requestedX = savedCoords[i][0];
 			const int requestedY = savedCoords[i][1];
@@ -1903,7 +1903,7 @@ static void CG_DrawCrosshair( ViewState *viewState, std::optional<float> minivie
 		playerState = &viewState->predictedPlayerState;
 	}
 	if( const auto weapon = playerState->stats[STAT_WEAPON] ) {
-		if( const auto *const firedef = GS_FiredefForPlayerState( playerState, weapon ) ) {
+		if( const auto *const firedef = GS_FiredefForPlayerState( cggs, playerState, weapon ) ) {
 			if( firedef->fire_mode == FIRE_MODE_STRONG ) {
 				::drawCrosshair( weapon, FIRE_MODE_STRONG, miniviewScale, viewState );
 			}

@@ -235,7 +235,7 @@ void AiManager::SetupBotForEntity( edict_t *ent ) {
 }
 
 void AiManager::TryJoiningTeam( edict_t *ent, const char *teamName ) {
-	int team = GS_Teams_TeamFromName( teamName );
+	int team = GS_Teams_TeamFromName( ggs, teamName );
 	if( team >= TEAM_PLAYERS && team <= TEAM_BETA ) {
 		// Join specified team immediately
 		G_Teams_JoinTeam( ent, team );
@@ -268,7 +268,7 @@ void AiManager::SpawnBot( const char *teamName ) {
 
 void AiManager::RemoveBot( const wsw::StringView &name ) {
 	// Do not iterate over the linked list of bots since it is implicitly modified by these calls
-	for( edict_t *ent = game.edicts + gs.maxclients; PLAYERNUM( ent ) >= 0; ent-- ) {
+	for( edict_t *ent = game.edicts + ggs->maxclients; PLAYERNUM( ent ) >= 0; ent-- ) {
 		if( ent->r.client->netname.equalsIgnoreCase( name ) ) {
 			trap_DropClient( ent, ReconnectBehaviour::DontReconnect );
 			OnBotDropped( ent );
@@ -282,7 +282,7 @@ void AiManager::RemoveBot( const wsw::StringView &name ) {
 
 void AiManager::AfterLevelScriptShutdown() {
 	// Do not iterate over the linked list of bots since it is implicitly modified by these calls
-	for( edict_t *ent = game.edicts + gs.maxclients; PLAYERNUM( ent ) >= 0; ent-- ) {
+	for( edict_t *ent = game.edicts + ggs->maxclients; PLAYERNUM( ent ) >= 0; ent-- ) {
 		if( !ent->r.inuse || !ent->bot ) {
 			continue;
 		}
@@ -306,7 +306,7 @@ void AiManager::Update() {
 	globalCpuQuota.Update( botHandlesHead );
 	thinkQuota[level.framenum % 4].Update( botHandlesHead );
 
-	if( !GS_TeamBasedGametype() ) {
+	if( !GS_TeamBasedGametype( *ggs ) ) {
 		AiBaseTeam::GetTeamForNum( TEAM_PLAYERS )->Update();
 		return;
 	}

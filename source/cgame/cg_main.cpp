@@ -407,7 +407,7 @@ void CG_ConfigString( int i, const wsw::StringView &string ) {
 		CG_RegisterLevelMinimap();
 	} else if( i == CS_GAMETYPETITLE ) {
 	} else if( i == CS_GAMETYPENAME ) {
-		GS_SetGametypeName( string.data() );
+		GS_SetGametypeName( cggs, string.data() );
 	} else if( i == CS_AUTORECORDSTATE ) {
 		CG_SC_AutoRecordAction( getOurClientViewState(), string.data() );
 	} else if( i >= CS_MODELS && i < CS_MODELS + MAX_MODELS ) {
@@ -478,7 +478,7 @@ static const char *CG_SC_AutoRecordName( ViewState *viewState ) {
 	// make file name
 	// duel_year-month-day_hour-min_map_player
 	Q_snprintfz( name, sizeof( name ), "%s_%04d-%02d-%02d_%02d-%02d_%s_%s_%04i",
-				 gs.gametypeName,
+				 cggs->gametypeName,
 				 newtime->tm_year + 1900, newtime->tm_mon + 1, newtime->tm_mday,
 				 newtime->tm_hour, newtime->tm_min,
 				 mapname,
@@ -521,13 +521,13 @@ void CG_SC_AutoRecordAction( ViewState *viewState, const char *action ) {
 			if( v_autoactionDemo.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
 				CL_Cmd_ExecuteNow( "stop silent" );
 				CL_Cmd_ExecuteNow( va( "record autorecord/%s/%s silent",
-									   gs.gametypeName, name ) );
+									   cggs->gametypeName, name ) );
 				autorecording = true;
 			}
 		} else if( !Q_stricmp( action, "altstart" ) ) {
 			if( v_autoactionDemo.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
 				CL_Cmd_ExecuteNow( va( "record autorecord/%s/%s silent",
-									   gs.gametypeName, name ) );
+									   cggs->gametypeName, name ) );
 				autorecording = true;
 			}
 		} else if( !Q_stricmp( action, "stop" ) ) {
@@ -538,7 +538,7 @@ void CG_SC_AutoRecordAction( ViewState *viewState, const char *action ) {
 
 			if( v_autoactionScreenshot.get() && ( !spectator || v_autoactionSpectator.get() ) ) {
 				CL_Cmd_ExecuteNow( va( "screenshot autorecord/%s/%s silent",
-									   gs.gametypeName, name ) );
+									   cggs->gametypeName, name ) );
 			}
 		} else if( !Q_stricmp( action, "cancel" ) ) {
 			if( autorecording ) {
@@ -813,7 +813,7 @@ static void CG_SC_FragEvent( ViewState *viewState, const CmdArgs &cmdArgs ) {
 					if( attacker && attacker != victim && viewState->isViewerEntity( attacker ) ) {
 						wsw::StaticString<256> message;
 						if( cg_entities[attacker].current.team == cg_entities[victim].current.team ) {
-							if( GS_TeamBasedGametype() ) {
+							if( GS_TeamBasedGametype( *cggs ) ) {
 								message << wsw::StringView( S_COLOR_ORANGE ) <<
 										wsw::StringView( "You teamfragged " ) << wsw::StringView( S_COLOR_WHITE );
 							}
@@ -897,7 +897,7 @@ void CG_ReloadCommands( const CmdArgs & ) {
 void CG_UseItem( const char *name ) {
 	if( name && cg.frame.valid && !cgs.demoPlaying ) {
 		ViewState *const viewState = getOurClientViewState();
-		if( gsitem_t *item = GS_Cmd_UseItem( &viewState->snapPlayerState, name, 0 ) ) {
+		if( const gsitem_t *item = GS_Cmd_UseItem( cggs, &viewState->snapPlayerState, name, 0 ) ) {
 			if( item->type & IT_WEAPON ) {
 				CG_Predict_ChangeWeapon( item->tag );
 				viewState->lastWeapon = viewState->predictedPlayerState.stats[STAT_PENDING_WEAPON];
@@ -921,7 +921,7 @@ static void CG_Cmd_NextWeapon_f( const CmdArgs & ) {
 		if( cgs.demoPlaying || viewState->predictedPlayerState.pmove.pm_type == PM_CHASECAM ) {
 			CG_ChaseStep( 1 );
 		} else {
-			if( gsitem_t *item = GS_Cmd_NextWeapon_f( &viewState->snapPlayerState, viewState->predictedWeaponSwitch ) ) {
+			if( const gsitem_t *item = GS_Cmd_NextWeapon_f( cggs, &viewState->snapPlayerState, viewState->predictedWeaponSwitch ) ) {
 				CG_Predict_ChangeWeapon( item->tag );
 				CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
 				viewState->lastWeapon = viewState->predictedPlayerState.stats[STAT_PENDING_WEAPON];
@@ -936,7 +936,7 @@ static void CG_Cmd_PrevWeapon_f( const CmdArgs & ) {
 		if( cgs.demoPlaying || viewState->predictedPlayerState.pmove.pm_type == PM_CHASECAM ) {
 			CG_ChaseStep( -1 );
 		} else {
-			if( gsitem_t *item = GS_Cmd_PrevWeapon_f( &viewState->snapPlayerState, viewState->predictedWeaponSwitch ) ) {
+			if( const gsitem_t *item = GS_Cmd_PrevWeapon_f( cggs, &viewState->snapPlayerState, viewState->predictedWeaponSwitch ) ) {
 				CG_Predict_ChangeWeapon( item->tag );
 				CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
 				viewState->lastWeapon = viewState->predictedPlayerState.stats[STAT_PENDING_WEAPON];
@@ -950,7 +950,7 @@ static void CG_Cmd_LastWeapon_f( const CmdArgs & ) {
 		ViewState *const viewState = getOurClientViewState();
 		if( viewState->lastWeapon != WEAP_NONE ) {
 			if( viewState->lastWeapon != viewState->predictedPlayerState.stats[STAT_PENDING_WEAPON] ) {
-				if( gsitem_t *item = GS_Cmd_UseItem( &viewState->snapPlayerState, va( "%i", viewState->lastWeapon ), IT_WEAPON ) ) {
+				if( const gsitem_t *item = GS_Cmd_UseItem( cggs, &viewState->snapPlayerState, va( "%i", viewState->lastWeapon ), IT_WEAPON ) ) {
 					if( item->type & IT_WEAPON ) {
 						CG_Predict_ChangeWeapon( item->tag );
 					}
@@ -1045,19 +1045,19 @@ void CG_UnregisterCGameCommands( void ) {
 }
 
 static void CG_Event_WeaponBeam( vec3_t origin, vec3_t dir, int ownerNum, int weapon, int firemode ) {
-	gs_weapon_definition_t *weapondef;
+	const gs_weapon_definition_t *weapondef;
 	int range;
 	vec3_t end;
 	trace_t trace;
 
 	switch( weapon ) {
 		case WEAP_ELECTROBOLT:
-			weapondef = GS_GetWeaponDef( WEAP_ELECTROBOLT );
+			weapondef = GS_GetWeaponDef( cggs, WEAP_ELECTROBOLT );
 			range = ELECTROBOLT_RANGE;
 			break;
 
 		case WEAP_INSTAGUN:
-			weapondef = GS_GetWeaponDef( WEAP_INSTAGUN );
+			weapondef = GS_GetWeaponDef( cggs, WEAP_INSTAGUN );
 			range = weapondef->firedef.timeout;
 			break;
 
@@ -1315,7 +1315,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 		VecToAngles( dir, blendAngles );
 
 		int passthrough             = ownerEntNum;
-		const auto range            = (float)GS_GetWeaponDef( WEAP_LASERGUN )->firedef_weak.timeout;
+		const auto range            = (float)GS_GetWeaponDef( cggs, WEAP_LASERGUN )->firedef_weak.timeout;
 		const int minSubdivisions   = CURVELASERBEAM_SUBDIVISIONS;
 		const int maxSubdivisions   = MAX_CURVELASERBEAM_SUBDIVISIONS;
 		const int subdivisions      = wsw::clamp( v_laserBeamSubdivisions.get(), minSubdivisions, maxSubdivisions );
@@ -1334,7 +1334,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 			VecToAngles( stepDir, tmpangles );
 
 			trace_t trace;
-			GS_TraceLaserBeam( &trace, stepFrom, tmpangles, DistanceFast( stepFrom, stepTo ), passthrough, 0, _LaserImpact );
+			GS_TraceLaserBeam( cggs, &trace, stepFrom, tmpangles, DistanceFast( stepFrom, stepTo ), passthrough, 0, _LaserImpact );
 			numAddedPoints++;
 			if( trace.fraction != 1.0f ) {
 				VectorCopy( trace.endpos, stepTo );
@@ -1347,11 +1347,11 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 		std::span<const vec3_t> pointsSpan( points, numAddedPoints );
 		cg.effectsSystem.updateCurvedLaserBeam( ownerEntNum, usePovSlot, pointsSpan, cg.time, povPlayerMask );
 	} else {
-		const auto range = (float)GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout;
+		const auto range = (float)GS_GetWeaponDef( cggs, WEAP_LASERGUN )->firedef.timeout;
 
 		trace_t trace;
 		// trace the beam: for tracing we use the real beam origin
-		GS_TraceLaserBeam( &trace, laserOrigin, laserAngles, range, ownerEntNum, 0, _LaserImpact );
+		GS_TraceLaserBeam( cggs, &trace, laserOrigin, laserAngles, range, ownerEntNum, 0, _LaserImpact );
 
 		cg.effectsSystem.updateStraightLaserBeam( ownerEntNum, usePovSlot, projectsource.origin, trace.endpos, cg.time, povPlayerMask );
 	}
@@ -1393,23 +1393,23 @@ void CG_Event_LaserBeam( int entNum, int weapon, int fireMode, ViewState *viewSt
 	// lasergun's smooth refire
 	if( fireMode == FIRE_MODE_STRONG ) {
 		cent->laserCurved = false;
-		timeout = GS_GetWeaponDef( WEAP_LASERGUN )->firedef.reload_time + 10;
+		timeout = GS_GetWeaponDef( cggs, WEAP_LASERGUN )->firedef.reload_time + 10;
 
 		// find destiny point
 		VectorCopy( viewState->predictedPlayerState.pmove.origin, cent->laserOrigin );
 		cent->laserOrigin[2] += viewState->predictedPlayerState.viewheight;
 		AngleVectors( viewState->predictedPlayerState.viewangles, dir, NULL, NULL );
-		VectorMA( cent->laserOrigin, GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout, dir, cent->laserPoint );
+		VectorMA( cent->laserOrigin, GS_GetWeaponDef( cggs, WEAP_LASERGUN )->firedef.timeout, dir, cent->laserPoint );
 	} else {
 		cent->laserCurved = true;
-		timeout = GS_GetWeaponDef( WEAP_LASERGUN )->firedef_weak.reload_time + 10;
+		timeout = GS_GetWeaponDef( cggs, WEAP_LASERGUN )->firedef_weak.reload_time + 10;
 
 		// find destiny point
 		VectorCopy( viewState->predictedPlayerState.pmove.origin, cent->laserOrigin );
 		cent->laserOrigin[2] += viewState->predictedPlayerState.viewheight;
 		if( !G_GetLaserbeamPoint( &viewState->weaklaserTrail, &viewState->predictedPlayerState, viewState->predictingTimeStamp, cent->laserPoint ) ) {
 			AngleVectors( viewState->predictedPlayerState.viewangles, dir, NULL, NULL );
-			VectorMA( cent->laserOrigin, GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout, dir, cent->laserPoint );
+			VectorMA( cent->laserOrigin, GS_GetWeaponDef( cggs, WEAP_LASERGUN )->firedef.timeout, dir, cent->laserPoint );
 		}
 	}
 
@@ -1581,7 +1581,7 @@ auto getSurfFlagsForImpact( const trace_t &trace, const float *impactDir ) -> in
 }
 
 static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int firemode, int seed, int owner ) {
-	const auto *weaponDef = GS_GetWeaponDef( weapon );
+	const auto *weaponDef = GS_GetWeaponDef( cggs, weapon );
 	const auto *fireDef   = firemode ? &weaponDef->firedef : &weaponDef->firedef_weak;
 
 	// circle shape
@@ -1592,22 +1592,22 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 
 	VectorNormalizeFast( dir );
 
-	trace_t trace;
+	trace_t trace, waterTraceBuffer;
 
 	[[maybe_unused]]
-	const trace_t *waterTrace = GS_TraceBullet( &trace, origin, dir, r, u, (int)fireDef->timeout, owner, 0 );
-	if( waterTrace ) {
-		[[maybe_unused]] const unsigned delay = cg.effectsSystem.spawnBulletTracer( owner, waterTrace->endpos );
+	const trace_t *maybeWaterTrace = GS_TraceBullet( cggs, &trace, &waterTraceBuffer, origin, dir, r, u, (int)fireDef->timeout, owner, 0 );
+	if( maybeWaterTrace ) {
+		[[maybe_unused]] const unsigned delay = cg.effectsSystem.spawnBulletTracer( owner, maybeWaterTrace->endpos );
 
 		if( canShowBulletImpactForDirAndTrace( dir, trace ) ) {
 			cg.effectsSystem.spawnUnderwaterBulletImpactEffect( delay, trace.endpos, trace.plane.normal );
 		}
 
-		if( !VectorCompare( waterTrace->endpos, origin ) ) {
+		if( !VectorCompare( maybeWaterTrace->endpos, origin ) ) {
 			cg.effectsSystem.spawnBulletLiquidImpactEffect( delay, LiquidImpact {
-				.origin   = { waterTrace->endpos[0], waterTrace->endpos[1], waterTrace->endpos[2] },
-				.burstDir = { waterTrace->plane.normal[0], waterTrace->plane.normal[1], waterTrace->plane.normal[2] },
-				.contents = waterTrace->contents,
+				.origin   = {maybeWaterTrace->endpos[0], maybeWaterTrace->endpos[1], maybeWaterTrace->endpos[2] },
+				.burstDir = {maybeWaterTrace->plane.normal[0], maybeWaterTrace->plane.normal[1], maybeWaterTrace->plane.normal[2] },
+				.contents = maybeWaterTrace->contents,
 			});
 		}
 	} else {
@@ -1651,20 +1651,20 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int o
 		const float r = std::cos( (float)*seed + phi ) * (float)hspread * sqrtPhi;
 		const float u = std::sin( (float)*seed + phi ) * (float)vspread * sqrtPhi;
 
-		trace_t trace;
-		const trace_t *waterTrace = GS_TraceBullet( &trace, start, dir, r, u, range, owner, 0 );
-		if( waterTrace ) {
+		trace_t trace, waterTraceBuffer;
+		const trace_t *maybeWaterTrace = GS_TraceBullet( cggs, &trace, &waterTraceBuffer, start, dir, r, u, range, owner, 0 );
+		if( maybeWaterTrace ) {
 			const bool shouldShowUnderwaterImpact = canShowBulletImpactForDirAndTrace( dir, trace );
 			if( shouldShowUnderwaterImpact ) {
 				// We don't know the delay yet
 				VectorCopy( trace.endpos, underwaterImpactOrigins[numUnderwaterImpacts] );
 				VectorCopy( trace.plane.normal, underwaterImpactNormals[numUnderwaterImpacts] );
 			}
-			if( !VectorCompare( waterTrace->endpos, start ) ) {
+			if( !VectorCompare( maybeWaterTrace->endpos, start ) ) {
 				liquidImpacts[numLiquidImpacts] = LiquidImpact {
-					.origin   = { waterTrace->endpos[0], waterTrace->endpos[1], waterTrace->endpos[2] },
-					.burstDir = { waterTrace->plane.normal[0], waterTrace->plane.normal[1], waterTrace->plane.normal[2] },
-					.contents = waterTrace->contents,
+					.origin   = {maybeWaterTrace->endpos[0], maybeWaterTrace->endpos[1], maybeWaterTrace->endpos[2] },
+					.burstDir = {maybeWaterTrace->plane.normal[0], maybeWaterTrace->plane.normal[1], maybeWaterTrace->plane.normal[2] },
+					.contents = maybeWaterTrace->contents,
 				};
 				liquidImpactTracerIndices[numLiquidImpacts] = i;
 				++numLiquidImpacts;
@@ -1679,7 +1679,7 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int o
 			if( shouldShowUnderwaterImpact ) {
 				numUnderwaterImpacts++;
 			}
-			VectorCopy( waterTrace->endpos, tracerTargets[numTracerTargets] );
+			VectorCopy( maybeWaterTrace->endpos, tracerTargets[numTracerTargets] );
 			numTracerTargets++;
 		} else {
 			if( canShowBulletImpactForDirAndTrace( dir, trace ) ) {
@@ -1731,8 +1731,8 @@ static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dirVec, int weapon, int 
 	VectorCopy( dirVec, dir );
 	VectorNormalizeFast( dir );
 
-	gs_weapon_definition_t *weapondef = GS_GetWeaponDef( weapon );
-	firedef_t *firedef = ( firemode ) ? &weapondef->firedef : &weapondef->firedef_weak;
+	const gs_weapon_definition_t *weapondef = GS_GetWeaponDef( cggs, weapon );
+	const firedef_t *firedef = ( firemode ) ? &weapondef->firedef : &weapondef->firedef_weak;
 
 	CG_Fire_SunflowerPattern( origin, dir, &seed, owner, firedef->projectile_count,
 							  firedef->spread, firedef->v_spread, firedef->timeout );
@@ -2224,7 +2224,7 @@ static void handlePlayerRespawnEvent( entity_state_t *ent, int parm, bool predic
 		SoundSystem::instance()->startFixedSound( cgs.media.sndPlayerRespawn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 	}
 
-	if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
+	if( ent->ownerNum && ent->ownerNum < cggs->maxclients + 1 ) {
 		if( ViewState *const viewState = getViewStateForEntity( ent->ownerNum ) ) {
 			CG_ResetKickAngles( viewState );
 			CG_ResetColorBlend( viewState );
@@ -2241,7 +2241,7 @@ static void handlePlayerTeleportInEvent( entity_state_t *ent, int parm, bool pre
 		SoundSystem::instance()->startFixedSound( cgs.media.sndTeleportIn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 	}
 
-	if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
+	if( ent->ownerNum && ent->ownerNum < cggs->maxclients + 1 ) {
 		cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_IN] = cg.time;
 		VectorCopy( ent->origin, cg_entities[ent->ownerNum].teleportedTo );
 	}
@@ -2252,7 +2252,7 @@ static void handlePlayerTeleportOutEvent( entity_state_t *ent, int parm, bool pr
 		SoundSystem::instance()->startFixedSound( cgs.media.sndTeleportOut, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 	}
 
-	if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
+	if( ent->ownerNum && ent->ownerNum < cggs->maxclients + 1 ) {
 		cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_OUT] = cg.time;
 		VectorCopy( ent->origin, cg_entities[ent->ownerNum].teleportedFrom );
 	}
@@ -2353,7 +2353,7 @@ static void handleGunbladeBlastImpactEvent( entity_state_t *ent, int parm, bool 
 static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted ) {
 	unsigned povPlayerMask = ~0u;
 	if( !v_showPovBlood.get() ) {
-		if( ent->ownerNum > 0 && ent->ownerNum <= gs.maxclients ) {
+		if( ent->ownerNum > 0 && ent->ownerNum <= cggs->maxclients ) {
 			povPlayerMask &= ~( 1u << ( ent->ownerNum - 1 ) );
 		}
 	}
@@ -2655,7 +2655,7 @@ static bool CG_UpdateLinearProjectilePosition( centity_t *cent, ViewState *viewS
 		return -1;
 	}
 
-	if( GS_MatchPaused() ) {
+	if( GS_MatchPaused( *cggs ) ) {
 		serverTime = cg.frame.serverTime;
 	} else {
 		serverTime = cg.time + cgs.extrapolationTime;
@@ -3090,7 +3090,7 @@ static void CG_UpdatePlayerState() {
 	const unsigned numPanes = wsw::ui::UISystem::instance()->retrieveNumberOfHudMiniviewPanes();
 	assert( numPanes >= 0 && numPanes <= 2 );
 
-	const bool hasTwoTeams = GS_TeamBasedGametype() && !GS_IndividualGameType();
+	const bool hasTwoTeams = GS_TeamBasedGametype( *cggs ) && !GS_IndividualGametype( *cggs );
 	const auto ourTeam     = cg.viewStates[cg.ourClientViewportIndex].predictedPlayerState.stats[STAT_REALTEAM];
 
 	wsw::StaticVector<uint8_t, MAX_CLIENTS> tmpIndicesForTwoTilePanes[2];
@@ -3282,7 +3282,7 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 	}
 
 	cg.frame = *frame;
-	gs.gameState = frame->gameState;
+	cggs->gameState = frame->gameState;
 
 	CG_UpdatePlayerState();
 
@@ -3645,7 +3645,7 @@ static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneReques
 	cent->ent.renderfx = cent->renderfx;
 
 	if( cent->item ) {
-		gsitem_t *item = cent->item;
+		const gsitem_t *item = cent->item;
 
 		if( item->type & ( IT_HEALTH | IT_POWERUP ) ) {
 			cent->ent.renderfx |= RF_NOSHADOW;
@@ -3801,7 +3801,7 @@ static void CG_UpdateFlagBaseEnt( centity_t *cent ) {
 
 	cent->ent.scale = 1.0f;
 
-	cent->item = GS_FindItemByTag( cent->current.itemNum );
+	cent->item = GS_FindItemByTag( cggs, cent->current.itemNum );
 	if( cent->item ) {
 		cent->effects |= cent->item->effects;
 	}
@@ -3889,7 +3889,7 @@ static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest
 	if( v_playerTrail.get() ) {
 		if( cent->current.number != (int)drawFromViewState->predictedPlayerState.POVnum ) {
 			const float timeDeltaSeconds  = 1e-3f * (float)cgs.snapFrameTime;
-			const float speedThreshold    = 0.5f * ( DEFAULT_PLAYERSPEED + DEFAULT_DASHSPEED );
+			const float speedThreshold    = 0.5f * ( GS_DefaultPlayerSpeed( *cggs ) + DEFAULT_DASHSPEED );
 			const float distanceThreshold = speedThreshold * timeDeltaSeconds;
 			// This condition effectively detaches trails from slowly walking players/stopped corpses.
 			// A detached trail dissolves relatively quickly.
@@ -4024,7 +4024,7 @@ static void CG_UpdateItemEnt( centity_t *cent ) {
 	memset( &cent->ent, 0, sizeof( cent->ent ) );
 	Vector4Set( cent->ent.shaderRGBA, 255, 255, 255, 255 );
 
-	cent->item = GS_FindItemByTag( cent->current.itemNum );
+	cent->item = GS_FindItemByTag( cggs, cent->current.itemNum );
 	if( !cent->item ) {
 		return;
 	}
@@ -4133,11 +4133,11 @@ void CG_ResetItemTimers( void ) {
 }
 
 static void CG_UpdateItemTimerEnt( centity_t *cent ) {
-	if( GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
+	if( GS_MatchState( *cggs ) >= MATCH_STATE_POSTMATCH ) {
 		return;
 	}
 
-	cent->item = GS_FindItemByTag( cent->current.itemNum );
+	cent->item = GS_FindItemByTag( cggs, cent->current.itemNum );
 	if( !cent->item ) {
 		return;
 	}
@@ -5041,7 +5041,7 @@ void CG_Predict_TouchTriggers( pmove_t *pm, const vec3_t previous_origin ) {
 		if( state->type == ET_PUSH_TRIGGER ) {
 			if( !cg_triggersListTriggered[i] ) {
 				if( CG_ClipEntityContact( pm->playerState->pmove.origin, pm->mins, pm->maxs, state->number ) ) {
-					GS_TouchPushTrigger( pm->playerState, state );
+					GS_TouchPushTrigger( cggs, pm->playerState, state );
 					cg_triggersListTriggered[i] = true;
 				}
 			}
@@ -5241,18 +5241,18 @@ void CG_PredictMovement() {
 				viewState->predictingTimeStamp = pm.cmd.serverTimeStamp;
 			}
 
-			Pmove( &pm );
+			Pmove( cggs, &pm );
 
 			// copy for stair smoothing
 			viewState->predictedSteps[frame] = pm.step;
 
 			if( ucmdReady ) { // hmm fixme: the wip command may not be run enough time to get proper key presses
 				if( ucmdExecuted >= ucmdHead - 1 ) {
-					GS_AddLaserbeamPoint( &viewState->weaklaserTrail, &viewState->predictedPlayerState, pm.cmd.serverTimeStamp );
+					GS_AddLaserbeamPoint( cggs, &viewState->weaklaserTrail, &viewState->predictedPlayerState, pm.cmd.serverTimeStamp );
 				}
 
 				cg_entities[viewState->predictedPlayerState.POVnum].current.weapon =
-					GS_ThinkPlayerWeapon( &viewState->predictedPlayerState, pm.cmd.buttons, pm.cmd.msec, 0 );
+					GS_ThinkPlayerWeapon( cggs, &viewState->predictedPlayerState, pm.cmd.buttons, pm.cmd.msec, 0 );
 			}
 
 			// save for debug checking
@@ -5279,7 +5279,7 @@ void CG_PredictMovement() {
 					vec3_t move;
 					int64_t serverTime;
 
-					serverTime = GS_MatchPaused() ? cg.frame.serverTime : cg.time + cgs.extrapolationTime;
+					serverTime = GS_MatchPaused( *cggs ) ? cg.frame.serverTime : cg.time + cgs.extrapolationTime;
 					GS_LinearMovementDelta( ent, cg.frame.serverTime, serverTime, move );
 					VectorAdd( viewState->predictedPlayerState.pmove.origin, move, viewState->predictedPlayerState.pmove.origin );
 				}
@@ -5315,7 +5315,7 @@ std::optional<unsigned> CG_ActivePovOfViewState( unsigned viewStateIndex ) {
 			}
 		}
 		// Protect against chasing other entities (is it a thing?)
-		if( chosenPovNum && chosenPovNum < (unsigned)( gs.maxclients + 1 ) ) {
+		if( chosenPovNum && chosenPovNum < (unsigned)( cggs->maxclients + 1 ) ) {
 			return chosenPovNum - 1u;
 		}
 	}
@@ -5342,11 +5342,11 @@ bool CG_IsPovAlive( unsigned viewStateIndex ) {
 }
 
 bool CG_HasTwoTeams() {
-	return GS_TeamBasedGametype();
+	return GS_TeamBasedGametype( *cggs );
 }
 
 bool CG_CanBeReady() {
-	return !ISREALSPECTATOR( getOurClientViewState() ) && GS_MatchState() == MATCH_STATE_WARMUP;
+	return !ISREALSPECTATOR( getOurClientViewState() ) && GS_MatchState( *cggs ) == MATCH_STATE_WARMUP;
 }
 
 bool CG_IsReady() {
@@ -5455,7 +5455,7 @@ std::optional<unsigned> CG_GetPlayerNumForViewState( unsigned viewStateIndex ) {
 			return cg.viewStates[viewStateIndex].snapPlayerState.playerNum;
 		}
 		const auto &playerState = cg.viewStates[viewStateIndex].predictedPlayerState;
-		if( playerState.POVnum > 0 && playerState.POVnum < gs.maxclients + 1 ) {
+		if( playerState.POVnum > 0 && playerState.POVnum < cggs->maxclients + 1 ) {
 			return playerState.POVnum - 1;
 		}
 	}
@@ -5499,7 +5499,7 @@ auto CG_HudIndicatorStatusString( int stringNum ) -> std::optional<wsw::StringVi
 }
 
 std::pair<int, int> CG_WeaponAmmo( unsigned viewStateIndex, int weapon ) {
-	const auto *weaponDef = GS_GetWeaponDef( weapon );
+	const auto *weaponDef = GS_GetWeaponDef( cggs, weapon );
 	const int *inventory = cg.viewStates[viewStateIndex].predictedPlayerState.inventory;
 	return { inventory[weaponDef->firedef_weak.ammo_id], inventory[weaponDef->firedef.ammo_id] };
 }
@@ -5513,23 +5513,23 @@ auto CG_GetMatchClockTime() -> std::pair<int, int> {
 		return { 0, 0 };
 	}
 
-	if( GS_MatchState() > MATCH_STATE_PLAYTIME ) {
+	if( GS_MatchState( *cggs ) > MATCH_STATE_PLAYTIME ) {
 		return { 0, 0 };
 	}
 
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *cggs ) ) {
 		const ViewState *viewState = getPrimaryViewState();
 		if( viewState->predictedPlayerState.stats[STAT_TIME_SELF] != STAT_NOTSET ) {
 			clocktime = viewState->predictedPlayerState.stats[STAT_TIME_SELF] * 100;
 		} else {
 			clocktime = 0;
 		}
-	} else if( GS_MatchClockOverride() ) {
-		clocktime = GS_MatchClockOverride();
+	} else if( GS_MatchClockOverride( *cggs ) ) {
+		clocktime = GS_MatchClockOverride( *cggs );
 	} else {
-		curtime = ( GS_MatchWaiting() || GS_MatchPaused() ) ? cg.frame.serverTime : cg.time;
-		duration = GS_MatchDuration();
-		startTime = GS_MatchStartTime();
+		curtime = ( GS_MatchWaiting( *cggs ) || GS_MatchPaused( *cggs ) ) ? cg.frame.serverTime : cg.time;
+		duration = GS_MatchDuration( *cggs );
+		startTime = GS_MatchStartTime( *cggs );
 
 		// count downwards when having a duration
 		if( duration && ( v_showTimer.get() != 3 ) ) {
@@ -5600,7 +5600,7 @@ bool CG_UsesTiledView() {
 
 void CG_SwitchToPlayerNum( unsigned playerNum ) {
 	assert( cg.chaseMode == CAM_TILED );
-	assert( playerNum >= 0 && playerNum < gs.maxclients );
+	assert( playerNum >= 0 && playerNum < cggs->maxclients );
 	cg.pendingChasedPlayerNum        = playerNum;
 	cg.hasPendingSwitchFromTiledMode = true;
 }
@@ -5681,26 +5681,29 @@ static const char *CG_GS_GetConfigString( int index ) {
 	return nullptr;
 }
 
-static void CG_InitGameShared( void ) {
-	memset( &gs, 0, sizeof( gs_state_t ) );
-	gs.module = GS_MODULE_CGAME;
-	gs.maxclients = atoi( cl.configStrings.getMaxClients()->data() );
-	if( gs.maxclients < 1 || gs.maxclients > MAX_CLIENTS ) {
-		gs.maxclients = MAX_CLIENTS;
+static gs_state_t storageOfGS;
+gs_state_t *cggs { &storageOfGS };
+
+static void CG_InitGameShared() {
+	cggs->clear();
+	cggs->module = GS_MODULE_CGAME;
+	cggs->maxclients = atoi( cl.configStrings.getMaxClients()->data() );
+	if( cggs->maxclients < 1 || cggs->maxclients > MAX_CLIENTS ) {
+		cggs->maxclients = MAX_CLIENTS;
 	}
 
-	module_PredictedEvent = CG_PredictedEvent;
-	module_Error = CG_Error;
-	module_Printf = Com_Printf;
-	module_Malloc = CG_GS_Malloc;
-	module_Free = CG_GS_Free;
-	module_Trace = CG_GS_Trace;
-	module_GetEntityState = CG_GS_GetEntityState;
-	module_PointContents = CG_GS_PointContents;
-	module_PMoveTouchTriggers = CG_Predict_TouchTriggers;
-	module_GetConfigString = CG_GS_GetConfigString;
+	cggs->PredictedEvent = CG_PredictedEvent;
+	cggs->Error = CG_Error;
+	cggs->Printf = Com_Printf;
+	cggs->Malloc = CG_GS_Malloc;
+	cggs->Free = CG_GS_Free;
+	cggs->Trace = CG_GS_Trace;
+	cggs->GetEntityState = CG_GS_GetEntityState;
+	cggs->PointContents = CG_GS_PointContents;
+	cggs->PMoveTouchTriggers = CG_Predict_TouchTriggers;
+	cggs->GetConfigString = CG_GS_GetConfigString;
 
-	GS_InitWeapons();
+	GS_InitWeapons( cggs );
 }
 
 static void CG_RegisterWeaponModels( void ) {
@@ -5941,9 +5944,9 @@ static void CG_RegisterLightStyles( void ) {
 }
 
 void CG_ValidateItemDef( int tag, const char *name ) {
-	gsitem_t *item;
+	const gsitem_t *item;
 
-	item = GS_FindItemByName( name );
+	item = GS_FindItemByName( cggs, name );
 	if( !item ) {
 		CG_Error( "Client/Server itemlist missmatch (Game and Cgame version/mod differs). Item '%s' not found\n", name );
 	}
@@ -5964,7 +5967,7 @@ void CG_OverrideWeapondef( int index, const char *cstring ) {
 	race = index > ( MAX_WEAPONDEFS / 2 );
 	strong = ( index % ( MAX_WEAPONDEFS / 2 ) ) > ( MAX_WEAPONDEFS / 4 );
 
-	weapondef = GS_GetWeaponDefExt( weapon, race );
+	weapondef = GS_GetWeaponDefExt( cggs, weapon, race );
 	if( !weapondef ) {
 		CG_Error( "CG_OverrideWeapondef: Invalid weapon index\n" );
 	}
@@ -6070,9 +6073,9 @@ static void CG_RegisterConfigStrings( void ) {
 	// backup initial configstrings for CG_Reset
 	cgs.baseConfigStrings.copyFrom( cgs.configStrings );
 
-	GS_SetGametypeName( cgs.configStrings.getGametypeName().value_or( wsw::StringView() ).data() );
+	GS_SetGametypeName( cggs, cgs.configStrings.getGametypeName().value_or( wsw::StringView() ).data() );
 
-	CL_Cmd_ExecuteNow( va( "exec configs/client/%s.cfg silent", gs.gametypeName ) );
+	CL_Cmd_ExecuteNow( va( "exec configs/client/%s.cfg silent", cggs->gametypeName ) );
 
 	CG_SC_AutoRecordAction( getOurClientViewState(), cgs.configStrings.getAutoRecordState().value_or( wsw::StringView() ).data() );
 }

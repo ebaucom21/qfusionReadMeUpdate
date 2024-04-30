@@ -20,8 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // cg_local.h -- local definitions for client game module
 
-#define CGAME_HARD_LINKED
-
 #include "../common/q_arch.h"
 #include "../common/q_math.h"
 #include "../common/q_shared.h"
@@ -40,6 +38,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <new>
 #include <tuple>
 #include <utility>
+
+extern gs_state_t *cggs;
 
 #define ITEM_RESPAWN_TIME   1000
 
@@ -86,7 +86,7 @@ typedef struct {
 	//vec3_t prevExtrapolatedOrigin;
 	//vec3_t extrapolatedOrigin;
 
-	gsitem_t    *item;
+	const gsitem_t *item;
 
 	// local effects from events timers
 	int64_t localEffects[MAX_LOCALEFFECTS];

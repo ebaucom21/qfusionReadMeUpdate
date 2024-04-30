@@ -321,7 +321,7 @@ static bool IsEnemyVisible( const edict_t *self, const edict_t *enemyEnt ) {
 }
 
 void BotAwarenessModule::RegisterVisibleEnemies() {
-	if( GS_MatchState() == MATCH_STATE_COUNTDOWN ) {
+	if( GS_MatchState( *ggs ) == MATCH_STATE_COUNTDOWN ) {
 		return;
 	}
 

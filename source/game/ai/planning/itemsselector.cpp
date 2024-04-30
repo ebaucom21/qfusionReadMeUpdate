@@ -82,7 +82,7 @@ BotItemsSelector::ItemAndGoalWeights BotItemsSelector::ComputeWeaponWeights( con
 
 	if( inventory[item->tag] ) {
 		// TODO: Precache
-		const gsitem_t *ammo = GS_FindItemByTag( item->ammo_tag );
+		const gsitem_t *ammo = GS_FindItemByTag( ggs, item->ammo_tag );
 		if( inventory[ammo->tag] >= ammo->inventory_max ) {
 			return ItemAndGoalWeights( 0, 0 );
 		}
@@ -139,7 +139,7 @@ BotItemsSelector::ItemAndGoalWeights BotItemsSelector::ComputeAmmoWeights( const
 
 		for( int weapon = WEAP_GUNBLADE; weapon < WEAP_TOTAL; weapon++ ) {
 			// TODO: Preache
-			const gsitem_t *weaponItem = GS_FindItemByTag( weapon );
+			const gsitem_t *weaponItem = GS_FindItemByTag( ggs, weapon );
 			if( weaponItem->ammo_tag == item->tag ) {
 				if( inventory[weaponItem->tag] ) {
 					switch( weaponItem->tag ) {

@@ -972,11 +972,11 @@ void PredictionContext::BuildPlan() {
 		movementAction->BeforePlanning();
 
 	// Intercept these calls implicitly performed by PMove()
-	const auto general_PMoveTouchTriggers = module_PMoveTouchTriggers;
-	const auto general_PredictedEvent = module_PredictedEvent;
+	const auto general_PMoveTouchTriggers = ggs->PMoveTouchTriggers;
+	const auto general_PredictedEvent = ggs->PredictedEvent;
 
-	module_PMoveTouchTriggers = &Intercepted_PMoveTouchTriggers;
-	module_PredictedEvent = &Intercepted_PredictedEvent;
+	ggs->PMoveTouchTriggers = &Intercepted_PMoveTouchTriggers;
+	ggs->PredictedEvent = &Intercepted_PredictedEvent;
 
 	edict_t *const self = game.edicts + bot->EntNum();
 
@@ -1085,8 +1085,8 @@ void PredictionContext::BuildPlan() {
 	Assert( VectorCompare( self->s.origin, self->bot->entityPhysicsState->Origin() ) );
 	Assert( VectorCompare( self->velocity, self->bot->entityPhysicsState->Velocity() ) );
 
-	module_PMoveTouchTriggers = general_PMoveTouchTriggers;
-	module_PredictedEvent = general_PredictedEvent;
+	ggs->PMoveTouchTriggers = general_PMoveTouchTriggers;
+	ggs->PredictedEvent = general_PredictedEvent;
 
 	for( auto *movementAction: m_subsystem->movementActions )
 		movementAction->AfterPlanning();
@@ -1204,20 +1204,20 @@ void PredictionContext::NextMovementStep() {
 	// should be added and this interception of the module_Trace() should be skipped if the flag is set.
 
 	// Save the G_GS_Trace() pointer
-	auto oldModuleTrace = module_Trace;
-	module_Trace = Intercepted_Trace;
+	auto oldModuleTrace = ggs->Trace;
+	ggs->Trace = Intercepted_Trace;
 
 	// Do not test entities contents for same reasons
 	// Save the G_PointContents4D() pointer
-	auto oldModulePointContents = module_PointContents;
-	module_PointContents = Intercepted_PointContents;
+	auto oldModulePointContents = ggs->PointContents;
+	ggs->PointContents = Intercepted_PointContents;
 
-	Pmove( &pm );
+	Pmove( ggs, &pm );
 
 	// Restore the G_GS_Trace() pointer
-	module_Trace = oldModuleTrace;
+	ggs->Trace = oldModuleTrace;
 	// Restore the G_PointContents4D() pointer
-	module_PointContents = oldModulePointContents;
+	ggs->PointContents = oldModulePointContents;
 
 	// Update the saved player state for using in the next prediction frame
 	currMinimalPlayerState->pmove      = playerStateForPmove.pmove;

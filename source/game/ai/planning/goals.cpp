@@ -352,7 +352,7 @@ void ReactToEnemyLostGoal::UpdateWeight( const WorldState &currWorldState ) {
 
 void ReactToEnemyLostGoal::ModifyWeightForTurningBack( const WorldState &currWorldState, const Vec3 &enemyOrigin ) {
 	// There's really nothing more to do than shooting and avoiding to be shot in instagib
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		this->weight *= 3.0f;
 		return;
 	}
@@ -396,7 +396,7 @@ void ReactToEnemyLostGoal::ModifyWeightForPursuit( const WorldState &currWorldSt
 	// Increase the threshold wearing powerups or in duel-like gametypes
 	if( hasOffensivePowerups ) {
 		distanceThreshold = 1024.0f + 256.0f;
-	} else if( GS_IndividualGameType() ) {
+	} else if( GS_IndividualGametype( *ggs ) ) {
 		distanceThreshold = 768.0f;
 	}
 

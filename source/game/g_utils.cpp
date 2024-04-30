@@ -447,8 +447,8 @@ edict_t *G_Spawn( void ) {
 	}
 
 	freed = NULL;
-	e = &game.edicts[gs.maxclients + 1];
-	for( i = gs.maxclients + 1; i < game.numentities; i++, e++ ) {
+	e = &game.edicts[ggs->maxclients + 1];
+	for( i = ggs->maxclients + 1; i < game.numentities; i++, e++ ) {
 		if( e->r.inuse ) {
 			continue;
 		}
@@ -734,7 +734,7 @@ void G_PrintChasersf( const edict_t *self, const char *format, ... ) {
 	Q_vsnprintfz( msg, sizeof( msg ), format, argptr );
 	va_end( argptr );
 
-	for( ent = game.edicts + 1; PLAYERNUM( ent ) < gs.maxclients; ent++ ) {
+	for( ent = game.edicts + 1; PLAYERNUM( ent ) < ggs->maxclients; ent++ ) {
 		if( ent->r.client->chase.active && ent->r.client->chase.target == ENTNUM( self ) ) {
 			G_PrintMsg( ent, "%s", msg );
 		}
@@ -767,7 +767,7 @@ void G_CenterPrintMsg( const edict_t *ent, const char *format, ... ) {
 
 	if( ent != NULL ) {
 		// add it to every player who's chasing this player
-		for( other = game.edicts + 1; PLAYERNUM( other ) < gs.maxclients; other++ ) {
+		for( other = game.edicts + 1; PLAYERNUM( other ) < ggs->maxclients; other++ ) {
 			if( !other->r.client || !other->r.inuse || !other->r.client->chase.active ) {
 				continue;
 			}
@@ -855,7 +855,7 @@ void G_CenterPrintFormatMsg( const edict_t *ent, int numVargs, const char *forma
 
 	if( ent != NULL ) {
 		// add it to every player who's chasing this player
-		for( other = game.edicts + 1; PLAYERNUM( other ) < gs.maxclients; other++ ) {
+		for( other = game.edicts + 1; PLAYERNUM( other ) < ggs->maxclients; other++ ) {
 			if( !other->r.client || !other->r.inuse || !other->r.client->chase.active ) {
 				continue;
 			}
@@ -883,18 +883,18 @@ void G_Obituary( edict_t *victim, edict_t *attacker, int mod ) {
 void G_UpdatePlayerMatchMsg( edict_t *ent, bool force ) {
 	matchmessage_t newmm;
 
-	if( GS_MatchWaiting() ) {
+	if( GS_MatchWaiting( *ggs ) ) {
 		newmm = MATCHMESSAGE_WAITING_FOR_PLAYERS;
-	} else if( GS_MatchState() > MATCH_STATE_PLAYTIME ) {
+	} else if( GS_MatchState( *ggs ) > MATCH_STATE_PLAYTIME ) {
 		newmm = MATCHMESSAGE_NONE;
 	} else if( ent->s.team == TEAM_SPECTATOR ) {
-		if( GS_HasChallengers() ) { // He is in the queue
+		if( GS_HasChallengers( *ggs ) ) { // He is in the queue
 			newmm = ( ent->r.client->queueTimeStamp ? MATCHMESSAGE_CHALLENGERS_QUEUE : MATCHMESSAGE_ENTER_CHALLENGERS_QUEUE );
 		} else {
 			newmm = ( ent->r.client->chase.active ? MATCHMESSAGE_NONE : MATCHMESSAGE_SPECTATOR_MODES );
 		}
 	} else {
-		if( GS_MatchState() == MATCH_STATE_WARMUP ) {
+		if( GS_MatchState( *ggs ) == MATCH_STATE_WARMUP ) {
 			newmm = ( !level.ready[PLAYERNUM( ent )] ? MATCHMESSAGE_GET_READY : MATCHMESSAGE_NONE );
 		} else {
 			newmm = MATCHMESSAGE_NONE;
@@ -917,7 +917,7 @@ void G_UpdatePlayersMatchMsgs( void ) {
 	int i;
 	edict_t *cl_ent;
 
-	for( i = 0; i < gs.maxclients; i++ ) {
+	for( i = 0; i < ggs->maxclients; i++ ) {
 		cl_ent = game.edicts + 1 + i;
 		if( !cl_ent->r.inuse ) {
 			continue;
@@ -1491,7 +1491,7 @@ edict_t *G_PlayerForText( const char *text ) {
 
 	pnum = atoi( text );
 
-	if( !Q_stricmp( text, va( "%i", pnum ) ) && pnum >= 0 && pnum < gs.maxclients && game.edicts[pnum + 1].r.inuse ) {
+	if( !Q_stricmp( text, va( "%i", pnum ) ) && pnum >= 0 && pnum < ggs->maxclients && game.edicts[pnum + 1].r.inuse ) {
 		return &game.edicts[atoi( text ) + 1];
 	} else {
 		int i;
@@ -1501,7 +1501,7 @@ edict_t *G_PlayerForText( const char *text ) {
 		Q_strncpyz( colorless, COM_RemoveColorTokens( text ), sizeof( colorless ) );
 
 		// check if it's a known player name
-		for( i = 0, e = game.edicts + 1; i < gs.maxclients; i++, e++ ) {
+		for( i = 0, e = game.edicts + 1; i < ggs->maxclients; i++, e++ ) {
 			if( !e->r.inuse ) {
 				continue;
 			}
@@ -1536,7 +1536,7 @@ void G_AnnouncerSound( edict_t *targ, int soundindex, int team, bool queued, edi
 	} else {   // add it to all players
 		edict_t *ent;
 
-		for( ent = game.edicts + 1; PLAYERNUM( ent ) < gs.maxclients; ent++ ) {
+		for( ent = game.edicts + 1; PLAYERNUM( ent ) < ggs->maxclients; ent++ ) {
 			if( !ent->r.inuse || trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 				continue;
 			}
@@ -1603,7 +1603,7 @@ void G_PrecacheWeapondef( int weapon ) {
 		race = index > ( MAX_WEAPONDEFS / 2 );
 		strong = ( index % ( MAX_WEAPONDEFS / 2 ) ) > ( MAX_WEAPONDEFS / 4 );
 
-		const auto *weaponDef = GS_GetWeaponDefExt( weapon, race );
+		const auto *weaponDef = GS_GetWeaponDefExt( ggs, weapon, race );
 		const auto *firedef = strong ? &weaponDef->firedef : &weaponDef->firedef_weak;
 		
 		char cstring[MAX_CONFIGSTRING_CHARS];

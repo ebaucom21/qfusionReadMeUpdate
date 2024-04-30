@@ -83,4 +83,6 @@ wsw::StringView CG_PlayerClan( unsigned playerClan );
 bool CG_UsesTiledView();
 void CG_SwitchToPlayerNum( unsigned playerNum );
 
+extern struct gs_state_t *cggs;
+
 #endif

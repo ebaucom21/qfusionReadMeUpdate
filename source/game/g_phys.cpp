@@ -105,7 +105,7 @@ int G_BoxSlideMove( edict_t *ent, int contentmask, float slideBounce, float fric
 		entMove.passent = ENTNUM( ent );
 		entMove.contentmask = contentmask;
 
-		blockedmask = GS_SlideMove( &entMove );
+		blockedmask = GS_SlideMove( ggs, &entMove );
 
 		// update with the new values
 		VectorCopy( entMove.origin, ent->s.origin );

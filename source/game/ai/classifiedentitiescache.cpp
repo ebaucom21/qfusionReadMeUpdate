@@ -33,7 +33,7 @@ void ClassifiedEntitiesCache::retrievePersistentEntities() {
 
 	const auto *__restrict gameEnts = game.edicts;
 	const int numEnts = game.numentities;
-	for( int i = gs.maxclients + 1; i < numEnts; ++i ) {
+	for( int i = ggs->maxclients + 1; i < numEnts; ++i ) {
 		const auto *__restrict ent = gameEnts + i;
 		if( ent->r.inuse && ent->r.solid == SOLID_TRIGGER ) {
 			if( const char *const classname = ent->classname ) {
@@ -70,7 +70,7 @@ void ClassifiedEntitiesCache::update() {
 
 	const auto *__restrict gameEnts = game.edicts;
 	const int numEnts = game.numentities;
-	for( int i = gs.maxclients + 1; i < numEnts; ++i ) {
+	for( int i = ggs->maxclients + 1; i < numEnts; ++i ) {
 		if( const auto *__restrict ent = gameEnts + i; ent->r.inuse ) {
 			if( ent->r.solid == SOLID_TRIGGER ) {
 				if( !m_persistentEntitiesMask[i] ) {

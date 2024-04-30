@@ -883,7 +883,7 @@ void asFunc_RemoveOffenseSpot( int team, int id )
 
 void asFunc_RemoveAllObjectiveSpots()
 {
-    if( !GS_TeamBasedGametype() ) {
+    if( !GS_TeamBasedGametype( *ggs ) ) {
         return;
     }
     GetObjectiveBasedTeam(__FUNCTION__, TEAM_ALPHA)->RemoveAllObjectiveSpots();

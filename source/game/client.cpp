@@ -181,7 +181,7 @@ static void ClientObituary( edict_t *self, edict_t *inflictor, edict_t *attacker
 
 static void G_Client_UnlinkBodies( edict_t *ent ) {
 	// find bodies linked to us
-	edict_t *body = &game.edicts[gs.maxclients + 1];
+	edict_t *body = &game.edicts[ggs->maxclients + 1];
 	for( int i = 0; i < BODY_QUEUE_SIZE; body++, i++ ) {
 		if( !body->r.inuse ) {
 			continue;
@@ -252,7 +252,7 @@ static edict_t *CopyToBodyQue( edict_t *ent, edict_t *attacker, int damage ) {
 	edict_t *body;
 	int contents;
 
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		return NULL;
 	}
 
@@ -264,7 +264,7 @@ static edict_t *CopyToBodyQue( edict_t *ent, edict_t *attacker, int damage ) {
 	G_Client_UnlinkBodies( ent );
 
 	// grab a body que and cycle to the next one
-	body = &game.edicts[gs.maxclients + level.body_que + 1];
+	body = &game.edicts[ggs->maxclients + level.body_que + 1];
 	level.body_que = ( level.body_que + 1 ) % BODY_QUEUE_SIZE;
 
 	// send an effect on the removed body
@@ -425,7 +425,7 @@ void G_Client_InactivityRemove( Client *client, int64_t inactivityMillis ) {
 		return;
 	}
 
-	if( ( GS_MatchState() != MATCH_STATE_PLAYTIME ) || !level.gametype.removeInactivePlayers ) {
+	if( ( GS_MatchState( *ggs ) != MATCH_STATE_PLAYTIME ) || !level.gametype.removeInactivePlayers ) {
 		return;
 	}
 
@@ -461,7 +461,7 @@ static bool couldBeValidModelOrSkin( const wsw::StringView &s ) {
 }
 
 void Client::setSkinFromInfo() {
-	std::optional<wsw::StringView> maybeSkin = GS_TeamSkinName( getEntity()->s.team ); // is it a team skin?
+	std::optional<wsw::StringView> maybeSkin = GS_TeamSkinName( ggs, getEntity()->s.team ); // is it a team skin?
 	if( !maybeSkin ) {
 		maybeSkin = getNonEmptyInfoValue( kInfoKeySkin );
 		if( maybeSkin && ( !couldBeValidModelOrSkin( *maybeSkin ) || maybeSkin->contains( "invisibility"_asView ) ) ) {
@@ -614,7 +614,7 @@ void G_ClientRespawn( edict_t *self, bool ghost ) {
 	client->ps.POVnum = ENTNUM( self );
 
 	// set movement info
-	client->ps.pmove.stats[PM_STAT_MAXSPEED] = (short)DEFAULT_PLAYERSPEED;
+	client->ps.pmove.stats[PM_STAT_MAXSPEED] = (short)GS_DefaultPlayerSpeed( *ggs );
 	client->ps.pmove.stats[PM_STAT_JUMPSPEED] = (short)DEFAULT_JUMPSPEED;
 	client->ps.pmove.stats[PM_STAT_DASHSPEED] = (short)DEFAULT_DASHSPEED;
 
@@ -702,7 +702,7 @@ bool G_PlayerCanTeleport( edict_t *player ) {
 	if( player->r.client->ps.pmove.pm_type > PM_SPECTATOR ) {
 		return false;
 	}
-	if( GS_MatchState() == MATCH_STATE_COUNTDOWN ) { // match countdown
+	if( GS_MatchState( *ggs ) == MATCH_STATE_COUNTDOWN ) { // match countdown
 		return false;
 	}
 	return true;
@@ -901,7 +901,7 @@ void Client::setCleanNameResolvingNameClash( const wsw::StringView &inputName ) 
 
 auto Client::findClientWithTheSameColorlessName( const wsw::StringView &colorlessName ) -> const Client * {
 	const auto *const self = getEntity();
-	for( int i = 0; i < gs.maxclients; ++i ) {
+	for( int i = 0; i < ggs->maxclients; ++i ) {
 		if( const edict_t *other = game.edicts + 1 + i; ( other->r.inuse && other->r.client && other != self ) ) {
 			if( colorlessName.equalsIgnoreCase( other->r.client->colorlessNetname.asView() ) ) {
 				return other->r.client;
@@ -951,7 +951,7 @@ void Client::setClan( const wsw::StringView &inputClan ) {
 }
 
 void think_MoveTypeSwitcher( edict_t *ent ) {
-	if( ent->s.ownerNum > 0 && ent->s.ownerNum <= gs.maxclients ) {
+	if( ent->s.ownerNum > 0 && ent->s.ownerNum <= ggs->maxclients ) {
 		edict_t *owner = &game.edicts[ent->s.ownerNum];
 		if( owner->r.client ) {
 			owner->r.client->movestyle = owner->r.client->movestyle_latched;
@@ -964,7 +964,7 @@ void think_MoveTypeSwitcher( edict_t *ent ) {
 }
 
 static void G_UpdatePlayerInfoString( int playerNum ) {
-	assert( playerNum >= 0 && playerNum < gs.maxclients );
+	assert( playerNum >= 0 && playerNum < ggs->maxclients );
 	Client *client = &game.clients[playerNum];
 
 	wsw::UserInfo info;
@@ -979,7 +979,7 @@ static void G_UpdatePlayerInfoString( int playerNum ) {
 }
 
 static void G_UpdateMMPlayerInfoString( int playerNum ) {
-	assert( playerNum >= 0 && playerNum < gs.maxclients );
+	assert( playerNum >= 0 && playerNum < ggs->maxclients );
 	if( playerNum >= MAX_MMPLAYERINFOS ) {
 		return; // oops
 	}
@@ -1350,8 +1350,8 @@ static void G_Client_DeadView( edict_t *ent ) {
 	Client *client = ent->r.client;
 
 	// find the body
-	edict_t *body = game.edicts + gs.maxclients;
-	for(; ENTNUM( body ) < gs.maxclients + BODY_QUEUE_SIZE + 1; body++ ) {
+	edict_t *body = game.edicts + ggs->maxclients;
+	for(; ENTNUM( body ) < ggs->maxclients + BODY_QUEUE_SIZE + 1; body++ ) {
 		if( !body->r.inuse || body->r.svflags & SVF_NOCLIENT ) {
 			continue;
 		}
@@ -1394,7 +1394,7 @@ void G_ClientAddDamageIndicatorImpact( Client *client, int damage, const vec3_t 
 		return;
 	}
 
-	if( !client || client - game.clients < 0 || client - game.clients >= gs.maxclients ) {
+	if( !client || client - game.clients < 0 || client - game.clients >= ggs->maxclients ) {
 		return;
 	}
 
@@ -1565,7 +1565,7 @@ static void G_PlayerWorldEffects( edict_t *ent ) {
 static void G_SetClientEffects( edict_t *ent ) {
 	Client *client = ent->r.client;
 
-	if( G_IsDead( ent ) || GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
+	if( G_IsDead( ent ) || GS_MatchState( *ggs ) >= MATCH_STATE_POSTMATCH ) {
 		return;
 	}
 
@@ -1591,7 +1591,7 @@ static void G_SetClientEffects( edict_t *ent ) {
 	}
 
 	if( ent->s.weapon ) {
-		const firedef_t *firedef = GS_FiredefForPlayerState( &client->ps, ent->s.weapon );
+		const firedef_t *firedef = GS_FiredefForPlayerState( ggs, &client->ps, ent->s.weapon );
 		if( firedef && firedef->fire_mode == FIRE_MODE_STRONG ) {
 			ent->s.effects |= EF_STRONG_WEAPON;
 		}
@@ -1651,7 +1651,7 @@ void G_ClientEndSnapFrame( edict_t *ent ) {
 
 	// If the end of unit layout is displayed, don't give
 	// the player any normal movement attributes
-	if( GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
+	if( GS_MatchState( *ggs ) >= MATCH_STATE_POSTMATCH ) {
 		client->setReplicatedStats();
 	} else {
 		if( G_IsDead( ent ) && !level.gametype.customDeadBodyCam ) {
@@ -1693,7 +1693,7 @@ void G_ClientThink( edict_t *ent ) {
 	ent->r.client->ps.POVnum = ENTNUM( ent ); // set self
 
 	// load instashield
-	if( GS_Instagib() && g_instashield->integer ) {
+	if( GS_Instagib( *ggs ) && g_instashield->integer ) {
 		if( ent->s.team >= TEAM_PLAYERS && ent->s.team < GS_MAX_TEAMS ) {
 			if( ent->r.client->ps.inventory[POWERUP_SHELL] > 0 ) {
 				ent->r.client->instashieldCharge -= ( game.frametime * 0.001f ) * 60.0f;
@@ -1733,7 +1733,7 @@ void Client::executeUcmd( const usercmd_t &ucmd_, int timeDelta_ ) {
 	}
 
 	// can exit intermission after two seconds, not counting postmatch
-	if( GS_MatchState() == MATCH_STATE_WAITEXIT && game.serverTime > GS_MatchStartTime() + 2000 ) {
+	if( GS_MatchState( *ggs ) == MATCH_STATE_WAITEXIT && game.serverTime > GS_MatchStartTime( *ggs ) + 2000 ) {
 		if( ucmd.buttons & BUTTON_ATTACK ) {
 			level.exitNow = true;
 		}
@@ -1742,14 +1742,14 @@ void Client::executeUcmd( const usercmd_t &ucmd_, int timeDelta_ ) {
 	pmove_t pm;
 	runPMove( &pm );
 
-	GS_AddLaserbeamPoint( &trail, &ps, ucmd.serverTimeStamp );
+	GS_AddLaserbeamPoint( ggs, &trail, &ps, ucmd.serverTimeStamp );
 
 	checkRegeneration();
 
 	runTouch( pm.touchents, pm.numtouch );
 
 	auto *const ent = getEntity();
-	ent->s.weapon = GS_ThinkPlayerWeapon( &ps, ucmd.buttons, ucmd.msec, timeDelta );
+	ent->s.weapon = GS_ThinkPlayerWeapon( ggs, &ps, ucmd.buttons, ucmd.msec, timeDelta );
 
 	if( G_IsDead( ent ) ) {
 		if( ent->deathTimeStamp + g_respawn_delay_min->integer <= level.time ) {
@@ -1762,7 +1762,7 @@ void Client::executeUcmd( const usercmd_t &ucmd_, int timeDelta_ ) {
 	checkInstaShield();
 
 	if( ps.pmove.pm_type == PM_NORMAL ) {
-		if( GS_MatchState() == MATCH_STATE_PLAYTIME ) {
+		if( GS_MatchState( *ggs ) == MATCH_STATE_PLAYTIME ) {
 			stats.had_playtime = true;
 			// StatsowFacade::Instance()->OnClientHadPlaytime( this );
 		}
@@ -1782,7 +1782,7 @@ void Client::runPMove( pmove_t *pm ) {
 
 	ps.pmove.gravity = level.gravity;
 
-	bool freeze = GS_MatchState() >= MATCH_STATE_POSTMATCH || GS_MatchPaused();
+	bool freeze = GS_MatchState( *ggs ) >= MATCH_STATE_POSTMATCH || GS_MatchPaused( *ggs );
 	if( !freeze ) {
 		if( ent->movetype != MOVETYPE_PLAYER && ent->movetype != MOVETYPE_NOCLIP ) {
 			freeze = true;
@@ -1814,7 +1814,7 @@ void Client::runPMove( pmove_t *pm ) {
 	}
 
 	// perform a pmove
-	Pmove( pm );
+	Pmove( ggs, pm );
 
 	// save results of pmove
 	old_pmove = ps.pmove;
@@ -1878,11 +1878,11 @@ void Client::runTouch( int *entNums, int numTouchEnts ) {
 }
 
 void Client::checkInstaShield() {
-	if( GS_Instagib() && g_instashield->integer ) {
+	if( GS_Instagib( *ggs ) && g_instashield->integer ) {
 		if( ps.pmove.pm_type == PM_NORMAL && ucmd.upmove < 0 ) {
 			if( instashieldCharge == INSTA_SHIELD_MAX && ps.inventory[POWERUP_SHELL] == 0 ) {
 				ps.inventory[POWERUP_SHELL] = instashieldCharge;
-				int soundIndex = trap_SoundIndex( GS_FindItemByTag( POWERUP_SHELL )->pickup_sound );
+				int soundIndex = trap_SoundIndex( GS_FindItemByTag( ggs, POWERUP_SHELL )->pickup_sound );
 				G_Sound( getEntity(), CHAN_AUTO, soundIndex, ATTN_NORM );
 			}
 		}
@@ -1929,7 +1929,7 @@ void G_CheckClientRespawnClick( edict_t *ent ) {
 		return;
 	}
 
-	if( GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
+	if( GS_MatchState( *ggs ) >= MATCH_STATE_POSTMATCH ) {
 		return;
 	}
 
@@ -1980,7 +1980,7 @@ static unsigned int G_FindPointedPlayer( const edict_t *self ) {
 
 	int bestNum = 0;
 	float bestValue = 0.90f;
-	for( int i = 0; i < gs.maxclients; i++ ) {
+	for( int i = 0; i < ggs->maxclients; i++ ) {
 		const edict_t *other = PLAYERENT( i );
 		if( !other->r.inuse ) {
 			continue;
@@ -2070,13 +2070,13 @@ void Client::setReplicatedStats() {
 	ps.stats[STAT_FLAGS] = 0;
 
 	// don't force scoreboard when dead during timeout
-	if( showscores || GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
+	if( showscores || GS_MatchState( *ggs ) >= MATCH_STATE_POSTMATCH ) {
 		ps.stats[STAT_FLAGS] |= STAT_FLAG_SCOREBOARD;
 	}
-	if( GS_HasChallengers() && queueTimeStamp ) {
+	if( GS_HasChallengers( *ggs ) && queueTimeStamp ) {
 		ps.stats[STAT_FLAGS] |= STAT_FLAG_CHALLENGER;
 	}
-	if( GS_MatchState() <= MATCH_STATE_WARMUP && level.ready[PLAYERNUM( this )] ) {
+	if( GS_MatchState( *ggs ) <= MATCH_STATE_WARMUP && level.ready[PLAYERNUM( this )] ) {
 		ps.stats[STAT_FLAGS] |= STAT_FLAG_READY;
 	}
 	if( isoperator ) {
@@ -2098,7 +2098,7 @@ void Client::setReplicatedStats() {
 
 	m_frags = ps.stats[STAT_SCORE];
 
-	if( GS_Instagib() ) {
+	if( GS_Instagib( *ggs ) ) {
 		if( g_instashield->integer ) {
 			ps.stats[STAT_ARMOR] = ARMOR_TO_INT( 100.0f * ( instashieldCharge / INSTA_SHIELD_MAX ) );
 		} else {
@@ -2121,7 +2121,7 @@ void Client::setReplicatedStats() {
 	//
 	// Team scores
 	//
-	if( GS_TeamBasedGametype() ) {
+	if( GS_TeamBasedGametype( *ggs ) ) {
 		// team based
 		for( int i = 0, team_ = TEAM_ALPHA; team_ < GS_MAX_TEAMS; i++, team_++ ) {
 			ps.stats[STAT_TEAM_ALPHA_SCORE + i] = teamlist[team_].stats.score;
@@ -2140,7 +2140,7 @@ void Client::setReplicatedStats() {
 	const int pointedPlayerEntNum = G_FindPointedPlayer( ent );
 	ps.stats[STAT_POINTED_TEAMPLAYER] = 0;
 	ps.stats[STAT_POINTED_PLAYER] = pointedPlayerEntNum;
-	if( pointedPlayerEntNum && GS_TeamBasedGametype() ) {
+	if( pointedPlayerEntNum && GS_TeamBasedGametype( *ggs ) ) {
 		const edict_t *e = &game.edicts[pointedPlayerEntNum];
 		if( e->s.team == ent->s.team ) {
 			int pointedhealth = HEALTH_TO_INT( e->health );
@@ -2160,7 +2160,7 @@ void Client::setReplicatedStats() {
 			}
 			pointedhealth /= 3.2;
 
-			if( GS_Armor_TagForCount( e->r.client->armor ) ) {
+			if( GS_Armor_TagForCount( ggs, e->r.client->armor ) ) {
 				pointedarmor = ARMOR_TO_INT( e->r.client->armor );
 			}
 			if( pointedarmor > 150 ) {
@@ -2178,7 +2178,7 @@ void Client::setReplicatedStats() {
 	ps.stats[STAT_LAST_KILLER] = 0;
 	// last killer. ignore world and team kills
 	if( const auto *attacker = last_killer ) {
-		if( attacker->r.client && !GS_IsTeamDamage( &ent->s, &attacker->s ) ) {
+		if( attacker->r.client && !GS_IsTeamDamage( ggs, &ent->s, &attacker->s ) ) {
 			ps.stats[STAT_LAST_KILLER] = (short)ENTNUM( attacker );
 		}
 	}

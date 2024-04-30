@@ -95,7 +95,7 @@ void BotEvolutionManager::Shutdown() {
 
 void DefaultBotEvolutionManager::LoadReferenceWeightConfig() {
 	char gametype[MAX_CONFIGSTRING_CHARS];
-	Q_snprintfz( gametype, MAX_CONFIGSTRING_CHARS, "%s%s", ( GS_Instagib() ? "i" : "" ), g_gametype->string );
+	Q_snprintfz( gametype, MAX_CONFIGSTRING_CHARS, "%s%s", ( GS_Instagib( *ggs ) ? "i" : "" ), g_gametype->string );
 
 	const char *mapname = level.mapname;
 	if( referenceConfig.Load( va( "ai/%s_%s.weights", gametype, mapname ) ) ) {
@@ -165,7 +165,7 @@ void DefaultBotEvolutionManager::OnBotConnected( edict_t *ent ) {
 	}
 
 	int numBotsInGame = 0;
-	for( int i = 0; i < gs.maxclients; ++i ) {
+	for( int i = 0; i < ggs->maxclients; ++i ) {
 		if( trap_GetClientState( i ) < CS_SPAWNED ) {
 			continue;
 		}
@@ -241,7 +241,7 @@ void DefaultBotEvolutionManager::SaveEvolutionResults() {
 	float bestReferenceScore = 0.0f;
 	unsigned numRatedBots = 0;
 
-	for( int i = 1; i <= gs.maxclients; ++i ) {
+	for( int i = 1; i <= ggs->maxclients; ++i ) {
 		edict_t *ent = game.edicts + i;
 		float score = DefaultEvolutionScore( ent );
 		if( score <= 0.0f ) {
@@ -263,7 +263,7 @@ void DefaultBotEvolutionManager::SaveEvolutionResults() {
 	}
 
 	constexpr const char *tag = "DefaultBotEvolutionManager::SaveEvolutionResults()";
-	if( numRatedBots < ( GS_IndividualGameType() ? 2u : 3u ) ) {
+	if( numRatedBots < ( GS_IndividualGametype( *ggs ) ? 2u : 3u ) ) {
 		G_Printf( S_COLOR_YELLOW "%s: There were too few (%d) rated bots. No results to save.\n", tag, numRatedBots );
 		return;
 	}
@@ -273,7 +273,7 @@ void DefaultBotEvolutionManager::SaveEvolutionResults() {
 		return;
 	}
 
-	const char *fileName = va( "ai/%s%s_%s.weights", ( GS_Instagib() ? "i" : "" ), g_gametype->string, level.mapname );
+	const char *fileName = va( "ai/%s%s_%s.weights", ( GS_Instagib( *ggs ) ? "i" : "" ), g_gametype->string, level.mapname );
 	if( !bestEnt->bot->WeightConfig().Save( fileName ) ) {
 		G_Printf( S_COLOR_RED "%s: Can't save weights file `%s`\n", tag, fileName );
 	}

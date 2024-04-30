@@ -86,7 +86,7 @@ void BotWeaponSelector::selectWeapon() {
 	const auto timeout = weaponChoicePeriod;
 	// Use instagib selection code for quad bearers as well
 	// TODO: Select script weapon too
-	if( GS_Instagib() || bot->self->r.client->ps.inventory[POWERUP_QUAD] ) {
+	if( GS_Instagib( *ggs ) || bot->self->r.client->ps.inventory[POWERUP_QUAD] ) {
 		if( auto maybeBuiltinWeapon = suggestInstagibWeapon( distanceToEnemy ) ) {
 			setSelectedWeapons( WeaponsToSelect::bultinOnly( *maybeBuiltinWeapon ), timeout );
 		}
@@ -98,7 +98,7 @@ void BotWeaponSelector::selectWeapon() {
 	if( sv_cheats->integer ) {
 		if( const wsw::StringView &forceWeapon = v_forceWeapon.get(); !forceWeapon.empty() ) {
 			assert( forceWeapon.isZeroTerminated() );
-			if( const gsitem_t *item = GS_FindItemByName( forceWeapon.data() ) ) {
+			if( const gsitem_t *item = GS_FindItemByName( ggs, forceWeapon.data() ) ) {
 				if( item->tag >= WEAP_GUNBLADE && item->tag < WEAP_TOTAL ) {
 					const auto *const inventory = bot->Inventory();
 					if( inventory[item->tag] && ( inventory[item->weakammo_tag] + inventory[item->ammo_tag] > 0 ) ) {
@@ -365,7 +365,7 @@ auto BotWeaponSelector::suggestCloseRangeWeapon( float distanceToEnemy ) -> std:
 	const float damageToBeKilled = DamageToKill( bot->Health(), bot->Armor() );
 
 	bool tryAvoidingSelfDamage = false;
-	if( GS_SelfDamage() && distanceToEnemy < 150.0f ) {
+	if( GS_SelfDamage( *ggs ) && distanceToEnemy < 150.0f ) {
 		if( damageToBeKilled < 100 || !( level.gametype.spawnableItemsMask & IT_HEALTH ) ) {
 			tryAvoidingSelfDamage = true;
 		}
@@ -462,7 +462,7 @@ auto BotWeaponSelector::suggestScriptWeapon( float distanceToEnemy ) -> std::opt
 
 		score *= 1.0f - BoundedFraction( cooldown, 1000.0f );
 
-		if( GS_SelfDamage() ) {
+		if( GS_SelfDamage( *ggs ) ) {
 			float estimatedSelfDamage = 0.0f;
 			estimatedSelfDamage = weaponDef.maxSelfDamage;
 			estimatedSelfDamage *= ( 1.0f - BoundedFraction( distanceToEnemy, weaponDef.splashRadius ) );
@@ -550,7 +550,7 @@ auto BotWeaponSelector::suggestInstagibWeapon( float distanceToEnemy ) -> std::o
 	}
 
 	const bool hasRL = hasWeakOrStrong( WEAP_ROCKETLAUNCHER );
-	if( distanceToEnemy > 0.5f * kLasergunRange || !GS_SelfDamage() ) {
+	if( distanceToEnemy > 0.5f * kLasergunRange || !GS_SelfDamage( *ggs ) ) {
 		if ( hasSW ) {
 			return WEAP_SHOCKWAVE;
 		}
@@ -610,7 +610,7 @@ auto BotWeaponSelector::suggestFinishWeapon() -> std::optional<int> {
 			return WEAP_RIOTGUN;
 		}
 
-		if( !GS_SelfDamage() ) {
+		if( !GS_SelfDamage( *ggs ) ) {
 			bool canRefillHealth = level.gametype.spawnableItemsMask & IT_HEALTH;
 			if( canRefillHealth && ( damageToBeKilled > 150.0f || inventory[POWERUP_SHELL] ) ) {
 				if ( hasWeakOrStrong( WEAP_ROCKETLAUNCHER ) ) {

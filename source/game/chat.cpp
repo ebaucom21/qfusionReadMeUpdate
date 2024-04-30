@@ -104,7 +104,7 @@ void ChatPrintHelper::dispatchWithFilter( const ChatHandlersChain *filter, bool 
 	}
 
 	const char *cmd = nullptr;
-	for( int i = 0; i < gs.maxclients; i++ ) {
+	for( int i = 0; i < ggs->maxclients; i++ ) {
 		edict_t *ent = game.edicts + 1 + i;
 		if( !ent->r.inuse || !ent->r.client ) {
 			continue;
@@ -238,7 +238,7 @@ void RespectHandler::reset() {
 }
 
 void RespectHandler::frame() {
-	const auto matchState = GS_MatchState();
+	const auto matchState = GS_MatchState( *ggs );
 	// This is not 100% correct but is sufficient for message checks
 	if( matchState == MATCH_STATE_PLAYTIME ) {
 		if( m_lastFrameMatchState != MATCH_STATE_PLAYTIME ) {
@@ -246,8 +246,8 @@ void RespectHandler::frame() {
 		}
 	}
 
-	if( !GS_RaceGametype() ) {
-		for( int i = 0; i < gs.maxclients; ++i ) {
+	if( !GS_RaceGametype( *ggs ) ) {
+		for( int i = 0; i < ggs->maxclients; ++i ) {
 			m_entries[i].checkBehaviour( m_matchStartedAt );
 		}
 	}
@@ -257,11 +257,11 @@ void RespectHandler::frame() {
 
 auto RespectHandler::handleMessage( const ChatMessage &message ) -> std::optional<MessageFault> {
 	// Race is another world...
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		return std::nullopt;
 	}
 
-	const auto matchState = GS_MatchState();
+	const auto matchState = GS_MatchState( *ggs );
 	// Ignore until countdown
 	if( matchState < MATCH_STATE_COUNTDOWN ) {
 		return std::nullopt;
@@ -294,7 +294,7 @@ bool RespectHandler::ClientEntry::handleMessage( const ChatMessage &message ) {
 		return false;
 	}
 
-	const auto matchState = GS_MatchState();
+	const auto matchState = GS_MatchState( *ggs );
 	// Skip everything in warmup
 	if( matchState < MATCH_STATE_COUNTDOWN ) {
 		return false;
@@ -314,7 +314,7 @@ bool RespectHandler::ClientEntry::handleMessage( const ChatMessage &message ) {
 		return false;
 	}
 	// Allow chatting (and just save respect tokens) in timeouts as well
-	if( GS_MatchPaused() ) {
+	if( GS_MatchPaused( *ggs ) ) {
 		return false;
 	}
 
@@ -611,7 +611,7 @@ void RespectHandler::ClientEntry::checkBehaviour( const int64_t matchStartTime )
 	}
 
 	const auto levelTime     = level.time;
-	const auto matchState    = GS_MatchState();
+	const auto matchState    = GS_MatchState( *ggs );
 	const auto startTokenNum = RespectTokensRegistry::kSayAtStartTokenNum;
 
 	if( matchState == MATCH_STATE_COUNTDOWN ) {
@@ -728,7 +728,7 @@ void RespectHandler::ClientEntry::onClientDisconnected() {
 }
 
 void RespectHandler::ClientEntry::onClientJoinedTeam( int newTeam ) {
-	if( GS_MatchState() == MATCH_STATE_PLAYTIME ) {
+	if( GS_MatchState( *ggs ) == MATCH_STATE_PLAYTIME ) {
 		// Invalidate the "saidAfter" flag possible set on a disconnection during a match
 		// TODO: Does it still hold?
 		if( newTeam == TEAM_SPECTATOR ) {
@@ -795,7 +795,7 @@ void IgnoreFilter::handleIgnoreCommand( const edict_t *ent, bool ignore, const C
 		e.ignoresNotTeammates = ignore;
 		e.ignoresEverybody = false;
 		if( !ignore ) {
-			for( int i = 0; i <= gs.maxclients; ++i ) {
+			for( int i = 0; i <= ggs->maxclients; ++i ) {
 				const edict_t *player = game.edicts + i + 1;
 				if( player->r.inuse && player->s.team != ent->s.team ) {
 					e.SetClientBit( i, false );
@@ -841,7 +841,7 @@ void IgnoreFilter::handleIgnoreCommand( const edict_t *ent, bool ignore, const C
 		} else if( e.ignoresNotTeammates && !wereOnlyTeammates ) {
 			e.ignoresNotTeammates = false;
 			// Convert the global flag to the per-client mask
-			for( int i = 0; i < gs.maxclients; ++i ) {
+			for( int i = 0; i < ggs->maxclients; ++i ) {
 				const edict_t *clientEnt = game.edicts + i + 1;
 				if( clientEnt->r.inuse && clientEnt->s.team != ent->s.team ) {
 					e.SetClientBit( i, true );
@@ -913,7 +913,7 @@ void IgnoreFilter::handleIgnoreListCommand( const edict_t *ent, const CmdArgs &c
 	ss << action;
 	const char *separator = " ";
 	bool wereTeammatesMet = false;
-	for( int i = 0; i < gs.maxclients; ++i ) {
+	for( int i = 0; i < ggs->maxclients; ++i ) {
 		const auto *clientEnt = game.edicts + i + 1;
 		if( clientEnt == player ) {
 			continue;

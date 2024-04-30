@@ -192,7 +192,7 @@ NavEntitiesRegistry::NavEntitiesRegistry() {
 
 	// Always add nav entities for clients
 	// (despite requiring special handling in Update() they are expected to be always present)
-	for( int clientEnt = 1; clientEnt <= gs.maxclients; ++clientEnt ) {
+	for( int clientEnt = 1; clientEnt <= ggs->maxclients; ++clientEnt ) {
 		AddNavEntity( game.edicts + clientEnt, 0, NavEntityFlags::REACH_ON_EVENT | NavEntityFlags::MOVABLE );
 	}
 }
@@ -219,7 +219,7 @@ NavEntity::NavEntity( const edict_t *ent_, int aasAreaNum_, NavEntityFlags flags
 	const char *const className = ent->classname ? ent->classname : "";
 
 	if( ( flags & NavEntityFlags::MOVABLE ) != NavEntityFlags::NONE ) {
-		if( ENTNUM( ent ) <= gs.maxclients ) {
+		if( ENTNUM( ent ) <= ggs->maxclients ) {
 			Q_snprintfz( name, NavEntity::MAX_NAME_LEN, "%s(ent#=%d)@client", className, ENTNUM( ent ) );
 		} else {
 			Q_snprintfz( name, NavEntity::MAX_NAME_LEN, "%s(ent#=%d)@movable", className, ENTNUM( ent ) );

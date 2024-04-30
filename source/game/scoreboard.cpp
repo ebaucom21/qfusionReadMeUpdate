@@ -46,7 +46,7 @@ void Scoreboard::expectState( State expectedState ) {
 }
 
 void Scoreboard::checkPlayerNum( unsigned playerNum ) const {
-	if( playerNum >= (unsigned)gs.maxclients ) {
+	if( playerNum >= (unsigned)ggs->maxclients ) {
 		wsw::failWithLogicError( "Illegal player num" );
 	}
 }
@@ -312,7 +312,7 @@ void Scoreboard::endUpdating() {
 	alignas( 16 ) bool isPlayerConnected[kMaxPlayers], isPlayerGhosting[kMaxPlayers];
 	std::fill( std::begin( isPlayerConnected ), std::end( isPlayerConnected ), false );
 	// Don't display players as dead/"ghosting" post-match
-	if( GS_MatchState() < MATCH_STATE_POSTMATCH ) {
+	if( GS_MatchState( *ggs ) < MATCH_STATE_POSTMATCH ) {
 		std::fill( std::begin( isPlayerGhosting ), std::end( isPlayerGhosting ), true );
 	} else {
 		std::fill( std::begin( isPlayerGhosting ), std::end( isPlayerGhosting ), false );
@@ -332,7 +332,7 @@ void Scoreboard::endUpdating() {
 	}
 
 	// Set ready status automatically for now
-	const bool shouldSetReadyStatusIcon = ( !GS_RaceGametype() && GS_MatchState() < MATCH_STATE_COUNTDOWN );
+	const bool shouldSetReadyStatusIcon = ( !GS_RaceGametype( *ggs ) && GS_MatchState( *ggs ) < MATCH_STATE_COUNTDOWN );
 	const bool *const readyStates = level.ready;
 
 	const auto *const playerEnts = game.edicts + 1;
@@ -440,7 +440,7 @@ void Scoreboard::update() {
 
 auto Scoreboard::getRawReplicatedDataForClient( unsigned clientNum ) -> const ReplicatedScoreboardData * {
 	// TODO: Cache the index <-> playerNum relation?
-	for( unsigned i = 0; i < (unsigned)gs.maxclients; ++i ) {
+	for( unsigned i = 0; i < (unsigned)ggs->maxclients; ++i ) {
 		if( m_replicatedData.getPlayerNum( i ) == clientNum ) {
 			return preparePlayerSpecificData( i, clientNum );
 		}

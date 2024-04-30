@@ -362,7 +362,7 @@ void Bot::Update() {
 		}
 	} else {
 		//get ready if in the game
-		if( GS_MatchState() <= MATCH_STATE_WARMUP && !IsReady() && self->r.client->teamStateTimestamp + 4000 < level.time ) {
+		if( GS_MatchState( *ggs ) <= MATCH_STATE_WARMUP && !IsReady() && self->r.client->teamStateTimestamp + 4000 < level.time ) {
 			G_Match_Ready( self, {} );
 		}
 
@@ -464,12 +464,12 @@ bool Bot::NavTargetWorthRushing() const {
 		return true;
 	}
 
-	if( !GS_SelfDamage() ) {
+	if( !GS_SelfDamage( *ggs ) ) {
 		return true;
 	}
 
-	// Force insta-jumps regardless of GS_SelfDamage() value
-	if( GS_Instagib() && g_instajump->integer ) {
+	// Force insta-jumps regardless of GS_SelfDamage( *ggs ) value
+	if( GS_Instagib( *ggs ) && g_instajump->integer ) {
 		// Check whether the bot really has an IG.
 		const auto *inventory = self->r.client->ps.inventory;
 		if( inventory[WEAP_INSTAGUN] && inventory[AMMO_INSTAS] ) {
@@ -491,7 +491,7 @@ bool Bot::NavTargetWorthRushing() const {
 	// Don't jump if there's no pressure from enemies
 	if( m_selectedEnemy == std::nullopt ) {
 		// Duel-like gametypes are an exception
-		if( !( GS_TeamBasedGametype() && GS_IndividualGameType() ) ) {
+		if( !( GS_TeamBasedGametype( *ggs ) && GS_IndividualGametype( *ggs ) ) ) {
 			return false;
 		}
 	}
@@ -536,7 +536,7 @@ int Bot::GetWeaponsForWeaponJumping( int *weaponNumsBuffer ) {
 
 		for( int weapon: *weaponsList ) {
 			if( inventory[weapon] && inventory[AMMO_GUNBLADE + ( weapon - WEAP_GUNBLADE )] ) {
-				const auto &firedef = GS_GetWeaponDef( weapon )->firedef;
+				const auto &firedef = GS_GetWeaponDef( ggs, weapon )->firedef;
 				if( firedef.damage * firedef.selfdamage + 15 < damageToKill ) {
 					weaponNumsBuffer[numSuitableWeapons++] = weapon;
 				}
@@ -632,7 +632,7 @@ float Bot::GetEffectiveOffensiveness() const {
 	if( squad ) {
 		return squad->IsSupporter( self ) ? 1.0f : 0.0f;
 	}
-	if( GS_MatchState() <= MATCH_STATE_WARMUP ) {
+	if( GS_MatchState( *ggs ) <= MATCH_STATE_WARMUP ) {
 		return 1.0f;
 	}
 	if( m_selectedEnemy && m_selectedEnemy->IsACarrier() ) {
@@ -754,7 +754,7 @@ bool Bot::IsDefinitelyNotAFeasibleEnemy( const edict_t *ent ) const {
 		return true;
 	}
 	// Skip teammates. Note that team overrides attitude
-	if( GS_TeamBasedGametype() && ent->s.team == self->s.team ) {
+	if( GS_TeamBasedGametype( *ggs ) && ent->s.team == self->s.team ) {
 		return true;
 	}
 	// Skip entities that has a non-negative bot attitude.

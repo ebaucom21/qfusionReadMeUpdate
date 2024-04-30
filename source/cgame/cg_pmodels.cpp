@@ -1016,7 +1016,7 @@ void CG_UpdatePlayerModelEnt( centity_t *cent ) {
 	CG_SetOutlineColor( cent->outlineColor, cent->ent.shaderRGBA );
 
 	// TODO: Update effects just before submission
-	if( v_raceGhosts.get() && !getPrimaryViewState()->isViewerEntity( cent->current.number ) && GS_RaceGametype() ) {
+	if( v_raceGhosts.get() && !getPrimaryViewState()->isViewerEntity( cent->current.number ) && GS_RaceGametype( *cggs ) ) {
 		cent->effects &= ~EF_OUTLINE;
 		cent->effects |= EF_RACEGHOST;
 	} else {
@@ -1290,7 +1290,7 @@ void CG_AddPModel( centity_t *cent, DrawSceneRequest *drawSceneRequest, ViewStat
 			VectorSet( color, 0.1f, 0.1f, 0.1f );
 		} else {
 			VectorSet( color, 0.5f, 0.5f, 0.5f );
-			if( v_raceGhosts.get() && GS_RaceGametype() ) {
+			if( v_raceGhosts.get() && GS_RaceGametype( *cggs ) ) {
 				const float scale = v_raceGhostsAlpha.get();
 				assert( scale >= 0.0f && scale <= 1.0f );
 				VectorScale( color, scale, color );
@@ -1491,11 +1491,11 @@ int GS_UpdateBaseAnims( entity_state_t *state, vec3_t velocity ) {
 	trace_t trace;
 
 	if( !state ) {
-		module_Error( "GS_UpdateBaseAnims: NULL state\n" );
+		cggs->Error( "GS_UpdateBaseAnims: NULL state\n" );
 		return 0;
 	}
 
-	GS_BBoxForEntityState( state, mins, maxs );
+	GS_BBoxForEntityState( cggs, state, mins, maxs );
 
 	memset( &pmanim, 0, sizeof( pm_anim_t ) );
 
@@ -1505,7 +1505,7 @@ int GS_UpdateBaseAnims( entity_state_t *state, vec3_t velocity ) {
 	point[0] = state->origin[0];
 	point[1] = state->origin[1];
 	point[2] = state->origin[2] - ( 1.6 * STEPSIZE );
-	module_Trace( &trace, state->origin, mins, maxs, point, state->number, MASK_PLAYERSOLID, 0 );
+	cggs->Trace( &trace, state->origin, mins, maxs, point, state->number, MASK_PLAYERSOLID, 0 );
 	if( trace.ent == -1 || ( trace.fraction < 1.0f && !ISWALKABLEPLANE( &trace.plane ) && !trace.startsolid ) ) {
 		pmanim.moveflags |= ANIMMOVE_AIR;
 	}
@@ -1516,7 +1516,7 @@ int GS_UpdateBaseAnims( entity_state_t *state, vec3_t velocity ) {
 	}
 
 	// find out the water level
-	waterlevel = GS_WaterLevel( state, mins, maxs );
+	waterlevel = GS_WaterLevel( cggs, state, mins, maxs );
 	if( waterlevel >= 2 || ( waterlevel && ( pmanim.moveflags & ANIMMOVE_AIR ) ) ) {
 		pmanim.moveflags |= ANIMMOVE_SWIM;
 	}

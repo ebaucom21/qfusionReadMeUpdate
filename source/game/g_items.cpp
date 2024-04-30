@@ -87,7 +87,7 @@ void SetRespawn( edict_t *ent, int delay ) {
 	ent->r.solid = SOLID_NOT;
 	ent->nextThink = level.time + delay;
 	ent->think = DoRespawn;
-	if( GS_MatchState() == MATCH_STATE_WARMUP ) {
+	if( GS_MatchState( *ggs ) == MATCH_STATE_WARMUP ) {
 		ent->s.effects |= EF_GHOST;
 	} else {
 		ent->r.svflags |= SVF_NOCLIENT;
@@ -108,7 +108,7 @@ void G_Items_RespawnByType( unsigned int typeMask, int item_tag, float delay ) {
 	edict_t *ent;
 	int msecs;
 
-	for( ent = game.edicts + gs.maxclients + BODY_QUEUE_SIZE; ENTNUM( ent ) < game.maxentities; ent++ ) {
+	for( ent = game.edicts + ggs->maxclients + BODY_QUEUE_SIZE; ENTNUM( ent ) < game.maxentities; ent++ ) {
 		if( !ent->r.inuse || !ent->item ) {
 			continue;
 		}
@@ -200,7 +200,7 @@ bool Add_Ammo( Client *client, const gsitem_t *item, int count, bool add_it ) {
 }
 
 static bool Pickup_AmmoPack( edict_t *other, const int *invpack ) {
-	gsitem_t *item;
+	const gsitem_t *item;
 	int i;
 
 	if( !other->r.client ) {
@@ -211,7 +211,7 @@ static bool Pickup_AmmoPack( edict_t *other, const int *invpack ) {
 	}
 
 	for( i = AMMO_GUNBLADE + 1; i < AMMO_TOTAL; i++ ) {
-		item = GS_FindItemByTag( i );
+		item = GS_FindItemByTag( ggs, i );
 		if( item ) {
 			Add_Ammo( other->r.client, item, invpack[i], true );
 		}
@@ -326,23 +326,23 @@ bool Add_Armor( edict_t *other, const gsitem_t *item, bool pick_it ) {
 		return false;
 	}
 
-	pickupitem_maxcount = GS_Armor_MaxCountForTag( item->tag );
+	pickupitem_maxcount = GS_Armor_MaxCountForTag( ggs, item->tag );
 
 	// can't pick if surpassed the max armor count of that type
 	if( pickupitem_maxcount && ( client->armor >= pickupitem_maxcount ) ) {
 		return false;
 	}
 
-	if( GS_Armor_TagForCount( client->armor ) == ARMOR_NONE ) {
+	if( GS_Armor_TagForCount( ggs, client->armor ) == ARMOR_NONE ) {
 		maxarmorcount = pickupitem_maxcount;
 	} else {
-		maxarmorcount = wsw::max( (float)GS_Armor_MaxCountForTag( GS_Armor_TagForCount( client->armor ) ), pickupitem_maxcount );
+		maxarmorcount = wsw::max( (float)GS_Armor_MaxCountForTag( ggs, GS_Armor_TagForCount( ggs, client->armor ) ), pickupitem_maxcount );
 	}
 
 	if( !pickupitem_maxcount ) {
-		newarmorcount = client->armor + GS_Armor_PickupCountForTag( item->tag );
+		newarmorcount = client->armor + GS_Armor_PickupCountForTag( ggs, item->tag );
 	} else {
-		newarmorcount = wsw::min( client->armor + GS_Armor_PickupCountForTag( item->tag ), maxarmorcount );
+		newarmorcount = wsw::min( client->armor + GS_Armor_PickupCountForTag( ggs, item->tag ), maxarmorcount );
 	}
 
 	// it can't be picked up if it doesn't add any armor
@@ -433,7 +433,7 @@ void Touch_Item( edict_t *ent, edict_t *other, cplane_t *plane, int surfFlags ) 
 	}
 
 	if( !( ent->spawnflags & DROPPED_ITEM ) && G_Gametype_CanRespawnItem( item ) ) {
-		if( ( item->type & IT_WEAPON ) && GS_RaceGametype() ) {
+		if( ( item->type & IT_WEAPON ) && GS_RaceGametype( *ggs ) ) {
 			return; // weapons stay in race
 		}
 		SetRespawn( ent, G_Gametype_RespawnTimeForItem( item ) );
@@ -515,12 +515,12 @@ edict_t *Drop_Item( edict_t *ent, const gsitem_t *item ) {
 			bool anything = false;
 
 			for( w = WEAP_GUNBLADE + 1; w < WEAP_TOTAL; w++ ) {
-				if( w == WEAP_INSTAGUN && !GS_Instagib() ) {
+				if( w == WEAP_INSTAGUN && !GS_Instagib( *ggs ) ) {
 					continue;
 				}
 
 				if( item->tag == AMMO_PACK_WEAK || item->tag == AMMO_PACK ) {
-					int weakTag = GS_FindItemByTag( w )->weakammo_tag;
+					int weakTag = GS_FindItemByTag( ggs, w )->weakammo_tag;
 					if( ent->r.client->ps.inventory[weakTag] > 0 ) {
 						dropped->invpak[weakTag] = ent->r.client->ps.inventory[weakTag];
 						ent->r.client->ps.inventory[weakTag] = 0;
@@ -529,7 +529,7 @@ edict_t *Drop_Item( edict_t *ent, const gsitem_t *item ) {
 				}
 
 				if( item->tag == AMMO_PACK_STRONG || item->tag == AMMO_PACK ) {
-					int strongTag = GS_FindItemByTag( w )->ammo_tag;
+					int strongTag = GS_FindItemByTag( ggs, w )->ammo_tag;
 					if( ent->r.client->ps.inventory[strongTag] ) {
 						dropped->invpak[strongTag] = ent->r.client->ps.inventory[strongTag];
 						ent->r.client->ps.inventory[strongTag] = 0;
@@ -565,19 +565,19 @@ edict_t *Drop_Item( edict_t *ent, const gsitem_t *item ) {
 			int w;
 
 			for( w = WEAP_GUNBLADE + 1; w < WEAP_TOTAL; w++ ) {
-				if( w == WEAP_INSTAGUN && !GS_Instagib() ) {
+				if( w == WEAP_INSTAGUN && !GS_Instagib( *ggs ) ) {
 					continue;
 				}
 
 				if( item->tag == AMMO_PACK_WEAK || item->tag == AMMO_PACK ) {
-					gsitem_t *ammo = GS_FindItemByTag( GS_FindItemByTag( w )->weakammo_tag );
+					const gsitem_t *ammo = GS_FindItemByTag( ggs, GS_FindItemByTag( ggs, w )->weakammo_tag );
 					if( ammo ) {
 						dropped->invpak[ammo->tag] = ammo->quantity;
 					}
 				}
 
 				if( item->tag == AMMO_PACK_STRONG || item->tag == AMMO_PACK ) {
-					gsitem_t *ammo = GS_FindItemByTag( GS_FindItemByTag( w )->ammo_tag );
+					const gsitem_t *ammo = GS_FindItemByTag( ggs, GS_FindItemByTag( ggs, w )->ammo_tag );
 					if( ammo ) {
 						dropped->invpak[ammo->tag] = ammo->quantity;
 					}
@@ -693,7 +693,7 @@ static edict_t *G_ClosestFlagBase( edict_t *ent ) {
 
 	// store pointers to flag bases if called for the first time in this level spawn
 	if( firstTime || lastLevelSpawnCount != game.levelSpawnCount ) {
-		for( t = game.edicts + 1 + gs.maxclients; ENTNUM( t ) < game.numentities; t++ ) {
+		for( t = game.edicts + 1 + ggs->maxclients; ENTNUM( t ) < game.numentities; t++ ) {
 			if( t->s.type != ET_FLAG_BASE ) {
 				continue;
 			}
@@ -811,7 +811,7 @@ static edict_t *Spawn_ItemTimer( edict_t *ent ) {
 	timer->think = item_timer_think;
 	VectorCopy( ent->s.origin, timer->s.origin ); // for z-sorting
 
-	if( /*( ( item->type != IT_POWERUP ) && */ GS_TeamBasedGametype() ) {
+	if( /*( ( item->type != IT_POWERUP ) && */ GS_TeamBasedGametype( *ggs ) ) {
 		edict_t *base;
 
 		// what follows is basically a hack that allows timers to be assigned
@@ -933,7 +933,7 @@ void G_Items_FinishSpawningItems( void ) {
 	edict_t *ops[MAX_EDICTS];
 
 	num_timers = num_opts = 0;
-	for( ent = game.edicts + 1 + gs.maxclients; ENTNUM( ent ) < game.numentities; ent++ ) {
+	for( ent = game.edicts + 1 + ggs->maxclients; ENTNUM( ent ) < game.numentities; ent++ ) {
 		if( !ent->r.inuse || !ent->item || ent->s.type != ET_ITEM ) {
 			continue;
 		}
@@ -993,7 +993,7 @@ void PrecacheItem( const gsitem_t *it ) {
 	const char *s, *start;
 	char data[MAX_QPATH];
 	int len;
-	gsitem_t    *ammo;
+	const gsitem_t    *ammo;
 
 	if( !it ) {
 		return;
@@ -1014,7 +1014,7 @@ void PrecacheItem( const gsitem_t *it ) {
 
 	// parse everything for its ammo
 	if( it->ammo_tag ) {
-		ammo = GS_FindItemByTag( it->ammo_tag );
+		ammo = GS_FindItemByTag( ggs, it->ammo_tag );
 		if( ammo != it ) {
 			PrecacheItem( ammo );
 		}
@@ -1070,30 +1070,30 @@ void PrecacheItem( const gsitem_t *it ) {
 */
 void G_PrecacheItems( void ) {
 	int i;
-	gsitem_t *item;
+	const gsitem_t *item;
 
 	// precache item names and weapondefs
-	for( i = 1; ( item = GS_FindItemByTag( i ) ) != NULL; i++ ) {
+	for( i = 1; ( item = GS_FindItemByTag( ggs, i ) ) != NULL; i++ ) {
 		trap_ConfigString( CS_ITEMS + i, item->name );
 
-		if( item->type & IT_WEAPON && GS_GetWeaponDef( item->tag ) ) {
+		if( item->type & IT_WEAPON && GS_GetWeaponDef( ggs, item->tag ) ) {
 			G_PrecacheWeapondef( i );
 		}
 	}
 
 	// precache items
-	if( GS_Instagib() ) {
-		item = GS_FindItemByTag( WEAP_INSTAGUN );
+	if( GS_Instagib( *ggs ) ) {
+		item = GS_FindItemByTag( ggs, WEAP_INSTAGUN );
 		PrecacheItem( item );
 	} else {
 		for( i = WEAP_GUNBLADE; i < WEAP_TOTAL; i++ ) {
-			item = GS_FindItemByTag( i );
+			item = GS_FindItemByTag( ggs, i );
 			PrecacheItem( item );
 		}
 	}
 
 	// Vic: precache ammo pack if it's droppable
-	item = GS_FindItemByClassname( "item_ammopack" );
+	item = GS_FindItemByClassname( ggs, "item_ammopack" );
 	if( item && G_Gametype_CanDropItem( item, true ) ) {
 		PrecacheItem( item );
 	}

@@ -86,7 +86,7 @@ static bool G_Teleport( edict_t *ent, vec3_t origin, vec3_t angles ) {
 */
 static void Cmd_Give_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	const char *name;
-	gsitem_t    *it;
+	const gsitem_t    *it;
 	int i;
 	bool give_all;
 
@@ -116,7 +116,7 @@ static void Cmd_Give_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 
 	if( give_all || !Q_stricmp( name, "weapons" ) ) {
 		for( i = 0; i < GS_MAX_ITEM_TAGS; i++ ) {
-			it = GS_FindItemByTag( i );
+			it = GS_FindItemByTag( ggs, i );
 			if( !it ) {
 				continue;
 			}
@@ -138,7 +138,7 @@ static void Cmd_Give_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 
 	if( give_all || !Q_stricmp( name, "ammo" ) ) {
 		for( i = 0; i < GS_MAX_ITEM_TAGS; i++ ) {
-			it = GS_FindItemByTag( i );
+			it = GS_FindItemByTag( ggs, i );
 			if( !it ) {
 				continue;
 			}
@@ -159,7 +159,7 @@ static void Cmd_Give_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	}
 
 	if( give_all || !Q_stricmp( name, "armor" ) ) {
-		ent->r.client->armor = GS_Armor_MaxCountForTag( ARMOR_RA );
+		ent->r.client->armor = GS_Armor_MaxCountForTag( ggs, ARMOR_RA );
 		if( !give_all ) {
 			return;
 		}
@@ -167,7 +167,7 @@ static void Cmd_Give_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 
 	if( give_all ) {
 		for( i = 0; i < GS_MAX_ITEM_TAGS; i++ ) {
-			it = GS_FindItemByTag( i );
+			it = GS_FindItemByTag( ggs, i );
 			if( !it ) {
 				continue;
 			}
@@ -185,10 +185,10 @@ static void Cmd_Give_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 		return;
 	}
 
-	it = GS_FindItemByName( name );
+	it = GS_FindItemByName( ggs, name );
 	if( !it ) {
 		name = trap_Cmd_Argv( 1 );
-		it = GS_FindItemByName( name );
+		it = GS_FindItemByName( ggs, name );
 		if( !it ) {
 			G_PrintMsg( ent, "unknown item\n" );
 			return;
@@ -208,7 +208,7 @@ static void Cmd_Give_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 		}
 	} else {
 		if( it->tag && ( it->tag > 0 ) && ( it->tag < GS_MAX_ITEM_TAGS ) ) {
-			if( GS_FindItemByTag( it->tag ) != NULL ) {
+			if( GS_FindItemByTag( ggs, it->tag ) != NULL ) {
 				ent->r.client->ps.inventory[it->tag]++;
 			}
 		} else {
@@ -295,11 +295,11 @@ static void Cmd_GameOperator_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 * Use an inventory item
 */
 static void Cmd_Use_f( edict_t *ent, const CmdArgs &cmdArgs ) {
-	gsitem_t    *it;
+	const gsitem_t    *it;
 
 	assert( ent && ent->r.client );
 
-	it = GS_Cmd_UseItem( &ent->r.client->ps, trap_Cmd_Args(), 0 );
+	it = GS_Cmd_UseItem( ggs, &ent->r.client->ps, trap_Cmd_Args(), 0 );
 	if( !it ) {
 		return;
 	}
@@ -316,7 +316,7 @@ static void Cmd_Kill_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	}
 
 	// can suicide after 5 seconds
-	if( level.time < ent->r.client->spawnStateTimestamp + (GS_RaceGametype() ? 1000 : 5000 ) ) {
+	if( level.time < ent->r.client->spawnStateTimestamp + (GS_RaceGametype( *ggs ) ? 1000 : 5000 ) ) {
 		return;
 	}
 
@@ -378,7 +378,7 @@ static bool CheckStateForPositionCmd( edict_t *ent ) {
 	if( sv_cheats->integer ) {
 		return true;
 	}
-	if( GS_MatchState() <= MATCH_STATE_WARMUP ) {
+	if( GS_MatchState( *ggs ) <= MATCH_STATE_WARMUP ) {
 		return true;
 	}
 	if ( ent->r.client->ps.pmove.pm_type != PM_SPECTATOR ) {
@@ -760,12 +760,12 @@ static void Cmd_PlayersExt_f( edict_t *ent, bool onlyspecs, const CmdArgs &cmdAr
 	if( trap_Cmd_Argc() > 1 ) {
 		start = atoi( trap_Cmd_Argv( 1 ) );
 	}
-	Q_clamp( start, 0, gs.maxclients - 1 );
+	Q_clamp( start, 0, ggs->maxclients - 1 );
 
 	// print information
 	msg[0] = 0;
 
-	for( i = start; i < gs.maxclients; i++ ) {
+	for( i = start; i < ggs->maxclients; i++ ) {
 		if( trap_GetClientState( i ) >= CS_SPAWNED ) {
 			edict_t *clientEnt = &game.edicts[i + 1];
 			Client *cl;
@@ -807,7 +807,7 @@ static void Cmd_PlayersExt_f( edict_t *ent, bool onlyspecs, const CmdArgs &cmdAr
 	Q_strncatz( msg, va( "%3i %s\n", count, trap_Cmd_Argv( 0 ) ), sizeof( msg ) );
 	G_PrintMsg( ent, "%s", msg );
 
-	if( i < gs.maxclients ) {
+	if( i < ggs->maxclients ) {
 		G_PrintMsg( ent, "Type '%s %i' for more %s\n", trap_Cmd_Argv( 0 ), i, trap_Cmd_Argv( 0 ) );
 	}
 }
@@ -861,7 +861,7 @@ void ChatHandlersChain::frame() {
 		g_floodprotection_penalty->modified = false;
 	}
 
-	if( m_respectHandler.m_lastFrameMatchState == MATCH_STATE_PLAYTIME && GS_MatchState() == MATCH_STATE_POSTMATCH ) {
+	if( m_respectHandler.m_lastFrameMatchState == MATCH_STATE_PLAYTIME && GS_MatchState( *ggs ) == MATCH_STATE_POSTMATCH ) {
 		// Unlock to say `gg` postmatch
 		m_muteFilter.reset();
 		m_floodFilter.reset();
@@ -924,7 +924,7 @@ static void Cmd_CoinToss_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	char *s;
 	char upper[MAX_STRING_CHARS];
 
-	if( GS_MatchState() > MATCH_STATE_WARMUP && !GS_MatchPaused() ) {
+	if( GS_MatchState( *ggs ) > MATCH_STATE_WARMUP && !GS_MatchPaused( *ggs ) ) {
 		G_PrintMsg( ent, "You can only toss coins during warmup or timeouts\n" );
 		return;
 	}
@@ -1018,17 +1018,17 @@ static void Cmd_Join_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 static void Cmd_Timeout_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	int num;
 
-	if( ent->s.team == TEAM_SPECTATOR || GS_MatchState() != MATCH_STATE_PLAYTIME ) {
+	if( ent->s.team == TEAM_SPECTATOR || GS_MatchState( *ggs ) != MATCH_STATE_PLAYTIME ) {
 		return;
 	}
 
-	if( GS_TeamBasedGametype() ) {
+	if( GS_TeamBasedGametype( *ggs ) ) {
 		num = ent->s.team;
 	} else {
 		num = ENTNUM( ent ) - 1;
 	}
 
-	if( GS_MatchPaused() && ( level.timeout.endtime - level.timeout.time ) >= 2 * TIMEIN_TIME ) {
+	if( GS_MatchPaused( *ggs ) && ( level.timeout.endtime - level.timeout.time ) >= 2 * TIMEIN_TIME ) {
 		G_PrintMsg( ent, "Timeout already in progress\n" );
 		return;
 	}
@@ -1036,7 +1036,7 @@ static void Cmd_Timeout_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	if( g_maxtimeouts->integer != -1 && level.timeout.used[num] >= g_maxtimeouts->integer ) {
 		if( g_maxtimeouts->integer == 0 ) {
 			G_PrintMsg( ent, "Timeouts are not allowed on this server\n" );
-		} else if( GS_TeamBasedGametype() ) {
+		} else if( GS_TeamBasedGametype( *ggs ) ) {
 			G_PrintMsg( ent, "Your team doesn't have any timeouts left\n" );
 		} else {
 			G_PrintMsg( ent, "You don't have any timeouts left\n" );
@@ -1046,12 +1046,12 @@ static void Cmd_Timeout_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 
 	G_PrintMsg( NULL, "%s%s called a timeout\n", ent->r.client->netname.data(), S_COLOR_WHITE );
 
-	if( !GS_MatchPaused() ) {
+	if( !GS_MatchPaused( *ggs ) ) {
 		G_AnnouncerSound( NULL, trap_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEOUT_1_to_2, ( rand() & 1 ) + 1 ) ), GS_MAX_TEAMS, true, NULL );
 	}
 
 	level.timeout.used[num]++;
-	GS_GamestatSetFlag( GAMESTAT_FLAG_PAUSED, true );
+	GS_GamestatSetFlag( *ggs, GAMESTAT_FLAG_PAUSED, true );
 	level.timeout.caller = num;
 	level.timeout.endtime = level.timeout.time + TIMEOUT_TIME + FRAMETIME;
 }
@@ -1066,7 +1066,7 @@ static void Cmd_Timein_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 		return;
 	}
 
-	if( !GS_MatchPaused() ) {
+	if( !GS_MatchPaused( *ggs ) ) {
 		G_PrintMsg( ent, "No timeout in progress.\n" );
 		return;
 	}
@@ -1076,14 +1076,14 @@ static void Cmd_Timein_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 		return;
 	}
 
-	if( GS_TeamBasedGametype() ) {
+	if( GS_TeamBasedGametype( *ggs ) ) {
 		num = ent->s.team;
 	} else {
 		num = ENTNUM( ent ) - 1;
 	}
 
 	if( level.timeout.caller != num ) {
-		if( GS_TeamBasedGametype() ) {
+		if( GS_TeamBasedGametype( *ggs ) ) {
 			G_PrintMsg( ent, "Your team didn't call this timeout.\n" );
 		} else {
 			G_PrintMsg( ent, "You didn't call this timeout.\n" );
@@ -1128,7 +1128,7 @@ static void Cmd_Awards_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 */
 char *G_StatsMessage( edict_t *ent ) {
 	Client *client;
-	gsitem_t *item;
+	const gsitem_t *item;
 	int i, shot_weak, hit_weak, shot_strong, hit_strong, shot_total, hit_total;
 	static char entry[MAX_TOKEN_CHARS];
 
@@ -1139,7 +1139,7 @@ char *G_StatsMessage( edict_t *ent ) {
 	Q_snprintfz( entry, sizeof( entry ), "%d", PLAYERNUM( ent ) );
 
 	for( i = WEAP_GUNBLADE; i < WEAP_TOTAL; i++ ) {
-		item = GS_FindItemByTag( i );
+		item = GS_FindItemByTag( ggs, i );
 		assert( item );
 
 		hit_weak = hit_strong = 0;

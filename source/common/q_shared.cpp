@@ -320,8 +320,8 @@ float ( *LittleFloat )( float l ) = &LittleFloatDetectSwap;
 * for making temporary vectors for function calls
 */
 float *tv( float x, float y, float z ) {
-	static int index;
-	static float vecs[8][3];
+	thread_local static int index;
+	thread_local static float vecs[8][3];
 	float *v;
 
 	// use an array so that multiple tempvectors won't collide
@@ -342,8 +342,8 @@ float *tv( float x, float y, float z ) {
 * This is just a convenience function for printing vectors
 */
 char *vtos( float v[3] ) {
-	static int index;
-	static char str[8][32];
+	thread_local static int index;
+	thread_local static char str[8][32];
 	char *s;
 
 	// use an array so that multiple vtos won't collide
@@ -377,8 +377,8 @@ char *va_r( char *dest, size_t size, const char *format, ... ) {
 */
 char *va( const char *format, ... ) {
 	va_list argptr;
-	static int str_index;
-	static char string[8][2048];
+	thread_local static int str_index;
+	thread_local static char string[8][2048];
 
 	str_index = ( str_index + 1 ) & 7;
 	va_start( argptr, format );

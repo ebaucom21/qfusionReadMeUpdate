@@ -33,7 +33,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define WEAPONUP_FRAMETIME 50
 #define DEFAULT_BULLET_SPREAD 350
 
-gs_weapon_definition_t gs_weaponDefs[] =
+static std::initializer_list<gs_weapon_definition_t> kDefaultWeaponDefs =
 {
 	{
 		"no weapon",
@@ -939,7 +939,7 @@ gs_weapon_definition_t gs_weaponDefs[] =
 	},
 };
 
-gs_weapon_definition_t gs_raceWeaponDefs[] =
+static std::initializer_list<gs_weapon_definition_t> kDefaultRaceWeaponDefs =
 {
 	{NULL},
 
@@ -1284,55 +1284,67 @@ gs_weapon_definition_t gs_raceWeaponDefs[] =
 	{NULL},
 };
 
-#define GS_NUMWEAPONDEFS ( sizeof( gs_weaponDefs ) / sizeof( gs_weapon_definition_t ) )
-
 /*
 * GS_GetWeaponDef
 */
-gs_weapon_definition_t *GS_GetWeaponDef( int weapon ) {
-	assert( GS_NUMWEAPONDEFS == WEAP_TOTAL );
+const gs_weapon_definition_t *GS_GetWeaponDef( const gs_state_t *gs, int weapon ) {
+	if( gs->weaponDefs.empty() ) [[unlikely]] {
+		gs->weaponDefs.assign( kDefaultWeaponDefs.begin(), kDefaultWeaponDefs.end() );
+		gs->raceWeaponDefs.assign( kDefaultRaceWeaponDefs.begin(), kDefaultRaceWeaponDefs.end() );
+	}
+
 	assert( weapon >= 0 && weapon < WEAP_TOTAL );
-	if( GS_RaceGametype() && gs_raceWeaponDefs[weapon].name != NULL ){
-		return &gs_raceWeaponDefs[weapon];
+	assert( gs->weaponDefs.size() == WEAP_TOTAL && gs->raceWeaponDefs.size() == WEAP_TOTAL );
+	if( GS_RaceGametype( *gs ) && gs->raceWeaponDefs[weapon].name != NULL ){
+		return &gs->raceWeaponDefs[weapon];
 	} else {
-		return &gs_weaponDefs[weapon];
+		return &gs->weaponDefs[weapon];
 	}
 }
 
 /*
 * GS_GetWeaponDefExt
 */
-gs_weapon_definition_t *GS_GetWeaponDefExt( int weapon, bool race ) {
-	if( race && gs_raceWeaponDefs[weapon].name != NULL ) {
-		return &gs_raceWeaponDefs[weapon];
+gs_weapon_definition_t *GS_GetWeaponDefExt( gs_state_t *gs, int weapon, bool race ) {
+	if( gs->weaponDefs.empty() ) [[unlikely]] {
+		gs->weaponDefs.assign( kDefaultWeaponDefs.begin(), kDefaultWeaponDefs.end() );
+		gs->raceWeaponDefs.assign( kDefaultRaceWeaponDefs.begin(), kDefaultRaceWeaponDefs.end() );
+	}
+
+	if( race && gs->raceWeaponDefs[weapon].name != NULL ) {
+		return &gs->raceWeaponDefs[weapon];
 	} else {
-		return &gs_weaponDefs[weapon];
+		return &gs->weaponDefs[weapon];
 	}
 }
 
 /*
 * GS_InitWeapons
 */
-void GS_InitWeapons( void ) {
-	int i;
-	gsitem_t *item;
-	gs_weapon_definition_t *weapondef;
+void GS_InitWeapons( gs_state_t *gs ) {
+	gs->weaponDefs.assign( kDefaultWeaponDefs.begin(), kDefaultWeaponDefs.end() );
+	gs->raceWeaponDefs.assign( kDefaultRaceWeaponDefs.begin(), kDefaultRaceWeaponDefs.end() );
 
-	for( i = WEAP_GUNBLADE; i < WEAP_TOTAL; i++ ) {
-		item = GS_FindItemByTag( i );
-		weapondef = GS_GetWeaponDef( i );
+	for( int i = WEAP_GUNBLADE; i < WEAP_TOTAL; i++ ) {
+		const gsitem_t *item = GS_FindItemByTag( gs, i );
+		const gs_weapon_definition_t *weapondef = GS_GetWeaponDef( gs, i );
 
 		assert( item && weapondef );
 
 		// hack : use the firedef pickup counts on items
-		if( item->weakammo_tag && GS_FindItemByTag( item->weakammo_tag ) ) {
-			GS_FindItemByTag( item->weakammo_tag )->quantity = weapondef->firedef_weak.ammo_pickup;
-			GS_FindItemByTag( item->weakammo_tag )->inventory_max = weapondef->firedef_weak.ammo_max;
+		if( item->weakammo_tag ) {
+			// Note: The behavior of const_cast is well-defined in this case
+			if( auto *weakAmmoItem = const_cast<gsitem_t *>( GS_FindItemByTag( gs, item->weakammo_tag ) ) ) {
+				weakAmmoItem->quantity = weapondef->firedef_weak.ammo_pickup;
+				weakAmmoItem->inventory_max = weapondef->firedef_weak.ammo_max;
+			}
 		}
 
-		if( item->ammo_tag && GS_FindItemByTag( item->ammo_tag ) ) {
-			GS_FindItemByTag( item->ammo_tag )->quantity = weapondef->firedef.ammo_pickup;
-			GS_FindItemByTag( item->ammo_tag )->inventory_max = weapondef->firedef.ammo_max;
+		if( item->ammo_tag ) {
+			if( auto *ammoItem = const_cast<gsitem_t *>( GS_FindItemByTag( gs, item->ammo_tag ) ) ) {
+				ammoItem->quantity = weapondef->firedef.ammo_pickup;
+				ammoItem->inventory_max = weapondef->firedef.ammo_max;
+			}
 		}
 	}
 }

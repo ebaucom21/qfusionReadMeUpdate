@@ -95,6 +95,8 @@ typedef struct asglobproperties_s {
 
 static void asnullfunc( void ) {}
 
+extern gs_state_t *ggs;
+
 #define ASLIB_LOCAL_CLASS_DESCR( x )
 
 // Changed from offsetof() to asOFFSET() to avoid warnings

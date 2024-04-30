@@ -51,21 +51,21 @@ static const char *gs_teamSkinsNames[] = {
 /*
 * GS_TeamName
 */
-const char *GS_TeamName( int team ) {
+const char *GS_TeamName( const gs_state_t *gs, int team ) {
 	if( team < 0 || team >= GS_MAX_TEAMS ) {
 		return NULL;
 	}
-	return module_GetConfigString( CS_TEAM_SPECTATOR_NAME + team );
+	return gs->GetConfigString( CS_TEAM_SPECTATOR_NAME + team );
 }
 
-const char *GS_DefaultTeamName( int team ) {
+const char *GS_DefaultTeamName( const gs_state_t *, int team ) {
 	if( team < 0 || team >= GS_MAX_TEAMS ) {
 		return NULL;
 	}
 	return gs_teamNames[team];
 }
 
-auto GS_TeamSkinName( int team ) -> std::optional<wsw::StringView> {
+auto GS_TeamSkinName( const gs_state_t *, int team ) -> std::optional<wsw::StringView> {
 	if( team >= 0 && team < GS_MAX_TEAMS ) {
 		if( const char *name = gs_teamSkinsNames[team] ) {
 			return wsw::StringView( name );
@@ -77,7 +77,7 @@ auto GS_TeamSkinName( int team ) -> std::optional<wsw::StringView> {
 /*
 * GS_Teams_TeamFromName
 */
-int GS_Teams_TeamFromName( const char *teamname ) {
+int GS_Teams_TeamFromName( const gs_state_t *gs, const char *teamname ) {
 	const char *s;
 	int i;
 
@@ -91,7 +91,7 @@ int GS_Teams_TeamFromName( const char *teamname ) {
 			return i;
 		}
 
-		s = module_GetConfigString( CS_TEAM_SPECTATOR_NAME + i );
+		s = gs->GetConfigString( CS_TEAM_SPECTATOR_NAME + i );
 		if( s && !Q_stricmp( s, teamname ) ) {
 			return i;
 		}
@@ -103,8 +103,8 @@ int GS_Teams_TeamFromName( const char *teamname ) {
 /*
 * GS_IsTeamDamage
 */
-bool GS_IsTeamDamage( const entity_state_t *targ, const entity_state_t *attacker ) {
-	if( !GS_TeamBasedGametype() ) {
+bool GS_IsTeamDamage( const gs_state_t *gs, const entity_state_t *targ, const entity_state_t *attacker ) {
+	if( !GS_TeamBasedGametype( *gs ) ) {
 		return false;
 	}
 

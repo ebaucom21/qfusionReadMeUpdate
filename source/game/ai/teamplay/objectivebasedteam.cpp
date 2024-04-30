@@ -199,7 +199,7 @@ AiAlertSpot AiObjectiveBasedTeam::DefenceSpot::ToAlertSpot() const {
 void AiObjectiveBasedTeam::EnableDefenceSpotAutoAlert( DefenceSpot *defenceSpot ) {
 	AiAlertSpot alertSpot( defenceSpot->ToAlertSpot() );
 	// TODO: Track a list of all bots in AiBaseTeam
-	for( int i = 1; i <= gs.maxclients; ++i ) {
+	for( int i = 1; i <= ggs->maxclients; ++i ) {
 		edict_t *ent = game.edicts + i;
 		if( !ent->bot ) {
 			continue;
@@ -215,7 +215,7 @@ void AiObjectiveBasedTeam::EnableDefenceSpotAutoAlert( DefenceSpot *defenceSpot 
 }
 
 void AiObjectiveBasedTeam::DisableDefenceSpotAutoAlert( DefenceSpot *defenceSpot ) {
-	for( int i = 1; i <= gs.maxclients; ++i ) {
+	for( int i = 1; i <= ggs->maxclients; ++i ) {
 		edict_t *ent = game.edicts + i;
 		if( !ent->bot ) {
 			continue;
@@ -376,7 +376,7 @@ void AiObjectiveBasedTeam::ResetBotOrders( Bot *bot ) {
 
 void AiObjectiveBasedTeam::ResetAllBotsOrders() {
 	// TODO: Utilize AiManager Ai/Bot list?
-	for( int i = 0; i <= gs.maxclients; ++i ) {
+	for( int i = 0; i <= ggs->maxclients; ++i ) {
 		edict_t *ent = game.edicts + i;
 		if( !ent->r.inuse || !ent->bot ) {
 			continue;
@@ -386,7 +386,7 @@ void AiObjectiveBasedTeam::ResetAllBotsOrders() {
 }
 
 void AiObjectiveBasedTeam::FindAllCandidates( Candidates &candidates ) {
-	for( int i = 0; i <= gs.maxclients; ++i ) {
+	for( int i = 0; i <= ggs->maxclients; ++i ) {
 		edict_t *ent = game.edicts + i;
 		if( !ent->r.inuse || !ent->bot ) {
 			continue;
@@ -504,7 +504,7 @@ void AiObjectiveBasedTeam::DefenceSpot::ComputeRawScores( Candidates &candidates
 				continue;
 			}
 
-			const auto *weaponDef = GS_GetWeaponDef( weapon );
+			const auto *weaponDef = GS_GetWeaponDef( ggs, weapon );
 
 			if( weaponDef->firedef.ammo_id != AMMO_NONE && weaponDef->firedef.ammo_max ) {
 				weaponScore += inventory[weaponDef->firedef.ammo_id] / (float)weaponDef->firedef.ammo_max;

@@ -90,7 +90,7 @@ static int G_Chase_FindFollowPOV( edict_t *ent ) {
 			edict_t *attacker = targ->r.client->last_killer;
 
 			// ignore world and team kills
-			if( attacker && attacker->r.client && !GS_IsTeamDamage( &targ->s, &attacker->s ) ) {
+			if( attacker && attacker->r.client && !GS_IsTeamDamage( ggs, &targ->s, &attacker->s ) ) {
 				newpov = ENTNUM( attacker );
 			}
 		}
@@ -108,7 +108,7 @@ static int G_Chase_FindFollowPOV( edict_t *ent ) {
 	newctfpov = newpoweruppov = -1;
 	maxteam = 0;
 
-	for( i = 1; PLAYERNUM( ( game.edicts + i ) ) < gs.maxclients; i++ ) {
+	for( i = 1; PLAYERNUM( ( game.edicts + i ) ) < ggs->maxclients; i++ ) {
 		target = game.edicts + i;
 
 		if( !target->r.inuse || trap_GetClientState( PLAYERNUM( target ) ) < CS_SPAWNED ) {
@@ -297,11 +297,11 @@ static void G_EndFrame_UpdateChaseCam( edict_t *ent ) {
 	ent->r.client->ps.stats[STAT_FLAGS] &= ~STAT_FLAG_READY;
 	ent->r.client->ps.stats[STAT_FLAGS] &= ~STAT_FLAG_OPERATOR;
 
-	if( GS_HasChallengers() && ent->r.client->queueTimeStamp ) {
+	if( GS_HasChallengers( *ggs ) && ent->r.client->queueTimeStamp ) {
 		ent->r.client->ps.stats[STAT_FLAGS] |= STAT_FLAG_CHALLENGER;
 	}
 
-	if( GS_MatchState() <= MATCH_STATE_WARMUP && level.ready[PLAYERNUM( ent )] ) {
+	if( GS_MatchState( *ggs ) <= MATCH_STATE_WARMUP && level.ready[PLAYERNUM( ent )] ) {
 		ent->r.client->ps.stats[STAT_FLAGS] |= STAT_FLAG_READY;
 	}
 
@@ -386,7 +386,7 @@ void G_ChasePlayer( edict_t *ent, const char *name, bool teamonly, int followmod
 	// locate the requested target
 	if( name && name[0] ) {
 		// find it by player names
-		for( e = game.edicts + 1; PLAYERNUM( e ) < gs.maxclients; e++ ) {
+		for( e = game.edicts + 1; PLAYERNUM( e ) < ggs->maxclients; e++ ) {
 			if( !G_Chase_IsValidTarget( ent, e, teamonly ) ) {
 				continue;
 			}
@@ -402,7 +402,7 @@ void G_ChasePlayer( edict_t *ent, const char *name, bool teamonly, int followmod
 		// didn't find it by name, try by numbers
 		if( targetNum == -1 ) {
 			i = atoi( name );
-			if( i >= 0 && i < gs.maxclients ) {
+			if( i >= 0 && i < ggs->maxclients ) {
 				e = game.edicts + 1 + i;
 				if( G_Chase_IsValidTarget( ent, e, teamonly ) ) {
 					targetNum = PLAYERNUM( e );
@@ -416,7 +416,7 @@ void G_ChasePlayer( edict_t *ent, const char *name, bool teamonly, int followmod
 	}
 
 	// try to reuse old target if we didn't find a valid one
-	if( targetNum == -1 && oldTarget > 0 && oldTarget < gs.maxclients ) {
+	if( targetNum == -1 && oldTarget > 0 && oldTarget < ggs->maxclients ) {
 		e = game.edicts + 1 + oldTarget;
 		if( G_Chase_IsValidTarget( ent, e, teamonly ) ) {
 			targetNum = PLAYERNUM( e );
@@ -425,7 +425,7 @@ void G_ChasePlayer( edict_t *ent, const char *name, bool teamonly, int followmod
 
 	// if we still don't have a target, just pick the first valid one
 	if( targetNum == -1 ) {
-		for( e = game.edicts + 1; PLAYERNUM( e ) < gs.maxclients; e++ ) {
+		for( e = game.edicts + 1; PLAYERNUM( e ) < ggs->maxclients; e++ ) {
 			if( !G_Chase_IsValidTarget( ent, e, teamonly ) ) {
 				continue;
 			}
@@ -501,7 +501,7 @@ void G_ChaseStep( edict_t *ent, int step ) {
 		if( team == GS_MAX_TEAMS ) {
 			team = TEAM_PLAYERS;
 		}
-		for( j = 0; j < gs.maxclients; j++ ) {
+		for( j = 0; j < ggs->maxclients; j++ ) {
 			// at this point step is -1 or 1
 			i += step;
 
@@ -553,7 +553,7 @@ void Cmd_ChaseCam_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 		// prevent 'joined spectators' spam
 		if( !ChatHandlersChain::instance()->detectFlood( ent ) ) {
 			G_PrintMsg( NULL, "%s%s joined the %s%s team.\n", ent->r.client->netname.data(),
-						S_COLOR_WHITE, GS_TeamName( ent->s.team ), S_COLOR_WHITE );
+						S_COLOR_WHITE, GS_TeamName( ggs, ent->s.team ), S_COLOR_WHITE );
 		}
 	}
 
@@ -562,7 +562,7 @@ void Cmd_ChaseCam_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	// & 4 = objectives
 	// & 8 = fragger
 
-	if( ent->r.client->is_coach && GS_TeamBasedGametype() ) {
+	if( ent->r.client->is_coach && GS_TeamBasedGametype( *ggs ) ) {
 		team_only = true;
 	} else {
 		team_only = false;
@@ -614,7 +614,7 @@ void G_SpectatorMode( edict_t *ent ) {
 	if( ent->s.team != TEAM_SPECTATOR ) {
 		G_Teams_JoinTeam( ent, TEAM_SPECTATOR );
 		G_PrintMsg( NULL, "%s%s joined the %s%s team.\n", ent->r.client->netname.data(),
-					S_COLOR_WHITE, GS_TeamName( ent->s.team ), S_COLOR_WHITE );
+					S_COLOR_WHITE, GS_TeamName( ggs, ent->s.team ), S_COLOR_WHITE );
 	}
 
 	// was in chasecam
@@ -623,7 +623,7 @@ void G_SpectatorMode( edict_t *ent ) {
 		G_Chase_SetChaseActive( ent, false );
 
 		// reset movement speeds
-		ent->r.client->ps.pmove.stats[PM_STAT_MAXSPEED] = DEFAULT_PLAYERSPEED;
+		ent->r.client->ps.pmove.stats[PM_STAT_MAXSPEED] = GS_DefaultPlayerSpeed( *ggs );
 		ent->r.client->ps.pmove.stats[PM_STAT_JUMPSPEED] = DEFAULT_JUMPSPEED;
 		ent->r.client->ps.pmove.stats[PM_STAT_DASHSPEED] = DEFAULT_DASHSPEED;
 	}

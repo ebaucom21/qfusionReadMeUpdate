@@ -367,7 +367,7 @@ bool BotWeaponsUsageModule::CheckShot( const AimParams &aimParams,
 	if( tr.fraction != 1.0f ) {
 		const edict_t *self = game.edicts + bot->EntNum();
 		// Do a generic check for team damage
-		if( ( game.edicts[tr.ent].s.team == self->s.team ) && GS_TeamBasedGametype() && g_allow_teamdamage->integer ) {
+		if( ( game.edicts[tr.ent].s.team == self->s.team ) && GS_TeamBasedGametype( *ggs ) && g_allow_teamdamage->integer ) {
 			return false;
 		}
 		hitToBotDist = DistanceFast( self->s.origin, tr.endpos );
@@ -378,11 +378,11 @@ bool BotWeaponsUsageModule::CheckShot( const AimParams &aimParams,
 			return true;
 		}
 
-		if( GS_SelfDamage() && hitToBotDist < fireDef.SplashRadius() ) {
+		if( GS_SelfDamage( *ggs ) && hitToBotDist < fireDef.SplashRadius() ) {
 			return false;
 		}
 
-		if( GS_TeamBasedGametype() && g_allow_teamdamage->integer ) {
+		if( GS_TeamBasedGametype( *ggs ) && g_allow_teamdamage->integer ) {
 			if( !CheckSplashTeamDamage( tr.endpos, aimParams, fireDef ) ) {
 				return false;
 			}
@@ -397,7 +397,7 @@ bool BotWeaponsUsageModule::CheckShot( const AimParams &aimParams,
 
 	// This factor lowers with the greater velocity.
 	// The bot should have lesser accuracy while moving fast, and greater one while standing still
-	const float velocityFactor = 1.0f - BoundedFraction( bot->EntityPhysicsState()->Speed() - DEFAULT_PLAYERSPEED, 500 );
+	const float velocityFactor = 1.0f - BoundedFraction( bot->EntityPhysicsState()->Speed() - GS_DefaultPlayerSpeed( *ggs ), 500 );
 
 	if( aimType == AI_WEAPON_AIM_TYPE_PREDICTION ) {
 		if( tr.fraction == 1.0f ) {
@@ -405,7 +405,7 @@ bool BotWeaponsUsageModule::CheckShot( const AimParams &aimParams,
 		}
 
 		// Avoid suicide with PG
-		if( hitToBotDist < fireDef.SplashRadius() && GS_SelfDamage() ) {
+		if( hitToBotDist < fireDef.SplashRadius() && GS_SelfDamage( *ggs ) ) {
 			return false;
 		}
 
@@ -464,7 +464,7 @@ bool BotWeaponsUsageModule::CheckShot( const AimParams &aimParams,
 			return false;
 		}
 
-		if( GS_TeamBasedGametype() && g_allow_teamdamage->integer ) {
+		if( GS_TeamBasedGametype( *ggs ) && g_allow_teamdamage->integer ) {
 			if( !CheckSplashTeamDamage( tr.endpos, aimParams, fireDef ) ) {
 				return false;
 			}
@@ -536,7 +536,7 @@ void BotWeaponsUsageModule::SetSelectedWeapons( const WeaponsToSelect &weaponsTo
 	selectedWeapons.hasSelectedScriptWeapon = false;
 
 	const int builtinWeapon = weaponsToSelect.getBuiltinWeapon();
-	const auto *weaponDef = GS_GetWeaponDef( builtinWeapon );
+	const auto *weaponDef = GS_GetWeaponDef( ggs, builtinWeapon );
 	const auto *fireDef = &weaponDef->firedef;
 
 	// TODO: We avoid issues with blade attack until melee aim style handling is introduced

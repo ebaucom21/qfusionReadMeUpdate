@@ -496,7 +496,7 @@ struct weaponinfo_s *CG_RegisterWeaponModel( char *cgs_name, int weaponTag ) {
 
 	// find the item for this weapon and try to assign the outline color
 	if( weaponTag ) {
-		gsitem_t *item = GS_FindItemByTag( weaponTag );
+		const gsitem_t *item = GS_FindItemByTag( cggs, weaponTag );
 		if( item ) {
 			if( item->color && strlen( item->color ) > 1 ) {
 				byte_vec4_t colorByte;

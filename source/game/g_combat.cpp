@@ -89,7 +89,7 @@ void G_Killed( edict_t *targ, edict_t *inflictor, edict_t *attacker, int damage,
 
 	if( targ->r.client ) {
 		if( attacker && targ != attacker ) {
-			if( GS_IsTeamDamage( &targ->s, &attacker->s ) ) {
+			if( GS_IsTeamDamage( ggs, &targ->s, &attacker->s ) ) {
 				attacker->snap.teamkill = true;
 			} else {
 				attacker->snap.kill = true;
@@ -97,7 +97,7 @@ void G_Killed( edict_t *targ, edict_t *inflictor, edict_t *attacker, int damage,
 		}
 
 		// count stats
-		if( GS_MatchState() == MATCH_STATE_PLAYTIME ) {
+		if( GS_MatchState( *ggs ) == MATCH_STATE_PLAYTIME ) {
 			targ->r.client->stats.AddDeath();
 			teamlist[targ->s.team].stats.AddDeath();
 
@@ -105,7 +105,7 @@ void G_Killed( edict_t *targ, edict_t *inflictor, edict_t *attacker, int damage,
 				targ->r.client->stats.AddSuicide();
 				teamlist[targ->s.team].stats.AddSuicide();
 			} else {
-				if( GS_IsTeamDamage( &targ->s, &attacker->s ) ) {
+				if( GS_IsTeamDamage( ggs, &targ->s, &attacker->s ) ) {
 					attacker->r.client->stats.AddTeamFrag();
 					teamlist[attacker->s.team].stats.AddTeamFrag();
 				} else {
@@ -269,7 +269,7 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 	client = targ->r.client;
 
 	// Cgg - race mode: players don't interact with one another
-	if( GS_RaceGametype() ) {
+	if( GS_RaceGametype( *ggs ) ) {
 		if( attacker->r.client && targ->r.client && attacker != targ ) {
 			return;
 		}
@@ -284,7 +284,7 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 	// stun
 	if( g_allow_stun->integer && !( dflags & ( DAMAGE_NO_STUN | FL_GODMODE ) )
 		&& (int)stun > 0 && targ->r.client && targ->r.client->takeStun &&
-		!GS_IsTeamDamage( &targ->s, &attacker->s ) && ( targ != attacker ) ) {
+		!GS_IsTeamDamage( ggs, &targ->s, &attacker->s ) && ( targ != attacker ) ) {
 		if( dflags & DAMAGE_STUN_CLAMP ) {
 			if( targ->r.client->ps.pmove.stats[PM_STAT_STUN] < (int)stun ) {
 				targ->r.client->ps.pmove.stats[PM_STAT_STUN] = (int)stun;
@@ -300,7 +300,7 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 	statDmg = ( attacker != targ ) && ( mod != MOD_TELEFRAG );
 
 	// apply handicap on the damage given
-	if( statDmg && attacker->r.client && !GS_Instagib() ) {
+	if( statDmg && attacker->r.client && !GS_Instagib( *ggs ) ) {
 		// handicap is a percentage value
 		if( attacker->r.client->handicap != 0 ) {
 			damage *= 1.0 - ( attacker->r.client->handicap * 0.01f );
@@ -318,26 +318,26 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 			save = damage;
 		}
 		// never damage in timeout
-		else if( GS_MatchPaused() ) {
+		else if( GS_MatchPaused( *ggs ) ) {
 			take = save = 0;
 		}
 		// ca has self splash damage disabled
-		else if( ( dflags & DAMAGE_RADIUS ) && attacker == targ && !GS_SelfDamage() ) {
+		else if( ( dflags & DAMAGE_RADIUS ) && attacker == targ && !GS_SelfDamage( *ggs ) ) {
 			take = save = 0;
 		}
 		// don't get damage from players in race
-		else if( ( GS_RaceGametype() ) && attacker->r.client && targ->r.client &&
+		else if( ( GS_RaceGametype( *ggs ) ) && attacker->r.client && targ->r.client &&
 				 ( attacker->r.client != targ->r.client ) ) {
 			take = save = 0;
 		}
 		// team damage avoidance
-		else if( GS_IsTeamDamage( &targ->s, &attacker->s ) && !G_Gametype_CanTeamDamage( dflags ) ) {
+		else if( GS_IsTeamDamage( ggs, &targ->s, &attacker->s ) && !G_Gametype_CanTeamDamage( dflags ) ) {
 			take = save = 0;
 		}
 		// apply warShell powerup protection
 		else if( targ->r.client && targ->r.client->ps.inventory[POWERUP_SHELL] > 0 ) {
 			// warshell offers full protection in instagib
-			if( GS_Instagib() ) {
+			if( GS_Instagib( *ggs ) ) {
 				take = 0;
 				save = damage;
 			} else {
@@ -370,7 +370,7 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 	if( statDmg && attacker->r.client && !targ->deadflag && targ->movetype != MOVETYPE_PUSH && targ->s.type != ET_CORPSE ) {
 		attacker->r.client->stats.AddDamageGiven( take + asave );
 		teamlist[attacker->s.team].stats.AddDamageGiven( take + asave );
-		if( GS_IsTeamDamage( &targ->s, &attacker->s ) ) {
+		if( GS_IsTeamDamage( ggs, &targ->s, &attacker->s ) ) {
 			attacker->r.client->stats.AddTeamDamageGiven( take + asave );
 			teamlist[attacker->s.team].stats.AddTeamDamageGiven( take + asave );
 		}
@@ -384,7 +384,7 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 	if( statDmg && client ) {
 		client->stats.AddDamageTaken( take + asave );
 		teamlist[targ->s.team].stats.AddDamageTaken( take + asave );
-		if( GS_IsTeamDamage( &targ->s, &attacker->s ) ) {
+		if( GS_IsTeamDamage( ggs, &targ->s, &attacker->s ) ) {
 			client->stats.AddTeamDamageTaken( take + asave );
 			teamlist[targ->s.team].stats.AddTeamDamageTaken( take + asave );
 		}
@@ -428,7 +428,7 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 	targ->health = targ->health - take;
 
 	// add damage done to stats
-	if( !GS_IsTeamDamage( &targ->s, &attacker->s ) && statDmg && G_ModToAmmo( mod ) != AMMO_NONE && client && attacker->r.client ) {
+	if( !GS_IsTeamDamage( ggs, &targ->s, &attacker->s ) && statDmg && G_ModToAmmo( mod ) != AMMO_NONE && client && attacker->r.client ) {
 		attacker->r.client->stats.accuracy_hits[G_ModToAmmo( mod ) - AMMO_GUNBLADE]++;
 		attacker->r.client->stats.accuracy_damage[G_ModToAmmo( mod ) - AMMO_GUNBLADE] += damage;
 		teamlist[attacker->s.team].stats.accuracy_hits[G_ModToAmmo( mod ) - AMMO_GUNBLADE]++;
@@ -440,7 +440,7 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 	// accumulate given damage for hit sounds
 	if( ( take || asave ) && targ != attacker && client && !targ->deadflag ) {
 		if( attacker ) {
-			if( GS_IsTeamDamage( &targ->s, &attacker->s ) ) {
+			if( GS_IsTeamDamage( ggs, &targ->s, &attacker->s ) ) {
 				attacker->snap.damageteam_given += take + asave; // we want to know how good our hit was, so saved also matters
 			} else {
 				attacker->snap.damage_given += take + asave;
@@ -770,16 +770,16 @@ public:
 
 auto weaponDefForSelfDamage( const edict_t *inflictor ) -> const gs_weapon_definition_t * {
 	if( inflictor->s.type == ET_ROCKET ) {
-		return GS_GetWeaponDef( WEAP_ROCKETLAUNCHER );
+		return GS_GetWeaponDef( ggs, WEAP_ROCKETLAUNCHER );
 	}
 	if( inflictor->s.type == ET_GRENADE ) {
-		return GS_GetWeaponDef( WEAP_GRENADELAUNCHER );
+		return GS_GetWeaponDef( ggs, WEAP_GRENADELAUNCHER );
 	}
 	if( inflictor->s.type == ET_PLASMA ) {
-		return GS_GetWeaponDef( WEAP_PLASMAGUN );
+		return GS_GetWeaponDef( ggs, WEAP_PLASMAGUN );
 	}
 	if( inflictor->s.type == ET_BLASTER ) {
-		return GS_GetWeaponDef( WEAP_GUNBLADE );
+		return GS_GetWeaponDef( ggs, WEAP_GUNBLADE );
 	}
 
 	return nullptr;
@@ -820,7 +820,7 @@ void SplashPropagationSolver::computeDamageParams( const EntNumsVector &vulnerab
 
 	const float *const origin       = m_inflictor->s.origin;
 	const float radius              = m_inflictor->projectileInfo.radius;
-	const bool isRaceGametype       = GS_RaceGametype();
+	const bool isRaceGametype       = GS_RaceGametype( *ggs );
 	const edict_t *const gameEdicts = game.edicts;
 
 	for( int entNum: vulnerableEnts ) {
@@ -1023,7 +1023,7 @@ void SplashPropagationSolver::operator()() {
 	// Do an early shortcut.
 	// A top-level call always includes the projectile in the output.
 	if( !rawEntNums.empty() && !( rawEntNums.size() == 1 && rawEntNums.front() == m_inflictor->s.number ) ) {
-		const bool volatileExplosives = GS_RaceGametype() && g_volatile_explosives->integer != 0;
+		const bool volatileExplosives = GS_RaceGametype( *ggs ) && g_volatile_explosives->integer != 0;
 
 		// Perform an initial pruning of invulnerable entities
 		EntNumsVector vulnerableEntNums;

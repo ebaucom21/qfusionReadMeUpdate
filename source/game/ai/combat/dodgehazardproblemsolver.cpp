@@ -53,7 +53,7 @@ std::optional<Vec3> DodgeHazardProblemSolver::getVelocityDirForConformanceTests(
 
 	Vec3 velocityDir( ent->velocity );
 	const float squareSpeed = velocityDir.SquaredLength();
-	const float runSpeed = DEFAULT_PLAYERSPEED;
+	const float runSpeed = GS_DefaultPlayerSpeed( *ggs );
 	if( squareSpeed < runSpeed * runSpeed ) {
 		return std::nullopt;
 	}

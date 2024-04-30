@@ -37,7 +37,7 @@ void EventsTracker::TryGuessingProjectileOwnersOrigins( const EntNumsVector &dan
 				} else {
 					const auto it = projectileToWeaponTable.find( projectile->s.type );
 					if( it != projectileToWeaponTable.end() ) {
-						const auto *weaponDef  = GS_GetWeaponDef( it.value().first );
+						const auto *weaponDef  = GS_GetWeaponDef( ggs, it.value().first );
 						const auto *fireDef    = it.value().second ? &weaponDef->firedef : &weaponDef->firedef_weak;
 						// Assume that we may legibly guess on the first half of lifetime
 						if( projectile->nextThink > levelTime + fireDef->timeout / 2 ) {
@@ -56,7 +56,7 @@ void EventsTracker::TryGuessingProjectileOwnersOrigins( const EntNumsVector &dan
 }
 
 void EventsTracker::ComputeTeammatesVisData( const vec3_t forwardDir, float fovDotFactor ) {
-	assert( GS_TeamBasedGametype() );
+	assert( GS_TeamBasedGametype( *ggs ) );
 
 	m_areAllTeammatesInFov = true;
 	m_teammatesVisData.clear();
@@ -92,7 +92,7 @@ void EventsTracker::ComputeTeammatesVisData( const vec3_t forwardDir, float fovD
 }
 
 bool EventsTracker::CanDistinguishGenericEnemySoundsFromTeammates( const GuessedEnemy &guessedEnemy ) {
-	if( !GS_TeamBasedGametype() ) {
+	if( !GS_TeamBasedGametype( *ggs ) ) {
 		return true;
 	}
 
@@ -107,7 +107,7 @@ bool EventsTracker::CanDistinguishGenericEnemySoundsFromTeammates( const Guessed
 	const Vec3 forwardDir       = m_bot->EntityPhysicsState()->ForwardDir();
 	const float fovDotFactor    = m_bot->FovDotFactor();
 	const edict_t *botEnt       = game.edicts + m_bot->EntNum();
-	const bool canShowMinimap   = GS_CanShowMinimap();
+	const bool canShowMinimap   = GS_CanShowMinimap( *ggs );
 
 	// Compute vis data lazily
 	if( m_teammatesVisDataComputedAt != level.time ) {
@@ -338,7 +338,7 @@ void EventsTracker::Update() {
 	const int64_t levelTime   = level.time;
 
 	// Try detecting landing events every frame
-	for( int clientNum = 0, maxClients = gs.maxclients; clientNum < maxClients; ++clientNum ) {
+	for( int clientNum = 0, maxClients = ggs->maxclients; clientNum < maxClients; ++clientNum ) {
 		if( m_jumppadUserTrackingTimeoutAt[clientNum] > levelTime ) {
 			if( gameEdicts[clientNum + 1].groundentity ) {
 				m_jumppadUserTrackingTimeoutAt[clientNum] = 0;
@@ -347,7 +347,7 @@ void EventsTracker::Update() {
 	}
 
 	if( m_bot->PermitsDistributedUpdateThisFrame() ) {
-		for( int clientNum = 0, maxClients = gs.maxclients; clientNum < maxClients; ++clientNum ) {
+		for( int clientNum = 0, maxClients = ggs->maxclients; clientNum < maxClients; ++clientNum ) {
 			if( m_jumppadUserTrackingTimeoutAt[clientNum] > levelTime ) {
 				const edict_t *ent = gameEdicts + clientNum + 1;
 				// Check whether a player cannot be longer a valid entity
