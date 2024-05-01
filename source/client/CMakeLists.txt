@@ -19,6 +19,9 @@ set(OPENAL_SOFT_LIBRARY "OpenAL32")
 link_directories(${OPENAL_SOFT_DIR}/cmake-build-release/)
 endif()
 
+set(ANGELSCRIPT_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/angelscript/sdk/angelscript)
+link_directories(${ANGELSCRIPT_DIR}/lib)
+
 # TODO: Is there something smarter
 get_filename_component(Qt5_CMAKEDIR ${Qt5_DIR} DIRECTORY)
 get_filename_component(Qt5_LIBDIR ${Qt5_CMAKEDIR} DIRECTORY)
@@ -52,8 +55,7 @@ if (NOT QFUSION_MAC_INFO_PLIST)
 endif()
 
 file(GLOB CLIENT_HEADERS
-    "*.h"
-	"../common/*.h"
+	"*.h"
 	"../common/*.h"
 	"../angelwrap/qas_public.h"
 	"../ref/r_public.h"
@@ -70,8 +72,7 @@ file(GLOB CLIENT_HEADERS
 file(GLOB CLIENT_COMMON_SOURCES
 	"../common/lifecycle.cpp"
 	"../common/noise.cpp"
-	"../server/sv_main.cpp"
-    "*.cpp"
+	"*.cpp"
 	"../ui/*.cpp"
 	"../cgame/*.cpp"
 	"../ftlib/*.cpp"
@@ -80,15 +81,7 @@ file(GLOB CLIENT_COMMON_SOURCES
 )
 
 file(GLOB REF_HEADERS
-		"../ref/*.h"
-		"../common/q_*.h"
-		"../common/anorms.h"
-		"../common/config.h"
-		"../common/bsp.h"
-		"../common/patch.h"
-		"../common/iqm.h"
-		"../common/qfiles.h"
-		)
+		"../ref/*.h")
 
 file(GLOB REF_COMMON_SOURCES
 		"../ref/*.cpp")
@@ -264,7 +257,7 @@ add_executable(${QFUSION_CLIENT_NAME} ${CLIENT_BINARY_TYPE}
 		       ${BUNDLE_RESOURCES}
 )
 
-add_dependencies(${QFUSION_CLIENT_NAME} game execommon)
+add_dependencies(${QFUSION_CLIENT_NAME} execommon)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set_target_properties(${QFUSION_CLIENT_NAME} PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${QFUSION_MAC_INFO_PLIST})
@@ -316,7 +309,7 @@ set(QT_STATIC_EXPLICIT_PLUGINS
 )
 
 target_link_libraries(${QFUSION_CLIENT_NAME} PRIVATE
-		              execommon
+					  execommon
 					  ${REF_PLATFORM_LIBRARIES}
 					  ${OGG_LIBRARY}
 					  ${VORBIS_LIBRARIES}

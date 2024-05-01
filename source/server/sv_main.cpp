@@ -235,8 +235,6 @@ static cvar_t *sv_demodir;
 
 static game_export_t *ge;
 
-static void *module_handle;
-
 typedef enum { RD_NONE, RD_PACKET } redirect_t;
 
 #define SV_OUTPUTBUF_LENGTH ( MAX_MSGLEN - 16 )
@@ -564,10 +562,6 @@ static bool PF_Compress( void *dst, size_t *const dstSize, const void *src, size
 void SV_ShutdownGameProgs() {
 	if( ge ) {
 		ge->Shutdown();
-		// This call might still require the memory pool to be valid
-		// (for example if there are global object destructors calling G_Free()),
-		// that's why it's called before releasing the pool.
-		Com_UnloadGameLibrary( &module_handle );
 		ge = nullptr;
 	};
 }
@@ -628,6 +622,8 @@ static int SV_FindIndex( const char *name, int start, int max, bool createIfMiss
 
 	return resultIndex;
 }
+
+game_export_t *GetGameAPI( game_import_t * import );
 
 void SV_InitGameProgs() {
 	// unload anything we have now
@@ -785,28 +781,10 @@ void SV_InitGameProgs() {
 	import.createMessageStream = wsw::createMessageStream;
 	import.submitMessageStream = wsw::submitMessageStream;
 
-	// clear module manifest string
-	char manifest[MAX_INFO_STRING];
-	assert( sizeof( manifest ) >= MAX_INFO_STRING );
-	memset( manifest, 0, sizeof( manifest ) );
-
-	void *( *builtinAPIfunc )( void * ) = NULL;
-	if( builtinAPIfunc ) {
-		ge = (game_export_t *)builtinAPIfunc( &import );
-	} else {
-		ge = (game_export_t *)Com_LoadGameLibrary( "game", "GetGameAPI", &module_handle, &import, false, manifest );
-	}
+	ge = GetGameAPI( &import );
 	if( !ge ) {
 		Com_Error( ERR_DROP, "Failed to load game DLL" );
 	}
-
-	if( const int apiversion = ge->API(); apiversion != GAME_API_VERSION ) {
-		Com_UnloadGameLibrary( &module_handle );
-		ge = nullptr;
-		Com_Error( ERR_DROP, "Game is version %i, not %i", apiversion, GAME_API_VERSION );
-	}
-
-	Cvar_ForceSet( "sv_modmanifest", manifest );
 
 	SV_SetServerConfigStrings();
 
@@ -1608,9 +1586,6 @@ void SV_Init() {
 	sv_defaultmap =         Cvar_Get( "sv_defaultmap", "wdm1", CVAR_ARCHIVE );
 	sv_reconnectlimit =     Cvar_Get( "sv_reconnectlimit", "3", CVAR_ARCHIVE );
 	sv_maxclients =         Cvar_Get( "sv_maxclients", "16", CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_LATCH );
-
-	Cvar_Get( "sv_modmanifest", "", CVAR_READONLY );
-	Cvar_ForceSet( "sv_modmanifest", "" );
 
 	// fix invalid sv_maxclients values
 	if( sv_maxclients->integer < 1 ) {

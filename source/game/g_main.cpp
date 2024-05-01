@@ -35,8 +35,6 @@ int meansOfDeath;
 cvar_t *password;
 cvar_t *g_operator_password;
 cvar_t *g_select_empty;
-cvar_t *dedicated;
-cvar_t *developer;
 
 cvar_t *filterban;
 
@@ -221,11 +219,6 @@ static void G_InitGameShared( void ) {
 * only happens when a new game is started or a save game is loaded.
 */
 void G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char *demoExtension ) {
-#ifndef GAME_HARD_LINKED
-	// Register all vars that are declared in this dynamically linked binary
-	DeclaredConfigVar::registerAllVars( DeclaredConfigVar::s_listHead );
-#endif
-
 	cvar_t *g_maxentities;
 
 	gNotice() << "==== G_Init ====";
@@ -248,10 +241,6 @@ void G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char
 	}
 
 	g_gravity = trap_Cvar_Get( "g_gravity", va( "%i", GRAVITY ), 0 );
-	developer = trap_Cvar_Get( "developer", "0", 0 );
-
-	// noset vars
-	dedicated = trap_Cvar_Get( "dedicated", "0", CVAR_NOSET );
 
 	// latched vars
 	sv_cheats = trap_Cvar_Get( "sv_cheats", "0", CVAR_SERVERINFO | CVAR_LATCH );
@@ -434,11 +423,6 @@ void G_Shutdown( void ) {
 
 	Q_free( game.clients );
 	game.clients = nullptr;
-
-#ifndef GAME_HARD_LINKED
-	// Unregister all vars that are declared in this dynamically linked binary
-	DeclaredConfigVar::unregisterAllVars( DeclaredConfigVar::s_listHead );
-#endif
 }
 
 //======================================================================
@@ -704,145 +688,4 @@ void G_ExitLevel( void ) {
 void G_RestartLevel( void ) {
 	Q_strncpyz( level.forcemap, level.mapname, sizeof( level.mapname ) );
 	G_EndMatch();
-}
-
-//======================================================================
-
-#ifndef GAME_HARD_LINKED
-// this is only here so the functions in q_shared.c and q_math.c can link
-void Sys_Error( const char *format, ... ) {
-	va_list argptr;
-	char msg[3072];
-
-	va_start( argptr, format );
-	Q_vsnprintfz( msg, sizeof( msg ), format, argptr );
-	va_end( argptr );
-
-	G_Error( "%s", msg );
-}
-
-void Com_Printf( const char *format, ... ) {
-	va_list argptr;
-	char msg[3072];
-
-	va_start( argptr, format );
-	Q_vsnprintfz( msg, sizeof( msg ), format, argptr );
-	va_end( argptr );
-
-	G_Printf( "%s", msg );
-}
-
-void *Q_malloc( size_t size ) {
-	// TODO: Ensure 16-byte alignment
-	// Zero memory as lots of old stuff rely on the old mempool behaviour
-	void *buf = std::calloc( size, 1 );
-
-	if( !buf ) {
-		wsw::failWithBadAlloc();
-	}
-
-	return buf;
-}
-
-void *Q_realloc( void *buf, size_t newsize ) {
-	void *newbuf = realloc( buf, newsize );
-
-	if( !newbuf && newsize ) {
-		wsw::failWithBadAlloc();
-	}
-
-	// TODO: Zero memory too? There's no portable way of doing that
-
-	return newbuf;
-}
-
-void Q_free( void *buf ) {
-	std::free( buf );
-}
-
-char *Q_strdup( const char *str ) {
-	auto len = std::strlen( str );
-	auto *result = (char *)Q_malloc( len + 1 );
-	std::memcpy( result, str, len + 1 );
-	return result;
-}
-
-#endif
-
-// Adapters for linking angelwrap
-// TODO: Remove all of this once the game code gets linked statically to the server executable
-
-cvar_t *Cvar_Get( const char *var_name, const char *value, cvar_flag_t flags, DeclaredConfigVar *controller ) {
-	return trap_Cvar_Get( var_name, value, flags, controller );
-}
-
-cvar_t *Cvar_Set( const char *var_name, const char *value ) {
-	return trap_Cvar_Set( var_name, value );
-}
-
-cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force ) {
-	return ( force ? trap_Cvar_ForceSet : trap_Cvar_Set )( var_name, value );
-}
-
-cvar_t *Cvar_ForceSet( const char *var_name, const char *value ) {
-	return trap_Cvar_ForceSet( var_name, value );
-}
-
-void Cvar_SetValue( const char *var_name, float value ) {
-	return trap_Cvar_SetValue( var_name, value );
-}
-
-float Cvar_Value( const char *var_name ) {
-	return trap_Cvar_Value( var_name );
-}
-
-const char *Cvar_String( const char *var_name ) {
-	return trap_Cvar_String( var_name );
-}
-
-int FS_FOpenFile( const char *filename, int *filenum, int mode ) {
-	return trap_FS_FOpenFile( filename, filenum, mode );
-}
-
-int FS_Write( const void *buffer, size_t len, int file ) {
-	return trap_FS_Write( buffer, len, file );
-}
-
-int FS_GetFileList( const char *dir, const char *extension, char *buf, size_t bufsize, int start, int end ) {
-	return trap_FS_GetFileList( dir, extension, buf, bufsize, start, end );
-}
-
-int FS_Eof( int file ) {
-	return trap_FS_Eof( file );
-}
-
-void FS_FCloseFile( int file ) {
-	return trap_FS_FCloseFile( file );
-}
-
-int FS_Read( void *buffer, size_t len, int file ) {
-	return trap_FS_Read( buffer, len, file );
-}
-
-const char *FS_FirstExtension( const char *filename, const char *extension[], int numExtensions ) {
-	return trap_FS_FirstExtension( filename, extension, numExtensions );
-}
-
-int FS_Seek( int file, int offset, int whence ) {
-	return trap_FS_Seek( file, offset, whence );
-}
-
-// All vars that are declared in this dynamically linked binary get linked to this list, not the list of the main executable
-DeclaredConfigVar *DeclaredConfigVar::s_listHead;
-
-namespace wsw {
-
-auto createMessageStream( wsw::MessageDomain domain, wsw::MessageCategory category ) -> wsw::OutputMessageStream * {
-	return GAME_IMPORT.createMessageStream( domain, category );
-}
-
-void submitMessageStream( wsw::OutputMessageStream *stream ) {
-	return GAME_IMPORT.submitMessageStream( stream );
-}
-
 }

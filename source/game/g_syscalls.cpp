@@ -32,7 +32,7 @@ static void ClientCommand( edict_t *ent, uint64_t clientCommandNum, const CmdArg
 *
 * Returns a pointer to the structure with all entry points
 */
-extern "C" QF_DLL_EXPORT game_export_t * GetGameAPI( game_import_t * import )
+game_export_t *GetGameAPI( game_import_t * import )
 {
 	static game_export_t globals;
 
@@ -64,9 +64,3 @@ extern "C" QF_DLL_EXPORT game_export_t * GetGameAPI( game_import_t * import )
 
 	return &globals;
 }
-
-#if defined ( HAVE_DLLMAIN ) && !defined ( GAME_HARD_LINKED )
-int WINAPI DLLMain( void *hinstDll, unsigned long dwReason, void *reserved ) {
-	return 1;
-}
-#endif

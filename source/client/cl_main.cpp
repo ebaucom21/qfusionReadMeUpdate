@@ -162,7 +162,6 @@ static graphsamp_t values[1024];
 //extern qbufPipe_s *g_clCmdPipe;
 
 static void *cge = nullptr;
-static void *module_handle;
 
 static uint8_t g_netchanCompressionBuffer[MAX_MSGLEN];
 static netchan_t g_netchanInstanceBackup;
@@ -268,9 +267,7 @@ void CL_GameModule_Reset( void ) {
 void CL_GameModule_Shutdown( void ) {
 	if( cge ) {
 		cls.cgameActive = false;
-
 		CG_Shutdown();
-		Com_UnloadGameLibrary( &module_handle );
 		cge = NULL;
 	}
 }

@@ -2,18 +2,14 @@ project(${QFUSION_SERVER_NAME})
 
 include_directories(${ZLIB_INCLUDE_DIR} ${CURL_INCLUDE_DIR})
 
+set(ANGELSCRIPT_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/angelscript/sdk/angelscript)
+link_directories(${ANGELSCRIPT_DIR}/lib)
+
 file(GLOB SERVER_HEADERS
-    "*.h"
-	"../common/q_*.h"
-	"../common/anorms.h"
-	"../common/config.h"
-	"../common/*.h"
-	"../game/g_public.h"
-	"../server/*.h"
-)
+    "*.h")
 
 file(GLOB SERVER_SOURCES
-	"../common/lifecycle.cpp")
+    "../common/lifecycle.cpp")
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     file(GLOB SERVER_PLATFORM_SOURCES 
@@ -54,7 +50,7 @@ else()
 endif()
 
 add_executable(${QFUSION_SERVER_NAME} ${SERVER_BINARY_TYPE} ${SERVER_HEADERS} ${SERVER_SOURCES} ${SERVER_PLATFORM_SOURCES})
-add_dependencies(${QFUSION_SERVER_NAME} game execommon)
+add_dependencies(${QFUSION_SERVER_NAME} execommon)
 target_link_libraries(${QFUSION_SERVER_NAME} PRIVATE execommon ${SERVER_PLATFORM_LIBRARIES})
 qf_set_output_dir(${QFUSION_SERVER_NAME} "")
 

@@ -1,86 +1,100 @@
 project(common)
 
-file(GLOB WSWCOMMON_SOURCES
-    "base64.cpp"
-    "cmdargssplitter.cpp"
-    "configvars.cpp"
-    "gs_*.cpp"
-    "hash.cpp"
-    "md5.cpp"
-    "q_math.cpp"
-    "q_shared.cpp"
-    "tasksystem.cpp"
-    "textstreamwriter.cpp"
-    "wswexceptions.cpp"
-    "wswfs.cpp"
-    "wswpodvector.cpp"
-    "wswsortbyfield.cpp"
-    "wswstringview.cpp"
-    "userinfo.cpp")
+set(ANGELSCRIPT_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/angelscript/sdk/angelscript)
 
-file(GLOB WSWCOMMON_HEADERS
-    "base64.h"
-    "cmdargs.h"
-    "configvars.h"
-    "md5.h"
-    "gs_*.h"
-    "q_*.h"
-    "taskhandle.h"
-    "tasksystem.h"
-    "wswexceptions.h"
-    "wswpodvector.h"
-    "wswsortbyfield.h"
-    "wswstringview.h")
+include_directories(${ANGELSCRIPT_DIR}/include)
+link_directories(${ANGELSCRIPT_DIR}/lib)
 
-add_library(wswcommon ${WSWCOMMON_SOURCES} ${WSWCOMMON_HEADERS})
-set_property(TARGET wswcommon PROPERTY POSITION_INDEPENDENT_CODE ON)
-qf_set_output_dir(wswcommon "")
+include_directories(${ZLIB_INCLUDE_DIR} ${CURL_INCLUDE_DIR})
 
-if (NOT GAME_MODULES_ONLY)
-    include_directories(${ZLIB_INCLUDE_DIR} ${CURL_INCLUDE_DIR})
+file(GLOB GAME_HEADERS
+    "../game/*.h"
+    "../game/ai/*.h"
+    "../game/ai/awareness/*.h"
+    "../game/ai/combat/*.h"
+    "../game/ai/movement/*.h"
+    "../game/ai/navigation/*.h"
+    "../game/ai/planning/*.h"
+    "../game/ai/teamplay/*.h"
+    "../game/ascript/*.h"
+    "../game/ascript/addon/*.h")
 
-    file(GLOB EXECOMMON_SOURCES
-         "asyncstream.cpp"
-         "autoupdate.cpp"
-         "bsp.cpp"
-         "cm_*.cpp"
-         "cmdsystem.cpp"
-         "common.cpp"
-         "compression.cpp"
-         "configstringstorage.cpp"
-         "cvar.cpp"
-         "files.cpp"
-         "glob.cpp"
-         "half_float.cpp"
-         "library.cpp"
-         "net.cpp"
-         "net_chan.cpp"
-         "maplist.cpp"
-         "mmcommon.cpp"
-         "msg.cpp"
-         "outputmessages.cpp"
-         "patch.cpp"
-         "q_trie.cpp"
-         "snap_demos.cpp"
-         "threads.cpp"
-         "../server/sv_web.cpp"
-         "../server/sv_main.cpp"
-         "wswcurl.cpp")
+file(GLOB GAME_SOURCES
+    "../game/*.cpp"
+    "../game/ai/*.cpp"
+    "../game/ai/awareness/*.cpp"
+    "../game/ai/combat/*.cpp"
+    "../game/ai/movement/*.cpp"
+    "../game/ai/navigation/*.cpp"
+    "../game/ai/planning/*.cpp"
+    "../game/ai/teamplay/*.cpp"
+    "../game/ascript/*.cpp"
+    "../game/ascript/addon/*.cpp")
 
-    file(GLOB EXECOMMON_HEADERS
-         "../common/bsp.h"
-         "outputmessages.h"
-         "q_trie.h")
+file(GLOB EXECOMMON_SOURCES
+     "asyncstream.cpp"
+     "base64.cpp"
+     "bsp.cpp"
+     "cm_main.cpp"
+     "cm_q3bsp.cpp"
+     "cm_sample.cpp"
+     "cm_trace.cpp"
+     "cm_trace_avx.cpp"
+     "cm_trace_sse42.cpp"
+     "cmdargssplitter.cpp"
+     "cmdsystem.cpp"
+     "common.cpp"
+     "compression.cpp"
+     "configstringstorage.cpp"
+     "configvars.cpp"
+     "cvar.cpp"
+     "files.cpp"
+     "glob.cpp"
+     "gs_gameteams.cpp"
+     "gs_items.cpp"
+     "gs_misc.cpp"
+     "gs_pmove.cpp"
+     "gs_slidebox.cpp"
+     "gs_weapondefs.cpp"
+     "gs_weapons.cpp"
+     "half_float.cpp"
+     "hash.cpp"
+     "library.cpp"
+     "maplist.cpp"
+     "md5.cpp"
+     "mmcommon.cpp"
+     "msg.cpp"
+     "net.cpp"
+     "net_chan.cpp"
+     "outputmessages.cpp"
+     "patch.cpp"
+     "q_math.cpp"
+     "q_shared.cpp"
+     "q_trie.cpp"
+     "snap_demos.cpp"
+     "tasksystem.cpp"
+     "textstreamwriter.cpp"
+     "threads.cpp"
+     "userinfo.cpp"
+     "wswcurl.cpp"
+     "wswexceptions.cpp"
+     "wswfs.cpp"
+     "wswpodvector.cpp"
+     "wswsortbyfield.cpp"
+     "wswstringview.cpp"
+     "../server/sv_web.cpp"
+     "../server/sv_main.cpp")
 
-    if (MSVC)
-        set_source_files_properties("../common/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "/arch:AVX")
-    else()
-        set_source_files_properties("../common/cm_trace_sse42.cpp" PROPERTIES COMPILE_FLAGS "-msse4.2")
-        set_source_files_properties("../common/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "-mavx")
-    endif()
+file(GLOB EXECOMMON_HEADERS
+     "*.h")
 
-    add_library(execommon ${EXECOMMON_SOURCES} ${EXECOMMON_HEADERS})
-    target_link_libraries(execommon PUBLIC wswcommon)
-    target_link_libraries(execommon PRIVATE ${CURL_LIBRARY} ${ZLIB_LIBRARY})
-    qf_set_output_dir(execommon "")
+if (MSVC)
+    set_source_files_properties("../common/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "/arch:AVX")
+else()
+    set_source_files_properties("../common/cm_trace_sse42.cpp" PROPERTIES COMPILE_FLAGS "-msse4.2")
+    set_source_files_properties("../common/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "-mavx")
 endif()
+
+add_library(execommon ${EXECOMMON_SOURCES} ${EXECOMMON_HEADERS} ${GAME_SOURCES} ${GAME_HEADERS})
+target_link_libraries(execommon PRIVATE angelscript ${CURL_LIBRARY} ${ZLIB_LIBRARY})
+qf_set_output_dir(execommon "")

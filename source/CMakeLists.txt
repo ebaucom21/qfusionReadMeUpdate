@@ -250,12 +250,8 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 endif()
 
 add_subdirectory(common)
-add_subdirectory(game)
+add_subdirectory(server)
 
-if (NOT GAME_MODULES_ONLY)
-    add_subdirectory(server)
-
-    if (NOT SERVER_ONLY)
-        add_subdirectory(client)
-    endif()
+if (NOT SERVER_ONLY)
+    add_subdirectory(client)
 endif()
