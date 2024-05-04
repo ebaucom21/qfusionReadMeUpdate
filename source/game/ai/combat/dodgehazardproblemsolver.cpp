@@ -88,7 +88,7 @@ void DodgeHazardProblemSolver::selectCandidateSpots( const SpotsQueryVector &spo
 	const auto *aasWorld = AiAasWorld::instance();
 	const int originAreaNum = originParams.originAreaNum;
 	const int originFloorClusterNum = aasWorld->floorClusterNum( originAreaNum );
-	const int topNodeHint = trap_CM_FindTopNodeForSphere( originParams.origin, originParams.searchRadius );
+	const int topNodeHint = SV_FindTopNodeForSphere( originParams.origin, originParams.searchRadius );
 	trace_t trace;
 
 	const auto *const spots = tacticalSpotsRegistry->spots;

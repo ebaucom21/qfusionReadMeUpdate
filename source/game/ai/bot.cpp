@@ -431,7 +431,7 @@ void Bot::Update() {
 		ucmd.msec            = (uint8_t)game.frametime;
 		ucmd.serverTimeStamp = game.serverTime;
 
-		ClientThink( self, &ucmd, 0 );
+		G_ClientThink( self, &ucmd, 0 );
 
 		m_pendingClientThinkInput = std::nullopt;
 	}

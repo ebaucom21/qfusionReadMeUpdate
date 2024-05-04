@@ -554,26 +554,26 @@ void G_PrecacheMedia( void ) {
 	// THIS ORDER MUST MATCH THE DEFINES IN gs_public.h
 	// you can add more, max 255
 
-	trap_ModelIndex( "#gunblade/gunblade.md3" );      // WEAP_GUNBLADE
-	trap_ModelIndex( "#machinegun/machinegun.md3" );    // WEAP_MACHINEGUN
-	trap_ModelIndex( "#riotgun/riotgun.md3" );        // WEAP_RIOTGUN
-	trap_ModelIndex( "#glauncher/glauncher.md3" );    // WEAP_GRENADELAUNCHER
-	trap_ModelIndex( "#rlauncher/rlauncher.md3" );    // WEAP_ROCKETLAUNCHER
-	trap_ModelIndex( "#plasmagun/plasmagun.md3" );    // WEAP_PLASMAGUN
-	trap_ModelIndex( "#lasergun/lasergun.md3" );      // WEAP_LASERGUN
-	trap_ModelIndex( "#electrobolt/electrobolt.md3" ); // WEAP_ELECTROBOLT
-	trap_ModelIndex( "#shockwave/shockwave.md3");     // WEAP_SHOCKWAVE
-	trap_ModelIndex( "#instagun/instagun.md3" );      // WEAP_INSTAGUN
+	SV_ModelIndex( "#gunblade/gunblade.md3" );      // WEAP_GUNBLADE
+	SV_ModelIndex( "#machinegun/machinegun.md3" );    // WEAP_MACHINEGUN
+	SV_ModelIndex( "#riotgun/riotgun.md3" );        // WEAP_RIOTGUN
+	SV_ModelIndex( "#glauncher/glauncher.md3" );    // WEAP_GRENADELAUNCHER
+	SV_ModelIndex( "#rlauncher/rlauncher.md3" );    // WEAP_ROCKETLAUNCHER
+	SV_ModelIndex( "#plasmagun/plasmagun.md3" );    // WEAP_PLASMAGUN
+	SV_ModelIndex( "#lasergun/lasergun.md3" );      // WEAP_LASERGUN
+	SV_ModelIndex( "#electrobolt/electrobolt.md3" ); // WEAP_ELECTROBOLT
+	SV_ModelIndex( "#shockwave/shockwave.md3");     // WEAP_SHOCKWAVE
+	SV_ModelIndex( "#instagun/instagun.md3" );      // WEAP_INSTAGUN
 
 	//-------------------
 
 	// precache our basic player models, they are just a very few
-	trap_ModelIndex( "$models/players/bigvic" );
+	SV_ModelIndex( "$models/players/bigvic" );
 
-	trap_SkinIndex( "models/players/bigvic/default" );
+	SV_SkinIndex( "models/players/bigvic/default" );
 
 	// FIXME: Temporarily use normal gib until the head is fixed
-	trap_ModelIndex( "models/objects/gibs/illuminati1/illuminati1.md3" );
+	SV_ModelIndex( "models/objects/gibs/illuminati1/illuminati1.md3" );
 
 	//
 	// SOUNDS
@@ -581,116 +581,116 @@ void G_PrecacheMedia( void ) {
 
 	// jalfixme : most of these sounds can be played from the clients
 
-	trap_SoundIndex( S_WORLD_WATER_IN );    // feet hitting water
-	trap_SoundIndex( S_WORLD_WATER_OUT );       // feet leaving water
-	trap_SoundIndex( S_WORLD_UNDERWATER );
+	SV_SoundIndex( S_WORLD_WATER_IN );    // feet hitting water
+	SV_SoundIndex( S_WORLD_WATER_OUT );       // feet leaving water
+	SV_SoundIndex( S_WORLD_UNDERWATER );
 
-	trap_SoundIndex( S_WORLD_SLIME_IN );
-	trap_SoundIndex( S_WORLD_SLIME_OUT );
-	trap_SoundIndex( S_WORLD_UNDERSLIME );
+	SV_SoundIndex( S_WORLD_SLIME_IN );
+	SV_SoundIndex( S_WORLD_SLIME_OUT );
+	SV_SoundIndex( S_WORLD_UNDERSLIME );
 
-	trap_SoundIndex( S_WORLD_LAVA_IN );
-	trap_SoundIndex( S_WORLD_LAVA_OUT );
-	trap_SoundIndex( S_WORLD_UNDERLAVA );
+	SV_SoundIndex( S_WORLD_LAVA_IN );
+	SV_SoundIndex( S_WORLD_LAVA_OUT );
+	SV_SoundIndex( S_WORLD_UNDERLAVA );
 
-	trap_SoundIndex( va( S_PLAYER_BURN_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_PLAYER_BURN_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_PLAYER_BURN_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_PLAYER_BURN_1_to_2, 2 ) );
 
 	//wsw: pb disable unreferenced sounds
-	//trap_SoundIndex (S_LAND);				// landing thud
-	trap_SoundIndex( S_HIT_WATER );
+	//SV_SoundIndex (S_LAND);				// landing thud
+	SV_SoundIndex( S_HIT_WATER );
 
-	trap_SoundIndex( S_WEAPON_NOAMMO );
+	SV_SoundIndex( S_WEAPON_NOAMMO );
 
 	// announcer
 
 	// readyup
-	trap_SoundIndex( S_ANNOUNCER_READY_UP_POLITE );
-	trap_SoundIndex( S_ANNOUNCER_READY_UP_PISSEDOFF );
+	SV_SoundIndex( S_ANNOUNCER_READY_UP_POLITE );
+	SV_SoundIndex( S_ANNOUNCER_READY_UP_PISSEDOFF );
 
 	// countdown
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_GET_READY_TO_FIGHT_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_GET_READY_TO_FIGHT_1_to_2, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_READY_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_READY_1_to_2, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 1, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 3, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 1, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 2, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 3, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_FIGHT_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_FIGHT_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_GET_READY_TO_FIGHT_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_GET_READY_TO_FIGHT_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_READY_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_READY_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 1, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 3, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 1, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 3, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_FIGHT_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_FIGHT_1_to_2, 2 ) );
 
 	// postmatch
-	trap_SoundIndex( va( S_ANNOUNCER_POSTMATCH_GAMEOVER_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_POSTMATCH_GAMEOVER_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_POSTMATCH_GAMEOVER_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_POSTMATCH_GAMEOVER_1_to_2, 2 ) );
 
 	// timeout
-	trap_SoundIndex( va( S_ANNOUNCER_TIMEOUT_MATCH_RESUMED_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_TIMEOUT_MATCH_RESUMED_1_to_2, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEOUT_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEOUT_1_to_2, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEIN_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEIN_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_TIMEOUT_MATCH_RESUMED_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_TIMEOUT_MATCH_RESUMED_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEOUT_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEOUT_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEIN_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEIN_1_to_2, 2 ) );
 
 	// callvote
-	trap_SoundIndex( va( S_ANNOUNCER_CALLVOTE_CALLED_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_CALLVOTE_CALLED_1_to_2, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_CALLVOTE_FAILED_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_CALLVOTE_FAILED_1_to_2, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_CALLVOTE_PASSED_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_CALLVOTE_PASSED_1_to_2, 2 ) );
-	trap_SoundIndex( S_ANNOUNCER_CALLVOTE_VOTE_NOW );
+	SV_SoundIndex( va( S_ANNOUNCER_CALLVOTE_CALLED_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_CALLVOTE_CALLED_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_CALLVOTE_FAILED_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_CALLVOTE_FAILED_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_CALLVOTE_PASSED_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_CALLVOTE_PASSED_1_to_2, 2 ) );
+	SV_SoundIndex( S_ANNOUNCER_CALLVOTE_VOTE_NOW );
 
 	// overtime
-	trap_SoundIndex( S_ANNOUNCER_OVERTIME_GOING_TO_OVERTIME );
-	trap_SoundIndex( S_ANNOUNCER_OVERTIME_OVERTIME );
-	trap_SoundIndex( va( S_ANNOUNCER_OVERTIME_SUDDENDEATH_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_OVERTIME_SUDDENDEATH_1_to_2, 2 ) );
+	SV_SoundIndex( S_ANNOUNCER_OVERTIME_GOING_TO_OVERTIME );
+	SV_SoundIndex( S_ANNOUNCER_OVERTIME_OVERTIME );
+	SV_SoundIndex( va( S_ANNOUNCER_OVERTIME_SUDDENDEATH_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_OVERTIME_SUDDENDEATH_1_to_2, 2 ) );
 
 	// score
-	trap_SoundIndex( va( S_ANNOUNCER_SCORE_TAKEN_LEAD_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_SCORE_TAKEN_LEAD_1_to_2, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_SCORE_LOST_LEAD_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_SCORE_LOST_LEAD_1_to_2, 2 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_SCORE_TIED_LEAD_1_to_2, 1 ) );
-	trap_SoundIndex( va( S_ANNOUNCER_SCORE_TIED_LEAD_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_SCORE_TAKEN_LEAD_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_SCORE_TAKEN_LEAD_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_SCORE_LOST_LEAD_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_SCORE_LOST_LEAD_1_to_2, 2 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_SCORE_TIED_LEAD_1_to_2, 1 ) );
+	SV_SoundIndex( va( S_ANNOUNCER_SCORE_TIED_LEAD_1_to_2, 2 ) );
 
 	if( GS_TeamBasedGametype( *ggs ) ) {
-		trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TAKEN_LEAD_1_to_2, 1 ) );
-		trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TAKEN_LEAD_1_to_2, 2 ) );
-		trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_LOST_LEAD_1_to_2, 1 ) );
-		trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_LOST_LEAD_1_to_2, 2 ) );
-		trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, 1 ) );
-		trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, 2 ) );
-		trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, 1 ) );
-		trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, 2 ) );
+		SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TAKEN_LEAD_1_to_2, 1 ) );
+		SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TAKEN_LEAD_1_to_2, 2 ) );
+		SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_LOST_LEAD_1_to_2, 1 ) );
+		SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_LOST_LEAD_1_to_2, 2 ) );
+		SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, 1 ) );
+		SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, 2 ) );
+		SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, 1 ) );
+		SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, 2 ) );
 
-		//trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_1_to_4_TAKEN_LEAD_1_to_2, 3, 1 ) );
-		//trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_1_to_4_TAKEN_LEAD_1_to_2, 3, 2 ) );
-		//trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_1_to_4_TAKEN_LEAD_1_to_2, 4, 1 ) );
-		//trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_1_to_4_TAKEN_LEAD_1_to_2, 4, 2 ) );
+		//SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_1_to_4_TAKEN_LEAD_1_to_2, 3, 1 ) );
+		//SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_1_to_4_TAKEN_LEAD_1_to_2, 3, 2 ) );
+		//SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_1_to_4_TAKEN_LEAD_1_to_2, 4, 1 ) );
+		//SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_1_to_4_TAKEN_LEAD_1_to_2, 4, 2 ) );
 	}
 
 	//
 	// LIGHTSTYLES
 	//
-	trap_ConfigString( CS_LIGHTS + 0, LS_NORMAL );
-	trap_ConfigString( CS_LIGHTS + 1, LS_FLICKER1 );
-	trap_ConfigString( CS_LIGHTS + 2, LS_SLOW_STRONG_PULSE );
-	trap_ConfigString( CS_LIGHTS + 3, LS_CANDLE1 );
-	trap_ConfigString( CS_LIGHTS + 4, LS_FAST_STROBE );
-	trap_ConfigString( CS_LIGHTS + 5, LS_GENTLE_PULSE_1 );
-	trap_ConfigString( CS_LIGHTS + 6, LS_FLICKER2 );
-	trap_ConfigString( CS_LIGHTS + 7, LS_CANDLE2 );
-	trap_ConfigString( CS_LIGHTS + 8, LS_CANDLE3 );
-	trap_ConfigString( CS_LIGHTS + 9, LS_SLOW_STROBE );
-	trap_ConfigString( CS_LIGHTS + 10, LS_FLUORESCENT_FLICKER );
-	trap_ConfigString( CS_LIGHTS + 11, LS_SLOW_PULSE_NOT_FADE );
+	SV_SetConfigString( CS_LIGHTS + 0, LS_NORMAL );
+	SV_SetConfigString( CS_LIGHTS + 1, LS_FLICKER1 );
+	SV_SetConfigString( CS_LIGHTS + 2, LS_SLOW_STRONG_PULSE );
+	SV_SetConfigString( CS_LIGHTS + 3, LS_CANDLE1 );
+	SV_SetConfigString( CS_LIGHTS + 4, LS_FAST_STROBE );
+	SV_SetConfigString( CS_LIGHTS + 5, LS_GENTLE_PULSE_1 );
+	SV_SetConfigString( CS_LIGHTS + 6, LS_FLICKER2 );
+	SV_SetConfigString( CS_LIGHTS + 7, LS_CANDLE2 );
+	SV_SetConfigString( CS_LIGHTS + 8, LS_CANDLE3 );
+	SV_SetConfigString( CS_LIGHTS + 9, LS_SLOW_STROBE );
+	SV_SetConfigString( CS_LIGHTS + 10, LS_FLUORESCENT_FLICKER );
+	SV_SetConfigString( CS_LIGHTS + 11, LS_SLOW_PULSE_NOT_FADE );
 
 	// styles 32-62 are assigned by the light program for switchable lights
-	trap_ConfigString( CS_LIGHTS + 63, "a" );
+	SV_SetConfigString( CS_LIGHTS + 63, "a" );
 }
 
 /*
@@ -800,7 +800,7 @@ static void G_SpawnEntities( void ) {
 	G_FindTeams();
 
 	// make sure server got the edicts data
-	trap_LocateEntities( game.edicts, sizeof( game.edicts[0] ), game.numentities, game.maxentities );
+	SV_LocateEntities( game.edicts, sizeof( game.edicts[0] ), game.numentities, game.maxentities );
 
 	// items need brush model entities spawned before they are linked
 	G_Items_FinishSpawningItems();
@@ -873,36 +873,36 @@ void G_InitLevel( char *mapname, char *entities, int entstrlen, int64_t levelTim
 	for( i = 0; i < ggs->maxclients; i++ ) {
 		game.edicts[i + 1].s.number = i + 1;
 		game.edicts[i + 1].r.client = &game.clients[i];
-		game.edicts[i + 1].r.inuse = ( trap_GetClientState( i ) >= CS_CONNECTED ) ? true : false;
+		game.edicts[i + 1].r.inuse = ( G_GetClientState( i ) >= CS_CONNECTED ) ? true : false;
 		game.clients[i].resetLevelState();
 		game.clients[i].levelTimestamp = level.time;
 	}
 
 	// initialize game subsystems
-	trap_ConfigString( CS_MAPNAME, level.mapname );
-	trap_ConfigString( CS_SKYBOX, "" );
-	trap_ConfigString( CS_AUDIOTRACK, "" );
-	trap_ConfigString( CS_STATNUMS, va( "%i %i %i", STAT_SCORE, STAT_HEALTH, STAT_LAST_KILLER ) );
-	trap_ConfigString( CS_POWERUPEFFECTS, va( "%i %i %i %i", EF_QUAD, EF_SHELL, EF_CARRIER, EF_REGEN ) );
-	trap_ConfigString( CS_SCOREBOARD_ASSETS, "" );
-	trap_ConfigString( CS_SCOREBOARD_SCHEMA, "" );
-	trap_ConfigString( CS_MATCHNAME, "" );
-	trap_ConfigString( CS_MATCHSCORE, "" );
-	trap_ConfigString( CS_GAMETYPE_OPTIONS_TITLE, "" );
+	SV_SetConfigString( CS_MAPNAME, level.mapname );
+	SV_SetConfigString( CS_SKYBOX, "" );
+	SV_SetConfigString( CS_AUDIOTRACK, "" );
+	SV_SetConfigString( CS_STATNUMS, va( "%i %i %i", STAT_SCORE, STAT_HEALTH, STAT_LAST_KILLER ) );
+	SV_SetConfigString( CS_POWERUPEFFECTS, va( "%i %i %i %i", EF_QUAD, EF_SHELL, EF_CARRIER, EF_REGEN ) );
+	SV_SetConfigString( CS_SCOREBOARD_ASSETS, "" );
+	SV_SetConfigString( CS_SCOREBOARD_SCHEMA, "" );
+	SV_SetConfigString( CS_MATCHNAME, "" );
+	SV_SetConfigString( CS_MATCHSCORE, "" );
+	SV_SetConfigString( CS_GAMETYPE_OPTIONS_TITLE, "" );
 
 	// reset gametype options
 	for( i = 0; i < MAX_GAMETYPE_OPTIONS; i++ ) {
-		trap_ConfigString( CS_GAMETYPE_OPTIONS + i, "" );
+		SV_SetConfigString( CS_GAMETYPE_OPTIONS + i, "" );
 	}
 
 	// reset map messages
 	for( i = 0; i < MAX_HELPMESSAGES; i++ ) {
-		trap_ConfigString( CS_HELPMESSAGES + i, "" );
+		SV_SetConfigString( CS_HELPMESSAGES + i, "" );
 	}
 
 	ClientCommandsHandler::shutdown();
 	for( i = 0; i < MAX_HELPMESSAGES; i++ ) {
-		trap_ConfigString( CS_GAMECOMMANDS + i, "" );
+		SV_SetConfigString( CS_GAMECOMMANDS + i, "" );
 	}
 
 	ClientCommandsHandler::init();
@@ -948,8 +948,8 @@ void G_InitLevel( char *mapname, char *entities, int entstrlen, int64_t levelTim
 
 	G_asGarbageCollect( true );
 
-	GAME_IMPORT.ServerCmd( nullptr, "reloadcommands" );
-	GAME_IMPORT.ServerCmd( nullptr, "reloadoptions" );
+	SV_DispatchServerCmd( nullptr, "reloadcommands" );
+	SV_DispatchServerCmd( nullptr, "reloadoptions" );
 }
 
 void G_ResetLevel( void ) {
@@ -970,7 +970,7 @@ void G_ResetLevel( void ) {
 	// call map specific
 	G_asCallMapInit();
 
-	GAME_IMPORT.ServerCmd( nullptr, "reloadoptions" );
+	SV_DispatchServerCmd( nullptr, "reloadoptions" );
 }
 
 bool G_RespawnLevel( void ) {
@@ -1011,17 +1011,17 @@ static void SP_worldspawn( edict_t *ent ) {
 	*/
 
 	if( ent->message && ent->message[0] ) {
-		trap_ConfigString( CS_MESSAGE, ent->message );
+		SV_SetConfigString( CS_MESSAGE, ent->message );
 		Q_strncpyz( level.level_name, ent->message, sizeof( level.level_name ) );
 	} else {
-		trap_ConfigString( CS_MESSAGE, level.mapname );
+		SV_SetConfigString( CS_MESSAGE, level.mapname );
 		Q_strncpyz( level.level_name, level.mapname, sizeof( level.level_name ) );
 	}
 
 	// send music
 	if( st.music ) {
-		trap_ConfigString( CS_AUDIOTRACK, st.music );
-		trap_PureSound( st.music );
+		SV_SetConfigString( CS_AUDIOTRACK, st.music );
+		SV_PureSound( st.music );
 	}
 
 	if( st.gravity ) {
@@ -1029,7 +1029,7 @@ static void SP_worldspawn( edict_t *ent ) {
 	}
 
 	if( st.colorCorrection ) {
-		level.colorCorrection = trap_ImageIndex( st.colorCorrection );
+		level.colorCorrection = SV_ImageIndex( st.colorCorrection );
 		ggs->gameState.stats[GAMESTAT_COLORCORRECTION] = level.colorCorrection;
 	}
 }

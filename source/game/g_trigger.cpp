@@ -126,7 +126,7 @@ void SP_trigger_multiple( edict_t *ent ) {
 	G_PureModel( ent->model );
 
 	if( st.noise ) {
-		ent->noise_index = trap_SoundIndex( st.noise );
+		ent->noise_index = SV_SoundIndex( st.noise );
 		G_PureSound( st.noise );
 	}
 
@@ -427,11 +427,11 @@ void SP_trigger_push( edict_t *self ) {
 
 	if( st.noise && Q_stricmp( st.noise, "default" ) ) {
 		if( Q_stricmp( st.noise, "silent" ) ) {
-			self->moveinfo.sound_start = trap_SoundIndex( st.noise );
+			self->moveinfo.sound_start = SV_SoundIndex( st.noise );
 			G_PureSound( st.noise );
 		}
 	} else {
-		self->moveinfo.sound_start = trap_SoundIndex( S_JUMPPAD );
+		self->moveinfo.sound_start = SV_SoundIndex( S_JUMPPAD );
 	}
 
 	// gameteam field from editor
@@ -586,7 +586,7 @@ void SP_trigger_hurt( edict_t *self ) {
 	if( self->spawnflags & 4 ) { // SILENT
 		self->noise_index = 0;
 	} else if( st.noise ) {
-		self->noise_index = trap_SoundIndex( st.noise );
+		self->noise_index = SV_SoundIndex( st.noise );
 		G_PureSound( st.noise );
 	} else {
 		self->noise_index = 0;
@@ -739,7 +739,7 @@ void SP_trigger_teleport( edict_t *ent ) {
 	}
 
 	if( st.noise ) {
-		ent->noise_index = trap_SoundIndex( st.noise );
+		ent->noise_index = SV_SoundIndex( st.noise );
 		G_PureSound( st.noise );
 	}
 

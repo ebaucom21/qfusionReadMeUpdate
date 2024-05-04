@@ -212,7 +212,7 @@ inline void StaticWorldTrace( trace_t *trace, const vec3_t from, const vec3_t to
 	float *mins_ = const_cast<float *>( mins );
 	assert( maxs );
 	float *maxs_ = const_cast<float *>( maxs );
-	trap_CM_TransformedBoxTrace( trace, from_, to_, mins_, maxs_, nullptr, contentsMask, nullptr, nullptr, topNodeHint );
+	SV_TransformedBoxTrace( trace, from_, to_, mins_, maxs_, nullptr, contentsMask, nullptr, nullptr, topNodeHint );
 }
 
 // This shorthand is for backward compatibility and some degree of convenience

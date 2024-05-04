@@ -37,7 +37,7 @@ static bool G_Chase_IsValidTarget( edict_t *ent, edict_t *target, bool teamonly 
 		return false;
 	}
 
-	if( !target->r.inuse || !target->r.client || trap_GetClientState( PLAYERNUM( target ) ) < CS_SPAWNED ) {
+	if( !target->r.inuse || !target->r.client || G_GetClientState( PLAYERNUM( target ) ) < CS_SPAWNED ) {
 		return false;
 	}
 
@@ -111,7 +111,7 @@ static int G_Chase_FindFollowPOV( edict_t *ent ) {
 	for( i = 1; PLAYERNUM( ( game.edicts + i ) ) < ggs->maxclients; i++ ) {
 		target = game.edicts + i;
 
-		if( !target->r.inuse || trap_GetClientState( PLAYERNUM( target ) ) < CS_SPAWNED ) {
+		if( !target->r.inuse || G_GetClientState( PLAYERNUM( target ) ) < CS_SPAWNED ) {
 			// check if old targets are still valid
 			if( ctfpov == ENTNUM( target ) ) {
 				ctfpov = -1;
@@ -329,7 +329,7 @@ void G_EndServerFrames_UpdateChaseCam( void ) {
 	for( team = TEAM_PLAYERS; team < GS_MAX_TEAMS; team++ ) {
 		for( i = 0; i < teamlist[team].numplayers; i++ ) {
 			ent = game.edicts + teamlist[team].playerIndices[i];
-			if( trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
+			if( G_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 				G_Chase_SetChaseActive( ent, false );
 				continue;
 			}
@@ -342,7 +342,7 @@ void G_EndServerFrames_UpdateChaseCam( void ) {
 	team = TEAM_SPECTATOR;
 	for( i = 0; i < teamlist[team].numplayers; i++ ) {
 		ent = game.edicts + teamlist[team].playerIndices[i];
-		if( trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
+		if( G_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 			G_Chase_SetChaseActive( ent, false );
 			continue;
 		}
@@ -568,9 +568,9 @@ void Cmd_ChaseCam_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 		team_only = false;
 	}
 
-	arg1 = trap_Cmd_Argv( 1 );
+	arg1 = Cmd_Argv( 1 );
 
-	if( trap_Cmd_Argc() < 2 ) {
+	if( Cmd_Argc() < 2 ) {
 		G_ChasePlayer( ent, NULL, team_only, 0 );
 	} else if( !Q_stricmp( arg1, "auto" ) ) {
 		G_PrintMsg( ent, "Chasecam mode is 'auto'. It will follow the score leader when no powerup nor flag is carried.\n" );

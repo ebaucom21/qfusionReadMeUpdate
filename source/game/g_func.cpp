@@ -23,29 +23,29 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 void G_AssignMoverSounds( edict_t *ent, const char *start, const char *move, const char *stop ) {
 	if( st.noise && Q_stricmp( st.noise, "default" ) ) {
 		if( Q_stricmp( st.noise, "silent" ) ) {
-			ent->moveinfo.sound_middle = trap_SoundIndex( st.noise );
+			ent->moveinfo.sound_middle = SV_SoundIndex( st.noise );
 			G_PureSound( st.noise );
 		}
 	} else if( move ) {
-		ent->moveinfo.sound_middle = trap_SoundIndex( move );
+		ent->moveinfo.sound_middle = SV_SoundIndex( move );
 	}
 
 	if( st.noise_start && Q_stricmp( st.noise_start, "default" ) ) {
 		if( Q_stricmp( st.noise_start, "silent" ) ) {
-			ent->moveinfo.sound_start = trap_SoundIndex( st.noise_start );
+			ent->moveinfo.sound_start = SV_SoundIndex( st.noise_start );
 			G_PureSound( st.noise_start );
 		}
 	} else if( start ) {
-		ent->moveinfo.sound_start = trap_SoundIndex( start );
+		ent->moveinfo.sound_start = SV_SoundIndex( start );
 	}
 
 	if( st.noise_stop && Q_stricmp( st.noise_stop, "default" ) ) {
 		if( Q_stricmp( st.noise_stop, "silent" ) ) {
-			ent->moveinfo.sound_end = trap_SoundIndex( st.noise_stop );
+			ent->moveinfo.sound_end = SV_SoundIndex( st.noise_stop );
 			G_PureSound( st.noise_stop );
 		}
 	} else if( stop ) {
-		ent->moveinfo.sound_end = trap_SoundIndex( stop );
+		ent->moveinfo.sound_end = SV_SoundIndex( stop );
 	}
 }
 
@@ -789,7 +789,7 @@ static void door_touch( edict_t *self, edict_t *other, cplane_t *plane, int surf
 	self->timeStamp = level.time;
 
 	G_CenterPrintMsg( other, "%s", self->message );
-	G_Sound( other, CHAN_AUTO, trap_SoundIndex( S_WORLD_MESSAGE ), ATTN_NORM );
+	G_Sound( other, CHAN_AUTO, SV_SoundIndex( S_WORLD_MESSAGE ), ATTN_NORM );
 }
 
 void SP_func_door( edict_t *ent ) {
@@ -855,7 +855,7 @@ void SP_func_door( edict_t *ent ) {
 		ent->takedamage = DAMAGE_YES;
 		ent->die = door_killed;
 	} else if( ent->targetname && ent->message ) {
-		trap_SoundIndex( S_WORLD_MESSAGE ); // precache
+		SV_SoundIndex( S_WORLD_MESSAGE ); // precache
 		ent->touch = door_touch;
 	}
 
@@ -978,7 +978,7 @@ void SP_func_door_rotating( edict_t *ent ) {
 	}
 
 	if( ent->targetname && ent->message ) {
-		trap_SoundIndex( S_WORLD_MESSAGE ); // precache
+		SV_SoundIndex( S_WORLD_MESSAGE ); // precache
 		ent->touch = door_touch;
 	}
 
@@ -1394,11 +1394,11 @@ void SP_func_button( edict_t *ent ) {
 
 	if( st.noise && Q_stricmp( st.noise, "default" ) ) {
 		if( Q_stricmp( st.noise, "silent" ) != 0 ) {
-			ent->moveinfo.sound_start = trap_SoundIndex( st.noise );
+			ent->moveinfo.sound_start = SV_SoundIndex( st.noise );
 			G_PureSound( st.noise );
 		}
 	} else {
-		ent->moveinfo.sound_start = trap_SoundIndex( S_BUTTON_START );
+		ent->moveinfo.sound_start = SV_SoundIndex( S_BUTTON_START );
 	}
 
 	if( !ent->speed ) {

@@ -1,7 +1,7 @@
 #include "trajectorypredictor.h"
 
 static void Trace( trace_t *tr, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, const edict_t *, int contentmask ) {
-	return trap_CM_TransformedBoxTrace( tr, start, end, mins, maxs, nullptr, contentmask, nullptr, nullptr );
+	return SV_TransformedBoxTrace( tr, start, end, mins, maxs, nullptr, contentmask, nullptr, nullptr );
 }
 
 AiTrajectoryPredictor::StopEvent AiTrajectoryPredictor::Run( const Vec3 &startVelocity,

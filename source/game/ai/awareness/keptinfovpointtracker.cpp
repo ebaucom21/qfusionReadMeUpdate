@@ -40,13 +40,13 @@ bool KeptInFovPointTracker::isPointInPvs( const Vec3 &point ) const {
 	const Vec3 maxs( Vec3( +8, +8, +8 ) + point );
 
 	int leafNums[16], unused = 0;
-	const int numLeafs = trap_CM_BoxLeafnums( mins.Data(), maxs.Data(), leafNums, (int)std::size( leafNums ), &unused );
+	const int numLeafs = SV_BoxLeafnums( mins.Data(), maxs.Data(), leafNums, (int)std::size( leafNums ), &unused );
 
 	const auto *const botEnt = game.edicts + m_bot->EntNum();
 	for( int botLeafIndex = 0; botLeafIndex < botEnt->r.num_clusters; ++botLeafIndex ) {
 		const int botLeaf = botEnt->r.leafnums[botLeafIndex];
 		for( int pointLeafIndex = 0; pointLeafIndex < numLeafs; ++pointLeafIndex ) {
-			if( trap_CM_LeafsInPVS( botLeaf, leafNums[pointLeafIndex] ) ) {
+			if( SV_LeafsInPVS( botLeaf, leafNums[pointLeafIndex] ) ) {
 				return true;
 			}
 		}

@@ -62,11 +62,11 @@ void DoRespawn( edict_t *ent ) {
 
 	int soundIndex = 0;
 	if( ent->item->tag == POWERUP_QUAD ) {
-		soundIndex = trap_SoundIndex( S_ITEM_QUAD_RESPAWN );
+		soundIndex = SV_SoundIndex( S_ITEM_QUAD_RESPAWN );
 	} else if( ent->item->tag == POWERUP_SHELL ) {
-		soundIndex = trap_SoundIndex( S_ITEM_WARSHELL_RESPAWN );
+		soundIndex = SV_SoundIndex( S_ITEM_WARSHELL_RESPAWN );
 	} else if( ent->item->tag == POWERUP_REGEN ) {
-		soundIndex = trap_SoundIndex( S_ITEM_REGEN_RESPAWN );
+		soundIndex = SV_SoundIndex( S_ITEM_REGEN_RESPAWN );
 	}
 
 	if( soundIndex ) {
@@ -371,9 +371,9 @@ static bool Pickup_Armor( edict_t *other, const gsitem_t *item ) {
 void Touch_ItemSound( edict_t *other, const gsitem_t *item ) {
 	if( item->pickup_sound ) {
 		if( item->type & IT_POWERUP ) {
-			G_Sound( other, CHAN_ITEM, trap_SoundIndex( item->pickup_sound ), ATTN_NORM );
+			G_Sound( other, CHAN_ITEM, SV_SoundIndex( item->pickup_sound ), ATTN_NORM );
 		} else {
-			G_Sound( other, CHAN_AUTO, trap_SoundIndex( item->pickup_sound ), ATTN_NORM );
+			G_Sound( other, CHAN_AUTO, SV_SoundIndex( item->pickup_sound ), ATTN_NORM );
 		}
 	}
 }
@@ -493,8 +493,8 @@ edict_t *Drop_Item( edict_t *ent, const gsitem_t *item ) {
 	dropped->s.type = ET_ITEM;
 	dropped->s.itemNum = item->tag;
 	dropped->s.effects = 0; // default effects are applied client side
-	dropped->s.modelindex = trap_ModelIndex( dropped->item->world_model[0] );
-	dropped->s.modelindex2 = trap_ModelIndex( dropped->item->world_model[1] );
+	dropped->s.modelindex = SV_ModelIndex( dropped->item->world_model[0] );
+	dropped->s.modelindex2 = SV_ModelIndex( dropped->item->world_model[1] );
 	dropped->attenuation = 1;
 
 	if( ent->r.client ) {
@@ -842,13 +842,13 @@ static void Finish_SpawningItem( edict_t *ent ) {
 	VectorCopy( item_box_maxs, ent->r.maxs );
 
 	if( ent->model ) {
-		ent->s.modelindex = trap_ModelIndex( ent->model );
+		ent->s.modelindex = SV_ModelIndex( ent->model );
 	} else {
 		if( item->world_model[0] ) {
-			ent->s.modelindex = trap_ModelIndex( item->world_model[0] );
+			ent->s.modelindex = SV_ModelIndex( item->world_model[0] );
 		}
 		if( item->world_model[1] ) {
-			ent->s.modelindex2 = trap_ModelIndex( item->world_model[1] );
+			ent->s.modelindex2 = SV_ModelIndex( item->world_model[1] );
 		}
 	}
 
@@ -1000,16 +1000,16 @@ void PrecacheItem( const gsitem_t *it ) {
 	}
 
 	if( it->pickup_sound ) {
-		trap_SoundIndex( it->pickup_sound );
+		SV_SoundIndex( it->pickup_sound );
 	}
 	for( i = 0; i < MAX_ITEM_MODELS; i++ ) {
 		if( it->world_model[i] ) {
-			trap_ModelIndex( it->world_model[i] );
+			SV_ModelIndex( it->world_model[i] );
 		}
 	}
 
 	if( it->icon ) {
-		trap_ImageIndex( it->icon );
+		SV_ImageIndex( it->icon );
 	}
 
 	// parse everything for its ammo
@@ -1051,11 +1051,11 @@ void PrecacheItem( const gsitem_t *it ) {
 			}
 
 			if( i == 0 ) {
-				trap_ModelIndex( data );
+				SV_ModelIndex( data );
 			} else if( i == 1 ) {
-				trap_SoundIndex( data );
+				SV_SoundIndex( data );
 			} else {
-				trap_ImageIndex( data );
+				SV_ImageIndex( data );
 			}
 		}
 	}
@@ -1074,7 +1074,7 @@ void G_PrecacheItems( void ) {
 
 	// precache item names and weapondefs
 	for( i = 1; ( item = GS_FindItemByTag( ggs, i ) ) != NULL; i++ ) {
-		trap_ConfigString( CS_ITEMS + i, item->name );
+		SV_SetConfigString( CS_ITEMS + i, item->name );
 
 		if( item->type & IT_WEAPON && GS_GetWeaponDef( ggs, item->tag ) ) {
 			G_PrecacheWeapondef( i );

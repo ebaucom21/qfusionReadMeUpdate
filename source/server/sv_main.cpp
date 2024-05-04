@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 #include "../common/cmdsystem.h"
+#include "../common/maplist.h"
 #include "../common/singletonholder.h"
 #include "../common/pipeutils.h"
 #include "../common/compression.h"
@@ -208,7 +209,6 @@ cvar_t *sv_http_upstream_realip_header;
 static cvar_t *sv_showRcon;
 static cvar_t *sv_showChallenge;
 static cvar_t *sv_showInfoQueries;
-static cvar_t *sv_highchars;
 
 static cvar_t *sv_hostname;
 static cvar_t *sv_public;         // should heartbeats be sent
@@ -233,7 +233,7 @@ static cvar_t *sv_MOTDString;
 
 static cvar_t *sv_demodir;
 
-static game_export_t *ge;
+static void *ge;
 
 typedef enum { RD_NONE, RD_PACKET } redirect_t;
 
@@ -256,7 +256,7 @@ static sv_infoserver_t sv_infoServers[MAX_INFO_SERVERS];
 
 static int64_t accTime = 0;
 
-static void PF_DropClient( edict_t *ent, ReconnectBehaviour reconnectBehaviour, const char *message ) {
+void G_DropClient( edict_t *ent, ReconnectBehaviour reconnectBehaviour, const char *message ) {
 	if( ent ) {
 		const int entNum = NUM_FOR_EDICT( ent );
 		if( entNum >= 1 && entNum <= sv_maxclients->integer ) {
@@ -275,7 +275,7 @@ static void PF_DropClient( edict_t *ent, ReconnectBehaviour reconnectBehaviour, 
 *
 * Game code asks for the state of this client
 */
-static int PF_GetClientState( int clientNum ) {
+int G_GetClientState( int clientNum ) {
 	if( clientNum >= 0 && clientNum < sv_maxclients->integer ) {
 		return svs.clients[clientNum].state;
 	}
@@ -287,8 +287,10 @@ static int PF_GetClientState( int clientNum ) {
 *
 * Sends the server command to clients.
 * If ent is NULL the command will be sent to all connected clients
+* Note: These commands are unreliable (the order is guaranteed to be preserved
+* but commands may be legitimately dropped due to server time adjustments on clients)
 */
-static void PF_GameCmd( const edict_t *ent, const char *cmd ) {
+void SV_DispatchGameCmd( const edict_t *ent, const char *cmd ) {
 	if( cmd && cmd[0] ) {
 		if( !ent ) {
 			for( int clientNum = 0; clientNum < sv_maxclients->integer; ++clientNum ) {
@@ -307,7 +309,7 @@ static void PF_GameCmd( const edict_t *ent, const char *cmd ) {
 	}
 }
 
-static void PF_ServerCmd( const edict_t *ent, const char *cmd ) {
+void SV_DispatchServerCmd( const edict_t *ent, const char *cmd ) {
 	if( cmd && cmd[0] ) {
 		static CmdArgsSplitter splitter;
 		const CmdArgs args           = splitter.exec( wsw::StringView( cmd ) );
@@ -366,73 +368,16 @@ static void PF_ServerCmd( const edict_t *ent, const char *cmd ) {
 	}
 }
 
-static void PF_dprint( const char *msg ) {
-	if( !msg ) {
-		return;
-	}
-
-	char copy[MAX_PRINTMSG];
-	const char *end = copy + sizeof( copy );
-	const char *in  = msg;
-	char *out       = copy;
-
-	// don't allow control chars except for \n
-	if( sv_highchars && sv_highchars->integer ) {
-		for( ; *in && out < end - 1; in++ )
-			if( ( unsigned char )*in >= ' ' || *in == '\n' ) {
-				*out++ = *in;
-			}
-	} else {   // also convert highchars to ascii by stripping high bit
-		for( ; *in && out < end - 1; in++ )
-			if( ( signed char )*in >= ' ' || *in == '\n' ) {
-				*out++ = *in;
-			} else if( ( unsigned char )*in > 128 ) { // 128 is not allowed
-				*out++ = *in & 127;
-			} else if( ( unsigned char )*in == 128 ) {
-				*out++ = '?';
-			}
-	}
-	*out = '\0';
-
-	Com_Printf( "%s", copy );
-}
-
-#ifndef _MSC_VER
-static void PF_error( const char *msg ) __attribute__( ( noreturn ) );
-#else
-__declspec( noreturn ) static void PF_error( const char *msg );
-#endif
-
-static void PF_error( const char *msg ) {
-	if( !msg ) {
-		Com_Error( ERR_DROP, "Game Error: unknown error" );
-	}
-
-	char copy[MAX_PRINTMSG];
-
-	int i;
-	// mask off high bits and colored strings
-	for( i = 0; i < (int)sizeof( copy ) - 1 && msg[i]; i++ ) {
-		copy[i] = (char)( msg[i] & 127 );
-	}
-	copy[i] = 0;
-
-	Com_Error( ERR_DROP, "Game Error: %s", copy );
-}
-
-/*
-* PF_Configstring
-*/
-static void PF_ConfigString( int index, const char *val ) {
+void SV_SetConfigString( int index, const char *val ) {
 	if( val ) {
 		if( index < 0 || index >= MAX_CONFIGSTRINGS ) {
 			Com_Error( ERR_DROP, "configstring: bad index %i", index );
 		} else {
 			if( index < SERVER_PROTECTED_CONFIGSTRINGS ) {
-				Com_Printf( "WARNING: 'PF_Configstring', configstring %i is server protected\n", index );
+				Com_Printf( "WARNING: 'SV_SetConfigstring', configstring %i is server protected\n", index );
 			} else {
 				if( !COM_ValidateConfigstring( val ) ) {
-					Com_Printf( "WARNING: 'PF_Configstring' invalid configstring %i: %s\n", index, val );
+					Com_Printf( "WARNING: 'SV_SetConfigstring' invalid configstring %i: %s\n", index, val );
 				} else {
 					const wsw::StringView stringView( val );
 					wsw::ConfigStringStorage &storage = sv.configStrings;
@@ -456,14 +401,14 @@ static void PF_ConfigString( int index, const char *val ) {
 	}
 }
 
-static const char *PF_GetConfigString( int index ) {
+const char *SV_GetConfigString( int index ) {
 	if( index >= 0 && index < MAX_CONFIGSTRINGS ) {
 		return sv.configStrings.get( index ).value_or( wsw::StringView() ).data();
 	}
 	return nullptr;
 }
 
-static void PF_PureSound( const char *name ) {
+void SV_PureSound( const char *name ) {
 	if( sv.state != ss_loading ) {
 		return;
 	}
@@ -533,7 +478,7 @@ static void SV_AddPureBSP() {
 	}
 }
 
-static void PF_PureModel( const char *name ) {
+void SV_PureModel( const char *name ) {
 	if( sv.state != ss_loading ) {
 		return;
 	}
@@ -550,7 +495,7 @@ static void PF_PureModel( const char *name ) {
 	}
 }
 
-static bool PF_Compress( void *dst, size_t *const dstSize, const void *src, size_t srcSize ) {
+bool SV_CompressBytes( void *dst, size_t *const dstSize, const void *src, size_t srcSize ) {
 	unsigned long compressedSize = *dstSize;
 	if( qzcompress( (Bytef *)dst, &compressedSize, (unsigned char*)src, srcSize ) == Z_OK ) {
 		*dstSize = compressedSize;
@@ -561,12 +506,12 @@ static bool PF_Compress( void *dst, size_t *const dstSize, const void *src, size
 
 void SV_ShutdownGameProgs() {
 	if( ge ) {
-		ge->Shutdown();
+		G_Shutdown();
 		ge = nullptr;
 	};
 }
 
-static void SV_LocateEntities( struct edict_s *edicts, int edict_size, int num_edicts, int max_edicts ) {
+void SV_LocateEntities( struct edict_s *edicts, int edict_size, int num_edicts, int max_edicts ) {
 	if( !edicts || edict_size < (int)sizeof( entity_shared_t ) ) {
 		Com_Error( ERR_DROP, "SV_LocateEntities: bad edicts" );
 	}
@@ -623,7 +568,113 @@ static int SV_FindIndex( const char *name, int start, int max, bool createIfMiss
 	return resultIndex;
 }
 
-game_export_t *GetGameAPI( game_import_t * import );
+int SV_ModelIndex( const char *name ) {
+	return SV_FindIndex( name, CS_MODELS, MAX_MODELS, true );
+}
+
+int SV_SoundIndex( const char *name ) {
+	return SV_FindIndex( name, CS_SOUNDS, MAX_SOUNDS, true );
+}
+
+int SV_ImageIndex( const char *name ) {
+	return SV_FindIndex( name, CS_IMAGES, MAX_IMAGES, true );
+}
+
+int SV_SkinIndex( const char *name ) {
+	return SV_FindIndex( name, CS_SKINFILES, MAX_SKINFILES, true );
+}
+
+// TODO: Let the game access svs.cms directly once it's refactored
+
+bool SV_InPVS( const float *p1, const float *p2 ) {
+	return CM_InPVS( svs.cms, p1, p2 );
+}
+
+int SV_TransformedPointContents( const vec3_t p, const struct cmodel_s *cmodel, const vec3_t origin, const vec3_t angles, int topNodeHint ) {
+	return CM_TransformedPointContents( svs.cms, p, cmodel, origin, angles, topNodeHint );
+}
+
+void SV_TransformedBoxTrace( trace_t *tr, const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
+							 const struct cmodel_s *cmodel, int brushmask, const vec3_t origin, const vec3_t angles, int topNodeHint ) {
+	CM_TransformedBoxTrace( svs.cms, tr, start, end, mins, maxs, cmodel, brushmask, origin, angles, topNodeHint );
+}
+
+int SV_NumInlineModels() {
+	return CM_NumInlineModels( svs.cms );
+}
+
+struct cmodel_s *SV_InlineModel( int num ) {
+	return CM_InlineModel( svs.cms, num );
+}
+
+void SV_InlineModelBounds( const struct cmodel_s *cmodel, vec3_t mins, vec3_t maxs ) {
+	CM_InlineModelBounds( svs.cms, cmodel, mins, maxs );
+}
+
+struct cmodel_s *SV_ModelForBBox( const vec3_t mins, const vec3_t maxs ) {
+	return CM_ModelForBBox( svs.cms, mins, maxs );
+};
+
+struct cmodel_s *SV_OctagonModelForBBox( const vec3_t mins, const vec3_t maxs ) {
+	return CM_OctagonModelForBBox( svs.cms, mins, maxs );
+}
+
+bool SV_AreasConnected( int area1, int area2 ) {
+	return CM_AreasConnected( svs.cms, area1, area2 );
+}
+
+void SV_SetAreaPortalState( int area, int otherarea, bool open ) {
+	CM_SetAreaPortalState( svs.cms, area, otherarea, open );
+}
+
+int SV_BoxLeafnums( const vec3_t mins, const vec3_t maxs, int *list, int listsize, int *topnode, int topNodeHint ) {
+	return CM_BoxLeafnums( svs.cms, mins, maxs, list, listsize, topnode, topNodeHint );
+}
+
+int SV_LeafCluster( int leafnum ) {
+	return CM_LeafCluster( svs.cms, leafnum );
+}
+
+int SV_LeafArea( int leafnum ) {
+	return CM_LeafArea( svs.cms, leafnum );
+}
+
+int SV_LeafsInPVS( int leafnum1, int leafnum2 ) {
+	return CM_LeafsInPVS( svs.cms, leafnum1, leafnum2 );
+}
+
+int SV_FindTopNodeForBox( const vec3_t mins, const vec3_t maxs, unsigned maxValue ) {
+	return CM_FindTopNodeForBox( svs.cms, mins, maxs, maxValue );
+}
+
+int SV_FindTopNodeForSphere( const vec3_t center, float radius, unsigned maxValue ) {
+	return CM_FindTopNodeForSphere( svs.cms, center, radius, maxValue );
+}
+
+CMShapeList *SV_AllocShapeList() {
+	return CM_AllocShapeList( svs.cms );
+}
+
+void SV_FreeShapeList( CMShapeList *list ) {
+	CM_FreeShapeList( svs.cms, list );
+}
+
+int SV_PossibleShapeListContents( const CMShapeList *list ) {
+	return CM_PossibleShapeListContents( list );
+}
+
+CMShapeList *SV_BuildShapeList( CMShapeList *list, const float *mins, const float *maxs, int clipMask ) {
+	return CM_BuildShapeList( svs.cms, list, mins, maxs, clipMask );
+}
+
+void SV_ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
+	CM_ClipShapeList( svs.cms, list, baseList, mins, maxs );
+}
+
+void SV_ClipToShapeList( const CMShapeList *list, trace_t *tr, const float *start,
+						 const float *end, const float *mins, const float *maxs, int clipMask ) {
+	CM_ClipToShapeList( svs.cms, list, tr, start, end, mins, maxs, clipMask );
+};
 
 void SV_InitGameProgs() {
 	// unload anything we have now
@@ -631,164 +682,11 @@ void SV_InitGameProgs() {
 		SV_ShutdownGameProgs();
 	}
 
-	game_import_t import;
-	// load a new game dll
-	import.Print = PF_dprint;
-	import.Error = PF_error;
-	import.GameCmd = PF_GameCmd;
-	import.ServerCmd = PF_ServerCmd;
-
-	// These wrappers should eventually be gone, once the game is statically linked.
-	// For now we can just reduce the related clutter by using lambdas.
-
-	import.inPVS = []( const float *p1, const float *p2 ) -> bool {
-		return CM_InPVS( svs.cms, p1, p2 );
-	};
-	import.CM_TransformedPointContents = []( const vec3_t p, const struct cmodel_s *cmodel, const vec3_t origin, const vec3_t angles, int topNodeHint ) -> int {
-		return CM_TransformedPointContents( svs.cms, p, cmodel, origin, angles, topNodeHint );
-	};
-	import.CM_TransformedBoxTrace = []( trace_t *tr, const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
-										const struct cmodel_s *cmodel, int brushmask, const vec3_t origin, const vec3_t angles, int topNodeHint ) {
-		CM_TransformedBoxTrace( svs.cms, tr, start, end, mins, maxs, cmodel, brushmask, origin, angles, topNodeHint );
-	};
-	import.CM_NumInlineModels = []() -> int {
-		return CM_NumInlineModels( svs.cms );
-	};
-	import.CM_InlineModel = []( int num ) -> struct cmodel_s * {
-		return CM_InlineModel( svs.cms, num );
-	};
-	import.CM_InlineModelBounds = []( const struct cmodel_s *cmodel, vec3_t mins, vec3_t maxs ) {
-		CM_InlineModelBounds( svs.cms, cmodel, mins, maxs );
-	};
-	import.CM_ModelForBBox = []( const vec3_t mins, const vec3_t maxs ) -> struct cmodel_s * {
-		return CM_ModelForBBox( svs.cms, mins, maxs );
-	};
-	import.CM_OctagonModelForBBox = []( const vec3_t mins, const vec3_t maxs ) -> struct cmodel_s * {
-		return CM_OctagonModelForBBox( svs.cms, mins, maxs );
-	};
-	import.CM_AreasConnected = []( int area1, int area2 ) -> bool {
-		return CM_AreasConnected( svs.cms, area1, area2 );
-	};
-	import.CM_SetAreaPortalState = []( int area, int otherarea, bool open ) {
-		CM_SetAreaPortalState( svs.cms, area, otherarea, open );
-	};
-	import.CM_BoxLeafnums = []( const vec3_t mins, const vec3_t maxs, int *list, int listsize, int *topnode, int topNodeHint ) {
-		return CM_BoxLeafnums( svs.cms, mins, maxs, list, listsize, topnode, topNodeHint );
-	};
-	import.CM_LeafCluster = []( int leafnum ) -> int {
-		return CM_LeafCluster( svs.cms, leafnum );
-	};
-	import.CM_LeafArea = []( int leafnum ) -> int {
-		return CM_LeafArea( svs.cms, leafnum );
-	};
-	import.CM_LeafsInPVS = []( int leafnum1, int leafnum2 ) -> int {
-		return CM_LeafsInPVS( svs.cms, leafnum1, leafnum2 );
-	};
-	import.CM_FindTopNodeForBox = []( const vec3_t mins, const vec3_t maxs, unsigned maxValue ) -> int {
-		return CM_FindTopNodeForBox( svs.cms, mins, maxs, maxValue );
-	};
-	import.CM_FindTopNodeForSphere = []( const vec3_t center, float radius, unsigned maxValue ) -> int {
-		return CM_FindTopNodeForSphere( svs.cms, center, radius, maxValue );
-	};
-	import.CM_AllocShapeList = []() -> CMShapeList * {
-		return CM_AllocShapeList( svs.cms );
-	};
-	import.CM_FreeShapeList = []( CMShapeList *list ) {
-		CM_FreeShapeList( svs.cms, list );
-	};
-	import.CM_PossibleShapeListContents = []( const CMShapeList *list ) -> int {
-		return CM_PossibleShapeListContents( list );
-	};
-	import.CM_BuildShapeList = []( CMShapeList *list, const float *mins, const float *maxs, int clipMask ) -> CMShapeList * {
-		return CM_BuildShapeList( svs.cms, list, mins, maxs, clipMask );
-	};
-	import.CM_ClipShapeList = []( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
-		CM_ClipShapeList( svs.cms, list, baseList, mins, maxs );
-	};
-	import.CM_ClipToShapeList = []( const CMShapeList *list, trace_t *tr, const float *start,
-								    const float *end, const float *mins, const float *maxs, int clipMask ) {
-		CM_ClipToShapeList( svs.cms, list, tr, start, end, mins, maxs, clipMask );
-	};
-
-	import.Milliseconds = Sys_Milliseconds;
-
-	import.ModelIndex = []( const char *name ) -> int {
-		return SV_FindIndex( name, CS_MODELS, MAX_MODELS, true );
-	};
-	import.SoundIndex = []( const char *name ) -> int {
-		return SV_FindIndex( name, CS_SOUNDS, MAX_SOUNDS, true );
-	};
-	import.ImageIndex = []( const char *name ) -> int {
-		return SV_FindIndex( name, CS_IMAGES, MAX_IMAGES, true );
-	};
-	import.SkinIndex = []( const char *name ) -> int {
-		return SV_FindIndex( name, CS_SKINFILES, MAX_SKINFILES, true );
-	};
-
-	import.ConfigString = PF_ConfigString;
-	import.GetConfigString = PF_GetConfigString;
-	import.PureSound = PF_PureSound;
-	import.PureModel = PF_PureModel;
-
-	import.FS_FOpenFile = FS_FOpenFile;
-	import.FS_Read = FS_Read;
-	import.FS_Write = FS_Write;
-	import.FS_Print = FS_Print;
-	import.FS_Tell = FS_Tell;
-	import.FS_Seek = FS_Seek;
-	import.FS_Eof = FS_Eof;
-	import.FS_Flush = FS_Flush;
-	import.FS_FCloseFile = FS_FCloseFile;
-	import.FS_RemoveFile = FS_RemoveFile;
-	import.FS_GetFileList = FS_GetFileList;
-	import.FS_FirstExtension = FS_FirstExtension;
-	import.FS_MoveFile = FS_MoveFile;
-	import.FS_FileMTime = FS_BaseFileMTime;
-	import.FS_RemoveDirectory = FS_RemoveDirectory;
-
-	import.Cvar_Get = Cvar_Get;
-	import.Cvar_Set = Cvar_Set;
-	import.Cvar_SetValue = Cvar_SetValue;
-	import.Cvar_ForceSet = Cvar_ForceSet;
-	import.Cvar_Value = Cvar_Value;
-	import.Cvar_String = Cvar_String;
-
-	import.Cmd_AddCommand = []( const char *name, CmdFunc func ) {
-		SV_Cmd_Register( wsw::StringView( name ), func );
-	};
-	import.Cmd_RemoveCommand = []( const char *name ) {
-		SV_Cmd_Unregister( wsw::StringView( name ) );
-	};
-
-	import.ML_Update = ML_Update;
-	import.ML_GetListSize = ML_GetListSize;
-	import.ML_GetMapByNum = ML_GetMapByNum;
-	import.ML_FilenameExists = ML_FilenameExists;
-	import.ML_GetFullname = ML_GetFullname;
-
-	import.Compress = PF_Compress;
-
-	import.Cmd_ExecuteText = SV_Cmd_ExecuteText;
-	import.Cbuf_Execute = SV_Cbuf_ExecutePendingCommands;
-
-	import.FakeClientConnect = SVC_FakeConnect;
-	import.DropClient = PF_DropClient;
-	import.GetClientState = PF_GetClientState;
-	import.ExecuteClientThinks = SV_ExecuteClientThinks;
-
-	import.LocateEntities = SV_LocateEntities;
-
-	import.createMessageStream = wsw::createMessageStream;
-	import.submitMessageStream = wsw::submitMessageStream;
-
-	ge = GetGameAPI( &import );
-	if( !ge ) {
-		Com_Error( ERR_DROP, "Failed to load game DLL" );
-	}
+	ge = (void *)1;
 
 	SV_SetServerConfigStrings();
 
-	ge->Init( time( nullptr ), svc.snapFrameTime, APP_PROTOCOL_VERSION, APP_DEMO_EXTENSION_STR );
+	G_Init( time( nullptr ), svc.snapFrameTime, APP_PROTOCOL_VERSION, APP_DEMO_EXTENSION_STR );
 }
 
 static void SV_CalcPings() {
@@ -1013,14 +911,14 @@ static bool SV_RunGameFrame( int msec ) {
 			accTime = 0;
 		}
 
-		ge->RunFrame( moduleTime, svs.gametime );
+		G_RunFrame( moduleTime, svs.gametime );
 	}
 
 	// if we don't have to send a snapshot we are done here
 	if( refreshSnapshot ) {
 		// set up for sending a snapshot
 		sv.framenum++;
-		ge->SnapFrame();
+		G_SnapFrame();
 
 		// set time for next snapshot
 		int extraSnapTime = (int)( svs.gametime - sv.nextSnapTime );
@@ -1077,7 +975,7 @@ void SV_Frame( unsigned realmsec, unsigned gamemsec ) {
 			SV_InfoServerHeartbeat();
 
 			// clear teleport flags, etc for next frame
-			ge->ClearSnap();
+			G_ClearSnap();
 		}
 	}
 }
@@ -1212,11 +1110,11 @@ static void SV_SpawnServer( const char *server, bool devmap ) {
 	SV_ReloadPureList();
 
 	// load and spawn all other entities
-	ge->InitLevel( sv.mapname, CM_EntityString( svs.cms ), CM_EntityStringLen( svs.cms ), 0, svs.gametime, svs.realtime );
+	G_InitLevel( sv.mapname, CM_EntityString( svs.cms ), CM_EntityStringLen( svs.cms ), 0, svs.gametime, svs.realtime );
 
 	// run two frames to allow everything to settle
-	ge->RunFrame( svc.snapFrameTime, svs.gametime );
-	ge->RunFrame( svc.snapFrameTime, svs.gametime );
+	G_RunFrame( svc.snapFrameTime, svs.gametime );
+	G_RunFrame( svc.snapFrameTime, svs.gametime );
 
 	SV_CreateBaseline(); // create a baseline for more efficient communications
 
@@ -1507,7 +1405,7 @@ void SV_UserinfoChanged( client_t *client ) {
 	}
 
 	// call prog code to allow overrides
-	ge->ClientUserinfoChanged( client->edict, client->userinfo );
+	G_ClientUserinfoChanged( client->edict, client->userinfo );
 
 	if( !Info_Validate( client->userinfo ) ) {
 		SV_DropClient( client, ReconnectBehaviour::OfUserChoice, "%s", "Error: Invalid userinfo (after game)" );
@@ -1562,7 +1460,6 @@ void SV_Init() {
 	sv_showRcon =           Cvar_Get( "sv_showRcon", "1", 0 );
 	sv_showChallenge =      Cvar_Get( "sv_showChallenge", "0", 0 );
 	sv_showInfoQueries =    Cvar_Get( "sv_showInfoQueries", "0", 0 );
-	sv_highchars =          Cvar_Get( "sv_highchars", "1", 0 );
 
 	sv_uploads_http =       Cvar_Get( "sv_uploads_http", "1", CVAR_READONLY );
 	sv_uploads_baseurl =    Cvar_Get( "sv_uploads_baseurl", "", CVAR_ARCHIVE );
@@ -1757,7 +1654,7 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address,
 	// assert( ::strlen( Info_ValueForKey( userinfo, "cl_mm_session" ) ) == UUID_DATA_LENGTH );
 
 	// get the game a chance to reject this connection or modify the userinfo
-	if( ge->ClientConnect( ent, userinfo, fakeClient ) ) {
+	if( G_ClientConnect( ent, userinfo, fakeClient ) ) {
 		// the connection is accepted, set up the client slot
 		client->edict     = ent;
 		client->challenge = challenge; // save challenge for checksumming
@@ -1836,7 +1733,7 @@ void SV_DropClient( client_t *drop, ReconnectBehaviour reconnectBehaviour, const
 	}
 
 	if( drop->isAFakeClient() ) {
-		ge->ClientDisconnect( drop->edict, reason );
+		G_ClientDisconnect( drop->edict, reason );
 		SV_ClientResetCommandBuffers( drop ); // make sure everything is clean
 	} else {
 		SV_InitClientMessage( drop, &tmpMessage, NULL, 0 );
@@ -1849,7 +1746,7 @@ void SV_DropClient( client_t *drop, ReconnectBehaviour reconnectBehaviour, const
 		if( drop->state >= CS_CONNECTED ) {
 			// call the prog function for removing a client
 			// this will remove the body, among other things
-			ge->ClientDisconnect( drop->edict, reason );
+			G_ClientDisconnect( drop->edict, reason );
 		} else if( drop->name[0] ) {
 			Com_Printf( "Connecting client %s%s disconnected (%s%s)\n", drop->name, S_COLOR_WHITE, reason, S_COLOR_WHITE );
 		}
@@ -2063,7 +1960,7 @@ static void HandleClientCommand_Begin( client_t *client, const CmdArgs &cmdArgs 
 		} else {
 			client->state = CS_SPAWNED;
 			// call the game begin function
-			ge->ClientBegin( client->edict );
+			G_ClientBegin( client->edict );
 		}
 	}
 }
@@ -2394,7 +2291,7 @@ static void SV_ExecuteUserCommand( client_t *client, uint64_t clientCommandNum, 
 	}
 
 	if( client->state >= CS_SPAWNED && !u->name && sv.state == ss_game ) {
-		ge->ClientCommand( client->edict, clientCommandNum, cmdArgs );
+		G_ClientCommand( client->edict, clientCommandNum, cmdArgs );
 	}
 }
 
@@ -2456,7 +2353,7 @@ void SV_ExecuteClientThinks( int clientNum ) {
 			timeDelta = -(int)( svs.gametime - ucmd->serverTimeStamp );
 		}
 
-		ge->ClientThink( client->edict, ucmd, timeDelta );
+		G_ClientThink( client->edict, ucmd, timeDelta );
 
 		client->UcmdTime = ucmd->serverTimeStamp;
 	}
@@ -2928,13 +2825,13 @@ void SV_BuildClientFrameSnap( client_t *client ) {
 
 	const ReplicatedScoreboardData *scoreboardData;
 	if( client->edict ) {
-		scoreboardData = ge->GetScoreboardDataForClient( client->edict->s.number - 1 );
+		scoreboardData = G_GetScoreboardDataForClient( client->edict->s.number - 1 );
 	} else {
-		scoreboardData = ge->GetScoreboardDataForDemo();
+		scoreboardData = G_GetScoreboardDataForDemo();
 	}
 
 	SNAP_BuildClientFrameSnap( svs.cms, &sv.gi, sv.framenum, svs.gametime, skyorg,
-							   client, ge->GetGameState(), scoreboardData, &svs.client_entities );
+							   client, G_GetGameState(), scoreboardData, &svs.client_entities );
 }
 
 static bool SV_SendClientDatagram( client_t *client ) {
@@ -4390,7 +4287,7 @@ int SVC_FakeConnect( const char *fakeUserinfo, const char *fakeSocketType, const
 			} else {
 				// directly call the game begin function
 				newcl->state = CS_SPAWNED;
-				ge->ClientBegin( newcl->edict );
+				G_ClientBegin( newcl->edict );
 
 				return NUM_FOR_EDICT( newcl->edict );
 			}

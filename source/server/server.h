@@ -221,8 +221,6 @@ void SV_UserinfoChanged( client_t *cl );
 void SV_InfoServerHeartbeat( void );
 void SV_InfoServerSendQuit( void );
 
-int SVC_FakeConnect( const char *fakeUserinfo, const char *fakeSocketType, const char *fakeIP );
-
 void SV_UpdateActivity( void );
 
 void SV_ConnectionlessPacket( const socket_t *socket, const netadr_t *address, msg_t *msg );
@@ -236,8 +234,6 @@ void SV_SetServerConfigStrings( void );
 void SV_AddPureFile( const wsw::StringView &fileName );
 void SV_PureList_f( const CmdArgs & );
 
-void SV_Cmd_ExecuteText( int when, const char *text );
-
 void SV_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionFunc = nullptr );
 void SV_Cmd_Unregister( const wsw::StringView &name );
 
@@ -245,8 +241,6 @@ void SV_Cmd_ExecuteNow( const char *text );
 void SV_Cmd_ExecuteNow2( const wsw::PodVector<char> &text );
 
 void SV_Cbuf_AppendCommand( const char *text );
-
-void SV_Cbuf_ExecutePendingCommands();
 
 bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg );
 void SV_SendServerCommand( client_t *cl, const char *format, ... );
@@ -285,7 +279,6 @@ void SV_DropClient( client_t *drop, ReconnectBehaviour reconnectBehaviour, const
 void SV_DropClient( client_t *drop, ReconnectBehaviour reconnectBehaviour, _Printf_format_string_ const char *format, ... );
 #endif
 
-void SV_ExecuteClientThinks( int clientNum );
 void SV_ClientResetCommandBuffers( client_t *client );
 void SV_ClientCloseDownload( client_t *client );
 

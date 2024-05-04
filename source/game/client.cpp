@@ -417,7 +417,7 @@ void G_Client_UpdateActivity( Client *client ) {
 void G_Client_InactivityRemove( Client *client, int64_t inactivityMillis ) {
 	assert( inactivityMillis > 0 );
 
-	if( trap_GetClientState( client - game.clients ) < CS_SPAWNED ) {
+	if( G_GetClientState( client - game.clients ) < CS_SPAWNED ) {
 		return;
 	}
 
@@ -486,9 +486,9 @@ void Client::setSkinFromInfo() {
 
 	auto *ent = getEntity();
 	if( !ent->deadflag ) {
-		ent->s.modelindex = trap_ModelIndex( modelPath.data() );
+		ent->s.modelindex = SV_ModelIndex( modelPath.data() );
 	}
-	ent->s.skinnum = trap_SkinIndex( skinPath.data() );
+	ent->s.skinnum = SV_SkinIndex( skinPath.data() );
 }
 
 void G_ClientClearStats( edict_t *ent ) {
@@ -771,7 +771,7 @@ void G_TeleportPlayer( edict_t *player, edict_t *dest ) {
 * called when a client has finished connecting, and is ready
 * to be placed into the game.  This will happen every level load.
 */
-void ClientBegin( edict_t *ent ) {
+void G_ClientBegin( edict_t *ent ) {
 	Client *client = ent->r.client;
 
 	memset( &client->ucmd, 0, sizeof( client->ucmd ) );
@@ -975,7 +975,7 @@ static void G_UpdatePlayerInfoString( int playerNum ) {
 
 	wsw::StaticString<MAX_INFO_STRING> string;
 	info.serialize( &string );
-	trap_ConfigString( CS_PLAYERINFOS + playerNum, string.data() );
+	SV_SetConfigString( CS_PLAYERINFOS + playerNum, string.data() );
 }
 
 static void G_UpdateMMPlayerInfoString( int playerNum ) {
@@ -989,21 +989,21 @@ static void G_UpdateMMPlayerInfoString( int playerNum ) {
 	playerString[0] = 0;
 
 	playerString[MAX_CONFIGSTRING_CHARS - 1] = 0;
-	trap_ConfigString( CS_MMPLAYERINFOS + playerNum, playerString );
+	SV_SetConfigString( CS_MMPLAYERINFOS + playerNum, playerString );
 }
 
 
 void Client::handleUserInfoChanges() {
 	const auto maybeIP = m_userInfo.get( kInfoKeyIP );
 	if( !maybeIP ) {
-		trap_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Server didn't provide client IP" );
+		G_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Server didn't provide client IP" );
 		return;
 	}
 	ip.assign( *maybeIP );
 
 	const auto maybeSocket = m_userInfo.get( kInfoKeySocket );
 	if( !maybeSocket ) {
-		trap_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Server didn't provide client socket" );
+		G_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Server didn't provide client socket" );
 		return;
 	}
 	socket.assign( *maybeSocket );
@@ -1031,7 +1031,7 @@ void Client::handleUserInfoChanges() {
 		}
 	}
 	if( !m_userInfo.set( kInfoKeyName, netname.asView() ) ) {
-		trap_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Couldn't set userinfo (name)" );
+		G_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Couldn't set userinfo (name)" );
 		return;
 	}
 
@@ -1059,7 +1059,7 @@ void Client::handleUserInfoChanges() {
 
 	if( const auto maybeStyleString = m_userInfo.get( kInfoKeyMovementStyle ) ) {
 		const int style = wsw::clamp( wsw::toNum<int>( *maybeStyleString ).value_or( 0 ), 0, GS_MAXBUNNIES - 1 );
-		if( trap_GetClientState( PLAYERNUM( getEntity() ) ) < CS_SPAWNED ) {
+		if( G_GetClientState( PLAYERNUM( getEntity() ) ) < CS_SPAWNED ) {
 			if( style != movestyle ) {
 				movestyle = movestyle_latched = style;
 			}
@@ -1112,7 +1112,7 @@ void Client::handleUserInfoChanges() {
 	}*/
 	mm_session = Uuid_ZeroUuid();
 
-	if( !G_ISGHOSTING( getEntity() ) && trap_GetClientState( PLAYERNUM( getEntity() ) ) >= CS_SPAWNED ) {
+	if( !G_ISGHOSTING( getEntity() ) && G_GetClientState( PLAYERNUM( getEntity() ) ) >= CS_SPAWNED ) {
 		setSkinFromInfo();
 	}
 
@@ -1133,7 +1133,7 @@ void Client::handleUserInfoChanges() {
 * Changing levels will NOT cause this to be called again, but
 * loadgames will.
 */
-bool ClientConnect( edict_t *ent, char *userinfo, bool fakeClient ) {
+bool G_ClientConnect( edict_t *ent, char *userinfo, bool fakeClient ) {
 	assert( ent );
 	assert( userinfo && Info_Validate( userinfo ) );
 
@@ -1190,7 +1190,7 @@ bool ClientConnect( edict_t *ent, char *userinfo, bool fakeClient ) {
 	ent->r.client->team = TEAM_SPECTATOR;
 	G_Client_UpdateActivity( ent->r.client ); // activity detected
 
-	ClientUserinfoChanged( ent, userinfo );
+	G_ClientUserinfoChanged( ent, userinfo );
 
 	if( !fakeClient ) {
 		char message[MAX_STRING_CHARS];
@@ -1212,7 +1212,7 @@ bool ClientConnect( edict_t *ent, char *userinfo, bool fakeClient ) {
 * Called when a player drops from the server.
 * Will not be called between levels.
 */
-void ClientDisconnect( edict_t *ent, const char *reason ) {
+void G_ClientDisconnect( edict_t *ent, const char *reason ) {
 	if( !ent->r.client || !ent->r.inuse ) {
 		return;
 	}
@@ -1249,7 +1249,7 @@ void ClientDisconnect( edict_t *ent, const char *reason ) {
 	ent->r.client->reset();
 	ent->r.client->ps.playerNum = PLAYERNUM( ent );
 
-	trap_ConfigString( CS_PLAYERINFOS + PLAYERNUM( ent ), "" );
+	SV_SetConfigString( CS_PLAYERINFOS + PLAYERNUM( ent ), "" );
 	GClip_UnlinkEntity( ent );
 
 	G_Match_CheckReadys();
@@ -1470,11 +1470,11 @@ static void G_PlayerWorldEffects( edict_t *ent ) {
 	//
 	if( !old_waterlevel && waterlevel ) {
 		if( ent->watertype & CONTENTS_LAVA ) {
-			G_Sound( ent, CHAN_AUTO, trap_SoundIndex( S_WORLD_LAVA_IN ), ATTN_NORM );
+			G_Sound( ent, CHAN_AUTO, SV_SoundIndex( S_WORLD_LAVA_IN ), ATTN_NORM );
 		} else if( ent->watertype & CONTENTS_SLIME ) {
-			G_Sound( ent, CHAN_AUTO, trap_SoundIndex( S_WORLD_SLIME_IN ), ATTN_NORM );
+			G_Sound( ent, CHAN_AUTO, SV_SoundIndex( S_WORLD_SLIME_IN ), ATTN_NORM );
 		} else if( ent->watertype & CONTENTS_WATER ) {
-			G_Sound( ent, CHAN_AUTO, trap_SoundIndex( S_WORLD_WATER_IN ), ATTN_NORM );
+			G_Sound( ent, CHAN_AUTO, SV_SoundIndex( S_WORLD_WATER_IN ), ATTN_NORM );
 		}
 
 		ent->flags |= FL_INWATER;
@@ -1485,11 +1485,11 @@ static void G_PlayerWorldEffects( edict_t *ent ) {
 	//
 	if( old_waterlevel && !waterlevel ) {
 		if( old_watertype & CONTENTS_LAVA ) {
-			G_Sound( ent, CHAN_AUTO, trap_SoundIndex( S_WORLD_LAVA_OUT ), ATTN_NORM );
+			G_Sound( ent, CHAN_AUTO, SV_SoundIndex( S_WORLD_LAVA_OUT ), ATTN_NORM );
 		} else if( old_watertype & CONTENTS_SLIME ) {
-			G_Sound( ent, CHAN_AUTO, trap_SoundIndex( S_WORLD_SLIME_OUT ), ATTN_NORM );
+			G_Sound( ent, CHAN_AUTO, SV_SoundIndex( S_WORLD_SLIME_OUT ), ATTN_NORM );
 		} else if( old_watertype & CONTENTS_WATER ) {
-			G_Sound( ent, CHAN_AUTO, trap_SoundIndex( S_WORLD_WATER_OUT ), ATTN_NORM );
+			G_Sound( ent, CHAN_AUTO, SV_SoundIndex( S_WORLD_WATER_OUT ), ATTN_NORM );
 		}
 
 		ent->flags &= ~FL_INWATER;
@@ -1548,7 +1548,7 @@ static void G_PlayerWorldEffects( edict_t *ent ) {
 			// wsw: Medar: We don't have the sounds yet and this seems to overwrite the normal pain sounds
 			//if( !G_IsDead(ent) && ent->pain_debounce_time <= level.time )
 			//{
-			//	G_Sound( ent, CHAN_BODY, trap_SoundIndex(va(S_PLAYER_BURN_1_to_2, (rand()&1)+1)), 1, ATTN_NORM );
+			//	G_Sound( ent, CHAN_BODY, SV_SoundIndex(va(S_PLAYER_BURN_1_to_2, (rand()&1)+1)), 1, ATTN_NORM );
 			//	ent->pain_debounce_time = level.time + 1000;
 			//}
 			G_Damage( ent, world, world, vec3_origin, vec3_origin, ent->s.origin,
@@ -1617,11 +1617,11 @@ static void G_SetClientEffects( edict_t *ent ) {
 static void G_SetClientSound( edict_t *ent ) {
 	if( ent->waterlevel == 3 ) {
 		if( ent->watertype & CONTENTS_LAVA ) {
-			ent->s.sound = trap_SoundIndex( S_WORLD_UNDERLAVA );
+			ent->s.sound = SV_SoundIndex( S_WORLD_UNDERLAVA );
 		} else if( ent->watertype & CONTENTS_SLIME ) {
-			ent->s.sound = trap_SoundIndex( S_WORLD_UNDERSLIME );
+			ent->s.sound = SV_SoundIndex( S_WORLD_UNDERSLIME );
 		} else if( ent->watertype & CONTENTS_WATER ) {
-			ent->s.sound = trap_SoundIndex( S_WORLD_UNDERWATER );
+			ent->s.sound = SV_SoundIndex( S_WORLD_UNDERWATER );
 		}
 	} else {
 		ent->s.sound = 0;
@@ -1643,7 +1643,7 @@ void G_SetClientFrame( edict_t *ent ) {
 * and right after spawning
 */
 void G_ClientEndSnapFrame( edict_t *ent ) {
-	if( trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
+	if( G_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 		return;
 	}
 
@@ -1686,7 +1686,7 @@ void G_ClientThink( edict_t *ent ) {
 		return;
 	}
 
-	if( trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
+	if( G_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 		return;
 	}
 
@@ -1715,7 +1715,7 @@ void G_ClientThink( edict_t *ent ) {
 		}
 	}
 
-	trap_ExecuteClientThinks( PLAYERNUM( ent ) );
+	SV_ExecuteClientThinks( PLAYERNUM( ent ) );
 }
 
 void Client::executeUcmd( const usercmd_t &ucmd_, int timeDelta_ ) {
@@ -1882,7 +1882,7 @@ void Client::checkInstaShield() {
 		if( ps.pmove.pm_type == PM_NORMAL && ucmd.upmove < 0 ) {
 			if( instashieldCharge == INSTA_SHIELD_MAX && ps.inventory[POWERUP_SHELL] == 0 ) {
 				ps.inventory[POWERUP_SHELL] = instashieldCharge;
-				int soundIndex = trap_SoundIndex( GS_FindItemByTag( ggs, POWERUP_SHELL )->pickup_sound );
+				int soundIndex = SV_SoundIndex( GS_FindItemByTag( ggs, POWERUP_SHELL )->pickup_sound );
 				G_Sound( getEntity(), CHAN_AUTO, soundIndex, ATTN_NORM );
 			}
 		}
@@ -1920,7 +1920,7 @@ bool Client::hasNewActivity( const usercmd_t &oldUcmd ) const {
 	return false;
 }
 
-void ClientThink( edict_t *ent, usercmd_t *ucmd, int timeDelta ) {
+void G_ClientThink( edict_t *ent, usercmd_t *ucmd, int timeDelta ) {
 	ent->r.client->executeUcmd( *ucmd, timeDelta );
 }
 
@@ -1933,7 +1933,7 @@ void G_CheckClientRespawnClick( edict_t *ent ) {
 		return;
 	}
 
-	if( trap_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
+	if( G_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
 		// if the spawnsystem doesn't require to click
 		if( G_SpawnQueue_GetSystem( ent->s.team ) != SPAWNSYSTEM_INSTANT ) {
 			int minDelay = g_respawn_delay_min->integer;
@@ -2031,7 +2031,7 @@ bool Client::isFakeClient() const {
 	return ( getEntity()->r.svflags & SVF_FAKECLIENT ) != 0;
 }
 
-void ClientUserinfoChanged( edict_t *ent, char *userinfo ) {
+void G_ClientUserinfoChanged( edict_t *ent, char *userinfo ) {
 	ent->r.client->setUserInfo( wsw::StringView( userinfo ) );
 }
 
@@ -2039,7 +2039,7 @@ void Client::setUserInfo( const wsw::StringView &rawInfo ) {
 	if( m_userInfo.parse( rawInfo ) ) {
 		handleUserInfoChanges();
 	} else {
-		trap_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Invalid userinfo" );
+		G_DropClient( getEntity(), ReconnectBehaviour::OfUserChoice, "Error: Invalid userinfo" );
 	}
 }
 

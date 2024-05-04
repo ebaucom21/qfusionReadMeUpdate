@@ -19,6 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "g_local.h"
+#include "../common/cvar.h"
 
 //QUAKED info_player_start (1 0 0) (-16 -16 -24) (16 16 32)
 //The normal starting point for a level.
@@ -244,9 +245,9 @@ bool G_OffsetSpawnPoint( vec3_t origin, const vec3_t box_mins, const vec3_t box_
 
 		// check if valid cluster
 		cluster = -1; // fix a warning
-		num_leafs = trap_CM_BoxLeafnums( absmins, absmaxs, leafs, 8, NULL );
+		num_leafs = SV_BoxLeafnums( absmins, absmaxs, leafs, 8, NULL );
 		for( j = 0; j < num_leafs; j++ ) {
-			cluster = trap_CM_LeafCluster( leafs[j] );
+			cluster = SV_LeafCluster( leafs[j] );
 			if( cluster == -1 ) {
 				break;
 			}
@@ -259,7 +260,7 @@ bool G_OffsetSpawnPoint( vec3_t origin, const vec3_t box_mins, const vec3_t box_
 
 		// one more trace is needed, only checking if some part of the world is on the
 		// way from spawnpoint to the virtual position
-		trap_CM_TransformedBoxTrace( &trace, origin, virtualorigin, box_mins, box_maxs, NULL, MASK_PLAYERSOLID, NULL, NULL );
+		SV_TransformedBoxTrace( &trace, origin, virtualorigin, box_mins, box_maxs, NULL, MASK_PLAYERSOLID, NULL, NULL );
 		if( trace.fraction != 1.0f ) {
 			continue;
 		}
@@ -415,9 +416,9 @@ void G_SpawnQueue_Init( void ) {
 	cvar_t *g_spawnsystem_wave_time;
 	cvar_t *g_spawnsystem_wave_maxcount;
 
-	g_spawnsystem = trap_Cvar_Get( "g_spawnsystem", va( "%i", SPAWNSYSTEM_INSTANT ), CVAR_DEVELOPER );
-	g_spawnsystem_wave_time = trap_Cvar_Get( "g_spawnsystem_wave_time", va( "%i", REINFORCEMENT_WAVE_DELAY ), CVAR_ARCHIVE );
-	g_spawnsystem_wave_maxcount = trap_Cvar_Get( "g_spawnsystem_wave_maxcount", va( "%i", REINFORCEMENT_WAVE_MAXCOUNT ), CVAR_ARCHIVE );
+	g_spawnsystem = Cvar_Get( "g_spawnsystem", va( "%i", SPAWNSYSTEM_INSTANT ), CVAR_DEVELOPER );
+	g_spawnsystem_wave_time = Cvar_Get( "g_spawnsystem_wave_time", va( "%i", REINFORCEMENT_WAVE_DELAY ), CVAR_ARCHIVE );
+	g_spawnsystem_wave_maxcount = Cvar_Get( "g_spawnsystem_wave_maxcount", va( "%i", REINFORCEMENT_WAVE_MAXCOUNT ), CVAR_ARCHIVE );
 
 	memset( g_spawnQueues, 0, sizeof( g_spawnQueues ) );
 	for( team = TEAM_SPECTATOR; team < GS_MAX_TEAMS; team++ )
@@ -426,7 +427,7 @@ void G_SpawnQueue_Init( void ) {
 	spawnsystem = g_spawnsystem->integer;
 	Q_clamp( spawnsystem, SPAWNSYSTEM_INSTANT, SPAWNSYSTEM_HOLD );
 	if( spawnsystem != g_spawnsystem->integer ) {
-		trap_Cvar_ForceSet( "g_spawnsystem", va( "%i", spawnsystem ) );
+		Cvar_ForceSet( "g_spawnsystem", va( "%i", spawnsystem ) );
 	}
 
 	for( team = TEAM_SPECTATOR; team < GS_MAX_TEAMS; team++ ) {

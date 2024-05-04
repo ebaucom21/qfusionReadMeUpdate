@@ -99,7 +99,7 @@ void ChatPrintHelper::dispatchWithFilter( const ChatHandlersChain *filter, bool 
 
 	if( !m_sender ) {
 		const char *cmd = setupPrefixForOthers( teamOnly );
-		trap_GameCmd( nullptr, cmd );
+		SV_DispatchGameCmd( nullptr, cmd );
 		return;
 	}
 
@@ -112,7 +112,7 @@ void ChatPrintHelper::dispatchWithFilter( const ChatHandlersChain *filter, bool 
 		if( teamOnly && ent->s.team != m_sender->s.team ) {
 			continue;
 		}
-		if( trap_GetClientState( i ) < CS_CONNECTED ) {
+		if( G_GetClientState( i ) < CS_CONNECTED ) {
 			continue;
 		}
 		if( filter && filter->ignores( ent, m_sender ) ) {
@@ -129,7 +129,7 @@ void ChatPrintHelper::dispatchWithFilter( const ChatHandlersChain *filter, bool 
 			cmd = setupPrefixForOthers( teamOnly );
 			pendingCmd = cmd;
 		}
-		trap_GameCmd( ent, cmd );
+		SV_DispatchGameCmd( ent, cmd );
 		cmd = pendingCmd;
 	}
 }
@@ -147,13 +147,13 @@ void ChatPrintHelper::printTo( const edict_t *target, bool teamOnly ) {
 		return;
 	}
 
-	if( trap_GetClientState( PLAYERNUM( target ) ) < CS_SPAWNED ) {
+	if( G_GetClientState( PLAYERNUM( target ) ) < CS_SPAWNED ) {
 		return;
 	}
 
 	printToServerConsole( teamOnly );
 	const char *cmd = ( m_sender == target ) ? setupPrefixForSender( teamOnly ) : setupPrefixForOthers( teamOnly );
-	trap_GameCmd( target, cmd );
+	SV_DispatchGameCmd( target, cmd );
 }
 
 auto ChatPrintHelper::setupPrefixForOthers( bool teamOnly ) -> const char * {
@@ -679,7 +679,7 @@ void RespectHandler::ClientEntry::checkBehaviour( const int64_t matchStartTime )
 
 					char cmd[MAX_STRING_CHARS];
 					Q_snprintfz( cmd, sizeof( cmd ), "ply \"%s\"", S_RESPECT_REWARD );
-					trap_GameCmd( m_ent, cmd );
+					SV_DispatchGameCmd( m_ent, cmd );
 
 					m_hasCompletedMatchEndAction = true;
 				} else {
@@ -765,7 +765,7 @@ void RespectHandler::ClientEntry::addToReportStats( RespectStats *reportedStats 
 }
 
 void IgnoreFilter::handleIgnoreCommand( const edict_t *ent, bool ignore, const CmdArgs &cmdArgs ) {
-	const int numArgs = wsw::min( trap_Cmd_Argc(), MAX_CLIENTS );
+	const int numArgs = wsw::min( Cmd_Argc(), MAX_CLIENTS );
 	if( numArgs < 2 ) {
 		printIgnoreCommandUsage( ent, ignore );
 		return;
@@ -774,7 +774,7 @@ void IgnoreFilter::handleIgnoreCommand( const edict_t *ent, bool ignore, const C
 	// Resetting of global flags should also unset individual bits
 
 	ClientEntry &e = m_entries[PLAYERNUM( ent )];
-	const char *prefix = trap_Cmd_Argv( 1 );
+	const char *prefix = Cmd_Argv( 1 );
 	if( !Q_stricmp( prefix, "everybody" ) ) {
 		if( e.ignoresEverybody == ignore ) {
 			return;
@@ -816,7 +816,7 @@ void IgnoreFilter::handleIgnoreCommand( const edict_t *ent, bool ignore, const C
 	bool wereOnlyTeammates = true;
 	// Convert player numbers first before applying a modification (don't apply changes partially)
 	for( int i = 2; i < numArgs; ++i ) {
-		const char *arg = trap_Cmd_Argv( i );
+		const char *arg = Cmd_Argv( i );
 		const edict_t *player = G_PlayerForText( arg );
 		if( !player ) {
 			G_PrintMsg( ent, "Failed to get a player for `%s`\n", arg );
@@ -872,13 +872,13 @@ void IgnoreFilter::sendChangeFilterVarCommand( const edict_t *ent ) {
 	} else if( e.ignoresNotTeammates ) {
 		value = 2;
 	}
-	trap_GameCmd( ent, va( "ign setVar %d", value ) );
+	SV_DispatchGameCmd( ent, va( "ign setVar %d", value ) );
 }
 
 void IgnoreFilter::handleIgnoreListCommand( const edict_t *ent, const CmdArgs &cmdArgs ) {
-	const edict_t *player = G_PlayerForText( trap_Cmd_Argv( 1 ) );
+	const edict_t *player = G_PlayerForText( Cmd_Argv( 1 ) );
 	if( !player ) {
-		if( trap_Cmd_Argc() >= 2 ) {
+		if( Cmd_Argc() >= 2 ) {
 			G_PrintMsg( ent, "Usage: ignorelist [<player>]\n" );
 			return;
 		}
@@ -921,7 +921,7 @@ void IgnoreFilter::handleIgnoreListCommand( const edict_t *ent, const CmdArgs &c
 		if( !clientEnt->r.inuse ) {
 			continue;
 		}
-		if( trap_GetClientState( i ) < CS_SPAWNED ) {
+		if( G_GetClientState( i ) < CS_SPAWNED ) {
 			continue;
 		}
 		if( !e.GetClientBit( i ) ) {
@@ -955,7 +955,7 @@ void IgnoreFilter::reset() {
 }
 
 void IgnoreFilter::notifyOfIgnoredMessage( const edict_t *target, const edict_t *source ) const {
-	trap_GameCmd( target, va( "ign %d", PLAYERNUM( source ) + 1 ) );
+	SV_DispatchGameCmd( target, va( "ign %d", PLAYERNUM( source ) + 1 ) );
 }
 
 void IgnoreFilter::onUserInfoChanged( const edict_t *user ) {

@@ -48,7 +48,7 @@ void G_PlayerAward( const edict_t *ent, const char *awardMsg ) {
 	//}
 
 	Q_snprintfz( cmd, sizeof( cmd ), "aw \"%s\"", awardMsg );
-	trap_GameCmd( ent, cmd );
+	SV_DispatchGameCmd( ent, cmd );
 
 	if( dedicated->integer ) {
 		G_Printf( "%s", COM_RemoveColorTokens( va( "%s receives a '%s' award.\n", ent->r.client->netname.data(), awardMsg ) ) );
@@ -67,7 +67,7 @@ void G_PlayerAward( const edict_t *ent, const char *awardMsg ) {
 		}
 
 		if( other->r.client->chase.target == ENTNUM( ent ) ) {
-			trap_GameCmd( other, cmd );
+			SV_DispatchGameCmd( other, cmd );
 		}
 	}
 }
@@ -459,5 +459,5 @@ void G_SendActionRequest( const edict_t *ent, const wsw::StringView &tag, unsign
 		appendQuoted( buffer, key );
 		appendQuoted( buffer, cmd );
 	}
-	trap_GameCmd( ent, buffer.data() );
+	SV_DispatchGameCmd( ent, buffer.data() );
 }

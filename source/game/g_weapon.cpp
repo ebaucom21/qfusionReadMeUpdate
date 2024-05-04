@@ -322,7 +322,7 @@ static edict_t *W_Fire_TossProjectile( edict_t *self, vec3_t start, vec3_t angle
 	VectorClear( projectile->r.mins );
 	VectorClear( projectile->r.maxs );
 
-	//projectile->s.modelindex = trap_ModelIndex ("models/objects/projectile/plasmagun/proj_plasmagun2.md3");
+	//projectile->s.modelindex = SV_ModelIndex ("models/objects/projectile/plasmagun/proj_plasmagun2.md3");
 	projectile->s.modelindex = 0;
 	projectile->r.owner = self;
 	projectile->touch = W_Touch_Projectile; //generic one. Should be replaced after calling this func
@@ -454,14 +454,14 @@ edict_t *W_Fire_GunbladeBlast( edict_t *self, vec3_t start, vec3_t angles, float
 	}
 
 	blast = W_Fire_LinearProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, minDamage, radius, timeout, timeDelta );
-	blast->s.modelindex = trap_ModelIndex( PATH_GUNBLADEBLAST_STRONG_MODEL );
+	blast->s.modelindex = SV_ModelIndex( PATH_GUNBLADEBLAST_STRONG_MODEL );
 	blast->s.type = ET_BLASTER;
 	blast->s.effects |= EF_STRONG_WEAPON;
 	blast->touch = W_Touch_GunbladeBlast;
 	blast->classname = "gunblade_blast";
 	blast->style = mod;
 
-	blast->s.sound = trap_SoundIndex( S_WEAPON_PLASMAGUN_S_FLY );
+	blast->s.sound = SV_SoundIndex( S_WEAPON_PLASMAGUN_S_FLY );
 	blast->s.attenuation = ATTN_STATIC;
 
 	return blast;
@@ -720,14 +720,14 @@ edict_t *W_Fire_Grenade( edict_t *self, vec3_t start, vec3_t angles, int speed, 
 	}
 
 	if( mod == MOD_GRENADE_S ) {
-		grenade->s.modelindex = trap_ModelIndex( PATH_GRENADE_STRONG_MODEL );
+		grenade->s.modelindex = SV_ModelIndex( PATH_GRENADE_STRONG_MODEL );
 		grenade->s.effects |= EF_STRONG_WEAPON;
 		if( GS_RaceGametype( *ggs ) ) {
 			// bounce count
 			grenade->health = 2;
 		}
 	} else {
-		grenade->s.modelindex = trap_ModelIndex( PATH_GRENADE_WEAK_MODEL );
+		grenade->s.modelindex = SV_ModelIndex( PATH_GRENADE_WEAK_MODEL );
 		grenade->s.effects &= ~EF_STRONG_WEAPON;
 	}
 
@@ -819,15 +819,15 @@ edict_t *W_Fire_Rocket( edict_t *self, vec3_t start, vec3_t angles, int speed, f
 	rocket = W_Fire_LinearProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, minDamage, radius, timeout, timeDelta );
 	rocket->s.type = ET_ROCKET; //rocket trail sfx
 	if( mod == MOD_ROCKET_S ) {
-		rocket->s.modelindex = trap_ModelIndex( PATH_ROCKET_STRONG_MODEL );
+		rocket->s.modelindex = SV_ModelIndex( PATH_ROCKET_STRONG_MODEL );
 		rocket->s.effects |= EF_STRONG_WEAPON;
-		rocket->s.sound = trap_SoundIndex( S_WEAPON_ROCKET_S_FLY );
+		rocket->s.sound = SV_SoundIndex( S_WEAPON_ROCKET_S_FLY );
 		rocket->think = G_FreeEdict;
 		rocket->nextThink = level.time + timeout;
 	} else {
-		rocket->s.modelindex = trap_ModelIndex( PATH_ROCKET_WEAK_MODEL );
+		rocket->s.modelindex = SV_ModelIndex( PATH_ROCKET_WEAK_MODEL );
 		rocket->s.effects &= ~EF_STRONG_WEAPON;
-		rocket->s.sound = trap_SoundIndex( S_WEAPON_ROCKET_W_FLY );
+		rocket->s.sound = SV_SoundIndex( S_WEAPON_ROCKET_W_FLY );
 		rocket->think     = convertToTossProjectile;
 		rocket->nextThink = level.time + wsw::max( 2 * game.snapFrameTime, g_projectile_toss_morph_delay->integer );
 	}
@@ -993,13 +993,13 @@ edict_t *W_Fire_Plasma( edict_t *self, vec3_t start, vec3_t angles, float damage
 	plasma->timeout = level.time + timeout;
 
 	if( mod == MOD_PLASMA_S ) {
-		plasma->s.modelindex = trap_ModelIndex( PATH_PLASMA_STRONG_MODEL );
-		plasma->s.sound = trap_SoundIndex( S_WEAPON_PLASMAGUN_S_FLY );
+		plasma->s.modelindex = SV_ModelIndex( PATH_PLASMA_STRONG_MODEL );
+		plasma->s.sound = SV_SoundIndex( S_WEAPON_PLASMAGUN_S_FLY );
 		plasma->s.effects |= EF_STRONG_WEAPON;
 		plasma->think = W_Think_Plasma;
 	} else {
-		plasma->s.modelindex = trap_ModelIndex( PATH_PLASMA_WEAK_MODEL );
-		plasma->s.sound = trap_SoundIndex( S_WEAPON_PLASMAGUN_W_FLY );
+		plasma->s.modelindex = SV_ModelIndex( PATH_PLASMA_WEAK_MODEL );
+		plasma->s.sound = SV_SoundIndex( S_WEAPON_PLASMAGUN_W_FLY );
 		plasma->s.effects &= ~EF_STRONG_WEAPON;
 		plasma->think = W_Think_Plasma2;
 		plasma->trigger_timeout = level.time + wsw::max( 2 * game.snapFrameTime, g_projectile_toss_morph_delay->integer );
@@ -1335,7 +1335,7 @@ edict_t *W_Fire_Electrobolt_Weak( edict_t *self, vec3_t start, vec3_t angles, fl
 
 	// projectile, weak mode
 	bolt = W_Fire_LinearProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, 0, 0, timeout, timeDelta );
-	bolt->s.modelindex = trap_ModelIndex( PATH_ELECTROBOLT_WEAK_MODEL );
+	bolt->s.modelindex = SV_ModelIndex( PATH_ELECTROBOLT_WEAK_MODEL );
 	bolt->s.type = ET_ELECTRO_WEAK; //add particle trail and light
 	bolt->s.ownerNum = ENTNUM( self );
 	bolt->touch = W_Touch_Bolt;
@@ -1497,12 +1497,12 @@ edict_t *W_Fire_Shockwave( edict_t *self, vec3_t start, vec3_t angles, int speed
 
 	wave = W_Fire_LinearProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, minDamage, radius, timeout, timeDelta );
 	if( mod == MOD_SHOCKWAVE_S ) {
-		wave->s.modelindex = trap_ModelIndex( PATH_WAVE_STRONG_MODEL );
-		wave->s.sound = trap_SoundIndex( S_WEAPON_SHOCKWAVE_S_FLY );
+		wave->s.modelindex = SV_ModelIndex( PATH_WAVE_STRONG_MODEL );
+		wave->s.sound = SV_SoundIndex( S_WEAPON_SHOCKWAVE_S_FLY );
 		wave->s.effects |= EF_STRONG_WEAPON;
 	} else {
-		wave->s.modelindex = trap_ModelIndex( PATH_WAVE_WEAK_MODEL );
-		wave->s.sound = trap_SoundIndex( S_WEAPON_SHOCKWAVE_W_FLY );
+		wave->s.modelindex = SV_ModelIndex( PATH_WAVE_WEAK_MODEL );
+		wave->s.sound = SV_SoundIndex( S_WEAPON_SHOCKWAVE_W_FLY );
 		wave->s.effects &= ~EF_STRONG_WEAPON;
 	}
 
@@ -1644,7 +1644,7 @@ static void G_Laser_Think( edict_t *ent ) {
 	owner = &game.edicts[ent->s.ownerNum];
 
 	if( G_ISGHOSTING( owner ) || owner->s.weapon != WEAP_LASERGUN ||
-		trap_GetClientState( PLAYERNUM( owner ) ) < CS_SPAWNED ||
+		G_GetClientState( PLAYERNUM( owner ) ) < CS_SPAWNED ||
 		( owner->r.client->ps.weaponState != WEAPON_STATE_REFIRESTRONG
 		  && owner->r.client->ps.weaponState != WEAPON_STATE_REFIRE ) ) {
 		G_HideLaser( ent );
@@ -1736,7 +1736,7 @@ edict_t *W_Fire_Lasergun( edict_t *self, vec3_t start, vec3_t angles, float dama
 	if( newLaser ) {
 		// the quad start sound is added from the server
 		if( self->r.client && self->r.client->ps.inventory[POWERUP_QUAD] > 0 ) {
-			G_Sound( self, CHAN_AUTO, trap_SoundIndex( S_QUAD_FIRE ), ATTN_NORM );
+			G_Sound( self, CHAN_AUTO, SV_SoundIndex( S_QUAD_FIRE ), ATTN_NORM );
 		}
 	}
 
@@ -1785,7 +1785,7 @@ edict_t *W_Fire_Lasergun_Weak( edict_t *self, vec3_t start, vec3_t end, float da
 	if( newLaser ) {
 		// the quad start sound is added from the server
 		if( self->r.client && self->r.client->ps.inventory[POWERUP_QUAD] > 0 ) {
-			G_Sound( self, CHAN_AUTO, trap_SoundIndex( S_QUAD_FIRE ), ATTN_NORM );
+			G_Sound( self, CHAN_AUTO, SV_SoundIndex( S_QUAD_FIRE ), ATTN_NORM );
 		}
 	}
 

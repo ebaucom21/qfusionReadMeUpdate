@@ -163,7 +163,7 @@ void EnvironmentTraceCache::testForResultsMask( PredictionContext *context, unsi
 			VectorScale( traceEnd, kTraceDepth, traceEnd );
 			VectorAdd( traceEnd, origin, traceEnd );
 			// Compute the trace of the cached result
-			GAME_IMPORT.CM_ClipToShapeList( shapeList, &fullResult->trace, origin, traceEnd, mins, maxs, contentsMask );
+			SV_ClipToShapeList( shapeList, &fullResult->trace, origin, traceEnd, mins, maxs, contentsMask );
 			this->resultsMask |= mask;
 			if( fullResult->trace.fraction != 1.0f ) {
 				continue;
@@ -207,7 +207,7 @@ void EnvironmentTraceCache::testForResultsMask( PredictionContext *context, unsi
 			VectorScale( traceEnd, kTraceDepth, traceEnd );
 			VectorAdd( traceEnd, origin, traceEnd );
 			// Compute the trace of the cached result
-			GAME_IMPORT.CM_ClipToShapeList( shapeList, &result->trace, origin, traceEnd, mins, maxs, contentsMask );
+			SV_ClipToShapeList( shapeList, &result->trace, origin, traceEnd, mins, maxs, contentsMask );
 			this->resultsMask |= mask;
 		}
 	}

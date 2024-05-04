@@ -580,6 +580,14 @@ void Cmd_PreInit( void ) {
 	cmd_preinitialized = true;
 }
 
+void SV_Cmd_Register( const char *name, CmdFunc cmdFunc, CompletionQueryFunc completionFunc ) {
+	SV_Cmd_Register( wsw::StringView( name ), cmdFunc, completionFunc );
+}
+
+void SV_Cmd_Unregister( const char *name ) {
+	SV_Cmd_Unregister( wsw::StringView( name ) );
+}
+
 void SV_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionFunc ) {
 	SV_GetCmdSystem()->registerCommand( name, cmdFunc );
 #ifndef DEDICATED_ONLY

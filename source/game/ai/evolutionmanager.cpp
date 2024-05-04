@@ -166,7 +166,7 @@ void DefaultBotEvolutionManager::OnBotConnected( edict_t *ent ) {
 
 	int numBotsInGame = 0;
 	for( int i = 0; i < ggs->maxclients; ++i ) {
-		if( trap_GetClientState( i ) < CS_SPAWNED ) {
+		if( G_GetClientState( i ) < CS_SPAWNED ) {
 			continue;
 		}
 

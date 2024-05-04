@@ -46,18 +46,18 @@ bool EntitiesPvsCache::AreInPvs( const edict_t *ent1, const edict_t *ent2 ) cons
 bool EntitiesPvsCache::AreInPvsUncached( const edict_t *ent1, const edict_t *ent2 ) {
 	const int numClusters1 = ent1->r.num_clusters;
 	if( numClusters1 < 0 ) {
-		return trap_inPVS( ent1->s.origin, ent2->s.origin );
+		return SV_InPVS( ent1->s.origin, ent2->s.origin );
 	}
 	const int numClusters2 = ent2->r.num_clusters;
 	if( numClusters2 < 0 ) {
-		return trap_inPVS( ent1->s.origin, ent2->s.origin );
+		return SV_InPVS( ent1->s.origin, ent2->s.origin );
 	}
 
 	const int *leafNums1 = ent1->r.leafnums;
 	const int *leafNums2 = ent2->r.leafnums;
 	for( int i = 0; i < numClusters1; ++i ) {
 		for( int j = 0; j < numClusters2; ++j ) {
-			if( trap_CM_LeafsInPVS( leafNums1[i], leafNums2[j] ) ) {
+			if( SV_LeafsInPVS( leafNums1[i], leafNums2[j] ) ) {
 				return true;
 			}
 		}

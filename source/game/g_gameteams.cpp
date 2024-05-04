@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "g_local.h"
 #include "../common/cmdargssplitter.h"
+#include "../common/cvar.h"
 #include "chat.h"
 
 //==========================================================
@@ -36,13 +37,13 @@ void G_Teams_Init( void ) {
 	edict_t *ent;
 
 	// set the team names with default ones
-	trap_ConfigString( CS_TEAM_SPECTATOR_NAME, GS_DefaultTeamName( ggs, TEAM_SPECTATOR ) );
-	trap_ConfigString( CS_TEAM_PLAYERS_NAME, GS_DefaultTeamName( ggs, TEAM_PLAYERS ) );
-	trap_ConfigString( CS_TEAM_ALPHA_NAME, GS_DefaultTeamName( ggs, TEAM_ALPHA ) );
-	trap_ConfigString( CS_TEAM_BETA_NAME, GS_DefaultTeamName( ggs, TEAM_BETA ) );
+	SV_SetConfigString( CS_TEAM_SPECTATOR_NAME, GS_DefaultTeamName( ggs, TEAM_SPECTATOR ) );
+	SV_SetConfigString( CS_TEAM_PLAYERS_NAME, GS_DefaultTeamName( ggs, TEAM_PLAYERS ) );
+	SV_SetConfigString( CS_TEAM_ALPHA_NAME, GS_DefaultTeamName( ggs, TEAM_ALPHA ) );
+	SV_SetConfigString( CS_TEAM_BETA_NAME, GS_DefaultTeamName( ggs, TEAM_BETA ) );
 
-	g_teams_maxplayers = trap_Cvar_Get( "g_teams_maxplayers", "0", CVAR_ARCHIVE );
-	g_teams_allow_uneven = trap_Cvar_Get( "g_teams_allow_uneven", "1", CVAR_ARCHIVE );
+	g_teams_maxplayers = Cvar_Get( "g_teams_maxplayers", "0", CVAR_ARCHIVE );
+	g_teams_allow_uneven = Cvar_Get( "g_teams_allow_uneven", "1", CVAR_ARCHIVE );
 
 	for( int i = 0, end = sizeof( teamlist ) / sizeof( *teamlist ); i < end; ++i ) {
 		teamlist[i].Clear();
@@ -94,7 +95,7 @@ void G_Teams_UpdateMembersList( void ) {
 
 		//create a temp list with the clients inside this team
 		for( i = 0, ent = game.edicts + 1; i < ggs->maxclients; i++, ent++ ) {
-			if( !ent->r.client || ( trap_GetClientState( PLAYERNUM( ent ) ) < CS_CONNECTED ) ) {
+			if( !ent->r.client || ( G_GetClientState( PLAYERNUM( ent ) ) < CS_CONNECTED ) ) {
 				continue;
 			}
 
@@ -260,7 +261,7 @@ void G_Teams_Invite_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 		return;
 	}
 
-	text = trap_Cmd_Argv( 1 );
+	text = Cmd_Argv( 1 );
 
 	if( !text || !strlen( text ) ) {
 		int i;
@@ -571,11 +572,11 @@ void G_Teams_Join_Cmd( edict_t *ent, const CmdArgs &cmdArgs ) {
 	const char *t;
 	int team;
 
-	if( !ent->r.client || trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
+	if( !ent->r.client || G_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 		return;
 	}
 
-	t = trap_Cmd_Argv( 1 );
+	t = Cmd_Argv( 1 );
 	if( !t || *t == 0 ) {
 		G_Teams_JoinAnyTeam( ent, false );
 		return;
@@ -637,7 +638,7 @@ edict_t **G_Teams_ChallengersQueue( void ) {
 		if( !e->r.inuse || !e->r.client || e->s.team != TEAM_SPECTATOR ) {
 			continue;
 		}
-		if( trap_GetClientState( PLAYERNUM( e ) ) < CS_SPAWNED ) {
+		if( G_GetClientState( PLAYERNUM( e ) ) < CS_SPAWNED ) {
 			continue;
 		}
 
@@ -851,7 +852,7 @@ void G_Teams_JoinChallengersQueue( edict_t *ent, const CmdArgs & ) {
 	if( !ent->r.client->queueTimeStamp ) {  // enter the line
 		ent->r.client->queueTimeStamp = game.realtime;
 		for( e = game.edicts + 1; PLAYERNUM( e ) < ggs->maxclients; e++ ) {
-			if( !e->r.inuse || !e->r.client || trap_GetClientState( PLAYERNUM( e ) ) < CS_SPAWNED ) {
+			if( !e->r.inuse || !e->r.client || G_GetClientState( PLAYERNUM( e ) ) < CS_SPAWNED ) {
 				continue;
 			}
 			if( !e->r.client->queueTimeStamp || e->s.team != TEAM_SPECTATOR ) {

@@ -212,7 +212,7 @@ bool EventsTracker::GuessedEnemyEntity::AreInPvsWith( const edict_t *botEnt ) co
 
 bool EventsTracker::GuessedEnemyOrigin::AreInPvsWith( const edict_t *botEnt ) const {
 	if( botEnt->r.num_clusters < 0 ) {
-		return trap_inPVS( botEnt->s.origin, m_origin );
+		return SV_InPVS( botEnt->s.origin, m_origin );
 	}
 
 	// Compute leafs for the own origin lazily
@@ -220,10 +220,10 @@ bool EventsTracker::GuessedEnemyOrigin::AreInPvsWith( const edict_t *botEnt ) co
 		const vec3_t mins { -4, -4, -4 };
 		const vec3_t maxs { +4, +4, +4 };
 		[[maybe_unused]] int topNode = 0;
-		m_numLeafs = trap_CM_BoxLeafnums( mins, maxs, m_leafNums, 4, &topNode );
+		m_numLeafs = SV_BoxLeafnums( mins, maxs, m_leafNums, 4, &topNode );
 		// Filter out solid leafs
 		for( int i = 0; i < m_numLeafs; ) {
-			if( trap_CM_LeafCluster( m_leafNums[i] ) >= 0 ) {
+			if( SV_LeafCluster( m_leafNums[i] ) >= 0 ) {
 				i++;
 			} else {
 				m_numLeafs--;
@@ -235,7 +235,7 @@ bool EventsTracker::GuessedEnemyOrigin::AreInPvsWith( const edict_t *botEnt ) co
 	const int *botLeafNums = botEnt->r.leafnums;
 	for( int i = 0, end = botEnt->r.num_clusters; i < end; ++i ) {
 		for( int j = 0; j < m_numLeafs; ++j ) {
-			if( trap_CM_LeafsInPVS( botLeafNums[i], m_leafNums[j] ) ) {
+			if( SV_LeafsInPVS( botLeafNums[i], m_leafNums[j] ) ) {
 				return true;
 			}
 		}

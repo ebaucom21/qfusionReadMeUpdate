@@ -225,8 +225,8 @@ void Scoreboard::endDefiningSchema() {
 		assetsBuffer << asset << ' ';
 	}
 
-	trap_ConfigString( CS_SCOREBOARD_SCHEMA, schemaBuffer.data() );
-	trap_ConfigString( CS_SCOREBOARD_ASSETS, assetsBuffer.data() );
+	SV_SetConfigString( CS_SCOREBOARD_SCHEMA, schemaBuffer.data() );
+	SV_SetConfigString( CS_SCOREBOARD_ASSETS, assetsBuffer.data() );
 }
 
 void Scoreboard::beginUpdating() {
@@ -348,7 +348,7 @@ void Scoreboard::endUpdating() {
 		int score = std::numeric_limits<int32_t>::min();
 		if( ent->r.inuse ) {
 			const auto *const client = ent->r.client;
-			const auto clientState = trap_GetClientState( (int)playerNum );
+			const auto clientState = G_GetClientState( (int)playerNum );
 			if( clientState >= CS_CONNECTING ) {
 				isPlayerConnected[playerIndex] = true;
 				ping = (int16_t)client->m_ping;

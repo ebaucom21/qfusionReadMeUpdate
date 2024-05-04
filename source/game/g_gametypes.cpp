@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "scoreboard.h"
 #include "../common/hash.h"
 #include "../common/wswstringsplitter.h"
+#include "../common/cvar.h"
 
 using wsw::operator""_asView;
 
@@ -202,16 +203,16 @@ bool G_Match_CheckExtendPlayTime( void ) {
 
 			if( g_match_extendedtime->value ) {
 				if( !GS_MatchExtended( *ggs ) ) { // first one
-					G_AnnouncerSound( NULL, trap_SoundIndex( S_ANNOUNCER_OVERTIME_GOING_TO_OVERTIME ), GS_MAX_TEAMS, true, NULL );
+					G_AnnouncerSound( NULL, SV_SoundIndex( S_ANNOUNCER_OVERTIME_GOING_TO_OVERTIME ), GS_MAX_TEAMS, true, NULL );
 				} else {
-					G_AnnouncerSound( NULL, trap_SoundIndex( S_ANNOUNCER_OVERTIME_OVERTIME ), GS_MAX_TEAMS, true, NULL );
+					G_AnnouncerSound( NULL, SV_SoundIndex( S_ANNOUNCER_OVERTIME_OVERTIME ), GS_MAX_TEAMS, true, NULL );
 				}
 
 				G_PrintMsg( NULL, "Match tied. Timelimit extended by %i minutes!\n", g_match_extendedtime->integer );
 				G_CenterPrintFormatMsg( NULL, 1, "%s minute overtime!\n", va( "%i", g_match_extendedtime->integer ) );
 				ggs->gameState.stats[GAMESTAT_MATCHDURATION] = (int64_t)( ( fabs( g_match_extendedtime->value ) * 60 ) * 1000 );
 			} else {
-				G_AnnouncerSound( NULL, trap_SoundIndex( va( S_ANNOUNCER_OVERTIME_SUDDENDEATH_1_to_2, ( rand() & 1 ) + 1 ) ), GS_MAX_TEAMS, true, NULL );
+				G_AnnouncerSound( NULL, SV_SoundIndex( va( S_ANNOUNCER_OVERTIME_SUDDENDEATH_1_to_2, ( rand() & 1 ) + 1 ) ), GS_MAX_TEAMS, true, NULL );
 				G_PrintMsg( NULL, "Match tied. Sudden death!\n" );
 				G_CenterPrintMsg( NULL, "Sudden death!" );
 				ggs->gameState.stats[GAMESTAT_MATCHDURATION] = 0;
@@ -228,7 +229,7 @@ bool G_Match_CheckExtendPlayTime( void ) {
 * G_Match_SetAutorecordState
 */
 static void G_Match_SetAutorecordState( const char *state ) {
-	trap_ConfigString( CS_AUTORECORDSTATE, state );
+	SV_SetConfigString( CS_AUTORECORDSTATE, state );
 }
 
 /*
@@ -265,7 +266,7 @@ void G_Match_Autorecord_Start( void ) {
 					 newtime->tm_mon + 1, newtime->tm_mday, newtime->tm_hour, newtime->tm_min );
 
 		// list of players
-		Q_strncpyz( players, trap_GetConfigString( CS_MATCHNAME ), sizeof( players ) );
+		Q_strncpyz( players, SV_GetConfigString( CS_MATCHNAME ), sizeof( players ) );
 		if( players[0] == '\0' ) {
 			if( GS_IndividualGametype( *ggs ) ) {
 				edict_t *ent;
@@ -295,7 +296,7 @@ void G_Match_Autorecord_Start( void ) {
 		Q_snprintfz( level.autorecord_name, sizeof( level.autorecord_name ), "%s_%s_%s%s%s_auto%04i",
 					 datetime, ggs->gametypeName, level.mapname, players[0] == '\0' ? "" : "_", players, (int)brandom( 1, 9999 ) );
 
-		trap_Cmd_ExecuteText( EXEC_APPEND, va( "serverrecord %s\n", level.autorecord_name ) );
+		SV_Cmd_ExecuteText( EXEC_APPEND, va( "serverrecord %s\n", level.autorecord_name ) );
 	}
 }
 
@@ -316,7 +317,7 @@ void G_Match_Autorecord_Stats( void ) {
 		if( !ent->r.inuse || ent->s.team == TEAM_SPECTATOR || ( ent->r.svflags & SVF_FAKECLIENT ) ) {
 			continue;
 		}
-		trap_GameCmd( ent, va( "plstats 2 \"%s\"", G_StatsMessage( ent ) ) );
+		SV_DispatchGameCmd( ent, va( "plstats 2 \"%s\"", G_StatsMessage( ent ) ) );
 	}
 }
 
@@ -328,11 +329,11 @@ void G_Match_Autorecord_Stop( void ) {
 
 	if( g_autorecord->integer ) {
 		// stop it
-		trap_Cmd_ExecuteText( EXEC_APPEND, "serverrecordstop 1\n" );
+		SV_Cmd_ExecuteText( EXEC_APPEND, "serverrecordstop 1\n" );
 
 		// check if we wanna delete some
 		if( g_autorecord_maxdemos->integer > 0 ) {
-			trap_Cmd_ExecuteText( EXEC_APPEND, va( "serverrecordpurge %i\n", g_autorecord_maxdemos->integer ) );
+			SV_Cmd_ExecuteText( EXEC_APPEND, va( "serverrecordpurge %i\n", g_autorecord_maxdemos->integer ) );
 		}
 	}
 }
@@ -344,7 +345,7 @@ void G_Match_Autorecord_Cancel( void ) {
 	G_Match_SetAutorecordState( "cancel" );
 
 	if( g_autorecord->integer ) {
-		trap_Cmd_ExecuteText( EXEC_APPEND, "serverrecordcancel 1\n" );
+		SV_Cmd_ExecuteText( EXEC_APPEND, "serverrecordcancel 1\n" );
 	}
 }
 
@@ -414,7 +415,7 @@ void G_Match_LaunchState( int matchState ) {
 	static bool advance_queue = false;
 
 	if( matchState == MATCH_STATE_PLAYTIME ) {
-		if( !*trap_GetConfigString( CS_MATCHUUID ) ) {
+		if( !*SV_GetConfigString( CS_MATCHUUID ) ) {
 			/*
 			const auto countdownTime = game.serverTime - ggs->gameState.stats[GAMESTAT_MATCHSTART];
 			if( countdownTime < 5000 ) {
@@ -445,7 +446,7 @@ void G_Match_LaunchState( int matchState ) {
 					continue;
 				}
 
-				if( trap_GetClientState( i ) < CS_SPAWNED ) {
+				if( G_GetClientState( i ) < CS_SPAWNED ) {
 					continue;
 				}
 
@@ -462,7 +463,7 @@ void G_Match_LaunchState( int matchState ) {
 			// This value won't be actually used.
 			*/
 
-			trap_ConfigString( CS_MATCHUUID, "ffffffff-ffff-ffff-ffff-ffffffffffff" );
+			SV_SetConfigString( CS_MATCHUUID, "ffffffff-ffff-ffff-ffff-ffffffffffff" );
 		}
 	}
 
@@ -493,7 +494,7 @@ void G_Match_LaunchState( int matchState ) {
 			ggs->gameState.stats[GAMESTAT_MATCHSTART] = game.serverTime;
 
 			// Force clients to reload their UI options (assumes that respective config strings are already updated)
-			GAME_IMPORT.ServerCmd( nullptr, "reloadoptions" );
+			SV_DispatchServerCmd( nullptr, "reloadoptions" );
 
 			break;
 		}
@@ -507,7 +508,7 @@ void G_Match_LaunchState( int matchState ) {
 			ggs->gameState.stats[GAMESTAT_MATCHSTART] = game.serverTime;
 
 			// request a new match UUID
-			trap_ConfigString( CS_MATCHUUID, "" );
+			SV_SetConfigString( CS_MATCHUUID, "" );
 			break;
 		}
 
@@ -736,7 +737,7 @@ static void G_Match_ScoreAnnouncement( void ) {
 	}
 
 	for( e = game.edicts + 1; PLAYERNUM( e ) < ggs->maxclients; e++ ) {
-		if( !e->r.client || trap_GetClientState( PLAYERNUM( e ) ) < CS_SPAWNED ) {
+		if( !e->r.client || G_GetClientState( PLAYERNUM( e ) ) < CS_SPAWNED ) {
 			continue;
 		}
 
@@ -753,10 +754,10 @@ static void G_Match_ScoreAnnouncement( void ) {
 			}
 
 			if( last_leaders[1] == 0 && leaders[1] != 0 ) {
-				G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
+				G_AnnouncerSound( e, SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, true, NULL );
 			} else if( leaders[1] == 0 && ( last_leaders[0] != leaders[0] || last_leaders[1] != 0 ) ) {
-				//G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_1_to_4_TAKEN_LEAD_1_to_2,
+				//G_AnnouncerSound( e, SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_1_to_4_TAKEN_LEAD_1_to_2,
 				//	leaders[0]-1, ( rand()&1 )+1 ) ), GS_MAX_TEAMS, true, NULL );
 			}
 			continue;
@@ -765,26 +766,26 @@ static void G_Match_ScoreAnnouncement( void ) {
 		// in the game or chasing someone who is
 		if( G_WasLeading( chased ) && !G_IsLeading( chased ) ) {
 			if( GS_TeamBasedGametype( *ggs ) && !GS_IndividualGametype( *ggs ) ) {
-				G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_LOST_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
+				G_AnnouncerSound( e, SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_LOST_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, true, NULL );
 			} else {
-				G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_LOST_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
+				G_AnnouncerSound( e, SV_SoundIndex( va( S_ANNOUNCER_SCORE_LOST_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, true, NULL );
 			}
 		} else if( ( !G_WasLeading( chased ) || ( last_leaders[1] != 0 ) ) && G_IsLeading( chased ) && ( leaders[1] == 0 ) ) {
 			if( GS_TeamBasedGametype( *ggs ) && !GS_IndividualGametype( *ggs ) ) {
-				G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TAKEN_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
+				G_AnnouncerSound( e, SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TAKEN_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, true, NULL );
 			} else {
-				G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_TAKEN_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
+				G_AnnouncerSound( e, SV_SoundIndex( va( S_ANNOUNCER_SCORE_TAKEN_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, true, NULL );
 			}
 		} else if( ( !G_WasLeading( chased ) || ( last_leaders[1] == 0 ) ) && G_IsLeading( chased ) && ( leaders[1] != 0 ) ) {
 			if( GS_TeamBasedGametype( *ggs ) && !GS_IndividualGametype( *ggs ) ) {
-				G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
+				G_AnnouncerSound( e, SV_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, true, NULL );
 			} else {
-				G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_TIED_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
+				G_AnnouncerSound( e, SV_SoundIndex( va( S_ANNOUNCER_SCORE_TIED_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, true, NULL );
 			}
 		}
@@ -848,7 +849,7 @@ static void G_Match_ReadyAnnouncement( void ) {
 		for( i = 0; i < teamlist[team].numplayers; i++ ) {
 			if( !level.ready[teamlist[team].playerIndices[i] - 1] ) {
 				e = game.edicts + teamlist[team].playerIndices[i];
-				if( !e->r.client || trap_GetClientState( PLAYERNUM( e ) ) != CS_SPAWNED ) {
+				if( !e->r.client || G_GetClientState( PLAYERNUM( e ) ) != CS_SPAWNED ) {
 					continue;
 				}
 
@@ -856,10 +857,10 @@ static void G_Match_ReadyAnnouncement( void ) {
 					e->r.client->readyUpWarningNext = game.realtime + G_ANNOUNCER_READYUP_DELAY;
 					e->r.client->readyUpWarningCount++;
 					if( e->r.client->readyUpWarningCount > 3 ) {
-						G_AnnouncerSound( e, trap_SoundIndex( S_ANNOUNCER_READY_UP_PISSEDOFF ), GS_MAX_TEAMS, true, NULL );
+						G_AnnouncerSound( e, SV_SoundIndex( S_ANNOUNCER_READY_UP_PISSEDOFF ), GS_MAX_TEAMS, true, NULL );
 						e->r.client->readyUpWarningCount = 0;
 					} else {
-						G_AnnouncerSound( e, trap_SoundIndex( S_ANNOUNCER_READY_UP_POLITE ), GS_MAX_TEAMS, true, NULL );
+						G_AnnouncerSound( e, SV_SoundIndex( S_ANNOUNCER_READY_UP_POLITE ), GS_MAX_TEAMS, true, NULL );
 					}
 
 					const wsw::StringView yellow( S_COLOR_YELLOW ), white( S_COLOR_WHITE );
@@ -1272,12 +1273,12 @@ static bool G_EachNewSecond( void ) {
 static void G_CheckNumBots( void ) {
 	if( level.spawnedTimeStamp + 3000 < game.realtime ) {
 		if( g_numbots->integer < 0 ) {
-			trap_Cvar_Set( "g_numbots", "0" );
+			Cvar_Set( "g_numbots", "0" );
 		}
 
 		const int maxNumBots = developer->integer ? ggs->maxclients : wsw::min( 11, ggs->maxclients );
 		if( g_numbots->integer > maxNumBots ) {
-			trap_Cvar_Set( "g_numbots", va( "%i", maxNumBots ) );
+			Cvar_Set( "g_numbots", va( "%i", maxNumBots ) );
 		}
 
 		if( level.gametype.numBots > maxNumBots ) {
@@ -1303,7 +1304,7 @@ static void G_CheckNumBots( void ) {
 			if( AI_CanSpawnBots() && GS_MatchState( *ggs ) < MATCH_STATE_POSTMATCH ) {
 				for( int entNum = maxPlayerEntNum; entNum >= minPlayerEntNum; --entNum ) {
 					const edict_t *ent = game.edicts + entNum;
-					if( !ent->r.inuse && trap_GetClientState( PLAYERNUM( ent ) ) == CS_FREE ) {
+					if( !ent->r.inuse && G_GetClientState( PLAYERNUM( ent ) ) == CS_FREE ) {
 						AI_SpawnBot( nullptr );
 						break;
 					}
@@ -1322,7 +1323,7 @@ static void G_TickOutPowerUps( void ) {
 	int i;
 
 	for( ent = game.edicts + 1; PLAYERNUM( ent ) < ggs->maxclients; ent++ ) {
-		if( ent->r.inuse && trap_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
+		if( ent->r.inuse && G_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
 			for( i = POWERUP_QUAD; i < POWERUP_TOTAL; i++ ) {
 				item = GS_FindItemByTag( ggs, i );
 				if( item && item->quantity && ent->r.client->ps.inventory[item->tag] > 0 ) {
@@ -1483,11 +1484,11 @@ void G_Gametype_GenerateGametypesList( void ) {
 
 	scriptsList = G_AllocCreateNamesList( "progs/gametypes", GAMETYPE_PROJECT_EXTENSION, CHAR_GAMETYPE_SEPARATOR );
 	if( !scriptsList ) {
-		trap_Cvar_ForceSet( "g_gametypes_list", "dm;" );
+		Cvar_ForceSet( "g_gametypes_list", "dm;" );
 		return;
 	}
 
-	trap_Cvar_ForceSet( "g_gametypes_list", scriptsList );
+	Cvar_ForceSet( "g_gametypes_list", scriptsList );
 	Q_free( scriptsList );
 }
 
@@ -1547,52 +1548,52 @@ void G_Gametype_Init( void ) {
 	bool changed = false;
 	const char *mapGametype;
 
-	g_gametypes_list = trap_Cvar_Get( "g_gametypes_list", "", CVAR_NOSET | CVAR_ARCHIVE );
+	g_gametypes_list = Cvar_Get( "g_gametypes_list", "", CVAR_NOSET | CVAR_ARCHIVE );
 	G_Gametype_GenerateGametypesList(); // fill the g_gametypes_list cvar
 
 	// empty string to allow all
-	g_votable_gametypes = trap_Cvar_Get( "g_votable_gametypes", "", CVAR_ARCHIVE );
+	g_votable_gametypes = Cvar_Get( "g_votable_gametypes", "", CVAR_ARCHIVE );
 
 	if( !g_gametype ) { // first time initialized
 		changed = true;
 	}
 
-	g_gametype = trap_Cvar_Get( "g_gametype", "dm", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_LATCH );
+	g_gametype = Cvar_Get( "g_gametype", "dm", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_LATCH );
 
 	//get the match cvars too
-	g_warmup_timelimit = trap_Cvar_Get( "g_warmup_timelimit", "5", CVAR_ARCHIVE );
-	g_postmatch_timelimit = trap_Cvar_Get( "g_postmatch_timelimit", "15", CVAR_ARCHIVE );
-	g_countdown_time = trap_Cvar_Get( "g_countdown_time", "5", CVAR_ARCHIVE );
-	g_match_extendedtime = trap_Cvar_Get( "g_match_extendedtime", "2", CVAR_ARCHIVE );
+	g_warmup_timelimit = Cvar_Get( "g_warmup_timelimit", "5", CVAR_ARCHIVE );
+	g_postmatch_timelimit = Cvar_Get( "g_postmatch_timelimit", "15", CVAR_ARCHIVE );
+	g_countdown_time = Cvar_Get( "g_countdown_time", "5", CVAR_ARCHIVE );
+	g_match_extendedtime = Cvar_Get( "g_match_extendedtime", "2", CVAR_ARCHIVE );
 
 	// game settings
-	g_timelimit = trap_Cvar_Get( "g_timelimit", "10", CVAR_ARCHIVE );
-	g_scorelimit = trap_Cvar_Get( "g_scorelimit", "0", CVAR_ARCHIVE );
-	g_allow_falldamage = trap_Cvar_Get( "g_allow_falldamage", "1", CVAR_ARCHIVE );
-	g_allow_selfdamage = trap_Cvar_Get( "g_allow_selfdamage", "1", CVAR_ARCHIVE );
-	g_allow_teamdamage = trap_Cvar_Get( "g_allow_teamdamage", "1", CVAR_ARCHIVE );
-	g_allow_bunny = trap_Cvar_Get( "g_allow_bunny", "1", CVAR_ARCHIVE | CVAR_READONLY );
+	g_timelimit = Cvar_Get( "g_timelimit", "10", CVAR_ARCHIVE );
+	g_scorelimit = Cvar_Get( "g_scorelimit", "0", CVAR_ARCHIVE );
+	g_allow_falldamage = Cvar_Get( "g_allow_falldamage", "1", CVAR_ARCHIVE );
+	g_allow_selfdamage = Cvar_Get( "g_allow_selfdamage", "1", CVAR_ARCHIVE );
+	g_allow_teamdamage = Cvar_Get( "g_allow_teamdamage", "1", CVAR_ARCHIVE );
+	g_allow_bunny = Cvar_Get( "g_allow_bunny", "1", CVAR_ARCHIVE | CVAR_READONLY );
 
 	// map-specific gametype
 	mapGametype = G_asCallMapGametype();
 	if( mapGametype[0] && G_Gametype_Exists( mapGametype ) ) {
-		trap_Cvar_Set( g_gametype->name, mapGametype );
+		Cvar_Set( g_gametype->name, mapGametype );
 	}
 
 	// update latched gametype change
 	if( g_gametype->latched_string ) {
 		if( G_Gametype_Exists( g_gametype->latched_string ) ) {
-			trap_Cvar_ForceSet( "g_gametype", va( "%s", g_gametype->latched_string ) );
+			Cvar_ForceSet( "g_gametype", va( "%s", g_gametype->latched_string ) );
 			changed = true;
 		} else {
 			G_Printf( "G_Gametype: Invalid new gametype, change ignored\n" );
-			trap_Cvar_ForceSet( "g_gametype", va( "%s", g_gametype->string ) );
+			Cvar_ForceSet( "g_gametype", va( "%s", g_gametype->string ) );
 		}
 	}
 
 	if( !G_Gametype_Exists( g_gametype->string ) ) {
 		G_Printf( "G_Gametype: Wrong value: '%s'. Setting up with default (dm)\n", g_gametype->string );
-		trap_Cvar_ForceSet( "g_gametype", "dm" );
+		Cvar_ForceSet( "g_gametype", "dm" );
 		changed = true;
 	}
 
@@ -1607,12 +1608,13 @@ void G_Gametype_Init( void ) {
 		// print a hint for admins so they know there's a chance to execute a
 		// config here, but don't show it as an error, because it isn't
 		G_Printf( "loading %s%s.cfg\n", configs_path, g_gametype->string );
-		trap_Cmd_ExecuteText( EXEC_NOW, va( "exec %s%s.cfg silent\n", configs_path, g_gametype->string ) );
-		trap_Cbuf_Execute();
+		SV_Cmd_ExecuteText( EXEC_NOW, va( "exec %s%s.cfg silent\n", configs_path, g_gametype->string ) );
+		SV_Cbuf_ExecutePendingCommands();
 
 		// on a listen server, override gametype-specific settings in config
-		trap_Cmd_ExecuteText( EXEC_NOW, "vstr ui_startservercmd\n" );
-		trap_Cbuf_Execute();
+		SV_Cmd_ExecuteText( EXEC_NOW, "vstr ui_startservercmd\n" );
+		// TODO: It's not going to affect anything on client, is it
+		SV_Cbuf_ExecutePendingCommands();
 	}
 
 	// fixme: we are doing this twice because the gametype may check for GS_Instagib
@@ -1628,7 +1630,7 @@ void G_Gametype_Init( void ) {
 		G_Error( "Failed to load %s", g_gametype->string );
 	}
 
-	trap_ConfigString( CS_GAMETYPENAME, g_gametype->string );
+	SV_SetConfigString( CS_GAMETYPENAME, g_gametype->string );
 
 	G_CheckCvars(); // update GS_Instagib, GS_FallDamage, etc
 

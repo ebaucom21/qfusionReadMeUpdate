@@ -18,6 +18,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 #include "g_local.h"
+#include "../common/cvar.h"
 
 //QUAKED target_temp_entity (1 0 0) (-8 -8 -8) (8 8 8)
 //Fire an origin based temp entity event to the clients.
@@ -96,7 +97,7 @@ void SP_target_speaker( edict_t *ent ) {
 	}
 
 	Q_strncpyz( buffer, st.noise, sizeof( buffer ) );
-	ent->noise_index = trap_SoundIndex( buffer );
+	ent->noise_index = SV_SoundIndex( buffer );
 	G_PureSound( buffer );
 
 	if( ent->attenuation == -1 || ent->spawnflags & 4 ) { // use -1 so 0 defaults to ATTN_NONE
@@ -209,7 +210,7 @@ void use_target_changelevel( edict_t *self, edict_t *other, edict_t *activator )
 	G_Printf( "%s" S_COLOR_WHITE " exited the level.\n", other->client->pers.netname);
 	}
 	*/
-	trap_Cvar_SetValue( "g_maprotation", -1 );
+	Cvar_SetValue( "g_maprotation", -1 );
 	G_Match_LaunchState( MATCH_STATE_POSTMATCH );
 }
 
@@ -462,7 +463,7 @@ static void target_lightramp_think( edict_t *self ) {
 
 	style[0] = 'a' + self->moveinfo.movedir[0] + ( level.time - self->timeStamp ) / game.snapFrameTime * self->moveinfo.movedir[2];
 	style[1] = 0;
-	trap_ConfigString( CS_LIGHTS + self->enemy->style, style );
+	SV_SetConfigString( CS_LIGHTS + self->enemy->style, style );
 
 	if( level.time - self->timeStamp < self->speed * 1000 ) {
 		self->nextThink = level.time + 1;

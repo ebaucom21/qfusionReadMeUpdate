@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/net.h"
 #include "../common/links.h"
 #include "../common/cmdargs.h"
+#include "../common/common.h"
 
 #include <new>
 
@@ -41,22 +42,22 @@ static void Cmd_ConsoleSay_f( const CmdArgs &cmdArgs ) {
 static void Cmd_ConsoleKick_f( const CmdArgs &cmdArgs ) {
 	edict_t *ent;
 
-	if( trap_Cmd_Argc() != 2 ) {
+	if( Cmd_Argc() != 2 ) {
 		gNotice() << "Usage: kick <id or name>";
 		return;
 	}
 
-	ent = G_PlayerForText( trap_Cmd_Argv( 1 ) );
+	ent = G_PlayerForText( Cmd_Argv( 1 ) );
 	if( !ent ) {
 		gNotice() << "No such player";
 		return;
 	}
 
 	if( const char *host = G_GetClientHostForFilter( ent ) ) {
-		trap_Cmd_ExecuteText( EXEC_APPEND, va( "addip %s 1", host ) );
+		SV_Cmd_ExecuteText( EXEC_APPEND, va( "addip %s 1", host ) );
 	}
 
-	trap_DropClient( ent, ReconnectBehaviour::DontReconnect, "Kicked" );
+	G_DropClient( ent, ReconnectBehaviour::DontReconnect, "Kicked" );
 }
 
 
@@ -66,12 +67,12 @@ static void Cmd_ConsoleKick_f( const CmdArgs &cmdArgs ) {
 static void Cmd_Match_f( const CmdArgs &cmdArgs ) {
 	const char *cmd;
 
-	if( trap_Cmd_Argc() != 2 ) {
+	if( Cmd_Argc() != 2 ) {
 		gNotice() << "Usage: match <option: restart|advance|status>";
 		return;
 	}
 
-	cmd = trap_Cmd_Argv( 1 );
+	cmd = Cmd_Argv( 1 );
 	if( !Q_stricmp( cmd, "restart" ) ) {
 		level.exitNow = false;
 		level.hardReset = false;
@@ -84,7 +85,7 @@ static void Cmd_Match_f( const CmdArgs &cmdArgs ) {
 		//		level.forcemap[0] = 0;
 		G_EndMatch();
 	} else if( !Q_stricmp( cmd, "status" ) ) {
-		trap_Cmd_ExecuteText( EXEC_APPEND, "status" );
+		SV_Cmd_ExecuteText( EXEC_APPEND, "status" );
 	}
 }
 
@@ -1070,7 +1071,7 @@ bool GIPFilter::Match( const char *ip ) const {
 void SV_InitIPList( void ) {
 	GIPFilter::Init();
 
-	trap_Cmd_ExecuteText( EXEC_APPEND, "exec listip.cfg silent\n" );
+	SV_Cmd_ExecuteText( EXEC_APPEND, "exec listip.cfg silent\n" );
 }
 
 /*
@@ -1085,25 +1086,25 @@ static void SV_WriteIPList( void ) {
 
 	//G_Printf( "Writing %s.\n", name );
 
-	if( trap_FS_FOpenFile( name, &file, FS_WRITE ) == -1 ) {
+	if( FS_FOpenFile( name, &file, FS_WRITE ) == -1 ) {
 		G_Printf( "Couldn't open %s\n", name );
 		return;
 	}
 
 	Q_snprintfz( string, sizeof( string ), "set filterban %d\r\n", filterban->integer );
-	trap_FS_Write( string, strlen( string ), file );
+	FS_Write( string, strlen( string ), file );
 
 	for( auto entry: *GIPFilter::Instance() ) {
 		char entryBuffer[MAX_STRING_CHARS];
 		if( entry.PrintTo( entryBuffer, sizeof( entryBuffer ) ) ) {
 			int numChars = Q_snprintfz( string, sizeof( string ), "addip %s\r\n", entryBuffer );
 			if( numChars > 0 ) {
-				trap_FS_Write( string, (size_t)numChars, file );
+				FS_Write( string, (size_t)numChars, file );
 			}
 		}
 	}
 
-	trap_FS_FCloseFile( file );
+	FS_FCloseFile( file );
 }
 
 void SV_ShutdownIPList( void ) {
@@ -1180,7 +1181,7 @@ static void Cmd_PrintIPCmdResult( int result ) {
 * Cmd_AddIP_f
 */
 static void Cmd_AddIP_f( const CmdArgs &cmdArgs ) {
-	int argc = trap_Cmd_Argc();
+	int argc = Cmd_Argc();
 	int64_t timeout = GIPFilter::NO_TIMEOUT;
 
 	if( argc < 2 ) {
@@ -1190,7 +1191,7 @@ static void Cmd_AddIP_f( const CmdArgs &cmdArgs ) {
 
 	if( argc >= 3 ) {
 		char *endptr;
-		const char *argString = trap_Cmd_Argv( 2 );
+		const char *argString = Cmd_Argv( 2 );
 		double parsedValue = strtod( argString, &endptr );
 		if( *endptr ) {
 			G_Printf( "Usage: addip <ip-mask> [time-mins]\n" );
@@ -1199,19 +1200,19 @@ static void Cmd_AddIP_f( const CmdArgs &cmdArgs ) {
 		timeout = game.serverTime + (int64_t)( parsedValue * 60 * 1000 );
 	}
 
-	Cmd_PrintIPCmdResult( GIPFilter::Instance()->AddFilterFromString( trap_Cmd_Argv( 1 ), timeout ) );
+	Cmd_PrintIPCmdResult( GIPFilter::Instance()->AddFilterFromString( Cmd_Argv( 1 ), timeout ) );
 }
 
 /*
 * Cmd_RemoveIP_f
 */
 static void Cmd_RemoveIP_f( const CmdArgs &cmdArgs ) {
-	if( trap_Cmd_Argc() < 2 ) {
+	if( Cmd_Argc() < 2 ) {
 		G_Printf( "Usage: removeip <ip-mask>\n" );
 		return;
 	}
 
-	Cmd_PrintIPCmdResult( GIPFilter::Instance()->RemoveFilterByString( trap_Cmd_Argv( 1 ) ) );
+	Cmd_PrintIPCmdResult( GIPFilter::Instance()->RemoveFilterByString( Cmd_Argv( 1 ) ) );
 }
 
 /*
@@ -1242,12 +1243,12 @@ static void Cmd_WriteIP_f( const CmdArgs & ) {
 static void Cmd_MatchIP_f( const CmdArgs &cmdArgs ) {
 	// We always expect a port in the command input because we want to simulate an actual address parsing
 	constexpr const char *usage = "Usage: matchip <address>:<port>, an IPv6 address must be enclosed in brackets";
-	if( trap_Cmd_Argc() < 2 ) {
+	if( Cmd_Argc() < 2 ) {
 		G_Printf( "%s\n", usage );
 		return;
 	}
 
-	if( GIPFilter::Instance()->Match( trap_Cmd_Argv( 1 ) ) ) {
+	if( GIPFilter::Instance()->Match( Cmd_Argv( 1 ) ) ) {
 		G_Printf( "Match!\n" );
 	} else {
 		G_Printf( "No match or malformed input. %s\n", usage );
@@ -1260,23 +1261,23 @@ static void Cmd_MatchIP_f( const CmdArgs &cmdArgs ) {
 */
 void G_AddServerCommands( void ) {
 	if( dedicated->integer ) {
-		trap_Cmd_AddCommand( "say", Cmd_ConsoleSay_f );
+		SV_Cmd_Register( "say", Cmd_ConsoleSay_f );
 	}
-	trap_Cmd_AddCommand( "kick", Cmd_ConsoleKick_f );
+	SV_Cmd_Register( "kick", Cmd_ConsoleKick_f );
 
 	// match controls
-	trap_Cmd_AddCommand( "match", Cmd_Match_f );
+	SV_Cmd_Register( "match", Cmd_Match_f );
 
 	// banning
-	trap_Cmd_AddCommand( "addip", Cmd_AddIP_f );
-	trap_Cmd_AddCommand( "removeip", Cmd_RemoveIP_f );
-	trap_Cmd_AddCommand( "listip", Cmd_ListIP_f );
-	trap_Cmd_AddCommand( "writeip", Cmd_WriteIP_f );
+	SV_Cmd_Register( "addip", Cmd_AddIP_f );
+	SV_Cmd_Register( "removeip", Cmd_RemoveIP_f );
+	SV_Cmd_Register( "listip", Cmd_ListIP_f );
+	SV_Cmd_Register( "writeip", Cmd_WriteIP_f );
 #ifndef PUBLIC_BUILD
-	trap_Cmd_AddCommand( "matchip", Cmd_MatchIP_f );
+	SV_Cmd_Register( "matchip", Cmd_MatchIP_f );
 #endif
 
-	trap_Cmd_AddCommand( "dumpASapi", G_asDumpAPI_f );
+	SV_Cmd_Register( "dumpASapi", G_asDumpAPI_f );
 }
 
 /*
@@ -1284,21 +1285,21 @@ void G_AddServerCommands( void ) {
 */
 void G_RemoveCommands( void ) {
 	if( dedicated->integer ) {
-		trap_Cmd_RemoveCommand( "say" );
+		SV_Cmd_Unregister( "say" );
 	}
-	trap_Cmd_RemoveCommand( "kick" );
+	SV_Cmd_Unregister( "kick" );
 
 	// match controls
-	trap_Cmd_RemoveCommand( "match" );
+	SV_Cmd_Unregister( "match" );
 
 	// banning
-	trap_Cmd_RemoveCommand( "addip" );
-	trap_Cmd_RemoveCommand( "removeip" );
-	trap_Cmd_RemoveCommand( "listip" );
-	trap_Cmd_RemoveCommand( "writeip" );
+	SV_Cmd_Unregister( "addip" );
+	SV_Cmd_Unregister( "removeip" );
+	SV_Cmd_Unregister( "listip" );
+	SV_Cmd_Unregister( "writeip" );
 #ifndef PUBLIC_BUILD
-	trap_Cmd_RemoveCommand( "matchip" );
+	SV_Cmd_Unregister( "matchip" );
 #endif
 
-	trap_Cmd_RemoveCommand( "dumpASapi" );
+	SV_Cmd_Unregister( "dumpASapi" );
 }

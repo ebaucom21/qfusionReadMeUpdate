@@ -407,7 +407,7 @@ void TacticalSpotsBuilder::ComputeMutualSpotsVisibility() {
 		// Mutual visibility for spots [0, i) has been already computed
 		for( unsigned j = i + 1; j < uNumSpots; ++j ) {
 			TacticalSpot &testedSpot = spots[j];
-			if( !trap_inPVS( currSpot.origin, testedSpot.origin ) ) {
+			if( !SV_InPVS( currSpot.origin, testedSpot.origin ) ) {
 				spotVisibilityTable[j * numSpots + i] = 0;
 				spotVisibilityTable[i * numSpots + j] = 0;
 				continue;
@@ -921,7 +921,7 @@ inline unsigned TacticalSpotsRegistry::BaseSpotsGrid::PointGridCellNum( const ve
 
 void TacticalSpotsRegistry::BaseSpotsGrid::SetupGridParams() {
 	// Get world bounds
-	trap_CM_InlineModelBounds( trap_CM_InlineModel( 0 ), worldMins, worldMaxs );
+	SV_InlineModelBounds( SV_InlineModel( 0 ), worldMins, worldMaxs );
 
 	vec3_t worldDims;
 	VectorSubtract( worldMaxs, worldMins, worldDims );

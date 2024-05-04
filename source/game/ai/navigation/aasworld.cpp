@@ -1073,7 +1073,7 @@ public:
 
 	~AasFileReader() {
 		if( fp ) {
-			trap_FS_FCloseFile( fp );
+			FS_FCloseFile( fp );
 		}
 	}
 
@@ -1103,14 +1103,14 @@ AasFileReader::AasFileReader( const wsw::StringView &baseMapName )
 	wsw::StaticString<MAX_QPATH> filePath;
 	AiAasWorld::makeFileName( filePath, baseMapName, ".aas"_asView );
 
-	fileSize = trap_FS_FOpenFile( filePath.data(), &fp, FS_READ );
+	fileSize = FS_FOpenFile( filePath.data(), &fp, FS_READ );
 	if( !fp || fileSize <= 0 ) {
 		G_Printf( S_COLOR_RED "can't open %s\n", filePath.data() );
 		return;
 	}
 
 	//read the header
-	trap_FS_Read( &header, sizeof( aas_header_t ), fp );
+	FS_Read( &header, sizeof( aas_header_t ), fp );
 	lastoffset = sizeof( aas_header_t );
 	//check header identification
 	header.ident = LittleLong( header.ident );
@@ -1141,7 +1141,7 @@ char *AasFileReader::LoadLump( int lumpNum, int size ) {
 	//seek to the data
 	if( offset != lastoffset ) {
 		G_Printf( S_COLOR_YELLOW "AAS file not sequentially read\n" );
-		if( trap_FS_Seek( fp, offset, FS_SEEK_SET ) ) {
+		if( FS_Seek( fp, offset, FS_SEEK_SET ) ) {
 			G_Printf( S_COLOR_RED "can't seek to aas lump\n" );
 			return nullptr;
 		}
@@ -1150,20 +1150,20 @@ char *AasFileReader::LoadLump( int lumpNum, int size ) {
 	char *buf = (char *) Q_malloc( length + 1 );
 	//read the data
 	if( length ) {
-		trap_FS_Read( buf, length, fp );
+		FS_Read( buf, length, fp );
 		lastoffset += length;
 	}
 	return buf;
 }
 
 bool AasFileReader::ComputeChecksum( char **base64Digest ) {
-	if( trap_FS_Seek( fp, 0, FS_SEEK_SET ) < 0 ) {
+	if( FS_Seek( fp, 0, FS_SEEK_SET ) < 0 ) {
 		return false;
 	}
 
 	// TODO: Read the entire AAS data at start and then use the read chunk for loading of AAS lumps
 	char *mem = (char *)Q_malloc( (unsigned)fileSize );
-	if( trap_FS_Read( mem, (unsigned)fileSize, fp ) <= 0 ) {
+	if( FS_Read( mem, (unsigned)fileSize, fp ) <= 0 ) {
 		Q_free( mem );
 		return false;
 	}
@@ -1877,7 +1877,7 @@ void AiAasWorld::computeAreasLeafsLists() {
 	for( int i = 1, end = m_numareas; i < end; ++i ) {
 		const auto &area = m_areas[i];
 		// Supply tmpLeafNums + 1 as a buffer so we can prepend the numeber of leaves in-place
-		int numLeaves = trap_CM_BoxLeafnums( area.mins, area.maxs, tmpNums + 1, 256, &topNode );
+		int numLeaves = SV_BoxLeafnums( area.mins, area.maxs, tmpNums + 1, 256, &topNode );
 		// Not sure whether the call above can return a value greater than a supplied buffer capacity
 		numLeaves = wsw::min( 256, numLeaves );
 		// Put the number of leaves to the list head
@@ -2280,7 +2280,7 @@ bool AiAasWorld::areAreasInPvs( int areaNum1, int areaNum2 ) const {
 	const auto *const leafsList2 = data + offsets[areaNum2] + 1;
 	for( int i = 0, iMax = leafsList1[-1]; i < iMax; ++i ) {
 		for( int j = 0, jMax = leafsList2[-1]; j < jMax; ++j ) {
-			if( trap_CM_LeafsInPVS( leafsList1[i], leafsList2[j] ) ) {
+			if( SV_LeafsInPVS( leafsList1[i], leafsList2[j] ) ) {
 				return true;
 			}
 		}

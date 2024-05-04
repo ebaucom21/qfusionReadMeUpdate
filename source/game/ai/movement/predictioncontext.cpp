@@ -285,7 +285,7 @@ static void Intercepted_Trace( trace_t *t, const vec3_t start, const vec3_t mins
 							   const vec3_t maxs, const vec3_t end,
 							   int ignore, int contentmask, int timeDelta ) {
 	// TODO: Check whether contentmask is compatible
-	GAME_IMPORT.CM_ClipToShapeList( pmoveShapeList, t, start, end, mins, maxs, contentmask );
+	SV_ClipToShapeList( pmoveShapeList, t, start, end, mins, maxs, contentmask );
 	if( !currPredictionContext->m_platformTriggerEntNumsToUseDuringPrediction.empty() ) [[unlikely]] {
 		if( t->fraction > 0.0f ) [[likely]] {
 			auto *const cache = &currPredictionContext->nearbyTriggersCache;
@@ -296,9 +296,9 @@ static void Intercepted_Trace( trace_t *t, const vec3_t start, const vec3_t mins
 			for( unsigned platformIndex = 0; platformIndex < cache->numPlatformSolidEnts; ++platformIndex ) {
 				const auto *const platform = game.edicts + cache->platformSolidEntNums[platformIndex];
 				if( ISBRUSHMODEL( platform->s.modelindex ) ) [[likely]] {
-					struct cmodel_s *cmodel = trap_CM_InlineModel( (int)platform->s.modelindex );
+					struct cmodel_s *cmodel = SV_InlineModel( (int)platform->s.modelindex );
 					trace_t t2;
-					trap_CM_TransformedBoxTrace( &t2, start, end, clipMins, clipMaxs, cmodel, contentmask,
+					SV_TransformedBoxTrace( &t2, start, end, clipMins, clipMaxs, cmodel, contentmask,
 												 platform->s.origin, platform->s.angles );
 					if( t2.fraction < t->fraction ) {
 						*t = t2;
@@ -315,7 +315,7 @@ static void Intercepted_Trace( trace_t *t, const vec3_t start, const vec3_t mins
 static int Intercepted_PointContents( const vec3_t p, int timeDelta ) {
 	if( pmoveShouldTestContents ) [[unlikely]] {
 		int topNodeHint = ::collisionTopNodeCache.getTopNode( p, p, !currPredictionContext->topOfStackIndex );
-		return trap_CM_TransformedPointContents( p, nullptr, nullptr, nullptr, topNodeHint );
+		return SV_TransformedPointContents( p, nullptr, nullptr, nullptr, topNodeHint );
 	}
 	return 0;
 }
@@ -1185,7 +1185,7 @@ void PredictionContext::NextMovementStep() {
 	pmoveShouldTestContents = false;
 
 	if( pmoveShapeList ) {
-		if( GAME_IMPORT.CM_PossibleShapeListContents( pmoveShapeList ) & MASK_WATER ) {
+		if( SV_PossibleShapeListContents( pmoveShapeList ) & MASK_WATER ) {
 			pmoveShouldTestContents = true;
 		}
 	} else {

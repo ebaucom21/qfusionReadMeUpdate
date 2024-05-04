@@ -24,6 +24,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/wswstringsplitter.h"
 #include "../common/wswstaticstring.h"
 #include "../common/wswstaticvector.h"
+#include "../common/cvar.h"
+#include "../common/common.h"
 #include "ai/vec3.h"
 
 #include <chrono>
@@ -78,7 +80,7 @@ static void G_Timeout_Update( unsigned int msec ) {
 		timeout_printtime = 0;
 		timeout_last_endtime = -1;
 
-		G_AnnouncerSound( NULL, trap_SoundIndex( va( S_ANNOUNCER_TIMEOUT_MATCH_RESUMED_1_to_2, ( rand() & 1 ) + 1 ) ),
+		G_AnnouncerSound( NULL, SV_SoundIndex( va( S_ANNOUNCER_TIMEOUT_MATCH_RESUMED_1_to_2, ( rand() & 1 ) + 1 ) ),
 						  GS_MAX_TEAMS, true, NULL );
 		G_CenterPrintMsg( NULL, "Match resumed" );
 		G_PrintMsg( NULL, "Match resumed\n" );
@@ -87,11 +89,11 @@ static void G_Timeout_Update( unsigned int msec ) {
 			int seconds_left = (int)( ( level.timeout.endtime - level.timeout.time ) / 1000.0 + 0.5 );
 
 			if( seconds_left == ( TIMEIN_TIME * 2 ) / 1000 ) {
-				G_AnnouncerSound( NULL, trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_READY_1_to_2, ( rand() & 1 ) + 1 ) ),
+				G_AnnouncerSound( NULL, SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_READY_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, false, NULL );
 				countdown_set = ( rand() & 1 ) + 1;
 			} else if( seconds_left >= 1 && seconds_left <= 3 ) {
-				G_AnnouncerSound( NULL, trap_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, seconds_left,
+				G_AnnouncerSound( NULL, SV_SoundIndex( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, seconds_left,
 															 countdown_set ) ), GS_MAX_TEAMS, false, NULL );
 			}
 
@@ -115,9 +117,9 @@ static void G_Timeout_Update( unsigned int msec ) {
 static void G_UpdateServerInfo( void ) {
 	// g_match_time
 	if( GS_MatchState( *ggs ) <= MATCH_STATE_WARMUP ) {
-		trap_Cvar_ForceSet( "g_match_time", "Warmup" );
+		Cvar_ForceSet( "g_match_time", "Warmup" );
 	} else if( GS_MatchState( *ggs ) == MATCH_STATE_COUNTDOWN ) {
-		trap_Cvar_ForceSet( "g_match_time", "Countdown" );
+		Cvar_ForceSet( "g_match_time", "Countdown" );
 	} else if( GS_MatchState( *ggs ) == MATCH_STATE_PLAYTIME ) {
 		// partly from G_GetMatchState
 		char extra[MAX_INFO_VALUE];
@@ -152,12 +154,12 @@ static void G_UpdateServerInfo( void ) {
 		}
 
 		if( timelimit ) {
-			trap_Cvar_ForceSet( "g_match_time", va( "%02i:%02i / %02i:00%s", mins, secs, timelimit, extra ) );
+			Cvar_ForceSet( "g_match_time", va( "%02i:%02i / %02i:00%s", mins, secs, timelimit, extra ) );
 		} else {
-			trap_Cvar_ForceSet( "g_match_time", va( "%02i:%02i%s", mins, secs, extra ) );
+			Cvar_ForceSet( "g_match_time", va( "%02i:%02i%s", mins, secs, extra ) );
 		}
 	} else {
-		trap_Cvar_ForceSet( "g_match_time", "Finished" );
+		Cvar_ForceSet( "g_match_time", "Finished" );
 	}
 
 	// g_match_score
@@ -172,17 +174,17 @@ static void G_UpdateServerInfo( void ) {
 			// prevent "invalid info cvar value" flooding
 			score[0] = '\0';
 		}
-		trap_Cvar_ForceSet( "g_match_score", score );
+		Cvar_ForceSet( "g_match_score", score );
 	} else {
-		trap_Cvar_ForceSet( "g_match_score", "" );
+		Cvar_ForceSet( "g_match_score", "" );
 	}
 
 	// g_needpass
 	if( password->modified ) {
 		if( password->string && strlen( password->string ) ) {
-			trap_Cvar_ForceSet( "g_needpass", "1" );
+			Cvar_ForceSet( "g_needpass", "1" );
 		} else {
-			trap_Cvar_ForceSet( "g_needpass", "0" );
+			Cvar_ForceSet( "g_needpass", "0" );
 		}
 		password->modified = false;
 	}
@@ -190,7 +192,7 @@ static void G_UpdateServerInfo( void ) {
 	// g_gametypes_available
 	if( g_votable_gametypes->modified || g_disable_vote_gametype->modified ) {
 		if( g_disable_vote_gametype->integer || !g_votable_gametypes->string || !strlen( g_votable_gametypes->string ) ) {
-			trap_Cvar_ForceSet( "g_gametypes_available", "" );
+			Cvar_ForceSet( "g_gametypes_available", "" );
 		} else {
 			size_t len = 0;
 
@@ -218,7 +220,7 @@ static void G_UpdateServerInfo( void ) {
 			}
 
 			//votable[ strlen( votable )-2 ] = 0; // remove the last space
-			trap_Cvar_ForceSet( "g_gametypes_available", votable );
+			Cvar_ForceSet( "g_gametypes_available", votable );
 			Q_free( votable );
 		}
 
@@ -227,9 +229,9 @@ static void G_UpdateServerInfo( void ) {
 	}
 
 	if( GS_RaceGametype( *ggs ) ) {
-		trap_Cvar_ForceSet( "g_race_gametype", "1" );
+		Cvar_ForceSet( "g_race_gametype", "1" );
 	} else {
-		trap_Cvar_ForceSet( "g_race_gametype", "0" );
+		Cvar_ForceSet( "g_race_gametype", "0" );
 	}
 }
 
@@ -240,7 +242,7 @@ static void G_UpdateServerInfo( void ) {
 void G_CheckCvars( void ) {
 	if( g_antilag_maxtimedelta->modified ) {
 		if( g_antilag_maxtimedelta->integer < 0 ) {
-			trap_Cvar_SetValue( "g_antilag_maxtimedelta", abs( g_antilag_maxtimedelta->integer ) );
+			Cvar_SetValue( "g_antilag_maxtimedelta", abs( g_antilag_maxtimedelta->integer ) );
 		}
 		g_antilag_maxtimedelta->modified = false;
 		g_antilag_timenudge->modified = true;
@@ -248,9 +250,9 @@ void G_CheckCvars( void ) {
 
 	if( g_antilag_timenudge->modified ) {
 		if( g_antilag_timenudge->integer > g_antilag_maxtimedelta->integer ) {
-			trap_Cvar_SetValue( "g_antilag_timenudge", g_antilag_maxtimedelta->integer );
+			Cvar_SetValue( "g_antilag_timenudge", g_antilag_maxtimedelta->integer );
 		} else if( g_antilag_timenudge->integer < -g_antilag_maxtimedelta->integer ) {
-			trap_Cvar_SetValue( "g_antilag_timenudge", -g_antilag_maxtimedelta->integer );
+			Cvar_SetValue( "g_antilag_timenudge", -g_antilag_maxtimedelta->integer );
 		}
 		g_antilag_timenudge->modified = false;
 	}
@@ -330,9 +332,9 @@ static bool g_snapStarted = false;
 void G_SnapClients( void ) {
 	if( g_inactivity_maxtime->modified ) {
 		if( g_inactivity_maxtime->value <= 0.0f ) {
-			trap_Cvar_ForceSet( "g_inactivity_maxtime", "0.0" );
+			Cvar_ForceSet( "g_inactivity_maxtime", "0.0" );
 		} else if( g_inactivity_maxtime->value < 15.0f ) {
-			trap_Cvar_ForceSet( "g_inactivity_maxtime", "15.0" );
+			Cvar_ForceSet( "g_inactivity_maxtime", "15.0" );
 		}
 
 		g_inactivity_maxtime->modified = false;
@@ -493,7 +495,7 @@ static int entity_sound_backup[MAX_EDICTS];
 void G_ClearSnap( void ) {
 	edict_t *ent;
 
-	game.realtime = trap_Milliseconds(); // level.time etc. might not be real time
+	game.realtime = Sys_Milliseconds(); // level.time etc. might not be real time
 
 	// clear gametype's clock override
 	ggs->gameState.stats[GAMESTAT_CLOCKOVERRIDE] = 0;
@@ -529,7 +531,7 @@ void G_ClearSnap( void ) {
 
 		// clear the snap temp info
 		memset( &ent->snap, 0, sizeof( ent->snap ) );
-		if( ent->r.client && trap_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
+		if( ent->r.client && G_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
 			memset( &ent->r.client->snap, 0, sizeof( ent->r.client->snap ) );
 
 			// set race stats to invisible
@@ -550,7 +552,7 @@ void G_ClearSnap( void ) {
 */
 void G_SnapFrame( void ) {
 	edict_t *ent;
-	game.realtime = trap_Milliseconds(); // level.time etc. might not be real time
+	game.realtime = Sys_Milliseconds(); // level.time etc. might not be real time
 
 	//others
 	G_UpdateServerInfo();
@@ -617,7 +619,7 @@ void G_SnapFrame( void ) {
 static void G_UpdateFrameTime( unsigned int msec ) {
 	game.frametime = msec;
 	G_Timeout_Update( msec );
-	game.realtime = trap_Milliseconds(); // level.time etc. might not be real time
+	game.realtime = Sys_Milliseconds(); // level.time etc. might not be real time
 }
 
 /*
@@ -752,8 +754,8 @@ class CMBenchmark {
 		const Vec3 listMins( Vec3( -16, -16, -16 ) + ent->r.absmin );
 		const Vec3 listMaxs( Vec3( +16, +16, +16 ) + ent->r.absmax );
 
-		GAME_IMPORT.CM_BuildShapeList( baseList, listMins.Data(), listMaxs.Data(), MASK_SOLID );
-		GAME_IMPORT.CM_ClipShapeList( clippedList, baseList, listMins.Data(), listMaxs.Data() );
+		SV_BuildShapeList( baseList, listMins.Data(), listMaxs.Data(), MASK_SOLID );
+		SV_ClipShapeList( clippedList, baseList, listMins.Data(), listMaxs.Data() );
 
 		wsw::StaticVector<Vec3, 8> vertices;
 		const float *bounds[2] { ent->r.absmin, ent->r.absmax };
@@ -770,7 +772,7 @@ class CMBenchmark {
 				if( i == j ) {
 					continue;
 				}
-				GAME_IMPORT.CM_ClipToShapeList( clippedList, &tr, vertices[i].Data(),
+				SV_ClipToShapeList( clippedList, &tr, vertices[i].Data(),
 												vertices[j].Data(), vec3_origin, vec3_origin, MASK_SOLID );
 				//GAME_IMPORT.CM_TransformedBoxTrace( &tr, vertices[i].Data(), vertices[j].Data(),
 				// vec3_origin, vec3_origin, nullptr, MASK_SOLID, nullptr, nullptr, 0 );
@@ -786,8 +788,8 @@ public:
 			}
 		}
 		for( const auto *ent: m_ents ) {
-			m_baseLists[ent->s.number] = GAME_IMPORT.CM_AllocShapeList();
-			m_clippedLists[ent->s.number] = GAME_IMPORT.CM_AllocShapeList();
+			m_baseLists[ent->s.number] = SV_AllocShapeList();
+			m_clippedLists[ent->s.number] = SV_AllocShapeList();
 		}
 	}
 

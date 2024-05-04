@@ -156,7 +156,7 @@ edict_t * AiManager::ConnectFakeClient() {
 	static char fakeSocketType[] = "loopback";
 	static char fakeIP[] = "127.0.0.1";
 	CreateUserInfo( userInfo, sizeof( userInfo ) );
-	int entNum = trap_FakeClientConnect( userInfo, fakeSocketType, fakeIP );
+	int entNum = SVC_FakeConnect( userInfo, fakeSocketType, fakeIP );
 	if( entNum >= 1 ) {
 		return game.edicts + entNum;
 	}
@@ -191,7 +191,7 @@ bool AiManager::CheckCanSpawnBots() {
 
 	aiWarning() << "Can't spawn bots without a valid navigation file";
 	if( g_numbots->integer ) {
-		trap_Cvar_Set( "g_numbots", "0" );
+		Cvar_Set( "g_numbots", "0" );
 	}
 
 	return false;
@@ -204,7 +204,7 @@ float AiManager::MakeSkillForNewBot( const Client *client ) const {
 	if( v_evolution.get() ) {
 		skillLevel = 0.75f;
 	} else {
-		skillLevel = ( trap_Cvar_Value( "sv_skilllevel" ) + random() ) / 3.0f;
+		skillLevel = ( Cvar_Value( "sv_skilllevel" ) + random() ) / 3.0f;
 		// Let the skill be not less than 10, so we can have nice-looking
 		// two-digit skills (not talking about formatting here)
 		Q_clamp( skillLevel, 0.10f, 0.99f );
@@ -270,7 +270,7 @@ void AiManager::RemoveBot( const wsw::StringView &name ) {
 	// Do not iterate over the linked list of bots since it is implicitly modified by these calls
 	for( edict_t *ent = game.edicts + ggs->maxclients; PLAYERNUM( ent ) >= 0; ent-- ) {
 		if( ent->r.client->netname.equalsIgnoreCase( name ) ) {
-			trap_DropClient( ent, ReconnectBehaviour::DontReconnect );
+			G_DropClient( ent, ReconnectBehaviour::DontReconnect );
 			OnBotDropped( ent );
 			G_FreeAI( ent );
 			game.numBots--;
@@ -287,7 +287,7 @@ void AiManager::AfterLevelScriptShutdown() {
 			continue;
 		}
 
-		trap_DropClient( ent, ReconnectBehaviour::DontReconnect );
+		G_DropClient( ent, ReconnectBehaviour::DontReconnect );
 		OnBotDropped( ent );
 		G_FreeAI( ent );
 		game.numBots--;

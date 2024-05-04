@@ -72,7 +72,7 @@ void GrabItemGoal::UpdateWeight( const WorldState &currWorldState ) {
 		return;
 	}
 
-	if( !trap_inPVS( botOrigin.Data(), navEntity->Origin().Data() ) ) {
+	if( !SV_InPVS( botOrigin.Data(), navEntity->Origin().Data() ) ) {
 		return;
 	}
 

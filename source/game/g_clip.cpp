@@ -18,6 +18,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 #include "g_local.h"
+#include "../common/cvar.h"
 
 //
 // g_clip.c - entity contact detection. (high level object sorting to reduce interaction tests)
@@ -147,7 +148,7 @@ static c4clipedict_t *GClip_GetClipEdictForDeltaTime( int entNum, int deltaTime 
 	backTime = abs( deltaTime );
 	if( g_antilag_maxtimedelta->integer ) {
 		if( g_antilag_maxtimedelta->integer < 0 ) {
-			trap_Cvar_SetValue( "g_antilag_maxtimedelta", abs( g_antilag_maxtimedelta->integer ) );
+			Cvar_SetValue( "g_antilag_maxtimedelta", abs( g_antilag_maxtimedelta->integer ) );
 		}
 		if( backTime > (int64_t)g_antilag_maxtimedelta->integer ) {
 			backTime = (int64_t)g_antilag_maxtimedelta->integer;
@@ -475,8 +476,8 @@ void GClip_ClearWorld( void ) {
 	vec3_t world_mins, world_maxs;
 	struct cmodel_s *world_model;
 
-	world_model = trap_CM_InlineModel( 0 );
-	trap_CM_InlineModelBounds( world_model, world_mins, world_maxs );
+	world_model = SV_InlineModel( 0 );
+	SV_InlineModelBounds( world_model, world_mins, world_maxs );
 
 	GClip_Init_AreaGrid( &g_areagrid, world_mins, world_maxs );
 }
@@ -584,13 +585,13 @@ void GClip_LinkEntity( edict_t *ent ) {
 	ent->r.areanum = ent->r.areanum2 = -1;
 
 	// get all leafs, including solids
-	num_leafs = trap_CM_BoxLeafnums( ent->r.absmin, ent->r.absmax,
+	num_leafs = SV_BoxLeafnums( ent->r.absmin, ent->r.absmax,
 									 leafs, MAX_TOTAL_ENT_LEAFS, &topnode );
 
 	// set areas
 	for( i = 0; i < num_leafs; i++ ) {
-		clusters[i] = trap_CM_LeafCluster( leafs[i] );
-		area = trap_CM_LeafArea( leafs[i] );
+		clusters[i] = SV_LeafCluster( leafs[i] );
+		area = SV_LeafArea( leafs[i] );
 		if( area > -1 ) {
 			// doors may legally straggle two areas,
 			// but nothing should ever need more than that
@@ -661,7 +662,7 @@ void GClip_SetAreaPortalState( edict_t *ent, bool open ) {
 	}
 
 	// change areaportal's state
-	trap_CM_SetAreaPortalState( ent->r.areanum, ent->r.areanum2, open );
+	SV_SetAreaPortalState( ent->r.areanum, ent->r.areanum2, open );
 }
 
 
@@ -695,7 +696,7 @@ static struct cmodel_s *GClip_CollisionModelForEntity( entity_state_t *s, entity
 
 	if( ISBRUSHMODEL( s->modelindex ) ) {
 		// explicit hulls in the BSP model
-		model = trap_CM_InlineModel( s->modelindex );
+		model = SV_InlineModel( s->modelindex );
 		if( !model ) {
 			G_Error( "MOVETYPE_PUSH with a non bsp model" );
 		}
@@ -705,10 +706,10 @@ static struct cmodel_s *GClip_CollisionModelForEntity( entity_state_t *s, entity
 
 	// create a temp hull from bounding box sizes
 	if( s->type != ET_PLAYER && s->type != ET_CORPSE ) {
-		return trap_CM_ModelForBBox( r->mins, r->maxs );
+		return SV_ModelForBBox( r->mins, r->maxs );
 	}
 
-	return trap_CM_OctagonModelForBBox( r->mins, r->maxs );
+	return SV_OctagonModelForBBox( r->mins, r->maxs );
 }
 
 
@@ -725,7 +726,7 @@ static int GClip_PointContents( const vec3_t p, int timeDelta ) {
 	struct cmodel_s *cmodel;
 
 	// get base contents from world
-	contents = trap_CM_TransformedPointContents( p, NULL, NULL, NULL );
+	contents = SV_TransformedPointContents( p, NULL, NULL, NULL );
 
 	// or in contents from all the other entities
 	num = GClip_AreaEdicts( p, p, touch, MAX_EDICTS, AREA_SOLID, timeDelta );
@@ -736,7 +737,7 @@ static int GClip_PointContents( const vec3_t p, int timeDelta ) {
 		// might intersect, so do an exact clip
 		cmodel = GClip_CollisionModelForEntity( &clipEnt->s, &clipEnt->r );
 
-		c2 = trap_CM_TransformedPointContents( p, cmodel, clipEnt->s.origin, clipEnt->s.angles );
+		c2 = SV_TransformedPointContents( p, cmodel, clipEnt->s.origin, clipEnt->s.angles );
 		contents |= c2;
 	}
 
@@ -812,7 +813,7 @@ typedef struct {
 			angles = vec3_origin; // boxes don't rotate
 
 		}
-		trap_CM_TransformedBoxTrace( &trace, clip->start, clip->end,
+		SV_TransformedBoxTrace( &trace, clip->start, clip->end,
 									 clip->mins, clip->maxs, cmodel, clip->contentmask,
 									 touch->s.origin, angles );
 
@@ -885,7 +886,7 @@ static void GClip_Trace( trace_t *tr, const vec3_t start, const vec3_t mins, con
 		tr->ent = -1;
 	} else {
 		// clip to world
-		trap_CM_TransformedBoxTrace( tr, start, end, mins, maxs, NULL, contentmask, NULL, NULL );
+		SV_TransformedBoxTrace( tr, start, end, mins, maxs, NULL, contentmask, NULL, NULL );
 		tr->ent = tr->fraction < 1.0 ? world->s.number : -1;
 		if( tr->fraction == 0 ) {
 			return; // blocked by the world
@@ -944,7 +945,7 @@ void GClip_SetBrushModel( edict_t *ent, const char *name ) {
 	}
 
 	if( name[0] != '*' ) {
-		ent->s.modelindex = trap_ModelIndex( name );
+		ent->s.modelindex = SV_ModelIndex( name );
 		return;
 	}
 
@@ -953,16 +954,16 @@ void GClip_SetBrushModel( edict_t *ent, const char *name ) {
 	// world model is special
 	if( !strcmp( name, "*0" ) ) {
 		ent->s.modelindex = 0;
-		cmodel = trap_CM_InlineModel( 0 );
-		trap_CM_InlineModelBounds( cmodel, ent->r.mins, ent->r.maxs );
+		cmodel = SV_InlineModel( 0 );
+		SV_InlineModelBounds( cmodel, ent->r.mins, ent->r.maxs );
 		return;
 	}
 
 	// brush model
-	ent->s.modelindex = trap_ModelIndex( name );
+	ent->s.modelindex = SV_ModelIndex( name );
 	assert( ent->s.modelindex == (unsigned int)atoi( name + 1 ) );
-	cmodel = trap_CM_InlineModel( ent->s.modelindex );
-	trap_CM_InlineModelBounds( cmodel, ent->r.mins, ent->r.maxs );
+	cmodel = SV_InlineModel( ent->s.modelindex );
+	SV_InlineModelBounds( cmodel, ent->r.mins, ent->r.maxs );
 	GClip_LinkEntity( ent );
 }
 
@@ -981,12 +982,12 @@ bool GClip_EntityContact( const vec3_t mins, const vec3_t maxs, const edict_t *e
 	}
 
 	if( ISBRUSHMODEL( ent->s.modelindex ) ) {
-		model = trap_CM_InlineModel( ent->s.modelindex );
+		model = SV_InlineModel( ent->s.modelindex );
 		if( !model ) {
 			G_Error( "MOVETYPE_PUSH with a non bsp model" );
 		}
 
-		trap_CM_TransformedBoxTrace( &tr, vec3_origin, vec3_origin, mins, maxs, model,
+		SV_TransformedBoxTrace( &tr, vec3_origin, vec3_origin, mins, maxs, model,
 									 MASK_ALL, ent->s.origin, ent->s.angles );
 
 		return tr.startsolid || tr.allsolid ? true : false;

@@ -19,7 +19,7 @@ int CollisionTopNodeCache::getTopNode( const float *absMins, const float *absMax
 		}
 
 		const auto [cachedMins, cachedMaxs] = defaultBoundsCache.getCachedBounds();
-		defaultCachedNode = trap_CM_FindTopNodeForBox( cachedMins, cachedMaxs );
+		defaultCachedNode = SV_FindTopNodeForBox( cachedMins, cachedMaxs );
 		return *defaultCachedNode;
 	}
 
@@ -27,7 +27,7 @@ int CollisionTopNodeCache::getTopNode( const float *absMins, const float *absMax
 	if( !zeroStepBoundsCache.checkOrUpdateBounds( absMins, absMaxs ) ) {
 		// zeroStepBoundsCache is updated first so mins/maxs are always valid
 		const auto [cachedMins, cachedMaxs] = zeroStepBoundsCache.getCachedBounds();
-		cachedZeroStepNode = trap_CM_FindTopNodeForBox( cachedMins, cachedMaxs );
+		cachedZeroStepNode = SV_FindTopNodeForBox( cachedMins, cachedMaxs );
 	}
 
 	// Cached bounds initially are illegal so this value gets set on a first checkOnUpdateBounds() call.
@@ -48,10 +48,10 @@ CollisionShapesListCache::CollisionShapesListCache() noexcept
 	, zeroStepBoundsCache( nullptr, kShapesListCacheAddToMins, kShapesListCacheAddToMaxs ) {}
 
 CollisionShapesListCache::~CollisionShapesListCache() {
-	GAME_IMPORT.CM_FreeShapeList( defaultCachedList );
-	GAME_IMPORT.CM_FreeShapeList( defaultClippedList );
-	GAME_IMPORT.CM_FreeShapeList( zeroStepCachedList );
-	GAME_IMPORT.CM_FreeShapeList( zeroStepClippedList );
+	SV_FreeShapeList( defaultCachedList );
+	SV_FreeShapeList( defaultClippedList );
+	SV_FreeShapeList( zeroStepCachedList );
+	SV_FreeShapeList( zeroStepClippedList );
 }
 
 CollisionShapesListCache shapesListCache;
@@ -71,15 +71,15 @@ const CMShapeList *CollisionShapesListCache::prepareList( const float *mins, con
 	}
 
 	if( !defaultCachedList ) {
-		defaultCachedList = GAME_IMPORT.CM_AllocShapeList();
-		defaultClippedList = GAME_IMPORT.CM_AllocShapeList();
-		zeroStepCachedList = GAME_IMPORT.CM_AllocShapeList();
-		zeroStepClippedList = GAME_IMPORT.CM_AllocShapeList();
+		defaultCachedList = SV_AllocShapeList();
+		defaultClippedList = SV_AllocShapeList();
+		zeroStepCachedList = SV_AllocShapeList();
+		zeroStepClippedList = SV_AllocShapeList();
 	}
 
 	const auto [cachedMins, cachedMaxs] = zeroStepBoundsCache.getCachedBounds();
-	activeCachedList = GAME_IMPORT.CM_BuildShapeList( zeroStepCachedList, cachedMins, cachedMaxs, kListClipMask );
-	GAME_IMPORT.CM_ClipShapeList( zeroStepClippedList, zeroStepCachedList, mins, maxs );
+	activeCachedList = SV_BuildShapeList( zeroStepCachedList, cachedMins, cachedMaxs, kListClipMask );
+	SV_ClipShapeList( zeroStepClippedList, zeroStepCachedList, mins, maxs );
 
 	defaultBoundsCache.setFrom( zeroStepBoundsCache );
 	return zeroStepClippedList;
@@ -88,13 +88,13 @@ const CMShapeList *CollisionShapesListCache::prepareList( const float *mins, con
 const CMShapeList *CollisionShapesListCache::defaultPrepareList( const float *mins, const float *maxs ) const {
 	if( defaultBoundsCache.checkOrUpdateBounds( mins, maxs ) ) {
 		assert( activeCachedList == defaultCachedList || activeCachedList == zeroStepCachedList );
-		GAME_IMPORT.CM_ClipShapeList( defaultClippedList, activeCachedList, mins, maxs );
+		SV_ClipShapeList( defaultClippedList, activeCachedList, mins, maxs );
 		return defaultClippedList;
 	}
 
 	const auto [cachedMins, cachedMaxs] = defaultBoundsCache.getCachedBounds();
-	activeCachedList = GAME_IMPORT.CM_BuildShapeList( defaultCachedList, cachedMins, cachedMaxs, kListClipMask );
-	GAME_IMPORT.CM_ClipShapeList( defaultClippedList, activeCachedList, mins, maxs );
+	activeCachedList = SV_BuildShapeList( defaultCachedList, cachedMins, cachedMaxs, kListClipMask );
+	SV_ClipShapeList( defaultClippedList, activeCachedList, mins, maxs );
 	return defaultClippedList;
 }
 

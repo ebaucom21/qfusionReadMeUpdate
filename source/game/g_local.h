@@ -28,7 +28,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../common/gs_public.h"
 #include "g_public.h"
-#include "g_syscalls.h"
 #include "g_gametypes.h"
 
 #include "../common/mmcommon.h"
@@ -661,7 +660,7 @@ void G_PureModel( const char *model );
 extern game_locals_t game;
 
 #define G_ISGHOSTING( x ) ( ( ( x )->s.modelindex == 0 ) && ( ( x )->r.solid == SOLID_NOT ) )
-#define ISBRUSHMODEL( x ) ( ( ( x > 0 ) && ( (int)x < trap_CM_NumInlineModels() ) ) ? true : false )
+#define ISBRUSHMODEL( x ) ( ( ( x > 0 ) && ( (int)x < SV_NumInlineModels() ) ) ? true : false )
 
 void G_TeleportEffect( edict_t *ent, bool in );
 void G_RespawnEffect( edict_t *ent );
@@ -844,18 +843,13 @@ void G_EndServerFrames_UpdateChaseCam( void );
 // g_client.c
 //
 void G_InitBodyQueue( void );
-void ClientUserinfoChanged( edict_t *ent, char *userinfo );
 void G_Client_UpdateActivity( Client *client );
 void G_Client_InactivityRemove( Client *client, int64_t inactivityMillis );
 void G_ClientRespawn( edict_t *self, bool ghost );
 void G_ClientClearStats( edict_t *ent );
 void G_GhostClient( edict_t *self );
-void ClientThink( edict_t *ent, usercmd_t *cmd, int timeDelta );
 void G_ClientThink( edict_t *ent );
 void G_CheckClientRespawnClick( edict_t *ent );
-bool ClientConnect( edict_t *ent, char *userinfo, bool fakeClient );
-void ClientDisconnect( edict_t *ent, const char *reason );
-void ClientBegin( edict_t *ent );
 void G_PredictedEvent( int entNum, int ev, int parm );
 void G_TeleportPlayer( edict_t *player, edict_t *dest );
 bool G_PlayerCanTeleport( edict_t *player );
@@ -918,8 +912,6 @@ int G_BoxSlideMove( edict_t *ent, int contentmask, float slideBounce, float fric
 // g_main.c
 //
 
-int G_API( void );
-
 #ifndef _MSC_VER
 void G_Error( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) ) __attribute__( ( noreturn ) );
 void G_Printf( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
@@ -928,28 +920,17 @@ __declspec( noreturn ) void G_Error( _Printf_format_string_ const char *format, 
 void G_Printf( _Printf_format_string_ const char *format, ... );
 #endif
 
-void    G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char *demoExtension );
-void    G_Shutdown( void );
-void    G_ExitLevel( void );
+void G_ExitLevel( void );
 void G_RestartLevel( void );
 
-void    G_Timeout_Reset( void );
+void G_Timeout_Reset( void );
 
-const game_state_t *G_GetGameState();
-const ReplicatedScoreboardData *G_GetScoreboardDataForClient( unsigned clientNum );
-const ReplicatedScoreboardData *G_GetScoreboardDataForDemo();
-
-bool G_AllowDownload( edict_t *ent, const char *requestname, const char *uploadname );
 
 //
 // g_frame.c
 //
 void G_CheckCvars( void );
-void G_RunFrame( unsigned int msec, int64_t serverTime );
 void G_SnapClients( void );
-void G_ClearSnap( void );
-void G_SnapFrame( void );
-
 
 //
 // g_spawn.c
@@ -957,7 +938,6 @@ void G_SnapFrame( void );
 bool G_CallSpawn( edict_t *ent );
 bool G_RespawnLevel( void );
 void G_ResetLevel( void );
-void G_InitLevel( char *mapname, char *entities, int entstrlen, int64_t levelTime, int64_t serverTime, int64_t realTime );
 const char *G_GetEntitySpawnKey( const char *key, edict_t *self );
 
 //

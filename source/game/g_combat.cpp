@@ -696,7 +696,7 @@ public:
 
 bool ClipRegion::castRay( const float *from, const float *to ) const {
 	trace_t trace;
-	GAME_IMPORT.CM_ClipToShapeList( m_worldShapeList, &trace, from, to, vec3_origin, vec3_origin, MASK_SOLID );
+	SV_ClipToShapeList( m_worldShapeList, &trace, from, to, vec3_origin, vec3_origin, MASK_SOLID );
 	if( trace.fraction != 1.0f ) {
 		return false;
 	}
@@ -706,8 +706,8 @@ bool ClipRegion::castRay( const float *from, const float *to ) const {
 		const auto *ent = gameEdicts + entNum;
 		// TODO: Hulls should be allowed to be precached once
 		// Non-vulnerable entities are assumed to always have a box shape
-		const cmodel_s *model = trap_CM_ModelForBBox( ent->r.absmin, ent->r.absmax );
-		trap_CM_TransformedBoxTrace( &trace, from, to, vec3_origin, vec3_origin, model, MASK_SOLID, nullptr, nullptr );
+		const cmodel_s *model = SV_ModelForBBox( ent->r.absmin, ent->r.absmax );
+		SV_TransformedBoxTrace( &trace, from, to, vec3_origin, vec3_origin, model, MASK_SOLID, nullptr, nullptr );
 		if( trace.fraction != 1.0f ) {
 			return false;
 		}
@@ -1114,14 +1114,14 @@ void SplashPropagationSolver::operator()() {
 			}
 
 			if( !s_shapeListStorage ) {
-				s_shapeListStorage = GAME_IMPORT.CM_AllocShapeList();
+				s_shapeListStorage = SV_AllocShapeList();
 			}
 
 			const Vec3 splashMins = Vec3( -radius, -radius, -radius ) + m_inflictor->s.origin;
 			const Vec3 splashMaxs = Vec3( +radius, +radius, +radius ) + m_inflictor->s.origin;
 			// TODO: Add/use a fused call
-			GAME_IMPORT.CM_BuildShapeList( s_shapeListStorage, splashMins.Data(), splashMaxs.Data(), MASK_SOLID );
-			GAME_IMPORT.CM_ClipShapeList( s_shapeListStorage, s_shapeListStorage, splashMins.Data(), splashMaxs.Data() );
+			SV_BuildShapeList( s_shapeListStorage, splashMins.Data(), splashMaxs.Data(), MASK_SOLID );
+			SV_ClipShapeList( s_shapeListStorage, s_shapeListStorage, splashMins.Data(), splashMaxs.Data() );
 
 			const ClipRegion clipRegion( s_shapeListStorage, std::span<int>( waveObstacles.begin(), waveObstacles.size() ) );
 

@@ -277,7 +277,7 @@ void G_UseTargets( edict_t *ent, edict_t *activator ) {
 		if( ent->noise_index ) {
 			G_Sound( activator, CHAN_AUTO, ent->noise_index, ATTN_NORM );
 		} else {
-			G_Sound( activator, CHAN_AUTO, trap_SoundIndex( S_WORLD_MESSAGE ), ATTN_NORM );
+			G_Sound( activator, CHAN_AUTO, SV_SoundIndex( S_WORLD_MESSAGE ), ATTN_NORM );
 		}
 	}
 
@@ -291,7 +291,7 @@ void G_UseTargets( edict_t *ent, edict_t *activator ) {
 			if( ent->noise_index ) {
 				G_Sound( activator, CHAN_AUTO, ent->noise_index, ATTN_NORM );
 			} else {
-				G_Sound( activator, CHAN_AUTO, trap_SoundIndex( S_WORLD_MESSAGE ), ATTN_NORM );
+				G_Sound( activator, CHAN_AUTO, SV_SoundIndex( S_WORLD_MESSAGE ), ATTN_NORM );
 			}
 		}
 	}
@@ -477,7 +477,7 @@ edict_t *G_Spawn( void ) {
 
 	game.numentities++;
 
-	trap_LocateEntities( game.edicts, sizeof( game.edicts[0] ), game.numentities, game.maxentities );
+	SV_LocateEntities( game.edicts, sizeof( game.edicts[0] ), game.numentities, game.maxentities );
 
 	G_InitEdict( e );
 
@@ -556,7 +556,7 @@ void G_InitMover( edict_t *ent ) {
 	G_PureModel( ent->model );
 
 	if( ent->model2 ) {
-		ent->s.modelindex2 = trap_ModelIndex( ent->model2 );
+		ent->s.modelindex2 = SV_ModelIndex( ent->model2 );
 		G_PureModel( ent->model2 );
 	}
 
@@ -713,10 +713,10 @@ void G_PrintMsg( const edict_t *ent, const char *format, ... ) {
 		if( dedicated->integer ) {
 			G_Printf( "%s", msg );
 		}
-		trap_GameCmd( NULL, s );
+		SV_DispatchGameCmd( NULL, s );
 	} else {
 		if( ent->r.inuse && ent->r.client ) {
-			trap_GameCmd( ent, s );
+			SV_DispatchGameCmd( ent, s );
 		}
 	}
 }
@@ -763,7 +763,7 @@ void G_CenterPrintMsg( const edict_t *ent, const char *format, ... ) {
 		*p = '\'';
 
 	Q_snprintfz( cmd, sizeof( cmd ), "cp \"%s\"", msg );
-	trap_GameCmd( ent, cmd );
+	SV_DispatchGameCmd( ent, cmd );
 
 	if( ent != NULL ) {
 		// add it to every player who's chasing this player
@@ -773,7 +773,7 @@ void G_CenterPrintMsg( const edict_t *ent, const char *format, ... ) {
 			}
 
 			if( other->r.client->chase.target == ENTNUM( ent ) ) {
-				trap_GameCmd( other, cmd );
+				SV_DispatchGameCmd( other, cmd );
 			}
 		}
 	}
@@ -851,7 +851,7 @@ void G_CenterPrintFormatMsg( const edict_t *ent, int numVargs, const char *forma
 		return;
 	}
 
-	trap_GameCmd( ent, cmd );
+	SV_DispatchGameCmd( ent, cmd );
 
 	if( ent != NULL ) {
 		// add it to every player who's chasing this player
@@ -861,7 +861,7 @@ void G_CenterPrintFormatMsg( const edict_t *ent, int numVargs, const char *forma
 			}
 
 			if( other->r.client->chase.target == ENTNUM( ent ) ) {
-				trap_GameCmd( other, cmd );
+				SV_DispatchGameCmd( other, cmd );
 			}
 		}
 	}
@@ -870,7 +870,7 @@ void G_CenterPrintFormatMsg( const edict_t *ent, int numVargs, const char *forma
 
 void G_Obituary( edict_t *victim, edict_t *attacker, int mod ) {
 	if( victim && attacker ) {
-		trap_GameCmd( NULL, va( "fra %i %i %i", (int)(victim - game.edicts), (int)(attacker - game.edicts), mod ) );
+		SV_DispatchGameCmd( NULL, va( "fra %i %i %i", (int)(victim - game.edicts), (int)(attacker - game.edicts), mod ) );
 	}
 }
 
@@ -903,7 +903,7 @@ void G_UpdatePlayerMatchMsg( edict_t *ent, bool force ) {
 
 	if( newmm != ent->r.client->matchmessage || force ) {
 		ent->r.client->matchmessage = newmm;
-		trap_GameCmd( ent, va( "mm %i", newmm ) );
+		SV_DispatchGameCmd( ent, va( "mm %i", newmm ) );
 	}
 }
 
@@ -941,7 +941,7 @@ unsigned G_RegisterHelpMessage( const char *str ) {
 	}
 
 	for( i = 0; i < MAX_HELPMESSAGES; i++ ) {
-		const char *cs = trap_GetConfigString( CS_HELPMESSAGES + i );
+		const char *cs = SV_GetConfigString( CS_HELPMESSAGES + i );
 		if( !cs[0] ) {
 			break;
 		}
@@ -951,7 +951,7 @@ unsigned G_RegisterHelpMessage( const char *str ) {
 	}
 
 	if( i < MAX_HELPMESSAGES ) {
-		trap_ConfigString( CS_HELPMESSAGES + i, str );
+		SV_SetConfigString( CS_HELPMESSAGES + i, str );
 	}
 	return i + 1;
 }
@@ -969,7 +969,7 @@ void G_SetPlayerHelpMessage( edict_t *ent, unsigned index, bool force ) {
 
 	if( index != ent->r.client->helpmessage || force ) {
 		ent->r.client->helpmessage = index;
-		trap_GameCmd( ent, va( "mapmsg %i", index ) );
+		SV_DispatchGameCmd( ent, va( "mapmsg %i", index ) );
 	}
 }
 
@@ -1176,7 +1176,7 @@ static void G_SpawnTeleportEffect( edict_t *ent, bool respawn, bool in ) {
 		return;
 	}
 
-	if( trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED || ent->r.solid == SOLID_NOT ) {
+	if( G_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED || ent->r.solid == SOLID_NOT ) {
 		return;
 	}
 
@@ -1524,7 +1524,7 @@ void G_AnnouncerSound( edict_t *targ, int soundindex, int team, bool queued, edi
 	int playerTeam;
 
 	if( targ ) { // only for a given player
-		if( !targ->r.client || trap_GetClientState( PLAYERNUM( targ ) ) < CS_SPAWNED ) {
+		if( !targ->r.client || G_GetClientState( PLAYERNUM( targ ) ) < CS_SPAWNED ) {
 			return;
 		}
 
@@ -1537,7 +1537,7 @@ void G_AnnouncerSound( edict_t *targ, int soundindex, int team, bool queued, edi
 		edict_t *ent;
 
 		for( ent = game.edicts + 1; PLAYERNUM( ent ) < ggs->maxclients; ent++ ) {
-			if( !ent->r.inuse || trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
+			if( !ent->r.inuse || G_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 				continue;
 			}
 
@@ -1574,9 +1574,9 @@ void G_PureSound( const char *sound ) {
 		// sexed sounds
 		// jal : this isn't correct. Sexed sounds don't have the full path because
 		// the path depends on the model, so how can they be pure anyway?
-		trap_PureSound( sound + 1 );
+		SV_PureSound( sound + 1 );
 	} else {
-		trap_PureSound( sound );
+		SV_PureSound( sound );
 	}
 }
 
@@ -1586,7 +1586,7 @@ void G_PureSound( const char *sound ) {
 void G_PureModel( const char *model ) {
 	assert( model && model[0] && strlen( model ) < MAX_QPATH );
 
-	trap_PureModel( model );
+	SV_PureModel( model );
 }
 
 /*
@@ -1621,6 +1621,6 @@ void G_PrecacheWeapondef( int weapon ) {
 					 firedef->v_spread
 					 );
 
-		trap_ConfigString( CS_WEAPONDEFS + index, cstring );
+		SV_SetConfigString( CS_WEAPONDEFS + index, cstring );
 	}
 }

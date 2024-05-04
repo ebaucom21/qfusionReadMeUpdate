@@ -112,7 +112,7 @@ int CoverProblemSolver::findTopNodeAndEntNums( SpotsAndScoreVector &spotsAndScor
 		AddPointToBounds( spot.absMaxs, bounds[0], bounds[1] );
 	}
 
-	const int topNode = trap_CM_FindTopNodeForBox( bounds[0], bounds[1] );
+	const int topNode = SV_FindTopNodeForBox( bounds[0], bounds[1] );
 
 	const auto numRawEnts = (unsigned)GClip_AreaEdicts( bounds[0], bounds[1], entNums.begin(), MAX_EDICTS, AREA_SOLID, 0 );
 	assert( numRawEnts < entNums.capacity() );
@@ -147,7 +147,7 @@ void CoverProblemSolver::pruneRawEntNums( EntNumsVector &entNums ) {
 				continue;
 			}
 			// TODO: Precache the attacker leaf num if the PVS test is kept
-			if( !trap_inPVS( attackerOrigin, ent->s.origin ) ) {
+			if( !SV_InPVS( attackerOrigin, ent->s.origin ) ) {
 				continue;
 			}
 			entNums[numKeptEnts++] = entNum;
@@ -258,8 +258,8 @@ bool CoverProblemSolver::castRay( const float *from, const float *to, int topNod
 		const auto *ent = gameEdicts + entNum;
 
 		// TODO: Optimize using AABB/line intersection
-		const auto *model = trap_CM_ModelForBBox( ent->r.mins, ent->r.maxs );
-		trap_CM_TransformedBoxTrace( &trace, from, to, vec3_origin, vec3_origin, model,
+		const auto *model = SV_ModelForBBox( ent->r.mins, ent->r.maxs );
+		SV_TransformedBoxTrace( &trace, from, to, vec3_origin, vec3_origin, model,
 			                         MASK_SHOT, ent->s.origin, ent->s.angles, topNode );
 
 		// A ray is blocked by some other solid entity

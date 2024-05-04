@@ -41,14 +41,14 @@ static inline bool isLaserBeamInPvs( const edict_t *self, const edict_t *ent ) {
 		return true;
 	}
 	// TODO: Reuse cached leaves
-	if( trap_inPVS( self->s.origin, ent->s.origin2 ) ) {
+	if( SV_InPVS( self->s.origin, ent->s.origin2 ) ) {
 		return true;
 	}
 	// Try this
 	vec3_t midPoint;
 	VectorAvg( ent->s.origin, ent->s.origin2, midPoint );
 	// TODO: Reuse cached leaves
-	return trap_inPVS( self->s.origin, midPoint );
+	return SV_InPVS( self->s.origin, midPoint );
 }
 
 void HazardsDetector::Clear() {

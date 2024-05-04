@@ -360,7 +360,7 @@ int AiWeightConfigVarGroup::ParseNextEntry( const char *data, const char **nextD
 #define CHECK_WRITE( message )                       \
 	do                                                 \
 	{                                                  \
-		if( trap_FS_Print( fileHandle, ( message ) ) <= 0 ) { \
+		if( FS_Print( fileHandle, ( message ) ) <= 0 ) { \
 			return false; }                              \
 	}                                                  \
 	while( 0 )
@@ -369,7 +369,7 @@ int AiWeightConfigVarGroup::ParseNextEntry( const char *data, const char **nextD
 	do                                                 \
 	{                                                  \
 		for( int i = 0; i < ( depth ); ++i )              \
-			if( trap_FS_Print( fileHandle, "\t" ) <= 0 ) {  \
+			if( FS_Print( fileHandle, "\t" ) <= 0 ) {  \
 				return false; }                          \
 	}                                                  \
 	while( 0 )
@@ -465,7 +465,7 @@ bool AiWeightConfig::LoadFromData( const char *data ) {
 
 bool AiWeightConfig::Load( const char *filename ) {
 	int fileHandle;
-	int fileSize = trap_FS_FOpenFile( filename, &fileHandle, FS_READ );
+	int fileSize = FS_FOpenFile( filename, &fileHandle, FS_READ );
 	if( fileSize <= 0 ) {
 		G_Printf( S_COLOR_RED "AiWeightConfig::Load(): Can't open file `%s`\n", filename );
 		return false;
@@ -475,10 +475,10 @@ bool AiWeightConfig::Load( const char *filename ) {
 	char *buffer = (char *)Q_malloc( (unsigned)fileSize + 1 );
 	buffer[fileSize] = 0;
 
-	int bytesRead = trap_FS_Read( buffer, (unsigned)fileSize, fileHandle );
+	int bytesRead = FS_Read( buffer, (unsigned)fileSize, fileHandle );
 	if( bytesRead != fileSize ) {
 		Q_free( buffer );
-		trap_FS_FCloseFile( fileHandle );
+		FS_FCloseFile( fileHandle );
 		const char *format = S_COLOR_RED "AIWeightConfig()::Load(): only %d/%d bytes of file %s can be read\n";
 		G_Printf( format, bytesRead, fileSize, filename );
 		return false;
@@ -486,17 +486,17 @@ bool AiWeightConfig::Load( const char *filename ) {
 
 	bool result = LoadFromData( buffer );
 	Q_free( buffer );
-	trap_FS_FCloseFile( fileHandle );
+	FS_FCloseFile( fileHandle );
 	return result;
 }
 
 bool AiWeightConfig::Save( const char *filename ) {
 	int fileHandle;
-	if( trap_FS_FOpenFile( filename, &fileHandle, FS_WRITE ) < 0 ) {
+	if( FS_FOpenFile( filename, &fileHandle, FS_WRITE ) < 0 ) {
 		return false;
 	}
 
 	bool result = Write( fileHandle, 0 );
-	trap_FS_FCloseFile( fileHandle );
+	FS_FCloseFile( fileHandle );
 	return result;
 }

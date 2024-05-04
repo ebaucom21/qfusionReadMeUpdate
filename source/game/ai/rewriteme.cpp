@@ -11,7 +11,7 @@ AiPrecomputedFileHandler::~AiPrecomputedFileHandler() {
 		}
 	}
 	if( fp >= 0 ) {
-		trap_FS_FCloseFile( fp );
+		FS_FCloseFile( fp );
 	}
 }
 
@@ -27,12 +27,12 @@ bool AiPrecomputedFileWriter::WriteString( const wsw::StringView &string ) {
 }
 
 bool AiPrecomputedFileWriter::WriteLengthAndData( const uint8_t *data, uint32_t dataLength ) {
-	if( trap_FS_Write( &dataLength, 4, fp ) <= 0 ) {
+	if( FS_Write( &dataLength, 4, fp ) <= 0 ) {
 		failedOnWrite = true;
 		return false;
 	}
 
-	if( trap_FS_Write( data, dataLength, fp ) <= 0 ) {
+	if( FS_Write( data, dataLength, fp ) <= 0 ) {
 		failedOnWrite = true;
 		return false;
 	}
@@ -42,7 +42,7 @@ bool AiPrecomputedFileWriter::WriteLengthAndData( const uint8_t *data, uint32_t 
 
 bool AiPrecomputedFileReader::ReadLengthAndData( uint8_t **data, uint32_t *dataLength ) {
 	uint32_t length;
-	if( trap_FS_Read( &length, 4, fp ) <= 0 ) {
+	if( FS_Read( &length, 4, fp ) <= 0 ) {
 		G_Printf( S_COLOR_RED "%s: Can't read a chunk length\n", tag );
 		return false;
 	}
@@ -60,7 +60,7 @@ bool AiPrecomputedFileReader::ReadLengthAndData( uint8_t **data, uint32_t *dataL
 		return false;
 	}
 
-	if( trap_FS_Read( mem, length, fp ) != (int)length ) {
+	if( FS_Read( mem, length, fp ) != (int)length ) {
 		G_Printf( S_COLOR_RED "%s: Can't read %d chunk bytes\n", tag, (int)length );
 		if( freeFn ) {
 			freeFn( mem );
@@ -105,13 +105,13 @@ AiPrecomputedFileReader::LoadingStatus AiPrecomputedFileReader::ExpectFileString
 }
 
 AiPrecomputedFileReader::LoadingStatus AiPrecomputedFileReader::BeginReading( const char *filePath ) {
-	if( trap_FS_FOpenFile( filePath, &fp, FS_READ ) < 0 ) {
+	if( FS_FOpenFile( filePath, &fp, FS_READ ) < 0 ) {
 		G_Printf( S_COLOR_YELLOW "%s: Can't open file `%s` for reading\n", tag, filePath );
 		return MISSING;
 	}
 
 	uint32_t version;
-	if( trap_FS_Read( &version, 4, fp ) != 4 ) {
+	if( FS_Read( &version, 4, fp ) != 4 ) {
 		G_Printf( S_COLOR_YELLOW "%s: Can't read the format version from the file\n", tag );
 		return FAILURE;
 	}
@@ -135,7 +135,7 @@ AiPrecomputedFileReader::LoadingStatus AiPrecomputedFileReader::BeginReading( co
 	}
 
 	if( useMapChecksum ) {
-		const char *mapChecksum = trap_GetConfigString( CS_MAPCHECKSUM );
+		const char *mapChecksum = SV_GetConfigString( CS_MAPCHECKSUM );
 		if( ( status = ExpectFileString( mapChecksum, "Map checksum mismatch" ) ) != SUCCESS ) {
 			return status;
 		}
@@ -153,9 +153,9 @@ AiPrecomputedFileWriter::~AiPrecomputedFileWriter() {
 	// in case when we have to remove the file
 	// (close the handle first, then remove the file)
 
-	trap_FS_FCloseFile( fp );
+	FS_FCloseFile( fp );
 	if( filePath ) {
-		trap_FS_RemoveFile( filePath );
+		FS_RemoveFile( filePath );
 		if( freeFn ) {
 			freeFn( filePath );
 		} else {
@@ -168,7 +168,7 @@ AiPrecomputedFileWriter::~AiPrecomputedFileWriter() {
 
 bool AiPrecomputedFileWriter::BeginWriting( const char *filePath_ ) {
 	// Try open file for writing
-	if( trap_FS_FOpenFile( filePath_, &fp, FS_WRITE ) < 0 ) {
+	if( FS_FOpenFile( filePath_, &fp, FS_WRITE ) < 0 ) {
 		G_Printf( S_COLOR_RED "%s: Can't open file %s for writing\n", tag, filePath_ );
 		return false;
 	}
@@ -187,7 +187,7 @@ bool AiPrecomputedFileWriter::BeginWriting( const char *filePath_ ) {
 	memcpy( this->filePath, filePath_, pathLen + 1 );
 
 	uint32_t version = LittleLong( expectedVersion );
-	if( !trap_FS_Write( &version, 4, fp ) ) {
+	if( !FS_Write( &version, 4, fp ) ) {
 		G_Printf( S_COLOR_RED "%s: Can't write version to file\n", tag );
 		return false;
 	}
@@ -205,7 +205,7 @@ bool AiPrecomputedFileWriter::BeginWriting( const char *filePath_ ) {
 	}
 
 	if( useMapChecksum ) {
-		if( !WriteString( trap_GetConfigString( CS_MAPCHECKSUM ) ) ) {
+		if( !WriteString( SV_GetConfigString( CS_MAPCHECKSUM ) ) ) {
 			G_Printf( S_COLOR_RED "%s: Can't write map checksum to file\n", tag );
 			return false;
 		}

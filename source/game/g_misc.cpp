@@ -277,10 +277,10 @@ void SP_info_camp( edict_t *self ) {
 
 static void light_use( edict_t *self, edict_t *other, edict_t *activator ) {
 	if( self->spawnflags & START_OFF ) {
-		trap_ConfigString( CS_LIGHTS + self->style, "m" );
+		SV_SetConfigString( CS_LIGHTS + self->style, "m" );
 		self->spawnflags &= ~START_OFF;
 	} else {
-		trap_ConfigString( CS_LIGHTS + self->style, "a" );
+		SV_SetConfigString( CS_LIGHTS + self->style, "a" );
 		self->spawnflags |= START_OFF;
 	}
 }
@@ -294,9 +294,9 @@ void SP_light( edict_t *self ) {
 	if( self->style >= 32 ) {
 		self->use = light_use;
 		if( self->spawnflags & START_OFF ) {
-			trap_ConfigString( CS_LIGHTS + self->style, "a" );
+			SV_SetConfigString( CS_LIGHTS + self->style, "a" );
 		} else {
-			trap_ConfigString( CS_LIGHTS + self->style, "m" );
+			SV_SetConfigString( CS_LIGHTS + self->style, "m" );
 		}
 	}
 }
@@ -659,10 +659,10 @@ void SP_func_explosive( edict_t *self ) {
 
 	// HACK HACK HACK
 	if( st.debris1 && st.debris1[0] ) {
-		self->count = trap_ModelIndex( st.debris1 );
+		self->count = SV_ModelIndex( st.debris1 );
 	}
 	if( st.debris2 && st.debris2[0] ) {
-		self->viewheight = trap_ModelIndex( st.debris2 );
+		self->viewheight = SV_ModelIndex( st.debris2 );
 	}
 
 	GClip_LinkEntity( self );
@@ -848,7 +848,7 @@ void SP_skyportal( edict_t *ent ) {
 	//		st.fov = 90;
 	ent->r.svflags = SVF_NOCLIENT;
 
-	trap_ConfigString( CS_SKYBOX, va( "%.3f %.3f %.3f %.1f %.1f %d %.1f %.1f %.1f", ent->s.origin[0], ent->s.origin[1], ent->s.origin[2],
+	SV_SetConfigString( CS_SKYBOX, va( "%.3f %.3f %.3f %.1f %.1f %d %.1f %.1f %.1f", ent->s.origin[0], ent->s.origin[1], ent->s.origin[2],
 									  st.fov, st.scale, st.noents, ent->s.angles[0], ent->s.angles[1], ent->s.angles[2] ) );
 }
 
@@ -888,7 +888,7 @@ void SP_misc_particles( edict_t *ent ) {
 	ent->s.type = ET_PARTICLES;
 
 	if( st.noise ) {
-		ent->s.sound = trap_SoundIndex( st.noise );
+		ent->s.sound = SV_SoundIndex( st.noise );
 		G_PureSound( st.noise );
 	}
 
@@ -907,9 +907,9 @@ void SP_misc_particles( edict_t *ent ) {
 	}
 
 	if( st.shaderName ) {
-		ent->particlesInfo.shaderIndex = trap_ImageIndex( st.shaderName );
+		ent->particlesInfo.shaderIndex = SV_ImageIndex( st.shaderName );
 	} else {
-		ent->particlesInfo.shaderIndex = trap_ImageIndex( "particle" );
+		ent->particlesInfo.shaderIndex = SV_ImageIndex( "particle" );
 	}
 
 	if( st.size ) {
