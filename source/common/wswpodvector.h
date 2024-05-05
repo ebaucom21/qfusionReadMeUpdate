@@ -242,7 +242,7 @@ public:
 		m_sizeInElems++;
 	}
 
-	void insert( iterator position, const T &value, size_type count ) {
+	void insert( iterator position, size_type count, const T &value ) {
 		const auto index = convertIteratorToIndex( position );
 		expandImpl( index, sizeof( T ), count );
 		fill( index, value, count );
