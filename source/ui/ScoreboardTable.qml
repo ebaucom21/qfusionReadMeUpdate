@@ -99,36 +99,25 @@ TableView {
             style: Text.Raised
         }
 
-        Loader {
-            active: (shouldBeDisplayedAsIcon && value) || isPovNickname
-            // Anchors should not be conditionally assigned using regular bindings in general.
-            // We do not change column kinds upon creation, so this works and saves instantiating redundant items/states
-            anchors.left: isPovNickname ? parent.left : undefined
-            anchors.horizontalCenter: isPovNickname ? undefined : parent.horizontalCenter
+        Rectangle {
+            visible: isPovNickname
+            anchors.left: tableDelegate.left
             anchors.verticalCenter: parent.verticalCenter
-            sourceComponent: isPovNickname ? povMarkComponent : imageComponent
+            height: tableDelegate.height
+            width: 7
+            radius: 1
+            color: Qt.rgba(1.0, 1.0, 1.0, 0.6)
         }
 
-        Component {
-            id: povMarkComponent
-            Rectangle {
-                anchors.left: parent.left
-                height: tableDelegate.height
-                width: 8
-                radius: 1
-                color: Qt.lighter(cellBackground.color, 1.1)
-            }
-        }
-
-        Component {
-            id: imageComponent
-            Image {
-                opacity: valueOpacity
-                mipmap: true
-                width: 20
-                height: 20
-                source: UI.scoreboard.getImageAssetPath(value)
-            }
+        Image {
+            opacity: valueOpacity
+            visible: shouldBeDisplayedAsIcon && value
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
+            mipmap: true
+            width: 20
+            height: 20
+            source: UI.scoreboard.getImageAssetPath(value)
         }
     }
 
