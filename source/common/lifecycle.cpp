@@ -35,6 +35,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/client.h"
 #endif
 
+#include <atomic>
 #include <clocale>
 #include <setjmp.h>
 
@@ -90,9 +91,15 @@ static void Cmd_PreInit( void );
 static void Cmd_Init( void );
 static void Cmd_Shutdown( void );
 
-static volatile int server_state = CA_UNINITIALIZED;
-static volatile int client_state = CA_UNINITIALIZED;
-static volatile bool demo_playing = false;
+static std::atomic<int> client_state { CA_UNINITIALIZED };
+static std::atomic<int> server_state { ss_dead };
+static std::atomic<bool> demo_playing { false };
+
+#ifndef DEDICATED_ONLY
+// TODO: This is a hack.
+// Client state value management is way too convoluted, hence its easier to track by timestamps.
+static std::atomic<int64_t> g_lastClientExecutionTimestamp;
+#endif
 
 // Another list is defined in the game module
 DeclaredConfigVar *DeclaredConfigVar::s_listHead;
@@ -236,10 +243,18 @@ static void *SV_Thread( void * ) {
 		do {
 			newtime = Sys_Milliseconds();
 			realMsec = newtime - oldtime;
+			bool clientBlocked = false;
 			if( realMsec > 0 ) {
-				break;
+				// Note: CA_ACTIVE is not our friend wrt
+				if( Com_ClientState() == CA_DISCONNECTED ) {
+					break;
+				}
+				if( const int64_t clTimestamp = g_lastClientExecutionTimestamp; !clTimestamp || newtime - clTimestamp < 100 ) {
+					break;
+				}
+				clientBlocked = true;
 			}
-			if( Com_ServerState() >= CA_CONNECTED ) {
+			if( Com_ServerState() >= ss_game && !clientBlocked ) {
 				Sys_Sleep( 0 );
 			} else {
 				// TODO: We can just wait on pipe cmds, especially if we process sound too
@@ -461,6 +476,9 @@ void Qcommon_Init( int argc, char **argv ) {
 };
 
 void Qcommon_Frame( unsigned realMsec, unsigned *gameMsec, float *extraTime ) {
+#ifndef DEDICATED_ONLY
+	g_lastClientExecutionTimestamp = Sys_Milliseconds();
+#endif
 
 	if( com_quit ) {
 		Com_Quit( {} );
@@ -468,8 +486,14 @@ void Qcommon_Frame( unsigned realMsec, unsigned *gameMsec, float *extraTime ) {
 
 	if( setjmp( abortframe ) ) {
 		return; // an ERR_DROP was thrown
-
 	}
+
+#ifndef DEDICATED_ONLY
+	// Wait for the builtin server (if we are connecting online it does not have the loading state)
+	if( Com_ServerState() == ss_loading ) {
+		return;
+	}
+#endif
 
 	if( logconsole && logconsole->modified ) {
 		logconsole->modified = false;
