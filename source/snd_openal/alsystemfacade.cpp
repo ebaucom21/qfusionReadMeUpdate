@@ -151,15 +151,9 @@ void ALSoundSystem::startFixedSound( const SoundSet *sound, const float *origin,
 	}
 }
 
-void ALSoundSystem::startRelativeSound( const SoundSet *sound, int entNum, int channel, float volume, float attenuation ) {
+void ALSoundSystem::startRelativeSound( const SoundSet *sound, SoundSystem::AttachmentTag attachmentTag, int entNum, int channel, float volume, float attenuation ) {
 	if( sound ) {
-		callMethodOverPipe( m_pipe, &m_backend, &Backend::startRelativeSound, sound, entNum, channel, volume, attenuation );
-	}
-}
-
-void ALSoundSystem::startGlobalSound( const SoundSet *sound, int channel, float volume ) {
-	if( sound ) {
-		callMethodOverPipe( m_pipe, &m_backend, &Backend::startGlobalSound, sound, channel, volume );
+		callMethodOverPipe( m_pipe, &m_backend, &Backend::startRelativeSound, sound, attachmentTag, entNum, channel, volume, attenuation );
 	}
 }
 
@@ -174,9 +168,9 @@ void ALSoundSystem::startLocalSound( const SoundSet *sound, float volume ) {
 	}
 }
 
-void ALSoundSystem::addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) {
+void ALSoundSystem::addLoopSound( const SoundSet *sound, SoundSystem::AttachmentTag attachmentTag, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) {
 	if( sound ) {
-		callMethodOverPipe( m_pipe, &m_backend, &Backend::addLoopSound, sound, entNum, identifyingToken, volume, attenuation );
+		callMethodOverPipe( m_pipe, &m_backend, &Backend::addLoopSound, sound, attachmentTag, entNum, identifyingToken, volume, attenuation );
 	}
 }
 
@@ -203,17 +197,17 @@ void ALSoundSystem::pauseBackgroundTrack() {
 	callMethodOverPipe( m_pipe, &m_backend, &Backend::advanceBackgroundTrack, 0 );
 }
 
-void ALSoundSystem::updateListener( const vec3_t origin, const vec3_t velocity, const mat3_t axis ) {
+void ALSoundSystem::updateListener( int entNum, const vec3_t origin, const vec3_t velocity, const mat3_t axis ) {
 	std::array<Vec3, 3> argAxis {
 		Vec3 { axis[0], axis[1], axis[2] },
 		Vec3 { axis[3], axis[4], axis[5] },
 		Vec3 { axis[6], axis[7], axis[8] }
 	};
 
-	callMethodOverPipe( m_pipe, &m_backend, &Backend::setListener, Vec3( origin ), Vec3( velocity ), argAxis );
+	callMethodOverPipe( m_pipe, &m_backend, &Backend::setListener, entNum, Vec3( origin ), Vec3( velocity ), argAxis );
 }
 
-void ALSoundSystem::setEntitySpatialParams( int entNum, const float *origin, const float *velocity ) {
+void ALSoundSystem::setEntitySpatialParams( int entNum, const float *origin, const float *velocity, const float *axis ) {
 	if( m_spatialParamsBatch.count == std::size( m_spatialParamsBatch.entNums ) ) [[unlikely]] {
 		flushEntitySpatialParams();
 	}
@@ -221,6 +215,7 @@ void ALSoundSystem::setEntitySpatialParams( int entNum, const float *origin, con
 	m_spatialParamsBatch.entNums[m_spatialParamsBatch.count] = entNum;
 	VectorCopy( origin, m_spatialParamsBatch.origins[m_spatialParamsBatch.count] );
 	VectorCopy( velocity, m_spatialParamsBatch.velocities[m_spatialParamsBatch.count] );
+	Matrix3_Copy( axis, m_spatialParamsBatch.axes[m_spatialParamsBatch.count] );
 	m_spatialParamsBatch.count++;
 }
 

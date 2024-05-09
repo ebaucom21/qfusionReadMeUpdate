@@ -342,7 +342,7 @@ void Info_CleanValue( const char *in, char *out, size_t outsize );
 //============================================
 
 constexpr const float kSoundAttenuationMaxDistance = 8000.0f;
-constexpr const float kSoundAttenuationRefDistance = 150.0f;
+constexpr const float kSoundAttenuationRefDistance = 250.0f;
 
 [[nodiscard]]
 auto calcSoundGainForDistance( float distance ) -> float;

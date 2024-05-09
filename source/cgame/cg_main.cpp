@@ -1258,11 +1258,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 		if( owner->localEffects[LOCALEFFECT_LASERBEAM] ) {
 			if( drawFromViewState->allowSounds ) {
 				const SoundSet *sound = isCurved ? cgs.media.sndLasergunWeakStop : cgs.media.sndLasergunStrongStop;
-				if( isOwnerThePov ) {
-					soundSystem->startGlobalSound( sound, CHAN_AUTO, v_volumeEffects.get() );
-				} else {
-					soundSystem->startRelativeSound( sound, ownerEntNum, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
-				}
+				soundSystem->startRelativeSound( sound, SoundSystem::WeaponAttachment, ownerEntNum, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 			}
 		}
 		owner->localEffects[LOCALEFFECT_LASERBEAM] = 0;
@@ -1369,10 +1365,9 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest, V
 			sound = owner->current.effects & EF_QUAD ? cgs.media.sndLasergunStrongQuadHum : cgs.media.sndLasergunStrongHum;
 		}
 		if( sound ) {
-			const float attenuation = isOwnerThePov ? ATTN_NONE : ATTN_STATIC;
 			// Tokens in range [1, MAX_EDICTS] are reserved for generic server-sent attachments
 			const uintptr_t loopIdentifyingToken = ownerEntNum + MAX_EDICTS;
-			soundSystem->addLoopSound( sound, ownerEntNum, loopIdentifyingToken, v_volumeEffects.get(), attenuation );
+			soundSystem->addLoopSound( sound, SoundSystem::WeaponAttachment, ownerEntNum, loopIdentifyingToken, v_volumeEffects.get(), ATTN_NORM );
 		}
 	}
 
@@ -1452,18 +1447,12 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode, ViewState 
 				attenuation = ATTN_NORM;
 			}
 
-			if( playSoundsFromViewState->isViewerEntity( entNum ) ) {
-				SoundSystem::instance()->startGlobalSound( sound, CHAN_AUTO, v_volumeEffects.get() );
-			} else {
-				SoundSystem::instance()->startRelativeSound( sound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
-			}
+			SoundSystem::instance()->startRelativeSound( sound, SoundSystem::WeaponAttachment, entNum,
+														 CHAN_AUTO, v_volumeEffects.get(), attenuation );
 			if( ( cg_entities[entNum].current.effects & EF_QUAD ) && ( weapon != WEAP_LASERGUN ) ) {
 				const SoundSet *quadSound = cgs.media.sndQuadFireSound;
-				if( playSoundsFromViewState->isViewerEntity( entNum ) ) {
-					SoundSystem::instance()->startGlobalSound( quadSound, CHAN_AUTO, v_volumeEffects.get() );
-				} else {
-					SoundSystem::instance()->startRelativeSound( quadSound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
-				}
+				SoundSystem::instance()->startRelativeSound( quadSound, SoundSystem::WeaponAttachment, entNum,
+															 CHAN_AUTO, v_volumeEffects.get(), attenuation );
 			}
 		}
 	}
@@ -1781,7 +1770,8 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 	// Isn't the latter redundant?
 	if( ownerViewState && ownerViewState->isViewerEntity( state->number ) ) {
 		if( ownerViewState->snapPlayerState.pmove.pm_type != PM_NORMAL ) {
-			playSexedSoundInPrimaryView( state->number, CHAN_AUTO, "*fall_0", v_volumePlayers.get(), state->attenuation );
+			playSexedSoundInPrimaryView( state->number, SoundSystem::FeetAttachment, CHAN_AUTO,
+										 "*fall_0", v_volumePlayers.get(), state->attenuation );
 			return;
 		}
 
@@ -1792,8 +1782,9 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 		}
 	}
 
+	// TODO: There should be two separate sounds with different attachments, possibly mergeable for optimization
 	if( parm > 10 ) {
-		playSexedSoundInPrimaryView( state->number, CHAN_PAIN, "*fall_2", v_volumePlayers.get(), state->attenuation );
+		playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_PAIN, "*fall_2", v_volumePlayers.get(), state->attenuation );
 		switch( (int)brandom( 0, 3 ) ) {
 			case 0:
 				CG_PModel_AddAnimation( state->number, 0, TORSO_PAIN1, 0, EVENT_CHANNEL );
@@ -1807,9 +1798,9 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 				break;
 		}
 	} else if( parm > 0 ) {
-		playSexedSoundInPrimaryView( state->number, CHAN_PAIN, "*fall_1", v_volumePlayers.get(), state->attenuation );
+		playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_PAIN, "*fall_1", v_volumePlayers.get(), state->attenuation );
 	} else {
-		playSexedSoundInPrimaryView( state->number, CHAN_PAIN, "*fall_0", v_volumePlayers.get(), state->attenuation );
+		playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_PAIN, "*fall_0", v_volumePlayers.get(), state->attenuation );
 	}
 
 	// smoke effect
@@ -1841,14 +1832,11 @@ void CG_Event_Pain( entity_state_t *state, int parm ) {
 	if( parm == PAIN_WARSHELL ) {
 		// TODO: What if it's not fullscreen?
 		if( getPrimaryViewState()->isViewerEntity( state->number ) ) {
-			SoundSystem::instance()->startGlobalSound( cgs.media.sndShellHit, CHAN_PAIN,
-													   v_volumePlayers.get() );
-		} else {
-			SoundSystem::instance()->startRelativeSound( cgs.media.sndShellHit, state->number, CHAN_PAIN,
-														 v_volumePlayers.get(), state->attenuation );
+			SoundSystem::instance()->startRelativeSound( cgs.media.sndShellHit, SoundSystem::HeadAttachment,
+														 state->number, CHAN_PAIN, v_volumePlayers.get(), state->attenuation );
 		}
 	} else {
-		playSexedSoundInPrimaryView( state->number, CHAN_PAIN, va( S_PLAYER_PAINS, 25 * parm ), v_volumePlayers.get(), state->attenuation );
+		playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_PAIN, va( S_PLAYER_PAINS, 25 * parm ), v_volumePlayers.get(), state->attenuation );
 	}
 
 	switch( (int)brandom( 0, 3 ) ) {
@@ -1866,7 +1854,8 @@ void CG_Event_Pain( entity_state_t *state, int parm ) {
 }
 
 void CG_Event_Die( entity_state_t *state, int parm ) {
-	playSexedSoundInPrimaryView( state->number, CHAN_PAIN, S_PLAYER_DEATH, v_volumePlayers.get(), state->attenuation );
+	// TODO: What attachment tag should we use
+	playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_PAIN, S_PLAYER_DEATH, v_volumePlayers.get(), state->attenuation );
 
 	switch( parm ) {
 		case 0:
@@ -1888,23 +1877,27 @@ void CG_Event_Dash( entity_state_t *state, int parm ) {
 			break;
 		case 0: // dash front
 			CG_PModel_AddAnimation( state->number, LEGS_DASH, 0, 0, EVENT_CHANNEL );
-			playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
-						   v_volumePlayers.get(), state->attenuation );
+			playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_BODY,
+										 va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+										 v_volumePlayers.get(), state->attenuation );
 			break;
 		case 1: // dash left
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_LEFT, 0, 0, EVENT_CHANNEL );
-			playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
-						   v_volumePlayers.get(), state->attenuation );
+			playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_BODY,
+										 va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+										 v_volumePlayers.get(), state->attenuation );
 			break;
 		case 2: // dash right
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_RIGHT, 0, 0, EVENT_CHANNEL );
-			playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
-						   v_volumePlayers.get(), state->attenuation );
+			playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_BODY,
+										 va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+										 v_volumePlayers.get(), state->attenuation );
 			break;
 		case 3: // dash back
 			CG_PModel_AddAnimation( state->number, LEGS_DASH_BACK, 0, 0, EVENT_CHANNEL );
-			playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
-						   v_volumePlayers.get(), state->attenuation );
+			playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_BODY,
+										 va( S_PLAYER_DASH_1_to_2, ( rand() & 1 ) + 1 ),
+										 v_volumePlayers.get(), state->attenuation );
 			break;
 	}
 
@@ -1932,14 +1925,13 @@ void CG_Event_WallJump( entity_state_t *state, int parm, int ev ) {
 	}
 
 	if( ev == EV_WALLJUMP_FAILED ) {
-		if( getPrimaryViewState()->isViewerEntity( state->number ) ) {
-			SoundSystem::instance()->startGlobalSound( cgs.media.sndWalljumpFailed, CHAN_BODY, v_volumeEffects.get() );
-		} else {
-			SoundSystem::instance()->startRelativeSound( cgs.media.sndWalljumpFailed, state->number, CHAN_BODY, v_volumeEffects.get(), ATTN_NORM );
-		}
+		SoundSystem::instance()->startRelativeSound( cgs.media.sndWalljumpFailed, SoundSystem::FeetAttachment,
+													 state->number, CHAN_BODY, v_volumeEffects.get(), ATTN_NORM );
 	} else {
-		playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_WALLJUMP_1_to_2, ( rand() & 1 ) + 1 ),
-					   v_volumePlayers.get(), state->attenuation );
+		// TODO: Voice and thud should be split and should use different attachments (mergeable for optimization)
+		playSexedSoundInPrimaryView( state->number, SoundSystem::FeetAttachment, CHAN_BODY,
+									 va( S_PLAYER_WALLJUMP_1_to_2, ( rand() & 1 ) + 1 ),
+									 v_volumePlayers.get(), state->attenuation );
 
 		// smoke effect
 		vec3_t pos;
@@ -1950,8 +1942,9 @@ void CG_Event_WallJump( entity_state_t *state, int parm, int ev ) {
 }
 
 void CG_Event_DoubleJump( entity_state_t *state, int parm ) {
-	playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-				   v_volumePlayers.get(), state->attenuation );
+	playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_BODY,
+								 va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+								 v_volumePlayers.get(), state->attenuation );
 }
 
 void CG_Event_Jump( entity_state_t *state, int parm ) {
@@ -1969,8 +1962,9 @@ void CG_Event_Jump( entity_state_t *state, int parm ) {
 	float xyspeedcheck = Q_Sqrt( cent->animVelocity[0] * cent->animVelocity[0] + cent->animVelocity[1] * cent->animVelocity[1] );
 	if( xyspeedcheck < 100 ) { // the player is jumping on the same place, not running
 		CG_PModel_AddAnimation( state->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
-		playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-					   v_volumePlayers.get(), attenuation );
+		playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_BODY,
+									 va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+									 v_volumePlayers.get(), attenuation );
 	} else {
 		vec3_t movedir;
 		mat3_t viewaxis;
@@ -1987,17 +1981,20 @@ void CG_Event_Jump( entity_state_t *state, int parm ) {
 			cent->jumpedLeft = !cent->jumpedLeft;
 			if( !cent->jumpedLeft ) {
 				CG_PModel_AddAnimation( state->number, LEGS_JUMP_LEG2, 0, 0, EVENT_CHANNEL );
-				playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-							   v_volumePlayers.get(), attenuation );
+				playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_BODY,
+											 va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+											 v_volumePlayers.get(), attenuation );
 			} else {
 				CG_PModel_AddAnimation( state->number, LEGS_JUMP_LEG1, 0, 0, EVENT_CHANNEL );
-				playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-							   v_volumePlayers.get(), attenuation );
+				playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_BODY,
+											 va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+											 v_volumePlayers.get(), attenuation );
 			}
 		} else {
 			CG_PModel_AddAnimation( state->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
-			playSexedSoundInPrimaryView( state->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
-						   v_volumePlayers.get(), attenuation );
+			playSexedSoundInPrimaryView( state->number, SoundSystem::HeadAttachment, CHAN_BODY,
+										 va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ),
+										 v_volumePlayers.get(), attenuation );
 		}
 	}
 }
@@ -2027,11 +2024,8 @@ static void handleWeaponActivateEvent( entity_state_t *ent, int parm, bool predi
 
 	const ViewState *primaryViewState = getPrimaryViewState();
 	if( primaryViewState->allowSounds ) {
-		if( viewer && ownerViewState == primaryViewState ) {
-			SoundSystem::instance()->startGlobalSound( cgs.media.sndWeaponUp, CHAN_AUTO, v_volumeEffects.get() );
-		} else {
-			SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUp, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
-		}
+		SoundSystem::instance()->startRelativeSound( cgs.media.sndWeaponUp, SoundSystem::WeaponAttachment,
+													 ent->number, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 	}
 }
 
@@ -2140,24 +2134,24 @@ static void handleFireBulletEvent( entity_state_t *ent, int parm, bool predicted
 static void handleNoAmmoClickEvent( entity_state_t *ent, int parm, bool predicted ) {
 	ViewState *const primaryViewState = getPrimaryViewState();
 	if( primaryViewState->allowSounds ) {
-		if( primaryViewState->isViewerEntity( ent->number ) ) {
-			SoundSystem::instance()->startGlobalSound( cgs.media.sndWeaponUpNoAmmo, CHAN_ITEM, v_volumeEffects.get() );
-		} else {
-			SoundSystem::instance()->startFixedSound( cgs.media.sndWeaponUpNoAmmo, ent->origin, CHAN_ITEM, v_volumeEffects.get(), ATTN_IDLE );
-		}
+		SoundSystem::instance()->startRelativeSound( cgs.media.sndWeaponUpNoAmmo, SoundSystem::WeaponAttachment,
+													 ent->number, CHAN_ITEM, v_volumeEffects.get(), ATTN_IDLE );
 	}
 }
 
 static void handleJumppadEvent( entity_state_t *ent, bool predicted ) {
-	playSexedSoundInPrimaryView( ent->number, CHAN_BODY, va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ), v_volumePlayers.get(), ent->attenuation );
+	playSexedSoundInPrimaryView( ent->number, SoundSystem::HeadAttachment, CHAN_BODY,
+								 va( S_PLAYER_JUMP_1_to_2, ( rand() & 1 ) + 1 ), v_volumePlayers.get(), ent->attenuation );
 	CG_PModel_AddAnimation( ent->number, LEGS_JUMP_NEUTRAL, 0, 0, EVENT_CHANNEL );
 }
 
 static void handleSexedSoundEvent( entity_state_t *ent, int parm, bool predicted ) {
 	if( parm == 2 ) {
-		playSexedSoundInPrimaryView( ent->number, CHAN_AUTO, S_PLAYER_GASP, v_volumePlayers.get(), ent->attenuation );
+		playSexedSoundInPrimaryView( ent->number, SoundSystem::HeadAttachment,
+									 CHAN_AUTO, S_PLAYER_GASP, v_volumePlayers.get(), ent->attenuation );
 	} else if( parm == 1 ) {
-		playSexedSoundInPrimaryView( ent->number, CHAN_AUTO, S_PLAYER_DROWN, v_volumePlayers.get(), ent->attenuation );
+		playSexedSoundInPrimaryView( ent->number, SoundSystem::HeadAttachment,
+									 CHAN_AUTO, S_PLAYER_DROWN, v_volumePlayers.get(), ent->attenuation );
 	}
 }
 
@@ -2214,8 +2208,7 @@ static void handleBulletSparksEvent( entity_state_t *ent, int parm, bool predict
 static void handleItemRespawnEvent( entity_state_t *ent, int parm, bool predicted ) {
 	cg_entities[ent->number].respawnTime = cg.time;
 	if( getPrimaryViewState()->allowSounds ) {
-		SoundSystem::instance()->startRelativeSound( cgs.media.sndItemRespawn, ent->number, CHAN_AUTO,
-													 v_volumeEffects.get(), ATTN_IDLE );
+		SoundSystem::instance()->startFixedSound( cgs.media.sndItemRespawn, ent->origin, CHAN_AUTO, v_volumeEffects.get(), ATTN_IDLE );
 	}
 }
 
@@ -2368,8 +2361,9 @@ static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted ) {
 
 static void handleMoverEvent( entity_state_t *ent, int parm ) {
 	if( getPrimaryViewState()->allowSounds ) {
-		vec3_t so;
-		CG_GetEntitySpatilization( ent->number, so, NULL );
+		[[maybe_unused]] vec3_t so, velocity;
+		[[maybe_unused]] mat3_t axis;
+		CG_GetEntitySpatilization( ent->number, so, velocity, axis );
 		SoundSystem::instance()->startFixedSound( cgs.soundPrecache[parm], so, CHAN_AUTO, v_volumeEffects.get(), ATTN_STATIC );
 	}
 }
@@ -2419,7 +2413,8 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 		case EV_SPARKS: return handleSparksEvent( ent, parm, predicted );
 		case EV_BULLET_SPARKS: return handleBulletSparksEvent( ent, parm, predicted );
 		case EV_LASER_SPARKS: return;
-		case EV_GESTURE: return playSexedSoundInPrimaryView( ent->number, CHAN_BODY, "*taunt", v_volumePlayers.get(), ent->attenuation );
+		case EV_GESTURE: return playSexedSoundInPrimaryView( ent->number, SoundSystem::HeadAttachment, CHAN_BODY,
+															 "*taunt", v_volumePlayers.get(), ent->attenuation );
 		case EV_DROP: return CG_PModel_AddAnimation( ent->number, 0, TORSO_DROP, 0, EVENT_CHANNEL );
 		case EV_SPOG: return CG_SmallPileOfGibs( ent->origin, parm, ent->origin2, ent->team );
 		case EV_ITEM_RESPAWN: return handleItemRespawnEvent( ent, parm, predicted );
@@ -2598,7 +2593,8 @@ static void CG_FirePlayerStateEvents( ViewState *playerViewState ) {
 			case PSEV_INDEXEDSOUND:
 				if( const SoundSet *sound = cgs.soundPrecache[parm] ) {
 					if( allowPlayingSounds ) {
-						SoundSystem::instance()->startGlobalSound( sound, CHAN_AUTO, v_volumeEffects.get() );
+						SoundSystem::instance()->startRelativeSound( sound, SoundSystem::OriginAttachment,
+																	 playerViewState->view.POVent, CHAN_AUTO, v_volumeEffects.get(), ATTN_NORM );
 					}
 				}
 				break;
@@ -4320,7 +4316,7 @@ void CG_SoundEntityNewState( centity_t *cent ) {
 
 	if( attenuation == ATTN_NONE ) {
 		if( cgs.soundPrecache[soundindex] && primaryViewState->allowSounds ) {
-			SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[soundindex], channel & ~CHAN_FIXED, 1.0f );
+			//SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[soundindex], channel & ~CHAN_FIXED, 1.0f );
 		}
 		return;
 	}
@@ -4344,7 +4340,8 @@ void CG_SoundEntityNewState( centity_t *cent ) {
 		if( owner ) {
 			auto string = cgs.configStrings.getSound( soundindex );
 			if( string && string->startsWith( '*' ) ) {
-				playSexedSoundInPrimaryView( owner, channel | ( fixed ? CHAN_FIXED : 0 ), string->data(), 1.0f, attenuation );
+				playSexedSoundInPrimaryView( owner, SoundSystem::OriginAttachment,
+											 channel | ( fixed ? CHAN_FIXED : 0 ), string->data(), 1.0f, attenuation );
 			}
 		}
 		return;
@@ -4353,10 +4350,8 @@ void CG_SoundEntityNewState( centity_t *cent ) {
 	if( primaryViewState->allowSounds ) {
 		if( fixed ) {
 			SoundSystem::instance()->startFixedSound( cgs.soundPrecache[soundindex], cent->current.origin, channel, 1.0f, attenuation );
-		} else if( primaryViewState->isViewerEntity( owner ) ) {
-			SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[soundindex], channel, 1.0f );
 		} else {
-			SoundSystem::instance()->startRelativeSound( cgs.soundPrecache[soundindex], owner, channel, 1.0f, attenuation );
+			SoundSystem::instance()->startRelativeSound( cgs.soundPrecache[soundindex], SoundSystem::OriginAttachment, owner, channel, 1.0f, attenuation );
 		}
 	}
 }
@@ -4367,7 +4362,7 @@ static void CG_EntityLoopSound( entity_state_t *state, float attenuation, const 
 		const int entNum                     = state->number;
 		const uintptr_t loopIdentifyingToken = state->number;
 
-		SoundSystem::instance()->addLoopSound( sound, entNum, loopIdentifyingToken, v_volumeEffects.get(), attenuation );
+		SoundSystem::instance()->addLoopSound( sound, SoundSystem::OriginAttachment, entNum, loopIdentifyingToken, v_volumeEffects.get(), attenuation );
 	}
 }
 
@@ -4692,8 +4687,9 @@ void CG_LerpEntities( ViewState *drawFromViewState ) {
 
 		if( spatialize ) {
 			vec3_t origin, velocity;
-			CG_GetEntitySpatilization( number, origin, velocity );
-			SoundSystem::instance()->setEntitySpatialParams( number, origin, velocity );
+			mat3_t axis;
+			CG_GetEntitySpatilization( number, origin, velocity, axis );
+			SoundSystem::instance()->setEntitySpatialParams( number, origin, velocity, axis );
 		}
 	}
 }
@@ -4816,25 +4812,13 @@ void CG_UpdateEntities( void ) {
 	CG_SortItemTimers();
 }
 
-void CG_GetEntitySpatilization( int entNum, vec3_t origin, vec3_t velocity ) {
+void CG_GetEntitySpatilization( int entNum, float *origin, float *velocity, float *axis ) {
 	centity_t *cent;
 	const cmodel_s *cmodel;
 	vec3_t mins, maxs;
 
-	if( entNum < -1 || entNum >= MAX_EDICTS ) {
+	if( entNum < 0 || entNum >= MAX_EDICTS ) {
 		CG_Error( "CG_GetEntitySoundOrigin: bad entnum" );
-		return;
-	}
-
-	// hack for client side floatcam
-	if( entNum == -1 ) {
-		const ViewState *const viewState = getOurClientViewState();
-		if( origin != NULL ) {
-			VectorCopy( viewState->snapPlayerState.pmove.origin, origin );
-		}
-		if( velocity != NULL ) {
-			VectorCopy( viewState->snapPlayerState.pmove.velocity, velocity );
-		}
 		return;
 	}
 
@@ -4842,25 +4826,19 @@ void CG_GetEntitySpatilization( int entNum, vec3_t origin, vec3_t velocity ) {
 
 	// normal
 	if( cent->current.solid != SOLID_BMODEL ) {
-		if( origin != NULL ) {
-			VectorCopy( cent->ent.origin, origin );
-		}
-		if( velocity != NULL ) {
-			VectorCopy( cent->velocity, velocity );
-		}
+		VectorCopy( cent->ent.origin, origin );
+		VectorCopy( cent->velocity, velocity );
+		VectorCopy( cent->ent.axis, axis );
 		return;
 	}
 
 	// bmodel
-	if( origin != NULL ) {
-		cmodel = CG_InlineModel( cent->current.modelindex );
-		CG_InlineModelBounds( cmodel, mins, maxs );
-		VectorAdd( maxs, mins, origin );
-		VectorMA( cent->ent.origin, 0.5f, origin, origin );
-	}
-	if( velocity != NULL ) {
-		VectorCopy( cent->velocity, velocity );
-	}
+	cmodel = CG_InlineModel( cent->current.modelindex );
+	CG_InlineModelBounds( cmodel, mins, maxs );
+	VectorAdd( maxs, mins, origin );
+	VectorMA( cent->ent.origin, 0.5f, origin, origin );
+	VectorCopy( cent->velocity, velocity );
+	VectorCopy( cent->ent.axis, axis );
 }
 
 /*

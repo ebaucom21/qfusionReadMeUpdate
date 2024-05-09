@@ -320,17 +320,17 @@ void ENV_UpdateRelativeSoundsSpatialization( const vec3_t origin, const vec3_t v
 	}
 }
 
-static void ENV_UpdatePanning( int64_t millisNow, const vec3_t origin, const mat3_t axes ) {
+static void ENV_UpdatePanning( int64_t millisNow, int listenerEntNum, const vec3_t origin, const mat3_t axes ) {
 	for( src_t *src = srclist, *end = srclist + src_count; src != end; ++src ) {
 		if( src->isActive ) {
 			if( Effect *effect = src->envUpdateState.effect ) {
-				effect->UpdatePanning( src, origin, axes );
+				effect->UpdatePanning( src, listenerEntNum, origin, axes );
 			}
 		}
 	}
 }
 
-void ENV_UpdateListener( const vec3_t origin, const vec3_t velocity, const mat3_t axes ) {
+void ENV_UpdateListener( int listenerEntNum, const vec3_t origin, const vec3_t velocity, const mat3_t axes ) {
 	vec3_t testedOrigin;
 	bool needsForcedUpdate = false;
 	bool isListenerInLiquid;
@@ -362,6 +362,7 @@ void ENV_UpdateListener( const vec3_t origin, const vec3_t velocity, const mat3_
 
 	VectorCopy( origin, listenerProps.origin );
 	VectorCopy( velocity, listenerProps.velocity );
+	listenerProps.entNum     = listenerEntNum;
 	listenerProps.isInLiquid = isListenerInLiquid;
 
 	// Sanitize the possibly modified cvar before the environment update
@@ -380,7 +381,7 @@ void ENV_UpdateListener( const vec3_t origin, const vec3_t velocity, const mat3_
 	ENV_ProcessUpdatesPriorityQueue();
 
 	// Panning info is dependent of environment one, make sure it is executed last
-	ENV_UpdatePanning( Sys_Milliseconds(), testedOrigin, axes );
+	ENV_UpdatePanning( Sys_Milliseconds(), listenerEntNum, testedOrigin, axes );
 }
 
 static void ENV_InterpolateEnvironmentProps( src_t *src, int64_t millisNow ) {

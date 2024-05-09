@@ -121,25 +121,14 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	alEffectf( src->effect, AL_EAXREVERB_DECAY_HFRATIO, this->reverbProps.decayHfRatio );
 	alEffectf( src->effect, AL_EAXREVERB_DECAY_LFRATIO, this->reverbProps.decayLfRatio );
 
-	const float globalVolumeFrac = clampSourceGain( s_volume->value );
-	assert( globalVolumeFrac >= 0.0f && globalVolumeFrac <= 1.0f );
-
 	const float distanceGainFrac = calcSoundGainForDistance( DistanceFast( src->origin, listenerProps.origin ) );
 	assert( distanceGainFrac >= 0.0f && distanceGainFrac <= 1.0f );
 
-	// The volume var is not the only thing that affects the analog output.
-	// A user could keep the var value small and raise the analog amplifier path gain.
-	// Keep the difference subtle.
-
-	// Attenuate nearby effects stronger for louder global volume
-	const float distanceDependentAttenuation   = 1.0f - ( 0.075f * ( 1.0f + globalVolumeFrac ) * distanceGainFrac );
-	// Attenuate all effects stronger for louder global value
-	const float distanceIndependentAttenuation = 1.0f - 0.1f * globalVolumeFrac;
-
-	const float effectGain = this->reverbProps.gain * distanceDependentAttenuation * distanceIndependentAttenuation;
+	// Make the effect less pronounced on close distance
+	const float effectGain = this->reverbProps.gain * ( 1.0f - 0.1f * distanceGainFrac );
 
 	alEffectf( src->effect, AL_EAXREVERB_GAIN, effectGain );
-	alEffectf( src->effect, AL_EAXREVERB_GAINHF, this->reverbProps.gainHf );
+	alEffectf( src->effect, AL_EAXREVERB_GAINHF, this->reverbProps.gainHf * ( 1.0f - 0.5f * secondaryRaysObstruction ) );
 	alEffectf( src->effect, AL_EAXREVERB_GAINLF, this->reverbProps.gainLf );
 
 	alEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_GAIN, this->reverbProps.reflectionsGain );
@@ -172,13 +161,13 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 
 	// Strongly suppress the dry path on obstruction.
 	// Note: we do not touch the entire source gain.
-	alFilterf( src->directFilter, AL_LOWPASS_GAIN, 1.0f - 0.8f * obstructionFrac );
+	alFilterf( src->directFilter, AL_LOWPASS_GAIN, 1.0f - 0.7f * obstructionFrac );
 
 	// There's nothing special with looping sources, their current sfx/sounds happen to benefit from that
 	if( src->isLooping ) {
 		alFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f - obstructionFrac );
 	} else {
-		alFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f );
+		alFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f - 0.5f * obstructionFrac );
 	}
 
 	AttachEffect( src );
@@ -228,12 +217,16 @@ void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
 	interpolateReverbProps( &that->reverbProps, lerpFrac, &this->reverbProps, &this->reverbProps );
 }
 
-void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {
+void EaxReverbEffect::UpdatePanning( src_s *src, int listenerEntNum, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {
 	// "If there is an active EaxReverbEffect, setting source origin/velocity is delegated to it".
-	UpdateDelegatedSpatialization( src, listenerOrigin );
+	UpdateDelegatedSpatialization( src, listenerEntNum, listenerOrigin );
 
-	// Disable reverb panning for non-listener-related sounds for now
+	// Disable reverb panning for local sounds
 	if( src->attenuation != ATTN_NONE ) {
+		return;
+	}
+	// Disable panning for listener sounds except for weapon sounds
+	if( listenerEntNum > 0 && src->entNum == listenerEntNum && src->attachmentTag != SoundSystem::WeaponAttachment ) {
 		return;
 	}
 
@@ -300,7 +293,7 @@ void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, co
 	alEffectfv( src->effect, AL_EAXREVERB_LATE_REVERB_PAN, latePan );
 }
 
-void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, const vec3_t listenerOrigin ) {
+void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, int listenerEntNum, const vec3_t listenerOrigin ) {
 	if( src->attenuation == ATTN_NONE ) {
 		// It MUST already be a relative sound
 #ifndef PUBLIC_BUILD
@@ -313,40 +306,51 @@ void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, const ve
 
 	alSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
 
+	float sourcePitchScale    = 1.0f;
 	const float *sourceOrigin = src->origin;
-	// Setting effect panning vectors is not sufficient for "realistic" obstruction,
-	// as the dry path is still propagates like if there were no obstacles and walls.
-	// We try modifying the source origin as well to simulate sound propagation.
-	// These conditions must be met:
-	// 1) the direct path is fully obstructed
-	// 2) there is a definite propagation path
-	if( directObstruction == 1.0f ) {
-		// Provide a fake origin for the source that is at the same distance
-		// as the real origin and is aligned to the sound propagation "window"
-		// TODO: Precache at least the listener leaf for this sound backend update frame
-		if( const int listenerLeaf = S_PointLeafNum( listenerOrigin ) ) {
-			if( const int srcLeaf = S_PointLeafNum( src->origin ) ) {
-				vec3_t dir;
-				float distance;
-				if( PropagationTable::Instance()->GetIndirectPathProps( srcLeaf, listenerLeaf, dir, &distance ) ) {
-					// The table stores distance using this granularity, so it might be zero
-					// for very close leaves. Adding an extra distance won't harm
-					// (even if the indirect path length is already larger than the straight euclidean distance).
-					distance += 256.0f;
-					// Feels better with this multiplier
-					distance *= 1.15f;
-					// Negate the vector scale multiplier as the dir is an sound influx dir to the listener
-					// and we want to shift the origin along the line of the dir but from the listener
-					VectorScale( dir, -distance, tmpSourceOrigin );
-					// Shift the listener origin in `dir` direction for `distance` units
-					VectorAdd( listenerOrigin, tmpSourceOrigin, tmpSourceOrigin );
-					// Use the shifted origin as a fake position in the world-space for the source
-					sourceOrigin = tmpSourceOrigin;
+	// Don't do that for own sounds
+	if( listenerEntNum <= 0 || listenerEntNum != src->entNum ) {
+		// Setting effect panning vectors is not sufficient for "realistic" obstruction,
+		// as the dry path is still propagates like if there were no obstacles and walls.
+		// We try modifying the source origin as well to simulate sound propagation.
+		// These conditions must be met:
+		// 1) the direct path is fully obstructed
+		// 2) there is a definite propagation path
+		if( directObstruction == 1.0f ) {
+			sourcePitchScale = 0.96f;
+			// Provide a fake origin for the source that is at the same distance
+			// as the real origin and is aligned to the sound propagation "window"
+			// TODO: Precache at least the listener leaf for this sound backend update frame
+			if( const int listenerLeaf = S_PointLeafNum( listenerOrigin ) ) {
+				if( const int srcLeaf = S_PointLeafNum( src->origin ) ) {
+					vec3_t dir;
+					float distance;
+					if( PropagationTable::Instance()->GetIndirectPathProps( srcLeaf, listenerLeaf, dir, &distance ) ) {
+						// The table stores distance using this granularity, so it might be zero
+						// for very close leaves. Adding an extra distance won't harm
+						// (even if the indirect path length is already larger than the straight euclidean distance).
+						distance += 256.0f;
+						// Feels better with this multiplier
+						distance *= 1.15f;
+						// Negate the vector scale multiplier as the dir is an sound influx dir to the listener
+						// and we want to shift the origin along the line of the dir but from the listener
+						VectorScale( dir, -distance, tmpSourceOrigin );
+						// Shift the listener origin in `dir` direction for `distance` units
+						VectorAdd( listenerOrigin, tmpSourceOrigin, tmpSourceOrigin );
+						// Use the shifted origin as a fake position in the world-space for the source
+						sourceOrigin = tmpSourceOrigin;
+						assert( sourcePitchScale > 0.0f && sourcePitchScale < 1.0f );
+						sourcePitchScale += ( 1.0f - sourcePitchScale ) * calcSoundGainForDistance( distance );
+						if( std::fabs( sourcePitchScale - 1.0f ) < 0.005f ) {
+							sourcePitchScale = 1.0f;
+						}
+					}
 				}
 			}
 		}
 	}
 
+	alSourcef( src->source, AL_PITCH, src->chosenPitch * sourcePitchScale );
 	alSourcefv( src->source, AL_POSITION, sourceOrigin );
 	// The velocity is kept untouched for now.
 	alSourcefv( src->source, AL_VELOCITY, src->velocity );

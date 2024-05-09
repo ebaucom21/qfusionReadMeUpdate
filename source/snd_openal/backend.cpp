@@ -204,7 +204,7 @@ static bool S_Init( void *hwnd, int maxEntities, bool verbose ) {
 	return true;
 }
 
-static void S_SetListener( const vec3_t origin, const vec3_t velocity, const mat3_t axis ) {
+static void S_SetListener( int entNum, const vec3_t origin, const vec3_t velocity, const mat3_t axis ) {
 	float orientation[6];
 
 	orientation[0] = axis[AXIS_FORWARD + 0];
@@ -218,7 +218,7 @@ static void S_SetListener( const vec3_t origin, const vec3_t velocity, const mat
 	alListenerfv( AL_VELOCITY, velocity );
 	alListenerfv( AL_ORIENTATION, orientation );
 
-	ENV_UpdateListener( origin, velocity, axis );
+	ENV_UpdateListener( entNum, origin, velocity, axis );
 }
 
 namespace wsw::snd {
@@ -660,12 +660,12 @@ void Backend::endRegistration() {
 
 void Backend::setEntitySpatialParams( const EntitySpatialParamsBatch &batch ) {
 	for( unsigned i = 0; i < batch.count; ++i ) {
-		S_SetEntitySpatialization( batch.entNums[i], batch.origins[i], batch.velocities[i] );
+		S_SetEntitySpatialization( batch.entNums[i], batch.origins[i], batch.velocities[i], batch.axes[i] );
 	}
 }
 
-void Backend::setListener( const Vec3 &origin, const Vec3 &velocity, const std::array<Vec3, 3> &axis ) {
-	S_SetListener( origin.Data(), velocity.Data(), (const float *)axis.data() );
+void Backend::setListener( int entNum, const Vec3 &origin, const Vec3 &velocity, const std::array<Vec3, 3> &axis ) {
+	S_SetListener( entNum, origin.Data(), velocity.Data(), (const float *)axis.data() );
 }
 
 void Backend::startLocalSound( const SoundSet *sound, float volume ) {
@@ -680,21 +680,15 @@ void Backend::startFixedSound( const SoundSet *sound, const Vec3 &origin, int ch
 	}
 }
 
-void Backend::startGlobalSound( const SoundSet *sound, int channel, float volume ) {
+void Backend::startRelativeSound( const SoundSet *sound, SoundSystem::AttachmentTag attachmentTag, int entNum, int channel, float volume, float attenuation ) {
 	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
-		S_StartGlobalSound( sound, *bufferAndIndex, getPitchForPlayback( sound ), channel, volume );
+		S_StartRelativeSound( sound, attachmentTag, *bufferAndIndex, getPitchForPlayback( sound ), entNum, channel, volume, attenuation );
 	}
 }
 
-void Backend::startRelativeSound( const SoundSet *sound, int entNum, int channel, float volume, float attenuation ) {
+void Backend::addLoopSound( const SoundSet *sound, SoundSystem::AttachmentTag attachmentTag, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) {
 	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
-		S_StartRelativeSound( sound, *bufferAndIndex, getPitchForPlayback( sound ), entNum, channel, volume, attenuation );
-	}
-}
-
-void Backend::addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) {
-	if( const std::optional<std::pair<ALuint, unsigned>> bufferAndIndex = getBufferForPlayback( sound ) ) {
-		S_AddLoopSound( sound, *bufferAndIndex, getPitchForPlayback( sound ), entNum, identifyingToken, volume, attenuation );
+		S_AddLoopSound( sound, attachmentTag, *bufferAndIndex, getPitchForPlayback( sound ), entNum, identifyingToken, volume, attenuation );
 	}
 }
 

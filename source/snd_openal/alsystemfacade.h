@@ -31,24 +31,23 @@ public:
 
 	void clear() override;
 
-	void updateListener( const float *origin, const float *velocity, const mat3_t axis ) override;
+	void updateListener( int entNum, const float *origin, const float *velocity, const mat3_t axis ) override;
 
 	void activate( bool isActive ) override;
 
 	void processFrameUpdates() override;
 
-	void setEntitySpatialParams( int entNum, const float *origin, const float *velocity ) override;
+	void setEntitySpatialParams( int entNum, const float *origin, const float *velocity, const float *axis ) override;
 
 	[[nodiscard]]
 	auto registerSound( const SoundSetProps &props ) -> const SoundSet * override;
 
 	void startFixedSound( const SoundSet *sfx, const float *origin, int channel, float volume, float attenuation ) override;
-	void startRelativeSound( const SoundSet *sfx, int entNum, int channel, float volume, float attenuation ) override;
-	void startGlobalSound( const SoundSet *sfx, int channel, float volume ) override;
+	void startRelativeSound( const SoundSet *sfx, SoundSystem::AttachmentTag, int entNum, int channel, float volume, float attenuation ) override;
 	void startLocalSound( const char *name, float volume ) override;
 	void startLocalSound( const SoundSet *sfx, float volume ) override;
 
-	void addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) override;
+	void addLoopSound( const SoundSet *sound, SoundSystem::AttachmentTag attachmentTag, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) override;
 
 	void startBackgroundTrack( const char *intro, const char *loop, int mode ) override;
 	void stopBackgroundTrack() override;

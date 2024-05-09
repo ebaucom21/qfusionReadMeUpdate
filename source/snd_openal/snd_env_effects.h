@@ -22,7 +22,7 @@ public:
 		return sourceQualityHint > 0;
 	};
 
-	virtual void UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {}
+	virtual void UpdatePanning( src_s *src, int listenerEntNum, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {}
 
 	virtual ~Effect() = default;
 
@@ -76,7 +76,7 @@ struct EfxPresetEntry;
 class EaxReverbEffect final: public Effect {
 	friend class ReverbEffectSampler;
 
-	void UpdateDelegatedSpatialization( struct src_s *src, const vec3_t listenerOrigin );
+	void UpdateDelegatedSpatialization( struct src_s *src, int listenerEntNum, const vec3_t listenerOrigin );
 
 	vec3_t tmpSourceOrigin { 0, 0, 0 };
 public:
@@ -99,7 +99,7 @@ public:
 	void BindOrUpdate( struct src_s *src ) override;
 	void InterpolateProps( const Effect *oldOne, int timeDelta ) override;
 
-	void UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) override;
+	void UpdatePanning( src_s *src, int listenerEntNum, const vec3_t listenerOrigin, const mat3_t listenerAxes ) override;
 };
 
 #endif

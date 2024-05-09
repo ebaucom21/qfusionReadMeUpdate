@@ -295,6 +295,33 @@ void callMethodOverPipe( qbufPipe_t *pipe, HandlerObject *handlerObject, Handler
 	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, handlerObject, handlerMethod, arg1, arg2, arg3, arg4, arg5 );
 }
 
+template <typename HandlerObject, typename HandlerMethod, typename Arg1, typename Arg2, typename Arg3, typename Arg4, typename Arg5, typename Arg6>
+void callMethodOverPipe( qbufPipe_t *pipe, HandlerObject *handlerObject, HandlerMethod handlerMethod,
+						 const Arg1 &arg1, const Arg2 &arg2, const Arg3 &arg3, const Arg4 &arg4, const Arg5 &arg5, const Arg6 &arg6 ) {
+	struct CmdClosure final : public PipeCmd {
+		HandlerObject *m_object;
+		HandlerMethod m_method;
+		Arg1 m_arg1;
+		Arg2 m_arg2;
+		Arg3 m_arg3;
+		Arg4 m_arg4;
+		Arg5 m_arg5;
+		Arg6 m_arg6;
+
+		CmdClosure( HandlerObject *object, HandlerMethod method, const Arg1 &arg1, const Arg2 &arg2,
+					const Arg3 &arg3, const Arg4 &arg4, const Arg5 &arg5, const Arg6 &arg6 )
+			: m_object( object ), m_method( method ), m_arg1( arg1 ), m_arg2( arg2 ), m_arg3( arg3 ), m_arg4( arg4 ), m_arg5( arg5 ), m_arg6( arg6 ) {}
+
+		[[nodiscard]]
+		auto exec() -> unsigned {
+			( m_object->*m_method )( m_arg1, m_arg2, m_arg3, m_arg4, m_arg5, m_arg6 );
+			return sizeWithPadding<CmdClosure>();
+		}
+	};
+
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, handlerObject, handlerMethod, arg1, arg2, arg3, arg4, arg5, arg6 );
+}
+
 #undef WRITE_CLOSURE_WITH_ARGS_TO_PIPE
 
 #endif

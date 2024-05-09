@@ -34,6 +34,7 @@ static bool src_inited = false;
 typedef struct sentity_s {
 	vec3_t origin;
 	vec3_t velocity;
+	mat3_t axis;
 } sentity_t;
 static sentity_t *entlist = NULL; //[MAX_EDICTS];
 static int max_ents;
@@ -54,7 +55,8 @@ static void S_AdjustGain( src_t *src ) {
 /*
 * source_setup
 */
-static void source_setup( src_t *src, const SoundSet *sfx, std::pair<ALuint, unsigned> chosenBufferAndIndex, float chosenPitch, int priority, int entNum, int channel, float fvol, float attenuation ) {
+static void source_setup( src_t *src, const SoundSet *sfx, std::pair<ALuint, unsigned> chosenBufferAndIndex, float chosenPitch,
+						  int priority, int entNum, int channel, SoundSystem::AttachmentTag attachmentTag, float fvol, float attenuation ) {
 	clamp_low( attenuation, 0.0f );
 
 	src->lastUse = Sys_Milliseconds();
@@ -63,7 +65,9 @@ static void source_setup( src_t *src, const SoundSet *sfx, std::pair<ALuint, uns
 	src->priority = priority;
 	src->entNum = entNum;
 	src->channel = channel;
+	src->attachmentTag = attachmentTag;
 	src->fvol = fvol;
+	src->chosenPitch = chosenPitch;
 	src->attenuation = attenuation;
 	src->isActive = true;
 	src->isLocked = false;
@@ -151,8 +155,25 @@ static void source_spatialize( src_t *src ) {
 	}
 
 	if( src->isTracking ) {
+		assert( src->entNum >= 0 && src->entNum < MAX_EDICTS );
 		VectorCopy( entlist[src->entNum].origin, src->origin );
 		VectorCopy( entlist[src->entNum].velocity, src->velocity );
+		// TODO: Using hardcoded values here, transmit offsets for each frame prior to running updates
+		// We have to limit offset to safe values within the regular player box
+		switch( src->attachmentTag ) {
+			case SoundSystem::OriginAttachment:
+				break;
+			case SoundSystem::WeaponAttachment:
+				VectorMA( src->origin, 15.0f, &entlist[src->entNum].axis[AXIS_FORWARD], src->origin );
+				break;
+			case SoundSystem::HeadAttachment:
+				VectorMA( src->origin, 8.0f, &entlist[src->entNum].axis[AXIS_FORWARD], src->origin );
+				src->origin[2] += 18.0f;
+				break;
+			case SoundSystem::FeetAttachment:
+				src->origin[2] -= 15.0f;
+				break;
+		}
 	}
 
 	// Delegate setting source origin to the effect in this case
@@ -165,9 +186,11 @@ static void source_spatialize( src_t *src ) {
 	alSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
 	alSourcefv( src->source, AL_POSITION, src->origin );
 	alSourcefv( src->source, AL_VELOCITY, src->velocity );
+	alSourcef( src->source, AL_PITCH, src->chosenPitch );
 }
 
-static void source_loop( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entNum, uintptr_t identifyingToken, float fvol, float attenuation ) {
+static void source_loop( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entNum,
+						 uintptr_t identifyingToken, SoundSystem::AttachmentTag attachmentTag, float fvol, float attenuation ) {
 	assert( identifyingToken );
 
 	if( !sfx ) {
@@ -194,7 +217,7 @@ static void source_loop( const SoundSet *sfx, std::pair<ALuint, unsigned> buffer
 		if( !chosenSrc ) {
 			return;
 		}
-		source_setup( chosenSrc, sfx, bufferAndIndex, pitch, SRCPRI_LOOP, entNum, -1, fvol, attenuation );
+		source_setup( chosenSrc, sfx, bufferAndIndex, pitch, SRCPRI_LOOP, entNum, -1, attachmentTag, fvol, attenuation );
 		alSourcei( chosenSrc->source, AL_LOOPING, AL_TRUE );
 		chosenSrc->loopIdentifyingToken = identifyingToken;
 		chosenSrc->isLooping = true;
@@ -411,7 +434,7 @@ void S_ShutdownSources( void ) {
 /*
 * S_SetEntitySpatialization
 */
-void S_SetEntitySpatialization( int entnum, const vec3_t origin, const vec3_t velocity ) {
+void S_SetEntitySpatialization( int entnum, const vec3_t origin, const vec3_t velocity, const mat3_t axis ) {
 	sentity_t *sent;
 
 	if( entnum < 0 || entnum > max_ents ) {
@@ -421,6 +444,7 @@ void S_SetEntitySpatialization( int entnum, const vec3_t origin, const vec3_t ve
 	sent = entlist + entnum;
 	VectorCopy( origin, sent->origin );
 	VectorCopy( velocity, sent->velocity );
+	Matrix3_Copy( axis, sent->axis );
 }
 
 /**
@@ -701,7 +725,7 @@ void S_StartLocalSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferA
 		return;
 	}
 
-	source_setup( src, sfx, bufferAndIndex, pitch, SRCPRI_LOCAL, -1, 0, fvol, ATTN_NONE );
+	source_setup( src, sfx, bufferAndIndex, pitch, SRCPRI_LOCAL, -1, 0, SoundSystem::OriginAttachment, fvol, ATTN_NONE );
 	alSourcei( src->source, AL_SOURCE_RELATIVE, AL_TRUE );
 
 	alSourcePlay( src->source );
@@ -710,13 +734,14 @@ void S_StartLocalSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferA
 /*
 * S_StartSound
 */
-static void S_StartSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, const vec3_t origin, int entNum, int channel, float fvol, float attenuation ) {
+static void S_StartSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch,
+						  const vec3_t origin, int entNum, int channel, SoundSystem::AttachmentTag attachmentTag, float fvol, float attenuation ) {
 	src_t *src = S_AllocSource( SRCPRI_ONESHOT, entNum, channel );
 	if( !src ) {
 		return;
 	}
 
-	source_setup( src, sfx, bufferAndIndex, pitch, SRCPRI_ONESHOT, entNum, channel, fvol, attenuation );
+	source_setup( src, sfx, bufferAndIndex, pitch, SRCPRI_ONESHOT, entNum, channel, attachmentTag, fvol, attenuation );
 
 	if( src->attenuation ) {
 		if( origin ) {
@@ -735,28 +760,21 @@ static void S_StartSound( const SoundSet *sfx, std::pair<ALuint, unsigned> buffe
 * S_StartFixedSound
 */
 void S_StartFixedSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, const vec3_t origin, int channel, float fvol, float attenuation ) {
-	S_StartSound( sfx, bufferAndIndex, pitch, origin, 0, channel, fvol, attenuation );
+	S_StartSound( sfx, bufferAndIndex, pitch, origin, 0, channel, SoundSystem::OriginAttachment, fvol, attenuation );
 }
 
 /*
 * S_StartRelativeSound
 */
-void S_StartRelativeSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entnum, int channel, float fvol, float attenuation ) {
-	S_StartSound( sfx, bufferAndIndex, pitch, NULL, entnum, channel, fvol, attenuation );
-}
-
-/*
-* S_StartGlobalSound
-*/
-void S_StartGlobalSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int channel, float fvol ) {
-	S_StartSound( sfx, bufferAndIndex, pitch, NULL, 0, channel, fvol, ATTN_NONE );
+void S_StartRelativeSound( const SoundSet *sfx, SoundSystem::AttachmentTag attachmentTag, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entnum, int channel, float fvol, float attenuation ) {
+	S_StartSound( sfx, bufferAndIndex, pitch, nullptr, entnum, channel, attachmentTag, fvol, attenuation );
 }
 
 /*
 * S_AddLoopSound
 */
-void S_AddLoopSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entnum, uintptr_t identifyingToken, float fvol, float attenuation ) {
-	source_loop( sfx, bufferAndIndex, pitch, entnum, identifyingToken, fvol, attenuation );
+void S_AddLoopSound( const SoundSet *sfx, SoundSystem::AttachmentTag attachmentTag, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entnum, uintptr_t identifyingToken, float fvol, float attenuation ) {
+	source_loop( sfx, bufferAndIndex, pitch, entnum, identifyingToken, attachmentTag, fvol, attenuation );
 }
 
 /*
@@ -774,7 +792,7 @@ src_t *S_AllocRawSource( int entNum, float fvol, float attenuation, cvar_t *volu
 		return NULL;
 	}
 
-	source_setup( src, NULL, { 0, 0 }, 1.0f, SRCPRI_STREAM, entNum, 0, fvol, attenuation );
+	source_setup( src, NULL, { 0, 0 }, 1.0f, SRCPRI_STREAM, entNum, 0, SoundSystem::OriginAttachment, fvol, attenuation );
 
 	if( src->attenuation && entNum > 0 ) {
 		src->isTracking = true;

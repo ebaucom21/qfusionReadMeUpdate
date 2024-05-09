@@ -42,22 +42,21 @@ public:
 	void stopAllSounds( unsigned ) override {}
 
 	void clear() override {}
-	void updateListener( const float *, const float *, const mat3_t ) override {}
+	void updateListener( int, const float *, const float *, const mat3_t ) override {}
 	void activate( bool ) override {}
 
 	void processFrameUpdates() override {}
 
-	void setEntitySpatialParams( int, const float *, const float * ) override {};
+	void setEntitySpatialParams( int, const float *, const float *, const float * ) override {};
 
 	[[nodiscard]]
 	auto registerSound( const SoundSetProps & ) -> const SoundSet * override { return nullptr; }
 
 	void startFixedSound( const SoundSet *, const float *, int, float, float ) override {}
-	void startRelativeSound( const SoundSet *, int, int, float, float ) override {}
-	void startGlobalSound( const SoundSet *, int, float ) override {}
+	void startRelativeSound( const SoundSet *, AttachmentTag attachmentTag, int, int, float, float ) override {}
 	void startLocalSound( const char *, float ) override {}
 	void startLocalSound( const SoundSet *, float ) override {}
-	void addLoopSound( const SoundSet *, int, uintptr_t, float, float ) override {}
+	void addLoopSound( const SoundSet *, AttachmentTag attachmentTag, int, uintptr_t, float, float ) override {}
 
 	void startBackgroundTrack( const char *, const char *, int ) override {}
 	void stopBackgroundTrack() override {}

@@ -88,12 +88,11 @@ static inline auto clampSourceGain( float givenVolume ) -> float {
 // playing
 
 void S_StartFixedSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, const vec3_t origin, int channel, float fvol, float attenuation );
-void S_StartRelativeSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entnum, int channel, float fvol, float attenuation );
-void S_StartGlobalSound( const SoundSet *sfx, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int channel, float fvol );
+void S_StartRelativeSound( const SoundSet *sfx, SoundSystem::AttachmentTag attachmentTag, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entnum, int channel, float fvol, float attenuation );
 
 void S_StartLocalSound( const SoundSet *sound, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, float fvol );
 
-void S_AddLoopSound( const SoundSet *sound, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entnum, uintptr_t identifyingToken, float fvol, float attenuation );
+void S_AddLoopSound( const SoundSet *sound, SoundSystem::AttachmentTag attachmentTag, std::pair<ALuint, unsigned> bufferAndIndex, float pitch, int entnum, uintptr_t identifyingToken, float fvol, float attenuation );
 
 void S_RawSamples2( unsigned int samples, unsigned int rate,
 					unsigned short width, unsigned short channels, const uint8_t *data, bool music, float fvol );
@@ -176,6 +175,8 @@ typedef struct src_s {
 	int priority;
 	int entNum;
 	int channel;
+	SoundSystem::AttachmentTag attachmentTag;
+	float chosenPitch;
 
 	float fvol; // volume modifier, for s_volume updating
 	float attenuation;
@@ -210,7 +211,7 @@ void S_UnlockSource( src_t *src );
 void S_StopAllSources( void );
 ALuint S_GetALSource( const src_t *src );
 src_t *S_AllocRawSource( int entNum, float fvol, float attenuation, cvar_t *volumeVar );
-void S_SetEntitySpatialization( int entnum, const vec3_t origin, const vec3_t velocity );
+void S_SetEntitySpatialization( int entnum, const vec3_t origin, const vec3_t velocity, const mat3_t axis );
 
 /*
 * Music

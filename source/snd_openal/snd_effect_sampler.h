@@ -7,6 +7,7 @@
 struct ListenerProps {
 	vec3_t origin;
 	vec3_t velocity;
+	int entNum { -1 };
 	mutable int leafNum { -1 };
 	bool isInLiquid { false };
 

@@ -5607,7 +5607,7 @@ void CL_Frame( int realMsec, int gameMsec ) {
 			if( cls.disable_screen ) {
 				SoundSystem::instance()->clear();
 			} else {
-				SoundSystem::instance()->updateListener( vec3_origin, vec3_origin, axis_identity );
+				SoundSystem::instance()->updateListener( -1, vec3_origin, vec3_origin, axis_identity );
 			}
 		}
 

@@ -35,7 +35,7 @@ void EffectsSystemFacade::startSound( const SoundSet *sound, const float *origin
 
 void EffectsSystemFacade::startRelativeSound( const SoundSet *sound, int entNum, float attenuation ) {
 	if( getPrimaryViewState()->allowSounds ) {
-		SoundSystem::instance()->startRelativeSound( sound, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
+		SoundSystem::instance()->startRelativeSound( sound, SoundSystem::OriginAttachment, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
 	}
 }
 

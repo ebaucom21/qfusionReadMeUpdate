@@ -685,7 +685,7 @@ struct model_s *CG_RegisterModel( const char *name );
 void CG_ResetClientInfos( void );
 void CG_LoadClientInfo( unsigned client, const wsw::StringView &configString );
 void CG_UpdateSexedSoundsRegistration( pmodelinfo_t *pmodelinfo );
-void playSexedSoundInPrimaryView( int entnum, int entchannel, const char *name, float fvol, float attn );
+void playSexedSoundInPrimaryView( int entnum, int attachmentTag, int entchannel, const char *name, float fvol, float attn );
 const SoundSet *CG_RegisterSexedSound( int entnum, const char *name );
 
 void CG_PredictedEvent( int entNum, int ev, int parm );

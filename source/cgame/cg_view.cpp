@@ -1186,7 +1186,7 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			cg.polyEffectsSystem.clear();
 			cg.simulatedHullsSystem.clear();
 
-			SoundSystem::instance()->updateListener( vec3_origin, vec3_origin, axis_identity );
+			SoundSystem::instance()->updateListener( -1, vec3_origin, vec3_origin, axis_identity );
 		} else {
 			if( cg.motd && ( cg.time > cg.motd_time ) ) {
 				Q_free( cg.motd );
@@ -1384,7 +1384,8 @@ bool CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 			cg.oldAreabits = true;
 
 			const ViewState *primaryViewState = getPrimaryViewState();
-			SoundSystem::instance()->updateListener( primaryViewState->view.origin, primaryViewState->view.velocity, primaryViewState->view.axis );
+			SoundSystem::instance()->updateListener( primaryViewState->view.POVent, primaryViewState->view.origin,
+													 primaryViewState->view.velocity, primaryViewState->view.axis );
 
 			hasRenderedTheMenu = numDisplayedViewStates > 0 && !actuallyUseTiledMode;
 		}

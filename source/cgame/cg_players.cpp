@@ -158,16 +158,15 @@ const SoundSet *CG_RegisterSexedSound( int entnum, const char *name ) {
 	return CG_RegisterPmodelSexedSound( cg_entPModels[entnum].pmodelinfo, name );
 }
 
-void playSexedSoundInPrimaryView( int entnum, int entchannel, const char *name, float fvol, float attn ) {
+void playSexedSoundInPrimaryView( int entnum, int attachmentTag, int entchannel, const char *name, float fvol, float attn ) {
 	if( const ViewState *primaryViewState = getPrimaryViewState(); primaryViewState->allowSounds ) {
-		const bool fixed = ( entchannel & CHAN_FIXED ) ? true : false;
+		const bool fixed = ( entchannel & CHAN_FIXED ) != 0;
 		entchannel &= ~CHAN_FIXED;
+		const SoundSet *soundSet = CG_RegisterSexedSound( entnum, name );
 		if( fixed ) {
-			SoundSystem::instance()->startFixedSound( CG_RegisterSexedSound( entnum, name ), cg_entities[entnum].current.origin, entchannel, fvol, attn );
-		} else if( primaryViewState->isViewerEntity( entnum ) ) {
-			SoundSystem::instance()->startGlobalSound( CG_RegisterSexedSound( entnum, name ), entchannel, fvol );
+			SoundSystem::instance()->startFixedSound( soundSet, cg_entities[entnum].current.origin, entchannel, fvol, attn );
 		} else {
-			SoundSystem::instance()->startRelativeSound( CG_RegisterSexedSound( entnum, name ), entnum, entchannel, fvol, attn );
+			SoundSystem::instance()->startRelativeSound( soundSet, (SoundSystem::AttachmentTag)attachmentTag, entnum, entchannel, fvol, attn );
 		}
 	}
 }

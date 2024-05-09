@@ -33,18 +33,18 @@ public:
 		int entNums[8];
 		vec3_t origins[8];
 		vec3_t velocities[8];
+		mat3_t axes[8];
 		unsigned count { 0 };
 	};
 
 	void setEntitySpatialParams( const EntitySpatialParamsBatch &batch );
 
-	void setListener( const Vec3 &origin, const Vec3 &velocity, const std::array<Vec3, 3> &axis );
+	void setListener( int entNum, const Vec3 &origin, const Vec3 &velocity, const std::array<Vec3, 3> &axis );
 
 	void startLocalSound( const SoundSet *sound, float volume );
 	void startFixedSound( const SoundSet *sound, const Vec3 &origin, int channel, float volume, float attenuation );
-	void startGlobalSound( const SoundSet *sound, int channel, float volume );
-	void startRelativeSound( const SoundSet *sound, int entNum, int channel, float volume, float attenuation );
-	void addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float volume, float attenuation );
+	void startRelativeSound( const SoundSet *sound, SoundSystem::AttachmentTag attachmentTag, int entNum, int channel, float volume, float attenuation );
+	void addLoopSound( const SoundSet *sound, SoundSystem::AttachmentTag attachmentTag, int entNum, uintptr_t identifyingToken, float volume, float attenuation );
 
 	void startBackgroundTrack( const wsw::PodVector<char> &intro, const wsw::PodVector<char> &loop, int mode );
 	void stopBackgroundTrack();

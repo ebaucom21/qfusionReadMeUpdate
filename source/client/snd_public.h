@@ -87,6 +87,13 @@ public:
 		bool useNullSystem { false };
 	};
 
+	enum AttachmentTag {
+		OriginAttachment,
+		WeaponAttachment,
+		HeadAttachment,
+		FeetAttachment,
+	};
+
 	[[nodiscard]]
 	static bool init( client_state_s *client, const InitOptions &options );
 
@@ -116,12 +123,12 @@ public:
 	virtual void stopAllSounds( unsigned flags = 0 ) = 0;
 
 	virtual void clear() = 0;
-	virtual void updateListener( const float *origin, const float *velocity, const mat3_t axis ) = 0;
+	virtual void updateListener( int entNum, const float *origin, const float *velocity, const mat3_t axis ) = 0;
 	virtual void activate( bool isActive ) = 0;
 
 	virtual void processFrameUpdates() = 0;
 
-	virtual void setEntitySpatialParams( int entNum, const float *origin, const float *velocity ) = 0;
+	virtual void setEntitySpatialParams( int entNum, const float *origin, const float *velocity, const float *axis ) = 0;
 
 	[[nodiscard]]
 	virtual auto registerSound( const SoundSetProps &props ) -> const SoundSet * = 0;
@@ -130,12 +137,11 @@ public:
 	auto getExactName( const SoundSet *sound ) -> std::optional<wsw::StringView>;
 
 	virtual void startFixedSound( const SoundSet *sound, const float *origin, int channel, float fvol, float attenuation ) = 0;
-	virtual void startRelativeSound( const SoundSet *sound, int entNum, int channel, float fvol, float attenuation ) = 0;
-	virtual void startGlobalSound( const SoundSet *sound, int channel, float fvol ) = 0;
+	virtual void startRelativeSound( const SoundSet *sound, AttachmentTag attachmentTag, int entNum, int channel, float fvol, float attenuation ) = 0;
 
 	virtual void startLocalSound( const char *name, float fvol ) = 0;
 	virtual void startLocalSound( const SoundSet *sound, float fvol ) = 0;
-	virtual void addLoopSound( const SoundSet *sound, int entNum, uintptr_t identifyingToken, float fvol, float attenuation ) = 0;
+	virtual void addLoopSound( const SoundSet *sound, AttachmentTag attachmentTag, int entNum, uintptr_t identifyingToken, float fvol, float attenuation ) = 0;
 
 	virtual void startBackgroundTrack( const char *intro, const char *loop, int mode ) = 0;
 	virtual void stopBackgroundTrack() = 0;
