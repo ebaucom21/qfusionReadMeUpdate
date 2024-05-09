@@ -4,50 +4,38 @@
 #include "snd_local.h"
 #include "snd_cached_computation.h"
 
+#include "../common/podbufferholder.h"
+#include "../common/tasksystem.h"
+
 #include <limits>
 
 class GraphLike {
 	friend class CachedLeafsGraph;
 	friend class CachedGraphReader;
 	friend class CachedGraphWriter;
+	friend class PropagationGraphBuilder;
 protected:
-	/**
-	 * Should be released using TaggedAllocator::FreeUsingMetadata()
-	 * (descendants can use custom allocators that are put in metadata).
-	 */
-	float *distanceTable { nullptr };
-	/**
-	 * Should be released using TaggedAllocator::FreeUsingMetadata()
-	 * (descendants can use custom allocators that are put in metadata).
-	 */
-	int *adjacencyListsData { nullptr };
-	/**
-	 * Assumed to be allocated within {@code adjacencyListsData} at its end.
-	 */
-	int *adjacencyListsOffsets { nullptr };
+	PodBufferHolder<int> m_adjacencyListsData;
+	PodBufferHolder<int> m_adjacencyListsOffsets;
+	PodBufferHolder<float> m_distanceTable;
 
-	int numLeafs;
-	explicit GraphLike( int numLeafs_ ): numLeafs( numLeafs_ ) {}
+	int m_numLeafs;
+
+	explicit GraphLike( int numLeafs ): m_numLeafs( numLeafs ) {}
 public:
-	/**
-	 * @note is put in the corresponding source to avoid exposing {@code TaggedAllocator}.
-	 * Gets called in only in the source anyway.
-	 */
-	virtual ~GraphLike();
+	virtual ~GraphLike() = default;
 
-	int NumLeafs() const { return numLeafs; }
+	int NumLeafs() const { return m_numLeafs; }
 
 	float EdgeDistance( int leaf1, int leaf2 ) const {
-		assert( distanceTable );
-		assert( leaf1 > 0 && leaf1 < numLeafs );
-		assert( leaf2 > 0 && leaf2 < numLeafs );
-		return distanceTable[leaf1 * numLeafs + leaf2];
+		assert( leaf1 > 0 && leaf1 < m_numLeafs );
+		assert( leaf2 > 0 && leaf2 < m_numLeafs );
+		return m_distanceTable.get( m_numLeafs * m_numLeafs )[leaf1 * m_numLeafs + leaf2];
 	}
 
 	const int *AdjacencyList( int leafNum ) const {
-		assert( adjacencyListsData && adjacencyListsOffsets );
-		assert( leafNum > 0 && leafNum < numLeafs );
-		return adjacencyListsData + adjacencyListsOffsets[leafNum];
+		assert( leafNum > 0 && leafNum < m_numLeafs );
+		return m_adjacencyListsData.get( m_numLeafs ) + m_adjacencyListsOffsets.get( m_numLeafs )[leafNum];
 	}
 };
 
@@ -58,19 +46,7 @@ class CachedLeafsGraph: public CachedComputation, public GraphLike {
 	template <typename> friend class SingletonHolder;
 	friend class PropagationGraphBuilder;
 
-	friend float *ReuseGlobalDistanceTable( int numLeafs );
-
-	/**
-	 * This is a temporary data useful for {@code PropagationGraphBuilder<?,?>}
-	 * While it currently serves no purpose for the {@code CachedLeafsGraph} itself,
-	 * having/saving it is mandatory to be able to use {@code GraphBuilder::TryUsingGlobalGraph()}.
-	 * Should be released by calling {@code TaggedAllocator::FreeUsingMetadata()}
-	 * (an ownership over this chunk of memory can be transferred via builder).
-	 * @note an actual allocator of this memory chunk must use reference counting as we must support sharing.
-	 */
-	uint8_t *dirsTable { nullptr };
-
-	int leafListsDataSize { -1 };
+	PodBufferHolder<uint8_t> m_dirsTable;
 
 	void ResetExistingState() override;
 	bool TryReadFromFile( int fsFlags ) override;
@@ -79,20 +55,9 @@ class CachedLeafsGraph: public CachedComputation, public GraphLike {
 	bool SaveToCache() override;
 
 	CachedLeafsGraph()
-		: CachedComputation( "CachedLeafsGraph", ".graph", "CachedLeafsGraph@v1337" )
+		: CachedComputation( "CachedLeafsGraph", ".graph", "CachedLeafsGraph@v1338" )
 		, GraphLike( -1 ) {}
-
-	~CachedLeafsGraph() override;
 public:
-	/**
-	 * Exposed for {@code GraphBuilder<?,?>::TryUsingGlobalGraph()} (a template can't be a friend).
-	 * @note the size is specified in integer elements and not in bytes.
-	 */
-	int LeafListsDataSize() const { return leafListsDataSize; }
-	/**
-	 * Exposed for {@code GraphBuilder<?,?>::TryUsingGlobalGraph()} (a template can't be a friend).
-	 */
-	const float *DistanceTable() const { return distanceTable; }
 	/**
 	 * A helper that resolves ambiguous calls of {@code NumLeafs()} of both base classes.
 	 */
@@ -108,9 +73,9 @@ class PropagationTable: public CachedComputation {
 	friend class PropagationTableReader;
 	friend class PropagationTableWriter;
 	friend class PropagationTableBuilder;
-	friend class PropagationBuilderTask;
-	friend class CoarsePropagationTask;
-	friend class FinePropagationTask;
+	friend class PropagationBuilderThreadState;
+	friend class CoarsePropagationThreadState;
+	friend class FinePropagationThreadState;
 	friend class CachedLeafsGraph;
 	template <typename> friend class SingletonHolder;
 
@@ -118,27 +83,16 @@ class PropagationTable: public CachedComputation {
 		/**
 		 * An index for {@code ByteToDir()} if is within {@code [0, MAXVERTEXNORMALS)} range.
 		 */
-		uint8_t maybeDirByte;
+		uint8_t m_maybeDirByte;
 		/**
 		 * An rough exponential encoding of an indirect path
 		 */
-		uint8_t distanceByte;
+		uint8_t m_distanceByte;
 
-		bool HasDirectPath() const {
-			return maybeDirByte == std::numeric_limits<uint8_t>::max();
-		}
-
-		bool HasIndirectPath() const {
-			return maybeDirByte < std::numeric_limits<uint8_t>::max() - 1;
-		}
-
-		void SetHasDirectPath() {
-			maybeDirByte = std::numeric_limits<uint8_t>::max();
-		}
-
-		void MarkAsFailed() {
-			maybeDirByte = std::numeric_limits<uint8_t>::max() - 1;
-		}
+		bool HasDirectPath() const { return m_maybeDirByte == std::numeric_limits<uint8_t>::max(); }
+		bool HasIndirectPath() const { return m_maybeDirByte < std::numeric_limits<uint8_t>::max() - 1; }
+		void SetHasDirectPath() { m_maybeDirByte = std::numeric_limits<uint8_t>::max(); }
+		void MarkAsFailed() { m_maybeDirByte = std::numeric_limits<uint8_t>::max() - 1; }
 
 		inline void SetIndirectPath( const vec3_t dir, float distance );
 
@@ -149,7 +103,7 @@ class PropagationTable: public CachedComputation {
 
 		void GetDir( vec3_t dir ) const {
 			assert( HasIndirectPath() );
-			ByteToDir( maybeDirByte, dir );
+			ByteToDir( m_maybeDirByte, dir );
 		}
 
 		void SetDistance( float distance ) {
@@ -163,30 +117,27 @@ class PropagationTable: public CachedComputation {
 			// Make sure that we do not lose the property of distance being positive.
 			// Otherwise validation fails (while computations were perfect up to this).
 			clamp_low( u, 1u );
-			distanceByte = (uint8_t)u;
+			m_distanceByte = (uint8_t)u;
 		}
 
-		float GetDistance() const {
-			return distanceByte * 256.0f;
-		}
+		float GetDistance() const { return m_distanceByte * 256.0f; }
 	};
 
-	static_assert( alignof( PropagationProps ) == 1, "" );
-	static_assert( sizeof( PropagationProps ) == 2, "" );
+	static_assert( alignof( PropagationProps ) == 1 );
+	static_assert( sizeof( PropagationProps ) == 2 );
 
-	PropagationProps *table { nullptr };
+	PodBufferHolder<PropagationProps> m_table;
 
 	const PropagationProps &GetProps( int fromLeafNum, int toLeafNum ) const {
-		assert( table );
 		const auto numLeafs = NumLeafs();
 		assert( numLeafs );
 		assert( fromLeafNum > 0 && fromLeafNum < numLeafs );
 		assert( toLeafNum > 0 && toLeafNum < numLeafs );
-		return table[numLeafs * fromLeafNum + toLeafNum];
+		return m_table.get( numLeafs * numLeafs )[numLeafs * fromLeafNum + toLeafNum];
 	}
 
 	void Clear() {
-		FreeIfNeeded( &table );
+		m_table = PodBufferHolder<PropagationProps>();
 	}
 
 	void ResetExistingState() override {
@@ -198,13 +149,13 @@ class PropagationTable: public CachedComputation {
 	void ProvideDummyData() override;
 	bool SaveToCache() override;
 public:
-	PropagationTable(): CachedComputation( "PropagationTable", ".table", "PropagationTable@v1337" ) {}
+	PropagationTable(): CachedComputation( "PropagationTable", ".table", "PropagationTable@v1338" ) {}
 
 	~PropagationTable() override {
 		Clear();
 	}
 
-	bool IsValid() const { return table != nullptr; }
+	bool IsValid() const { return m_table.get( 0 ) != nullptr; }
 
 	/**
 	 * Returns true if a direct (ray-like) path between these leaves exists.
@@ -246,6 +197,67 @@ public:
 	static PropagationTable *Instance();
 	static void Init();
 	static void Shutdown();
+};
+
+class PropagationGraphBuilder: public GraphLike {
+	friend class CachedLeafsGraph;
+	friend class PropagationBuilderThreadState;
+public:
+	PropagationGraphBuilder( int numLeafs, bool fastAndCoarse ) : GraphLike( numLeafs ), m_fastAndCoarse( fastAndCoarse ) {}
+
+	void SetEdgeDistance( int leaf1, int leaf2, float newDistance ) {
+		// Template quirks: a member of a template base cannot be resolved in scope otherwise
+		const int numLeafs  = this->m_numLeafs;
+		auto *distanceTable = this->m_distanceTable.get( numLeafs * numLeafs );
+		// The distance table must point at the scratchpad
+		assert( leaf1 > 0 && leaf1 < numLeafs );
+		assert( leaf2 > 0 && leaf2 < numLeafs );
+		distanceTable[leaf1 * numLeafs + leaf2] = newDistance;
+		distanceTable[leaf2 * numLeafs + leaf1] = newDistance;
+	}
+
+	void ScaleEdgeDistance( int leaf1, int leaf2, float scale ) {
+		const int numLeafs        = this->m_numLeafs;
+		auto *const distanceTable = this->m_distanceTable.get( numLeafs * numLeafs );
+		assert( leaf1 > 0 && leaf1 < numLeafs );
+		assert( leaf2 > 0 && leaf2 < numLeafs );
+		distanceTable[leaf1 * numLeafs + leaf2] *= scale;
+		distanceTable[leaf2 * numLeafs + leaf1] *= scale;
+	}
+
+	void SaveDistanceTable() {
+		const float *src = m_distanceTable.get( m_numLeafs * m_numLeafs );
+		float *const dst = m_distanceTableScratchpad.reserveAndGet( m_numLeafs * m_numLeafs );
+		std::memcpy( dst, src, sizeof( float ) * m_numLeafs * m_numLeafs );
+		std::swap( m_distanceTable, m_distanceTableScratchpad );
+	}
+
+	void RestoreDistanceTable() {
+		std::swap( m_distanceTable, m_distanceTableScratchpad );
+	}
+
+	bool TryUsingGlobalGraph( GraphLike *target );
+
+	/**
+	 * Tries to build the graph data (or reuse data from the global graph).
+	 */
+	bool Build( GraphLike *target = nullptr );
+
+	/**
+	 * Returns an average propagation direction from leaf1 to leaf2.
+	 * @param leaf1 a first leaf.
+	 * @param leaf2 a second leaf.
+	 * @param reuse a buffer for a valid result.
+	 * @return a valid address of a direction vector on success, a null on failure
+	 * @note a presence of a valid dir is symmetrical for any pair of leaves.
+	 * @note a valid dir magnitude is symmetrical for any pair of leaves such that a valid dir exists for the pair.
+	 */
+	const float *GetDirFromLeafToLeaf( int leaf1, int leaf2, vec3_t reuse ) const;
+private:
+
+	PodBufferHolder<float> m_distanceTableScratchpad;
+	PodBufferHolder<uint8_t> m_dirsTable;
+	const bool m_fastAndCoarse;
 };
 
 #endif

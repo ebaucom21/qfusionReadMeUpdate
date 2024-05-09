@@ -286,3 +286,16 @@ int S_FindTopNodeForSphere( const vec3_t center, float radius ) {
 const char *S_GetConfigString( int index ) {
 	return cl.configStrings.get( index ).value_or( wsw::StringView() ).data();
 }
+
+unsigned S_SuggestNumExtraThreadsForComputations() {
+	unsigned numPhysicalProcessors = 0, numLogicalProcessors = 0;
+	if( Sys_GetNumberOfProcessors( &numPhysicalProcessors, &numLogicalProcessors ) ) {
+		const unsigned chosenNumProcessors = developer->integer ? numLogicalProcessors : numPhysicalProcessors;
+		if( chosenNumProcessors ) {
+			// Take the current thread (which also acts as a worker thread for the task system) into account.
+			return chosenNumProcessors - 1;
+		}
+	}
+	// Use only the current thread.
+	return 0;
+}

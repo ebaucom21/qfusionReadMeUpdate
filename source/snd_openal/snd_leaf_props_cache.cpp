@@ -1,8 +1,8 @@
 #include "snd_leaf_props_cache.h"
 #include "snd_effect_sampler.h"
-#include "snd_computation_host.h"
 #include "../common/glob.h"
 #include "../common/singletonholder.h"
+#include "../common/tasksystem.h"
 #include "../common/wswstringview.h"
 #include "../common/wswstringsplitter.h"
 #include "../common/wswstaticstring.h"
@@ -301,80 +301,30 @@ public:
 	auto ComputeLeafProps( const vec3_t origin ) -> std::optional<LeafProps>;
 };
 
-class LeafPropsComputationTask: public ParallelComputationHost::PartialTask {
-	friend class LeafPropsCache;
-
-	LeafProps *const leafProps;
-	LeafPropsSampler sampler;
-	int leafsRangeBegin { -1 };
-	int leafsRangeEnd { -1 };
-	const bool fastAndCoarse;
-
-	LeafProps ComputeLeafProps( int leafNum );
-public:
-	explicit LeafPropsComputationTask( LeafProps *leafProps_, bool fastAndCoarse_ )
-		: leafProps( leafProps_ ), sampler( fastAndCoarse_ ), fastAndCoarse( fastAndCoarse_ ) {}
-
-	void Exec() override;
-};
+static LeafProps ComputeLeafProps( LeafPropsSampler *sampler, int leafNum, bool fastAndCoarse );
 
 bool LeafPropsCache::ComputeNewState( bool fastAndCoarse ) {
 	leafProps[0] = LeafProps();
 
 	const int actualNumLeafs = NumLeafs();
-
-	ComputationHostLifecycleHolder computationHostLifecycleHolder;
-	auto *const computationHost = computationHostLifecycleHolder.Instance();
-
-	// Up to 64 parallel tasks are supported.
-	// Every task does not consume lots of memory compared to computation of the sound propagation table.
-	LeafPropsComputationTask *submittedTasks[64];
-	int actualNumTasks = 0;
-	// Do not spawn more tasks than the actual number of leaves. Otherwise it fails for very small maps
-	const int suggestedNumTasks = wsw::min( actualNumLeafs, wsw::min( computationHost->SuggestNumberOfTasks(), 64 ) );
-	for( int i = 0; i < suggestedNumTasks; ++i ) {
-		void *taskMem = Q_malloc( sizeof( LeafPropsComputationTask ) );
-		// Never really happens with Q_malloc()... Use just malloc() instead?
-		if( !taskMem ) {
-			break;
-		}
-		auto *const task = new( taskMem )LeafPropsComputationTask( leafProps, fastAndCoarse );
-		if( !computationHost->TryAddTask( task ) ) {
-			break;
-		}
-		submittedTasks[actualNumTasks++] = task;
-	}
-
-	if( !actualNumTasks ) {
+	// CBA to do a proper partitioning (we can't have more than 2^16 tasks)
+	if( actualNumLeafs >= std::numeric_limits<uint16_t>::max() ) {
 		return false;
 	}
 
-	const int step = actualNumLeafs / actualNumTasks;
-	assert( step > 0 );
-	int rangeBegin = 1;
-	for( int i = 0; i < actualNumTasks; ++i ) {
-		auto *const task = submittedTasks[i];
-		task->leafsRangeBegin = rangeBegin;
-		if( i + 1 != actualNumTasks ) {
-			rangeBegin += step;
-			task->leafsRangeEnd = rangeBegin;
-		} else {
-			task->leafsRangeEnd = actualNumLeafs;
+	try {
+		TaskSystem taskSystem( { .numExtraThreads = S_SuggestNumExtraThreadsForComputations() } );
+		for( int i = 1; i < actualNumLeafs; ++i ) {
+			// Just add independent tasks for every leaf
+			(void)taskSystem.add( [=,this]() {
+				// TODO: This is a least-effort hack
+				static thread_local LeafPropsSampler sampler( fastAndCoarse );
+				leafProps[i] = ComputeLeafProps( &sampler, i, fastAndCoarse );
+			});
 		}
-	}
-
-	computationHost->Exec();
-
-	return true;
-}
-
-void LeafPropsComputationTask::Exec() {
-	// Check whether the range has been assigned
-	assert( leafsRangeBegin > 0 );
-	assert( leafsRangeEnd > leafsRangeBegin );
-
-	for( int i = leafsRangeBegin; i < leafsRangeEnd; ++i ) {
-		leafProps[i] = ComputeLeafProps( i );
+		return taskSystem.exec();
+	} catch( ... ) {
+		return false;
 	}
 }
 
@@ -459,7 +409,7 @@ bool LeafPropsSampler::CheckAndAddHitSurfaceProps( const trace_t &trace ) {
 	return true;
 }
 
-LeafProps LeafPropsComputationTask::ComputeLeafProps( int leafNum ) {
+static LeafProps ComputeLeafProps( LeafPropsSampler *sampler, int leafNum, bool fastAndCoarse ) {
 	const vec3_t *leafBounds = S_GetLeafBounds( leafNum );
 	const float *leafMins = leafBounds[0];
 	const float *leafMaxs = leafBounds[1];
@@ -514,7 +464,7 @@ LeafProps LeafPropsComputationTask::ComputeLeafProps( int leafNum ) {
 		}
 
 		// Might fail if the rays outgoing from the point start in solid
-		if( const auto maybeProps = sampler.ComputeLeafProps( point ) ) {
+		if( const auto maybeProps = sampler->ComputeLeafProps( point ) ) {
 			propsBuilder += *maybeProps;
 			numSamples++;
 			// Invalidate previous point used for sampling

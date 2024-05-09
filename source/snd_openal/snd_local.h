@@ -196,7 +196,7 @@ typedef struct src_s {
 	vec3_t origin, velocity; // for local culling
 } src_t;
 
-#define QF_METERS_PER_UNIT ( 1.7f / 64.0f )
+#define QF_METERS_PER_UNIT ( 2.2f / 64.0f )
 
 extern src_t srclist[MAX_SRC];
 extern int src_count;
@@ -271,6 +271,8 @@ int S_SeekSteam( snd_stream_t *stream, int ofs, int whence );
 
 unsigned S_GetRawSamplesLength( void );
 
+unsigned S_SuggestNumExtraThreadsForComputations();
+
 // This stuff is used by the sound system implementation and is defined in the client code
 
 void S_Trace( trace_s *tr, const float *start, const float *end, const float *mins,
@@ -288,6 +290,7 @@ int S_FindTopNodeForBox( const float *mins, const float *maxs );
 int S_FindTopNodeForSphere( const float *center, float radius );
 
 const char *S_GetConfigString( int index );
+
 
 #define sDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Sound, wsw::MessageCategory::Debug ) ).getWriter()
 #define sNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Sound, wsw::MessageCategory::Notice ) ).getWriter()

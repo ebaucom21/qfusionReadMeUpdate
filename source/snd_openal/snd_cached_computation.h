@@ -77,14 +77,6 @@ protected:
 
 	int NumLeafs() const { return numLeafs; };
 
-	template <typename T>
-	void FreeIfNeeded( T **p ) {
-		if( *p ) {
-			Q_free( *p );
-			*p = nullptr;
-		}
-	}
-
 public:
 	explicit CachedComputation( const char *logTag_, const char *fileExtension_, const char *fileVersion_ )
 		: logTag( logTag_), fileExtension( fileExtension_ ), fileVersion( fileVersion_ ) {

@@ -107,6 +107,12 @@ public:
 	}
 
 	[[nodiscard]]
+	auto get( size_t minExpectedCapacity ) const noexcept -> const T * {
+		assert( minExpectedCapacity <= m_capacity );
+		return m_data;
+	}
+
+	[[nodiscard]]
 	auto reserveAndGet( size_t desiredCapacity ) -> T * {
 		reserve( desiredCapacity );
 		return get( desiredCapacity );
@@ -124,6 +130,15 @@ public:
 		reserveZeroed( minDesiredCapacity );
 		return get( minDesiredCapacity );
 	}
+
+	[[nodiscard]]
+	auto makeADeepCopy() const -> PodBufferHolder<T> {
+		PodBufferHolder<T> result;
+		result.reserve( m_capacity );
+		std::memcpy( result.get( m_capacity ), m_data, sizeof( T ) * m_capacity );
+		return result;
+	}
+
 private:
 	void destroy() noexcept {
 #ifndef _MSC_VER
