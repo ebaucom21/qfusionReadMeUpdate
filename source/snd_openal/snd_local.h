@@ -196,8 +196,6 @@ typedef struct src_s {
 	vec3_t origin, velocity; // for local culling
 } src_t;
 
-#define QF_METERS_PER_UNIT ( 2.2f / 64.0f )
-
 extern src_t srclist[MAX_SRC];
 extern int src_count;
 

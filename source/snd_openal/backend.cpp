@@ -192,15 +192,6 @@ static bool S_Init( void *hwnd, int maxEntities, bool verbose ) {
 		return false;
 	}
 
-	// If we have reached this condition, EFX support is guaranteed.
-	if( s_environment_effects->integer ) {
-		// Set the value once
-		alListenerf( AL_METERS_PER_UNIT, QF_METERS_PER_UNIT );
-		if( alGetError() != AL_NO_ERROR ) {
-			return false;
-		}
-	}
-
 	return true;
 }
 
@@ -753,8 +744,6 @@ static void S_Update( void ) {
 		float appliedVelocity = s_sound_velocity->value;
 		if( appliedVelocity <= 0.0f ) {
 			appliedVelocity = 0.0f;
-		} else if( s_environment_effects->integer ) {
-			appliedVelocity *= QF_METERS_PER_UNIT;
 		}
 		alDopplerVelocity( appliedVelocity );
 		alSpeedOfSound( appliedVelocity );
