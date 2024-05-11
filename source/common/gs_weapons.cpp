@@ -558,17 +558,33 @@ int GS_ThinkPlayerWeapon( const gs_state_t *gs, player_state_t *playerState, int
 			playerState->weaponState = WEAPON_STATE_REFIRE;
 		}
 
+		bool shouldWasteAmmo = false;
+		if( !GS_InfiniteAmmo( *gs ) && playerState->stats[STAT_WEAPON] != WEAP_GUNBLADE ) {
+			if( firedef->ammo_id != AMMO_NONE && firedef->usage_count ) {
+				shouldWasteAmmo = true;
+			}
+		}
+
+		// Try setting a hint bit so the cgame code can use it for scheduling/rate limiting of various effects
+		if( shouldWasteAmmo ) {
+			int ammoLeft = playerState->inventory[firedef->ammo_id];
+			if( firedef->usage_count != 1 ) {
+				ammoLeft /= firedef->usage_count;
+			}
+			assert( !( parm & 128 ) );
+			if( ammoLeft % 2 ) {
+				parm |= 128;
+			}
+		}
+
 		if( refire && firedef->smooth_refire ) {
 			gs->PredictedEvent( playerState->POVnum, EV_SMOOTHREFIREWEAPON, parm );
 		} else {
 			gs->PredictedEvent( playerState->POVnum, EV_FIREWEAPON, parm );
 		}
 
-		// waste ammo
-		if( !GS_InfiniteAmmo( *gs ) && playerState->stats[STAT_WEAPON] != WEAP_GUNBLADE ) {
-			if( firedef->ammo_id != AMMO_NONE && firedef->usage_count ) {
-				playerState->inventory[firedef->ammo_id] -= firedef->usage_count;
-			}
+		if( shouldWasteAmmo ) {
+			playerState->inventory[firedef->ammo_id] -= firedef->usage_count;
 		}
 	}
 done:

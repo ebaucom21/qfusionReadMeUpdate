@@ -169,7 +169,8 @@ struct gs_state_t;
 
 // sound channels
 // channel 0 never willingly overrides
-// other channels (1-7) always override a playing sound on that channel
+// other channels always override a playing sound on that channel
+// note that we are free to use other numeric values below CHAN_FIXED
 enum {
 	CHAN_AUTO,
 	CHAN_PAIN,
@@ -177,9 +178,6 @@ enum {
 	CHAN_ITEM,
 	CHAN_BODY,
 	CHAN_MUZZLEFLASH,
-	CHAN_ANNOUNCER,
-
-	CHAN_TOTAL,
 
 	CHAN_FIXED = 128
 };

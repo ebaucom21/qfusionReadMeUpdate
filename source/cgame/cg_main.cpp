@@ -1418,7 +1418,7 @@ void CG_Event_LaserBeam( int entNum, int weapon, int fireMode, ViewState *viewSt
 	cent->localEffects[LOCALEFFECT_LASERBEAM] = cg.time + timeout;
 }
 
-static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode, ViewState *updateViewWeaponInViewState ) {
+static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode, bool altFrameHint, ViewState *updateViewWeaponInViewState ) {
 	if( !weapon ) {
 		return;
 	}
@@ -1446,13 +1446,17 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode, ViewState 
 			} else {
 				attenuation = ATTN_NORM;
 			}
+			int channel = CHAN_AUTO;
+			if( weapon == WEAP_MACHINEGUN && fireMode == FIRE_MODE_STRONG ) {
+				channel = CHAN_MUZZLEFLASH + ( altFrameHint ? 1 : 0 );
+			}
 
 			SoundSystem::instance()->startRelativeSound( sound, SoundSystem::WeaponAttachment, entNum,
-														 CHAN_AUTO, v_volumeEffects.get(), attenuation );
+														 channel, v_volumeEffects.get(), attenuation );
 			if( ( cg_entities[entNum].current.effects & EF_QUAD ) && ( weapon != WEAP_LASERGUN ) ) {
 				const SoundSet *quadSound = cgs.media.sndQuadFireSound;
 				SoundSystem::instance()->startRelativeSound( quadSound, SoundSystem::WeaponAttachment, entNum,
-															 CHAN_AUTO, v_volumeEffects.get(), attenuation );
+															 CHAN_MUZZLEFLASH + 2, v_volumeEffects.get(), attenuation );
 			}
 		}
 	}
@@ -2052,6 +2056,7 @@ static void handleSmoothRefireWeaponEvent( entity_state_t *ent, int parm, bool p
 static void handleFireWeaponEvent( entity_state_t *ent, int parm, bool predicted ) {
 	const int weapon = ( parm >> 1 ) & 0x3f;
 	const int fireMode = ( parm & 0x1 ) ? FIRE_MODE_STRONG : FIRE_MODE_WEAK;
+	const bool altFrameHint = ( parm & 128 ) != 0;
 
 	if( predicted ) {
 		cg_entities[ent->number].current.weapon = weapon;
@@ -2061,7 +2066,7 @@ static void handleFireWeaponEvent( entity_state_t *ent, int parm, bool predicted
 	}
 
 	ViewState *const attackerViewState = getViewStateForEntity( ent->number );
-	CG_FireWeaponEvent( ent->number, weapon, fireMode, attackerViewState );
+	CG_FireWeaponEvent( ent->number, weapon, fireMode, altFrameHint, attackerViewState );
 
 	// riotgun bullets, electrobolt and instagun beams are predicted when the weapon is fired
 	if( predicted ) {
