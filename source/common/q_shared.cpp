@@ -1847,15 +1847,14 @@ bool Info_SetValueForKey( char *info, const char *key, const char *value ) {
 	return true;
 }
 
-auto calcSoundGainForDistance( float dist ) -> float {
+auto calcSoundGainForDistanceAndAttenuation( float distance, float attenuation ) -> float {
 	constexpr float refDistance = kSoundAttenuationRefDistance;
 	constexpr float maxDistance = kSoundAttenuationMaxDistance;
-	constexpr float attenuation = 1.0f;
 
-	dist = wsw::min( wsw::max( dist, refDistance ), maxDistance );
+	distance = wsw::min( wsw::max( distance, refDistance ), maxDistance );
 
 	// AL_INVERSE_DISTANCE_CLAMPED
 	// gain = AL_REFERENCE_DISTANCE / (AL_REFERENCE_DISTANCE + AL_ROLLOFF_FACTOR * (distance - AL_REFERENCE_DISTANCE));
 
-	return refDistance * Q_Rcp( refDistance + attenuation * ( dist - refDistance ) );
+	return refDistance * Q_Rcp( refDistance + attenuation * ( distance - refDistance ) );
 }

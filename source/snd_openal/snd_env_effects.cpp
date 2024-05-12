@@ -1,6 +1,7 @@
 #include "snd_env_effects.h"
 #include "snd_effect_sampler.h"
 #include "snd_propagation.h"
+#include "../common/gs_public.h"
 
 #include <limits>
 #include <cmath>
@@ -121,7 +122,8 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	alEffectf( src->effect, AL_EAXREVERB_DECAY_HFRATIO, this->reverbProps.decayHfRatio );
 	alEffectf( src->effect, AL_EAXREVERB_DECAY_LFRATIO, this->reverbProps.decayLfRatio );
 
-	const float distanceGainFrac = calcSoundGainForDistance( DistanceFast( src->origin, listenerProps.origin ) );
+	const float distance         = DistanceFast( src->origin, listenerProps.origin );
+	const float distanceGainFrac = calcSoundGainForDistanceAndAttenuation( distance, src->attenuation );
 	assert( distanceGainFrac >= 0.0f && distanceGainFrac <= 1.0f );
 
 	// Make the effect less pronounced on close distance
@@ -340,7 +342,8 @@ void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, int list
 						// Use the shifted origin as a fake position in the world-space for the source
 						sourceOrigin = tmpSourceOrigin;
 						assert( sourcePitchScale > 0.0f && sourcePitchScale < 1.0f );
-						sourcePitchScale += ( 1.0f - sourcePitchScale ) * calcSoundGainForDistance( distance );
+						const float gainLike = calcSoundGainForDistanceAndAttenuation( distance, ATTN_NORM );
+						sourcePitchScale += ( 1.0f - sourcePitchScale ) * gainLike;
 						if( std::fabs( sourcePitchScale - 1.0f ) < 0.005f ) {
 							sourcePitchScale = 1.0f;
 						}

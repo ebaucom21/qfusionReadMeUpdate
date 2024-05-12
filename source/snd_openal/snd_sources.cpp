@@ -89,6 +89,7 @@ static void source_setup( src_t *src, const SoundSet *sfx, std::pair<ALuint, uns
 
 	alSourcef( src->source, AL_REFERENCE_DISTANCE, kSoundAttenuationRefDistance );
 	alSourcef( src->source, AL_MAX_DISTANCE, kSoundAttenuationMaxDistance );
+	alSourcef( src->source, AL_ROLLOFF_FACTOR, attenuation );
 
 	ENV_RegisterSource( src );
 }
@@ -227,6 +228,7 @@ static void source_loop( const SoundSet *sfx, std::pair<ALuint, unsigned> buffer
 
 	alSourcef( chosenSrc->source, AL_REFERENCE_DISTANCE, kSoundAttenuationRefDistance );
 	alSourcef( chosenSrc->source, AL_MAX_DISTANCE, kSoundAttenuationMaxDistance );
+	alSourcef( chosenSrc->source, AL_ROLLOFF_FACTOR, attenuation );
 
 	if( !existing ) {
 		if( chosenSrc->attenuation > 0.0f ) {
