@@ -443,7 +443,7 @@ auto Frontend::setupStateForCamera( CameraStateGroup stateGroup, const refdef_t 
 	stateForCamera->leafLightBitsOfSurfacesBuffer            = &m_leafLightBitsOfSurfacesBuffer[stateIndex];
 
 	m_particleDrawSurfacesBuffer[stateIndex].reserve( Scene::kMaxParticleAggregates * Scene::kMaxParticlesInAggregate );
-	stateForCamera->particleDrawSurfaces = m_particleDrawSurfacesBuffer[stateIndex].get( 0 );
+	stateForCamera->particleDrawSurfaces = m_particleDrawSurfacesBuffer[stateIndex].get();
 	
 	stateForCamera->refdef      = *fd;
 	stateForCamera->farClip     = getDefaultFarClip( fd );

@@ -177,7 +177,7 @@ void Frontend::addBrushModelEntitiesToSortList( StateForCamera *stateForCamera, 
 												std::span<const VisTestedModel> models,
 												std::span<const uint16_t> indices, std::span<const Scene::DynamicLight> lights ) {
 	MergedBspSurface *const mergedSurfaces = rsh.worldBrushModel->mergedSurfaces;
-	drawSurfaceBSP_t *const drawSurfaces   = stateForCamera->bspDrawSurfacesBuffer->get( rsh.worldBrushModel->numModelMergedSurfaces );
+	drawSurfaceBSP_t *const drawSurfaces   = stateForCamera->bspDrawSurfacesBuffer->get();
 	msurface_s *const surfaces             = rsh.worldBrushModel->surfaces;
 
 	for( const auto modelIndex: indices ) {
@@ -254,7 +254,7 @@ void Frontend::addMergedBspSurfToSortList( StateForCamera *stateForCamera, const
 	unsigned dlightBits = 0;
 	// TODO: This should belong to state
 	if( stateForCamera->numVisibleProgramLights ) {
-		const unsigned *const surfaceDlightBits = stateForCamera->leafLightBitsOfSurfacesBuffer->get( rsh.worldBrushModel->numsurfaces );
+		const unsigned *const surfaceDlightBits = stateForCamera->leafLightBitsOfSurfacesBuffer->get();
 		const msurface_t *const worldSurfaces   = rsh.worldBrushModel->surfaces;
 		const unsigned numLights                = lightsSpan.size();
 
@@ -459,9 +459,9 @@ void Frontend::addVisibleWorldSurfacesToSortList( StateForCamera *stateForCamera
 
 	const auto numWorldModelMergedSurfaces      = rsh.worldBrushModel->numModelMergedSurfaces;
 	msurface_t *const surfaces                  = rsh.worldBrushModel->surfaces;
-	drawSurfaceBSP_t *const drawSurfaces        = stateForCamera->bspDrawSurfacesBuffer->get( numWorldModelMergedSurfaces );
+	drawSurfaceBSP_t *const drawSurfaces        = stateForCamera->bspDrawSurfacesBuffer->get();
 	MergedBspSurface *const mergedSurfaces      = rsh.worldBrushModel->mergedSurfaces;
-	const MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get( numWorldModelMergedSurfaces );
+	const MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
 	std::span<const Scene::DynamicLight> dynamicLights { scene->m_dynamicLights.data(), scene->m_dynamicLights.size() };
 	// TODO: Left-pack instead of branchy scanning?
 	for( unsigned mergedSurfNum = 0; mergedSurfNum < numWorldModelMergedSurfaces; ++mergedSurfNum ) {

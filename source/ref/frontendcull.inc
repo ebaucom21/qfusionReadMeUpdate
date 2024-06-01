@@ -32,7 +32,7 @@ auto Frontend::collectVisibleWorldLeavesArch( StateForCamera *stateForCamera ) -
 	const auto *const pvs             = Mod_ClusterPVS( stateForCamera->viewCluster, rsh.worldModel );
 	const unsigned numWorldLeaves     = rsh.worldBrushModel->numvisleafs;
 	const auto leaves                 = rsh.worldBrushModel->visleafs;
-	unsigned *const visibleLeaves     = stateForCamera->visibleLeavesBuffer->get( numWorldLeaves );
+	unsigned *const visibleLeaves     = stateForCamera->visibleLeavesBuffer->get();
 	const Frustum *__restrict frustum = &stateForCamera->frustum;
 
 	unsigned numVisibleLeaves = 0;
@@ -56,7 +56,7 @@ template <unsigned Arch>
 auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder> {
 	const Frustum *__restrict frustum     = &stateForCamera->frustum;
 	const unsigned numWorldModelOccluders = rsh.worldBrushModel->numOccluders;
-	unsigned *const visibleOccluders      = stateForCamera->visibleOccludersBuffer->get( numWorldModelOccluders );
+	unsigned *const visibleOccluders      = stateForCamera->visibleOccludersBuffer->get();
 	unsigned numVisibleOccluders          = 0;
 
 #ifdef DEBUG_OCCLUDERS
@@ -92,7 +92,7 @@ auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> 
 		viewAxis   = lockedViewAxis;
 	}
 
-	SortedOccluder *const sortedOccluders = stateForCamera->sortedOccludersBuffer->get( numVisibleOccluders );
+	SortedOccluder *const sortedOccluders = stateForCamera->sortedOccludersBuffer->get();
 	unsigned numSortedOccluders           = 0;
 
 	for( unsigned i = 0; i < numVisibleOccluders; ++i ) {
@@ -336,8 +336,8 @@ auto Frontend::cullLeavesByOccludersArch( StateForCamera *stateForCamera,
 #endif
 
 	const unsigned numLeaves               = rsh.worldBrushModel->numvisleafs;
-	unsigned *const partiallyVisibleLeaves = stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->get( numLeaves );
-	unsigned *const fullyVisibleLeaves     = stateForCamera->occluderPassFullyVisibleLeavesBuffer->get( numLeaves );
+	unsigned *const partiallyVisibleLeaves = stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->get();
+	unsigned *const fullyVisibleLeaves     = stateForCamera->occluderPassFullyVisibleLeavesBuffer->get();
 
 	const unsigned numOccluders        = occluderFrusta.size();
 	const auto leaves                  = rsh.worldBrushModel->visleafs;

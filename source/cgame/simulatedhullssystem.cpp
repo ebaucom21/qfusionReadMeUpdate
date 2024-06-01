@@ -1066,8 +1066,8 @@ void SimulatedHullsSystem::submitToScene( int64_t currTime, DrawSceneRequest *dr
 	for( const BaseKeyframedHull *__restrict hull: activeKeyframedHulls ) {
 		assert( hull->numLayers );
 
-		const DynamicMesh **submittedMeshesBuffer = m_storageOfSubmittedMeshPtrs.get( 0 ) + offsetOfMultilayerMeshData;
-		float *const submittedOrderDesignators    = m_storageOfSubmittedMeshOrderDesignators.get( 0 ) + offsetOfMultilayerMeshData;
+		const DynamicMesh **submittedMeshesBuffer = m_storageOfSubmittedMeshPtrs.get() + offsetOfMultilayerMeshData;
+		float *const submittedOrderDesignators    = m_storageOfSubmittedMeshOrderDesignators.get() + offsetOfMultilayerMeshData;
 
 		const bool isCoupledWithConcentricHull = pairIndicesForKeyframedHulls[keyframedHullIndex] != std::nullopt;
 		if( isCoupledWithConcentricHull ) {
@@ -1235,12 +1235,12 @@ void SimulatedHullsSystem::submitToScene( int64_t currTime, DrawSceneRequest *dr
 		if( const std::optional<uint8_t> pairIndex = pairIndicesForConcentricHulls[concentricHullIndex] ) {
 			const unsigned meshDataOffset     = meshDataOffsetsForPairs[*pairIndex];
 			const unsigned numAddedToonMeshes = numAddedMeshesForPairs[*pairIndex];
-			submittedMeshesBuffer             = m_storageOfSubmittedMeshPtrs.get( 0 ) + meshDataOffset + numAddedToonMeshes;
-			submittedOrderDesignators         = m_storageOfSubmittedMeshOrderDesignators.get( 0 ) + meshDataOffset + numAddedToonMeshes;
+			submittedMeshesBuffer             = m_storageOfSubmittedMeshPtrs.get() + meshDataOffset + numAddedToonMeshes;
+			submittedOrderDesignators         = m_storageOfSubmittedMeshOrderDesignators.get() + meshDataOffset + numAddedToonMeshes;
 			startFromOrder                    = topAddedLayersForPairs[*pairIndex];
 		} else {
-			submittedMeshesBuffer     = m_storageOfSubmittedMeshPtrs.get( 0 ) + offsetOfMultilayerMeshData;
-			submittedOrderDesignators = m_storageOfSubmittedMeshOrderDesignators.get( 0 ) + offsetOfMultilayerMeshData;
+			submittedMeshesBuffer     = m_storageOfSubmittedMeshPtrs.get() + offsetOfMultilayerMeshData;
+			submittedOrderDesignators = m_storageOfSubmittedMeshOrderDesignators.get() + offsetOfMultilayerMeshData;
 			startFromOrder            = 0.0f;
 		}
 

@@ -497,10 +497,10 @@ bool Backend::loadBuffersFromFile( const wsw::StringView &filePath, ALuint *buff
 	snd_info_t monoInfo;
 	ALBufferHolder stereoBufferHolder;
 	if( fileInfo.numChannels == 1 ) {
-		monoData = m_fileDataBuffer.get( 0 );
+		monoData = m_fileDataBuffer.get();
 		monoInfo = fileInfo;
 	} else {
-		const void *stereoData      = m_fileDataBuffer.get( 0 );
+		const void *stereoData      = m_fileDataBuffer.get();
 		const snd_info_t stereoInfo = fileInfo;
 
 		ALBufferHolder tmpBufferHolder( uploadBufferData( filePath, stereoInfo, stereoData ) );
@@ -517,7 +517,7 @@ bool Backend::loadBuffersFromFile( const wsw::StringView &filePath, ALuint *buff
 			return false;
 		}
 
-		monoData = m_resamplingBuffer.get( monoSizeInBytes );
+		monoData = m_resamplingBuffer.get();
 		if( stereoInfo.bytesPerSample == 2 ) {
 			runResamplingLoop<int16_t>( (int16_t *)stereoData, (int16_t *)monoData, stereoInfo.samplesPerChannel, s_stereo2mono->integer );
 		} else {

@@ -402,7 +402,7 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 auto TextureFactory::internTextureName( unsigned storageIndex,
 										const wsw::HashedStringView &name ) -> wsw::HashedStringView {
 	assert( name.length() <= kMaxNameLen );
-	char *const data = m_nameDataStorage.get( 0 ) + kNameDataStride * storageIndex;
+	char *const data = m_nameDataStorage.get() + kNameDataStride * storageIndex;
 	std::memcpy( data, name.data(), name.length() );
 	data[name.length()] = '\0';
 	return wsw::HashedStringView( data, name.length(), name.getHash(), wsw::StringView::ZeroTerminated );

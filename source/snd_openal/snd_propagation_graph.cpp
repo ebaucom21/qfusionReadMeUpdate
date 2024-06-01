@@ -179,8 +179,8 @@ bool PropagationGraphBuilder::Build( GraphLike *target ) {
 	const int dirsTableSide = numLeafs - 1;
 	m_dirsTable.reserve( dirsTableSide * ( dirsTableSide - 1 ) / 2 );
 
-	uint8_t *dirsDataPtr = m_dirsTable.get( dirsTableSide * ( dirsTableSide - 1 ) / 2 );
-	float *distanceTable = m_distanceTable.get( numLeafs * numLeafs );
+	uint8_t *dirsDataPtr = m_dirsTable.get();
+	float *distanceTable = m_distanceTable.get();
 
 	for( int i = 1; i < numLeafs; ++i ) {
 		for( int j = i + 1; j < numLeafs; ++j ) {
@@ -199,7 +199,7 @@ bool PropagationGraphBuilder::Build( GraphLike *target ) {
 			assert( GetDirFromLeafToLeaf( i, j, dir ) );
 		}
 	}
-	assert( dirsDataPtr - m_dirsTable.get( 0 ) == dirsTableSide * ( dirsTableSide - 1 ) / 2 );
+	assert( dirsDataPtr - m_dirsTable.get() == dirsTableSide * ( dirsTableSide - 1 ) / 2 );
 
 	size_t numAdjacencyElems = 0;
 	for( int i = 1; i < numLeafs; ++i ) {
@@ -222,8 +222,8 @@ bool PropagationGraphBuilder::Build( GraphLike *target ) {
 	m_adjacencyListsData.reserve( numAdjacencyElems );
 	m_adjacencyListsOffsets.reserve( numLeafs );
 
-	auto *const adjacencyListsData    = m_adjacencyListsData.get( numAdjacencyElems );
-	auto *const adjacencyListsOffsets = m_adjacencyListsOffsets.get( numLeafs );
+	auto *const adjacencyListsData    = m_adjacencyListsData.get();
+	auto *const adjacencyListsOffsets = m_adjacencyListsOffsets.get();
 
 	int *dataPtr = adjacencyListsData;
 	// Write a zero-length list for the zero leaf
@@ -293,7 +293,7 @@ const float *PropagationGraphBuilder::GetDirFromLeafToLeaf( int leaf1, int leaf2
 	// We iterate over cells in the upper triangle starting from i + 1 for i-th row.
 	// Remember that leaf1 corresponds to row index and leaf2 corresponds to column index.
 	const int indexInRow = leaf2 - leaf1 - 1;
-	const uint8_t dirByte = m_dirsTable.get( 0 )[rowOffset + indexInRow];
+	const uint8_t dirByte = m_dirsTable.get()[rowOffset + indexInRow];
 	if( dirByte != std::numeric_limits<uint8_t>::max() ) {
 		::ByteToDir( dirByte, reuse );
 		VectorScale( reuse, sign, reuse );
@@ -410,19 +410,19 @@ bool CachedGraphReader::Read( CachedLeafsGraph *readObject ) {
 
 	PodBufferHolder<float> distanceTableHolder;
 	distanceTableHolder.reserve( numLeafs * numLeafs );
-	if( !CachedComputationReader::Read( distanceTableHolder.get( 0 ), numBytesForDistanceTable ) ) {
+	if( !CachedComputationReader::Read( distanceTableHolder.get(), numBytesForDistanceTable ) ) {
 		return false;
 	}
 
 	PodBufferHolder<uint8_t> dirsTableHolder;
 	dirsTableHolder.reserve( numLeafs * numLeafs );
-	if( !CachedComputationReader::Read( dirsTableHolder.get( 0 ), numBytesForDirsTable ) ) {
+	if( !CachedComputationReader::Read( dirsTableHolder.get(), numBytesForDirsTable ) ) {
 		return false;
 	}
 
 	// Validate dirs
 	for( int i = 0; i < numStoredDirs; ++i ) {
-		if( const uint8_t maybeDirByte = dirsTableHolder.get( 0 )[i]; !::IsValidDirByte( maybeDirByte ) ) {
+		if( const uint8_t maybeDirByte = dirsTableHolder.get()[i]; !::IsValidDirByte( maybeDirByte ) ) {
 			if( maybeDirByte != std::numeric_limits<uint8_t>::max() ) {
 				return false;
 			}
@@ -433,19 +433,19 @@ bool CachedGraphReader::Read( CachedLeafsGraph *readObject ) {
 	adjacencyListsData.reserve( listsDataSize );
 	adjacencyListsOffsets.reserve( numLeafs );
 
-	if( !CachedComputationReader::Read( adjacencyListsData.get( 0 ), sizeof( int ) * listsDataSize ) ) {
+	if( !CachedComputationReader::Read( adjacencyListsData.get(), sizeof( int ) * listsDataSize ) ) {
 		return false;
 	}
-	if( !CachedComputationReader::Read( adjacencyListsOffsets.get( 0 ), sizeof( int ) * numLeafs ) ) {
+	if( !CachedComputationReader::Read( adjacencyListsOffsets.get(), sizeof( int ) * numLeafs ) ) {
 		return false;
 	}
 
-	int *const listsDataBegin = adjacencyListsData.get( 0 );
-	int *const listsDataEnd   = adjacencyListsData.get( 0 ) + listsDataSize;
+	int *const listsDataBegin = adjacencyListsData.get();
+	int *const listsDataEnd   = adjacencyListsData.get() + listsDataSize;
 
 	// Byte-swap and validate offsets
 	int prevOffset = 0;
-	auto *offsets = adjacencyListsOffsets.get( 0 );
+	auto *offsets = adjacencyListsOffsets.get();
 	for( int i = 1; i < numLeafs; ++i ) {
 		offsets[i] = LittleLong( offsets[i] );
 		if( offsets[i] < 0 ) {
@@ -493,7 +493,7 @@ bool CachedGraphReader::Read( CachedLeafsGraph *readObject ) {
 	}
 
 	for( int i = 0, end = numLeafs * numLeafs; i < end; ++i ) {
-		distanceTableHolder.get( 0 )[i] = LittleLong( distanceTableHolder.get( 0 )[i] );
+		distanceTableHolder.get()[i] = LittleLong( distanceTableHolder.get()[i] );
 	}
 
 	readObject->m_distanceTable         = std::move( distanceTableHolder );
@@ -513,15 +513,15 @@ bool CachedGraphWriter::Write( const CachedLeafsGraph *writtenObject ) {
 		return false;
 	}
 
-	const auto lastOffset = writtenObject->m_adjacencyListsOffsets.get( 0 )[numLeafs - 1];
+	const auto lastOffset = writtenObject->m_adjacencyListsOffsets.get()[numLeafs - 1];
 	// Add the size of the last list (the first element in the array), +1 for the leading array size element
-	const int listsDataSize     = lastOffset + writtenObject->m_adjacencyListsData.get( 0 )[lastOffset] + 1;
+	const int listsDataSize     = lastOffset + writtenObject->m_adjacencyListsData.get()[lastOffset] + 1;
 
 	if( !WriteInt32( listsDataSize ) ) {
 		return false;
 	}
 
-	if( !CachedComputationWriter::Write( writtenObject->m_distanceTable.get( 0 ), numLeafs * numLeafs * sizeof( float ) ) ) {
+	if( !CachedComputationWriter::Write( writtenObject->m_distanceTable.get(), numLeafs * numLeafs * sizeof( float ) ) ) {
 		return false;
 	}
 
@@ -529,15 +529,15 @@ bool CachedGraphWriter::Write( const CachedLeafsGraph *writtenObject ) {
 	const int numStoredDirs   = ( dirsTableSide * ( dirsTableSide - 1 ) ) / 2;
 	const size_t dirsDataSize = sizeof( uint8_t ) * numStoredDirs;
 
-	if( !CachedComputationWriter::Write( writtenObject->m_dirsTable.get( 0 ), dirsDataSize ) ) {
+	if( !CachedComputationWriter::Write( writtenObject->m_dirsTable.get(), dirsDataSize ) ) {
 		return false;
 	}
 
-	if( !CachedComputationWriter::Write( writtenObject->m_adjacencyListsData.get( 0 ), sizeof( int ) * listsDataSize ) ) {
+	if( !CachedComputationWriter::Write( writtenObject->m_adjacencyListsData.get(), sizeof( int ) * listsDataSize ) ) {
 		return false;
 	}
 
-	return CachedComputationWriter::Write( writtenObject->m_adjacencyListsOffsets.get( 0 ), sizeof( int ) * numLeafs );
+	return CachedComputationWriter::Write( writtenObject->m_adjacencyListsOffsets.get(), sizeof( int ) * numLeafs );
 }
 
 bool PropagationGraphBuilder::TryUsingGlobalGraph( GraphLike *target ) {

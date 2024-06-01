@@ -30,12 +30,12 @@ public:
 	float EdgeDistance( int leaf1, int leaf2 ) const {
 		assert( leaf1 > 0 && leaf1 < m_numLeafs );
 		assert( leaf2 > 0 && leaf2 < m_numLeafs );
-		return m_distanceTable.get( m_numLeafs * m_numLeafs )[leaf1 * m_numLeafs + leaf2];
+		return m_distanceTable.get()[leaf1 * m_numLeafs + leaf2];
 	}
 
 	const int *AdjacencyList( int leafNum ) const {
 		assert( leafNum > 0 && leafNum < m_numLeafs );
-		return m_adjacencyListsData.get( m_numLeafs ) + m_adjacencyListsOffsets.get( m_numLeafs )[leafNum];
+		return m_adjacencyListsData.get() + m_adjacencyListsOffsets.get()[leafNum];
 	}
 };
 
@@ -133,7 +133,7 @@ class PropagationTable: public CachedComputation {
 		assert( numLeafs );
 		assert( fromLeafNum > 0 && fromLeafNum < numLeafs );
 		assert( toLeafNum > 0 && toLeafNum < numLeafs );
-		return m_table.get( numLeafs * numLeafs )[numLeafs * fromLeafNum + toLeafNum];
+		return m_table.get()[numLeafs * fromLeafNum + toLeafNum];
 	}
 
 	void Clear() {
@@ -155,7 +155,7 @@ public:
 		Clear();
 	}
 
-	bool IsValid() const { return m_table.get( 0 ) != nullptr; }
+	bool IsValid() const { return m_table.get() != nullptr; }
 
 	/**
 	 * Returns true if a direct (ray-like) path between these leaves exists.
@@ -208,7 +208,7 @@ public:
 	void SetEdgeDistance( int leaf1, int leaf2, float newDistance ) {
 		// Template quirks: a member of a template base cannot be resolved in scope otherwise
 		const int numLeafs  = this->m_numLeafs;
-		auto *distanceTable = this->m_distanceTable.get( numLeafs * numLeafs );
+		auto *distanceTable = this->m_distanceTable.get();
 		// The distance table must point at the scratchpad
 		assert( leaf1 > 0 && leaf1 < numLeafs );
 		assert( leaf2 > 0 && leaf2 < numLeafs );
@@ -218,7 +218,7 @@ public:
 
 	void ScaleEdgeDistance( int leaf1, int leaf2, float scale ) {
 		const int numLeafs        = this->m_numLeafs;
-		auto *const distanceTable = this->m_distanceTable.get( numLeafs * numLeafs );
+		auto *const distanceTable = this->m_distanceTable.get();
 		assert( leaf1 > 0 && leaf1 < numLeafs );
 		assert( leaf2 > 0 && leaf2 < numLeafs );
 		distanceTable[leaf1 * numLeafs + leaf2] *= scale;
@@ -226,7 +226,7 @@ public:
 	}
 
 	void SaveDistanceTable() {
-		const float *src = m_distanceTable.get( m_numLeafs * m_numLeafs );
+		const float *src = m_distanceTable.get();
 		float *const dst = m_distanceTableScratchpad.reserveAndGet( m_numLeafs * m_numLeafs );
 		std::memcpy( dst, src, sizeof( float ) * m_numLeafs * m_numLeafs );
 		std::swap( m_distanceTable, m_distanceTableScratchpad );

@@ -99,7 +99,7 @@ auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
 	stateForCamera->drawSurfSurfSpansBuffer->reserve( numMergedSurfaces );
 	stateForCamera->bspDrawSurfacesBuffer->reserve( numMergedSurfaces );
 
-	MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get( numMergedSurfaces );
+	MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
 	for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
 		mergedSurfSpans[i].firstSurface = std::numeric_limits<int>::max();
 		mergedSurfSpans[i].lastSurface  = std::numeric_limits<int>::min();

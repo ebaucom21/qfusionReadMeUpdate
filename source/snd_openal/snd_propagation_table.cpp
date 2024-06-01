@@ -126,8 +126,8 @@ class FloodFillPathFinder {
 
 	float GetCertainPathDistance( int from, int to ) {
 		assert( from == m_lastFillLeafNum );
-		assert( std::isfinite( m_updateStatus.get( 0 )[to].distance ) );
-		return m_updateStatus.get( 0 )[to].distance;
+		assert( std::isfinite( m_updateStatus.get()[to].distance ) );
+		return m_updateStatus.get()[to].distance;
 	}
 public:
 	explicit FloodFillPathFinder( PropagationGraphBuilder *graph ) : m_graph( graph ) {
@@ -186,12 +186,12 @@ public:
 };
 
 inline bool PathReverseIterator::HasNext() const {
-	return m_leafNum > 0 && m_parent->m_updateStatus.get( 0 )[m_leafNum].parentLeaf[m_listIndex] > 0;
+	return m_leafNum > 0 && m_parent->m_updateStatus.get()[m_leafNum].parentLeaf[m_listIndex] > 0;
 }
 
 inline void PathReverseIterator::Next() {
 	assert( HasNext() );
-	m_leafNum = m_parent->m_updateStatus.get( 0 )[m_leafNum].parentLeaf[m_listIndex];
+	m_leafNum = m_parent->m_updateStatus.get()[m_leafNum].parentLeaf[m_listIndex];
 }
 
 float BidirectionalPathFinder::FindPath( int fromLeaf, int toLeaf, IteratorType **direct, IteratorType **reverse ) {
@@ -199,7 +199,7 @@ float BidirectionalPathFinder::FindPath( int fromLeaf, int toLeaf, IteratorType 
 	const int turnTargetLeaf[2] = { toLeaf, fromLeaf };
 
 	for( int i = 0, end = m_graph->NumLeafs(); i < end; ++i ) {
-		auto *status = m_updateStatus.get( 0 ) + i;
+		auto *status = m_updateStatus.get() + i;
 		for( int turn = 0; turn < 2; ++turn ) {
 			status->distance[turn] = std::numeric_limits<float>::infinity();
 			status->parentLeaf[turn] = -1;
@@ -210,9 +210,9 @@ float BidirectionalPathFinder::FindPath( int fromLeaf, int toLeaf, IteratorType 
 	m_heaps[0].Clear();
 	m_heaps[1].Clear();
 
-	m_updateStatus.get( 0 )[fromLeaf].distance[0] = float( 0 );
+	m_updateStatus.get()[fromLeaf].distance[0] = float( 0 );
 	m_heaps[0].Push( fromLeaf, float( 0 ), GetEuclideanDistance( fromLeaf, toLeaf ) );
-	m_updateStatus.get( 0 )[toLeaf].distance[1] = float( 0 );
+	m_updateStatus.get()[toLeaf].distance[1] = float( 0 );
 	m_heaps[1].Push( toLeaf, float( 0 ), GetEuclideanDistance( toLeaf, fromLeaf ) );
 
 	int bestLeaf = -1;
@@ -222,8 +222,8 @@ float BidirectionalPathFinder::FindPath( int fromLeaf, int toLeaf, IteratorType 
 			if( m_heaps[0].BestDistance() + m_heaps[1].BestDistance() >= bestDistanceSoFar ) {
 				assert( bestLeaf > 0 );
 				// Check whether this leaf has been really touched by direct and reverse algorithm turns
-				assert( m_updateStatus.get( 0 )[bestLeaf].parentLeaf[0] >= 0 );
-				assert( m_updateStatus.get( 0 )[bestLeaf].parentLeaf[1] >= 0 );
+				assert( m_updateStatus.get()[bestLeaf].parentLeaf[0] >= 0 );
+				assert( m_updateStatus.get()[bestLeaf].parentLeaf[1] >= 0 );
 				m_tmpDirectIterator.ResetWithLeaf( bestLeaf );
 				*direct = &m_tmpDirectIterator;
 				m_tmpReverseIterator.ResetWithLeaf( bestLeaf );
@@ -236,9 +236,9 @@ float BidirectionalPathFinder::FindPath( int fromLeaf, int toLeaf, IteratorType 
 			const HeapEntry &entry = activeHeap->PopInPlace();
 			// Save these values immediately as ReserveForAddition() call might make accessing the entry illegal.
 			const int entryLeafNum = entry.leafNum;
-			const double entryDistance = m_updateStatus.get( 0 )[entryLeafNum].distance[turn];
+			const double entryDistance = m_updateStatus.get()[entryLeafNum].distance[turn];
 
-			m_updateStatus.get( 0 )[entryLeafNum].isVisited[turn] = true;
+			m_updateStatus.get()[entryLeafNum].isVisited[turn] = true;
 
 			// Now scan all adjacent vertices
 			const auto *const adjacencyList = m_graph->AdjacencyList( entryLeafNum ) + 1;
@@ -246,7 +246,7 @@ float BidirectionalPathFinder::FindPath( int fromLeaf, int toLeaf, IteratorType 
 			activeHeap->ReserveForAddition( listSize );
 			for( int i = 0; i < listSize; ++i ) {
 				const auto leafNum = adjacencyList[i];
-				auto *const status = m_updateStatus.get( 0 )+ leafNum;
+				auto *const status = m_updateStatus.get()+ leafNum;
 				// We do not have to re-check already visited nodes for an euclidean heuristic
 				if( status->isVisited[turn] ) {
 					continue;
@@ -279,21 +279,21 @@ void FloodFillPathFinder::FloodFillForLeaf( int leafNum ) {
 	// A-star hinting targets for each turn
 
 	for( int i = 0, end = m_graph->NumLeafs(); i < end; ++i ) {
-		auto *status = m_updateStatus.get( 0 ) + i;
+		auto *status = m_updateStatus.get() + i;
 		status->distance = std::numeric_limits<float>::infinity();
 		status->parentLeaf = -1;
 	}
 
 	m_heap.Clear();
 
-	m_updateStatus.get( 0 )[leafNum].distance = 0.0f;
+	m_updateStatus.get()[leafNum].distance = 0.0f;
 	m_heap.Push( leafNum, 0.0f, 0.0f );
 
 	while( !m_heap.IsEmpty() ) {
 		const HeapEntry &entry = m_heap.PopInPlace();
 		// Save these values immediately as ReserveForAddition() call might make accessing the entry illegal.
 		const int entryLeafNum = entry.leafNum;
-		const double entryDistance = m_updateStatus.get( 0 )[entryLeafNum].distance;
+		const double entryDistance = m_updateStatus.get()[entryLeafNum].distance;
 
 		// Now scan all adjacent vertices
 		const auto *const adjacencyList = m_graph->AdjacencyList( entryLeafNum ) + 1;
@@ -301,7 +301,7 @@ void FloodFillPathFinder::FloodFillForLeaf( int leafNum ) {
 		m_heap.ReserveForAddition( listSize );
 		for( int i = 0; i < listSize; ++i ) {
 			const auto leafNum = adjacencyList[i];
-			auto *const status = &m_updateStatus.get( 0 )[leafNum];
+			auto *const status = &m_updateStatus.get()[leafNum];
 			float edgeDistance = m_graph->EdgeDistance( entryLeafNum, leafNum );
 			float relaxedDistance = edgeDistance + entryDistance;
 			if( status->distance <= relaxedDistance ) {
@@ -328,7 +328,7 @@ int FloodFillPathFinder::UnwindPath( int from, int to, int *directLeafNumsEnd, i
 	for(;; ) {
 		*directWritePtr-- = vertexNum;
 		*reverseWritePtr++ = vertexNum;
-		int parent = m_updateStatus.get( 0 )[vertexNum].parentLeaf;
+		int parent = m_updateStatus.get()[vertexNum].parentLeaf;
 		if( parent < 0 ) {
 			break;
 		}
@@ -525,7 +525,7 @@ public:
 };
 
 PropagationBuilderThreadState::PropagationBuilderThreadState( ParentBuilderType *parent, const PropagationGraphBuilder *referenceGraph )
-	: m_parent( parent ), m_table( parent->m_table.get( wsw::square( referenceGraph->NumLeafs() ) ) )
+	: m_parent( parent ), m_table( parent->m_table.get() )
 	, m_graph( referenceGraph->NumLeafs(), referenceGraph->m_fastAndCoarse ) {
 	// TODO: We used to share something...
 	m_graph.m_distanceTable         = referenceGraph->m_distanceTable.makeADeepCopy();
@@ -547,7 +547,7 @@ class FinePropagationBuilder : public PropagationTableBuilder {
 		const int numLeafs = m_graphBuilder.NumLeafs();
 		for( int leafNum = 1; leafNum < numLeafs; ++leafNum ) {
 			(void)taskSystem->add( [=, this]() {
-				static thread_local FinePropagationThreadState threadState( this, m_euclideanDistanceTable.get( 0 ), &m_graphBuilder );
+				static thread_local FinePropagationThreadState threadState( this, m_euclideanDistanceTable.get(), &m_graphBuilder );
 				threadState.DoForRangeOfLeafs( leafNum, leafNum + 1 );
 			});
 		}
@@ -556,7 +556,7 @@ public:
 	explicit FinePropagationBuilder( int actualNumLeafs_ )
 		: PropagationTableBuilder( actualNumLeafs_, false ) {
 		m_euclideanDistanceTable.reserveZeroed( actualNumLeafs_ * actualNumLeafs_ );
-		BuildLeafEuclideanDistanceTable( m_euclideanDistanceTable.get( 0 ), actualNumLeafs_ );
+		BuildLeafEuclideanDistanceTable( m_euclideanDistanceTable.get(), actualNumLeafs_ );
 	}
 };
 
@@ -638,8 +638,8 @@ void PropagationTableBuilder::ValidateJointResults() {
 
 	for( int i = 1; i < numLeafs; ++i ) {
 		for( int j = i + 1; j < numLeafs; ++j ) {
-			const PropagationTable::PropagationProps &iToJ = m_table.get( numLeafs * numLeafs )[i * numLeafs + j];
-			const PropagationTable::PropagationProps &jToI = m_table.get( numLeafs * numLeafs )[j * numLeafs + i];
+			const PropagationTable::PropagationProps &iToJ = m_table.get()[i * numLeafs + j];
+			const PropagationTable::PropagationProps &jToI = m_table.get()[j * numLeafs + i];
 
 			if( iToJ.HasDirectPath() ^ jToI.HasDirectPath() ) {
 				ValidationError( "Direct path presence does not match for leaves %d, %d", i, j );
@@ -888,7 +888,7 @@ bool FinePropagationThreadState::BuildPropagationPath( int leaf1, int leaf2, vec
 		prevPathDistance = newPathDistance;
 
 		// tmpLeafNums are capacious enough to store slightly more than NumLeafs() * 2 elements
-		int *const directLeafNumsEnd = m_tmpLeafNums.get( 0 ) + m_graph.NumLeafs() + 1;
+		int *const directLeafNumsEnd = m_tmpLeafNums.get() + m_graph.NumLeafs() + 1;
 		int *directLeafNumsBegin;
 
 		int *const reverseLeafNumsEnd = directLeafNumsEnd + m_graph.NumLeafs() + 1;
@@ -939,7 +939,7 @@ bool FinePropagationThreadState::BuildPropagationPath( int leaf1, int leaf2, vec
 bool CoarsePropagationThreadState::BuildPropagationPath( int leaf1, int leaf2, vec3_t _1to2, vec3_t _2to1, float *distance ) {
 	// There's surely a sufficient room for the unwind buffer
 	// tmpLeafNums are capacious enough to store slightly more than NumLeafs() * 2 elements
-	int *const directLeafNumsEnd    = m_tmpLeafNums.get( 0 ) + m_graph.NumLeafs() + 1;
+	int *const directLeafNumsEnd    = m_tmpLeafNums.get() + m_graph.NumLeafs() + 1;
 	int *const reverseLeafNumsBegin = directLeafNumsEnd + 1;
 
 	int numLeafsInChain = m_pathFinder.UnwindPath( leaf1, leaf2, directLeafNumsEnd, reverseLeafNumsBegin );
@@ -1106,7 +1106,7 @@ inline void PropagationTable::PropagationProps::SetIndirectPath( const vec3_t di
 
 bool PropagationTable::TryReadFromFile( int fsFlags ) {
 	PropagationTableReader reader( this, fsFlags );
-	return ( this->m_table = reader.ReadPropsTable( NumLeafs() ) ).get( 0 ) != nullptr;
+	return ( this->m_table = reader.ReadPropsTable( NumLeafs() ) ).get() != nullptr;
 }
 
 bool PropagationTable::ComputeNewState( bool fastAndCoarse ) {
@@ -1138,7 +1138,7 @@ bool PropagationTable::SaveToCache() {
 	}
 
 	PropagationTableWriter writer( this );
-	return writer.WriteTable( this->m_table.get( NumLeafs() ), NumLeafs() );
+	return writer.WriteTable( this->m_table.get(), NumLeafs() );
 }
 
 bool PropagationTableReader::ValidateTable( PropagationTable::PropagationProps *propsData, int actualNumLeafs ) {
@@ -1179,8 +1179,8 @@ PodBufferHolder<PropagationTable::PropagationProps> PropagationTableReader::Read
 
 	PodBufferHolder<PropagationTable::PropagationProps> result;
 	result.reserve( actualNumLeafs * actualNumLeafs );
-	if( Read( result.get( 0 ), sizeof( PropagationTable::PropagationProps ) * actualNumLeafs * actualNumLeafs ) ) {
-		if( ValidateTable( result.get( 0 ), actualNumLeafs ) ) {
+	if( Read( result.get(), sizeof( PropagationTable::PropagationProps ) * actualNumLeafs * actualNumLeafs ) ) {
+		if( ValidateTable( result.get(), actualNumLeafs ) ) {
 			return result;
 		}
 	}

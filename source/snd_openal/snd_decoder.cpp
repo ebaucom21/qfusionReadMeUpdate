@@ -110,7 +110,7 @@ bool S_LoadSound( const char *filename, PodBufferHolder<uint8_t> *dataBuffer, sn
 		return false;
 	}
 
-	void *saneData = dataBuffer->get( sizeInBytes );
+	void *saneData = dataBuffer->get();
 	std::memcpy( saneData, rawData, sizeInBytes );
 	Q_free( rawData );
 	return true;
