@@ -120,6 +120,10 @@ TaskSystem::~TaskSystem() {
 	delete m_impl;
 }
 
+auto TaskSystem::getNumberOfWorkers() const -> unsigned {
+	return m_impl->threads.size() + 1;
+}
+
 auto TaskSystem::addEntryAndAllocCallableMem( Affinity affinity, size_t alignment, size_t size ) -> std::pair<void *, TaskHandle> {
 	assert( !m_impl->isExecuting );
 	assert( m_impl->entries.size() < std::numeric_limits<uint16_t>::max() );
@@ -342,7 +346,9 @@ bool TaskSystem::threadExecTasks( TaskSystemImpl *__restrict impl, unsigned thre
 			} while( false );
 
 			if( chosenIndex != kIndexUnset ) {
-				( ( CallableStorage * )( impl->memOfCallables + entries[chosenIndex].offsetOfCallable ) )->call();
+				auto *callable = (CallableStorage *)( impl->memOfCallables + entries[chosenIndex].offsetOfCallable );
+				const unsigned workerIndex = threadNumber + 1;
+				callable->call( workerIndex );
 				// Postpone completion so we don't have to lock twice
 				pendingCompletionIndex = chosenIndex;
 			} else {

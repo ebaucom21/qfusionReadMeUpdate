@@ -6,6 +6,8 @@
 #include <limits>
 #include <mutex>
 #include <random>
+#include <vector>
+#include <memory>
 
 struct HeapEntry {
 	float distance;
@@ -512,7 +514,7 @@ protected:
 	__declspec( noreturn ) void ValidationError( _Printf_format_string_ const char *format, ... );
 #endif
 
-	virtual void SpawnTasks( TaskSystem *taskSystem ) = 0;
+	virtual bool ExecComputations() = 0;
 public:
 	explicit PropagationTableBuilder( int actualNumLeafs, bool fastAndCoarse_ )
 		: m_graphBuilder( actualNumLeafs, fastAndCoarse_ ) {}
@@ -543,14 +545,20 @@ class FinePropagationBuilder : public PropagationTableBuilder {
 	 */
 	PodBufferHolder<float> m_euclideanDistanceTable;
 
-	void SpawnTasks( TaskSystem *taskSystem ) override {
+	bool ExecComputations() override {
+		TaskSystem taskSystem( { .numExtraThreads = S_SuggestNumExtraThreadsForComputations() } );
+		// A workaround for non-movable,non-copyable types
+		std::vector<std::shared_ptr<FinePropagationThreadState>> threadStatesForWorkers;
+		for( unsigned i = 0; i < taskSystem.getNumberOfWorkers(); ++i ) {
+			threadStatesForWorkers.emplace_back( std::make_shared<FinePropagationThreadState>( this, m_euclideanDistanceTable.get(), &m_graphBuilder ) );
+		}
 		const int numLeafs = m_graphBuilder.NumLeafs();
 		for( int leafNum = 1; leafNum < numLeafs; ++leafNum ) {
-			(void)taskSystem->add( [=, this]() {
-				static thread_local FinePropagationThreadState threadState( this, m_euclideanDistanceTable.get(), &m_graphBuilder );
-				threadState.DoForRangeOfLeafs( leafNum, leafNum + 1 );
+			(void)taskSystem.add( [=,&threadStatesForWorkers]( unsigned workerIndex ) {
+				threadStatesForWorkers[workerIndex]->DoForRangeOfLeafs( leafNum, leafNum + 1 );
 			});
 		}
+		return taskSystem.exec();
 	}
 public:
 	explicit FinePropagationBuilder( int actualNumLeafs_ )
@@ -561,14 +569,20 @@ public:
 };
 
 class CoarsePropagationBuilder : public PropagationTableBuilder {
-	void SpawnTasks( TaskSystem *taskSystem ) override {
+	bool ExecComputations() override {
+		TaskSystem taskSystem( { .numExtraThreads = S_SuggestNumExtraThreadsForComputations() } );
+		// A workaround for non-movable,non-copyable types
+		std::vector<std::shared_ptr<CoarsePropagationThreadState>> threadStatesForWorkers;
+		for( unsigned i = 0; i < taskSystem.getNumberOfWorkers(); ++i ) {
+			threadStatesForWorkers.emplace_back( std::make_shared<CoarsePropagationThreadState>( this, &m_graphBuilder ) );
+		}
 		const int numLeafs = m_graphBuilder.NumLeafs();
 		for( int leafNum = 1; leafNum < numLeafs; ++leafNum ) {
-			(void)taskSystem->add( [=, this] {
-				static thread_local CoarsePropagationThreadState threadState( this, &m_graphBuilder );
-				threadState.DoForRangeOfLeafs( leafNum, leafNum + 1 );
+			(void)taskSystem.add( [=,&threadStatesForWorkers]( unsigned workerIndex ) {
+				threadStatesForWorkers[workerIndex]->DoForRangeOfLeafs( leafNum, leafNum + 1 );
 			});
 		}
+		return taskSystem.exec();
 	}
 public:
 	explicit CoarsePropagationBuilder( int actualNumLeafs_ )
@@ -613,9 +627,7 @@ bool PropagationTableBuilder::Build() {
 	// (a computation of props for a pair of leafs is a workload unit)
 	this->m_totalWorkload = ( numLeafs - 1 ) * ( numLeafs - 2 ) / 2;
 
-	TaskSystem taskSystem( { .numExtraThreads = S_SuggestNumExtraThreadsForComputations() } );
-	SpawnTasks( &taskSystem );
-	if( !taskSystem.exec() ) {
+	if( !ExecComputations() ) {
 		return false;
 	}
 

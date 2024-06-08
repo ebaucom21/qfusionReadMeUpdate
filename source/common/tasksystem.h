@@ -33,12 +33,15 @@ class TaskSystem {
 	struct CallableStorage {
 		virtual ~CallableStorage() = default;
 		virtual void moveSelfTo( void *mem ) = 0;
-		virtual void call() = 0;
+		virtual void call( unsigned workerIndex ) = 0;
 	};
 public:
 	struct CtorArgs { size_t numExtraThreads; };
 	explicit TaskSystem( CtorArgs &&args );
 	~TaskSystem();
+	// Returns a total number of threads which may execute, including the main (std::this_thread) thread
+	[[nodiscard]]
+	auto getNumberOfWorkers() const -> unsigned;
 
 	enum Affinity : unsigned { AnyThread, OnlyThisThread };
 
@@ -65,9 +68,9 @@ public:
 				that->m_hasValue = true;
 				this->m_hasValue = false;
 			}
-			void call() override {
+			void call( unsigned workerIndex ) override {
 				auto &thisCallable = *( (Callable *)m_buffer );
-				thisCallable();
+				thisCallable( workerIndex );
 			}
 
 			alignas( alignof( Callable ) )uint8_t m_buffer[sizeof( Callable )];
