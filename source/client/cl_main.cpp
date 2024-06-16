@@ -5278,7 +5278,10 @@ void CL_AdjustServerTime( unsigned int gameMsec ) {
 	const auto oldServerTime = cl.serverTime;
 	cl.serverTime = cls.gametime + cl.serverTimeDelta;
 	if( oldServerTime > cl.serverTime ) {
-		CL_GameModule_Reset();
+		// Reset timestamp-dependent effects
+		if( cge ) {
+			CG_ClearEffects();
+		}
 	}
 
 	// it launches a new snapshot when the timestamp of the CURRENT snap is reached.
