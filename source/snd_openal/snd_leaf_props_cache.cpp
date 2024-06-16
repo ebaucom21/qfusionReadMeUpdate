@@ -323,7 +323,7 @@ bool LeafPropsCache::ComputeNewState( bool fastAndCoarse ) {
 		for( int i = 1; i < actualNumLeafs; ++i ) {
 			// Just add independent tasks for every leaf
 			(void)taskSystem.add( [=,&samplersForWorkers,this]( unsigned workerIndex ) {
-				leafProps[i] = ComputeLeafProps( &samplersForWorkers[i], i, fastAndCoarse );
+				leafProps[i] = ComputeLeafProps( &samplersForWorkers[workerIndex], i, fastAndCoarse );
 			});
 		}
 		return taskSystem.exec();

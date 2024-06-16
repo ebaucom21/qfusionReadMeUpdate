@@ -237,10 +237,22 @@ static void *SV_Thread( void * ) {
 
 	unsigned gameMsec = 0;
 	float extraTime   = 0.0f;
+	bool running      = true;
 
 	while( true ) {
 		int realMsec;
 		do {
+			// While waiting for positive time delta or client ready status, keep checking the pipe for ingoing commands
+			if( QBufPipe_ReadCmds( g_svCmdPipe ) < 0 ) {
+				running = false;
+				break;
+			}
+			// As we have moved the builtin server to a separate thread, it needs its own call for pumping commands.
+			// The old shared command buffer processing used to be initiated by the client code every frame.
+			// The client code is kept untouched with regard to this, but it does not longer manage server commands.
+			// The command buffer of the dedicated server gets executed in Qcommon_Frame().
+			SV_GetCmdSystem()->executeBufferCommands();
+
 			newtime = Sys_Milliseconds();
 			realMsec = newtime - oldtime;
 			bool clientBlocked = false;
@@ -254,6 +266,7 @@ static void *SV_Thread( void * ) {
 				}
 				clientBlocked = true;
 			}
+
 			if( Com_ServerState() >= ss_game && !clientBlocked ) {
 				Sys_Sleep( 0 );
 			} else {
@@ -261,27 +274,22 @@ static void *SV_Thread( void * ) {
 				Sys_Sleep( 16 );
 			}
 		} while( true );
-		oldtime = newtime;
 
-		if( const unsigned fixedTime = v_fixedTime.get(); fixedTime > 0 ) {
-			gameMsec = fixedTime;
-		} else if( timescale->value >= 0 ) {
-			gameMsec = extraTime + (float)realMsec * timescale->value;
-			extraTime = ( extraTime + (float)realMsec * timescale->value ) - (float)gameMsec;
+		if( running ) {
+			oldtime = newtime;
+			if( const unsigned fixedTime = v_fixedTime.get(); fixedTime > 0 ) {
+				gameMsec = fixedTime;
+			} else if( timescale->value >= 0 ) {
+				gameMsec = extraTime + (float)realMsec * timescale->value;
+				extraTime = ( extraTime + (float)realMsec * timescale->value ) - (float)gameMsec;
+			} else {
+				gameMsec = realMsec;
+			}
+			SV_Frame( realMsec, gameMsec );
 		} else {
-			gameMsec = realMsec;
-		}
-
-		if( QBufPipe_ReadCmds( g_svCmdPipe ) < 0 ) {
+			// TODO: It should've been a break @ label construct
 			break;
 		}
-
-		// As we have moved the builtin server to a separate thread, it needs its own call for pumping commands.
-		// The old shared command buffer processing used to be initiated by the client code every frame.
-		// The client code is kept untouched with regard to this, but it does not longer manage server commands.
-		// The command buffer of the dedicated server gets executed in Qcommon_Frame().
-		SV_GetCmdSystem()->executeBufferCommands();
-		SV_Frame( realMsec, gameMsec );
 	}
 
 	// Allow accessing the cmd system from the main thread during shutdown
@@ -491,6 +499,9 @@ void Qcommon_Frame( unsigned realMsec, unsigned *gameMsec, float *extraTime ) {
 #ifndef DEDICATED_ONLY
 	// Wait for the builtin server (if we are connecting online it does not have the loading state)
 	if( Com_ServerState() == ss_loading ) {
+		// While waiting for server, keep reading from the pipe and executing buffer commands (if any).
+		(void)QBufPipe_ReadCmds( g_clCmdPipe );
+		CL_GetCmdSystem()->executeBufferCommands();
 		return;
 	}
 #endif
