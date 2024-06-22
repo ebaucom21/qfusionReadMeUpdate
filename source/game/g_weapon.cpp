@@ -327,6 +327,7 @@ static edict_t *W_Fire_TossProjectile( edict_t *self, vec3_t start, vec3_t angle
 	projectile->r.owner = self;
 	projectile->touch = W_Touch_Projectile; //generic one. Should be replaced after calling this func
 	projectile->nextThink = level.time + timeout;
+	projectile->timeout = level.time + timeout;
 	projectile->think = G_FreeEdict;
 	projectile->classname = NULL; // should be replaced after calling this func.
 	projectile->style = 0;
@@ -618,6 +619,106 @@ void W_Detonate_Grenade( edict_t *ent, const edict_t *ignore ) {
 	W_Grenade_ExplodeDir( ent, NULL, ignore );
 }
 
+[[nodiscard]]
+static bool isGrenadeEnemySuitable( const edict_t *grenade, const edict_t *enemy ) {
+	return enemy && !G_ISGHOSTING( enemy ) && enemy->s.number != grenade->s.ownerNum;
+}
+
+[[nodiscard]]
+static bool isGrenadeEnemyReachable( const edict_t *grenade, const edict_t *enemy,
+									 float *outSquareDistance = nullptr,
+									 float bestSquareDistanceSoFar = std::numeric_limits<float>::max() ) {
+	const float distance = DistanceSquared( grenade->s.origin, enemy->s.origin );
+	if( distance > wsw::square( 1.0f ) && distance < wsw::square( 192.0f ) && distance < bestSquareDistanceSoFar ) {
+		trace_t trace;
+		G_Trace( &trace, grenade->s.origin, nullptr, nullptr, enemy->s.origin, grenade, MASK_PLAYERSOLID );
+		if( trace.ent < 0 || trace.ent == enemy->s.number ) {
+			if( outSquareDistance ) {
+				*outSquareDistance = distance;
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+[[nodiscard]]
+static auto findGrenadeEnemy( const edict_t *grenade ) -> edict_t * {
+	g_teamlist_t *list;
+	if( GS_TeamBasedGametype( *ggs ) ) {
+		const int otherTeam = grenade->s.team == TEAM_ALPHA ? TEAM_BETA : TEAM_ALPHA;
+		list = &::teamlist[otherTeam];
+	} else {
+		list = &::teamlist[TEAM_PLAYERS];
+	}
+
+	int bestEntNum           = -1;
+	float bestSquareDistance = std::numeric_limits<float>::max();
+	for( int i = 0; i < list->numplayers; ++i ) {
+		const int entNum = list->playerIndices[i];
+		edict_t *const ent = game.edicts + entNum;
+		if( isGrenadeEnemySuitable( grenade, ent ) ) {
+			float outSquareDistance = std::numeric_limits<float>::max();
+			if( isGrenadeEnemyReachable( grenade, ent, &outSquareDistance, bestSquareDistance ) ) {
+				bestSquareDistance = outSquareDistance;
+				bestEntNum         = entNum;
+			}
+		}
+	}
+
+	return bestEntNum > 0 ? game.edicts + bestEntNum : nullptr;
+}
+
+static void W_Grenade_Think_Leap( edict_t *grenade ) {
+	assert( grenade->enemy );
+	assert( grenade->s.effects |= EF_ACTIVATED );
+	if( !isGrenadeEnemySuitable( grenade, grenade->enemy ) || grenade->timeout <= level.time ) {
+		W_Grenade_Explode( grenade );
+	} else {
+		if( isGrenadeEnemyReachable( grenade, grenade->enemy ) ) {
+			vec3_t dir;
+			VectorSubtract( grenade->enemy->s.origin, grenade->s.origin, dir );
+			VectorNormalize( dir );
+			// Don't let it push down
+			dir[2] = std::max( dir[2], 0.001f );
+			constexpr float accel = 750.0f;
+			const float deltaSpeed = accel * ( 0.001f * game.frametime );
+			VectorMA( grenade->velocity, deltaSpeed, dir, grenade->velocity );
+			grenade->velocity[2] = std::max( grenade->velocity[2], 25.0f );
+		}
+		grenade->nextThink = level.time + 1;
+	}
+}
+
+static void W_Grenade_Think_Scan( edict_t *grenade ) {
+	assert( grenade->s.effects & EF_ARMED );
+	if( grenade->timeout <= level.time ) {
+		W_Grenade_Explode( grenade );
+	} else {
+		if( edict_t *enemy = findGrenadeEnemy( grenade ) ) {
+			grenade->enemy = enemy;
+			grenade->s.effects |= EF_ACTIVATED;
+			grenade->velocity[2] = std::max( grenade->velocity[2], 175.0f );
+			grenade->timeout = level.time + 500;
+			grenade->think = W_Grenade_Think_Leap;
+			G_AddEvent( grenade, EV_GRENADE_ACTIVATE, 0, true );
+		}
+		grenade->nextThink = level.time + 1;
+	}
+}
+
+static void W_Grenade_Stop( edict_t *ent ) {
+	if( ( ent->s.effects & EF_STRONG_WEAPON ) && ( ent->think == W_Grenade_Explode ) ) {
+		if( ent->groundentity && VectorLengthSquared( ent->velocity ) < wsw::square( 300.0f ) ) {
+			ent->s.effects |= EF_ARMED;
+			ent->timeout += 1000;
+			ent->think = W_Grenade_Think_Scan;
+			ent->nextThink = level.time + 1;
+			G_AddEvent( ent, EV_GRENADE_ARM, 0, true );
+		}
+	}
+}
+
 /*
 * W_Touch_Grenade
 */
@@ -638,19 +739,22 @@ static void W_Touch_Grenade( edict_t *ent, edict_t *other, cplane_t *plane, int 
 	// don't explode on doors and plats that take damage
 	// except for doors and plats that take damage in race
 	if( !other->takedamage || ( !GS_RaceGametype( *ggs ) && ISBRUSHMODEL( other->s.modelindex ) ) ) {
+		ent->count++;
+		if( !GS_RaceGametype( *ggs ) || ( ent->s.effects & EF_STRONG_WEAPON ) ) {
+			// kill some velocity on each bounce
+			float friction = 0.85f;
+			const gs_weapon_definition_t *weapondef = GS_GetWeaponDef( ggs, WEAP_GRENADELAUNCHER );
+			if( weapondef && weapondef->firedef.friction > 0 ) {
+				friction = bound( 0, weapondef->firedef.friction, 2 );
+			}
+			VectorScale( ent->velocity, friction, ent->velocity );
+		}
 		// race - make grenades bounce twice
 		if( GS_RaceGametype( *ggs ) ) {
 			if( ent->s.effects & EF_STRONG_WEAPON ) {
 				ent->health -= 1;
 			}
-			if( !( ent->s.effects & EF_STRONG_WEAPON ) || ( ( VectorLength( ent->velocity ) && Q_rint( ent->health ) > 0 ) || ent->timeStamp + 350 > level.time ) ) {
-				// kill some velocity on each bounce
-				float friction = 0.85;
-				const gs_weapon_definition_t *weapondef = GS_GetWeaponDef( ggs, WEAP_GRENADELAUNCHER );
-				if( weapondef ) {
-					friction = bound( 0, weapondef->firedef.friction, 2 );
-				}
-				VectorScale( ent->velocity, friction, ent->velocity );
+			if( !( ent->s.effects & EF_STRONG_WEAPON ) || ( ( VectorLength( ent->velocity ) && ent->count < 2 ) || ent->timeStamp + 350 > level.time ) ) {
 				G_AddEvent( ent, EV_GRENADE_BOUNCE, ( ent->s.effects & EF_STRONG_WEAPON ) ? FIRE_MODE_STRONG : FIRE_MODE_WEAK, true );
 				return;
 			}
@@ -706,10 +810,13 @@ edict_t *W_Fire_Grenade( edict_t *self, vec3_t start, vec3_t angles, int speed, 
 	VectorClear( grenade->s.angles );
 	grenade->style = mod;
 	grenade->s.type = ET_GRENADE;
+	grenade->r.owner = self;
+	grenade->s.ownerNum = ENTNUM( self );
 	grenade->movetype = MOVETYPE_BOUNCEGRENADE;
 	grenade->touch = W_Touch_Grenade;
 	grenade->use = NULL;
 	grenade->think = W_Grenade_Explode;
+	grenade->stop = W_Grenade_Stop;
 	grenade->classname = "grenade";
 	grenade->enemy = NULL;
 	if( GS_RaceGametype( *ggs ) ) {
@@ -722,10 +829,6 @@ edict_t *W_Fire_Grenade( edict_t *self, vec3_t start, vec3_t angles, int speed, 
 	if( mod == MOD_GRENADE_S ) {
 		grenade->s.modelindex = SV_ModelIndex( PATH_GRENADE_STRONG_MODEL );
 		grenade->s.effects |= EF_STRONG_WEAPON;
-		if( GS_RaceGametype( *ggs ) ) {
-			// bounce count
-			grenade->health = 2;
-		}
 	} else {
 		grenade->s.modelindex = SV_ModelIndex( PATH_GRENADE_WEAK_MODEL );
 		grenade->s.effects &= ~EF_STRONG_WEAPON;

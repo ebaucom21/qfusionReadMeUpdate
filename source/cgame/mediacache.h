@@ -115,6 +115,8 @@ public:
 
 	CachedSound sndGrenadeWeakBounce { this, SoundSetProps { .name = SoundSetProps::Pattern { "sounds/weapons/gren_strong_bounce*" } } };
 	CachedSound sndGrenadeStrongBounce { this, SoundSetProps { .name = SoundSetProps::Pattern { "sounds/weapons/gren_strong_bounce*" } } };
+	CachedSound sndGrenadeArm { this, SoundSetProps { .name = SoundSetProps::Pattern { "sounds/weapons/gren_strong_arm*" } } };
+	CachedSound sndGrenadeActivate { this, SoundSetProps { .name = SoundSetProps::Pattern { "sounds/weapons/gren_strong_activate*" } } };
 
 	CachedSound sndGrenadeWeakExplosion { this, SoundSetProps { .name = SoundSetProps::Exact { S_WEAPON_GRENADE_W_HIT } } };
 	CachedSound sndGrenadeStrongExplosion { this, SoundSetProps { .name = SoundSetProps::Exact { S_WEAPON_GRENADE_S_HIT } } };

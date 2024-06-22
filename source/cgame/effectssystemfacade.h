@@ -57,8 +57,6 @@ public:
 	void spawnPlasmaExplosionEffect( const float *origin, const float *impactNormal, int mode );
 	void spawnGenericExplosionEffect( const float *origin, int mode, float radius );
 
-	void spawnGrenadeBounceEffect( int entNum, int mode );
-
 	void spawnPlayerHitEffect( const float *origin, const float *dir, int damage, unsigned povPlayerMask );
 
 	void spawnElectroboltHitEffect( const float *origin, const float *impactNormal, const float *impactDir,
@@ -173,7 +171,6 @@ public:
 	void submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest, unsigned povPlayerMask );
 private:
 	void startSound( const SoundSet *sound, const float *origin, float attenuation = 1.0f );
-	void startRelativeSound( const SoundSet *sound, int entNum, float attenuation = 1.0f );
 
 	void spawnExplosionEffect( const float *origin, const float *dir, const SoundSet *sound, float radius, bool addSoundLfe );
 

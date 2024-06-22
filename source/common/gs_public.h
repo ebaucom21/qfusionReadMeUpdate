@@ -825,6 +825,8 @@ typedef enum {
 	EV_BLADE_IMPACT,
 	EV_GUNBLADEBLAST_IMPACT,
 	EV_GRENADE_BOUNCE,
+	EV_GRENADE_ARM,
+	EV_GRENADE_ACTIVATE,
 	EV_GRENADE_EXPLOSION,
 	EV_ROCKET_EXPLOSION,
 	EV_PLASMA_EXPLOSION,
@@ -950,6 +952,8 @@ enum {
 #define EF_REGEN                    4096
 #define EF_EXPIRING_REGEN           8192
 #define EF_GHOST                    16384
+#define EF_ARMED                    32768
+#define EF_ACTIVATED                65536
 
 // oh, this is so nasty... (reuse effect bits for different entity types)
 #define EF_NOPORTALENTS             EF_CARRIER
@@ -957,10 +961,10 @@ enum {
 #define EF_PLAYER_HIDENAME          EF_TEAMCOLOR_TRANSITION
 
 // these ones can be only set from client side
-#define EF_AMMOBOX                  ( 1 << 16 )
-#define EF_RACEGHOST                ( 1 << 17 )
-#define EF_OUTLINE                  ( 1 << 18 )
-#define EF_GHOSTITEM                ( 1 << 19 )
+#define EF_AMMOBOX                  ( 1 << 17 )
+#define EF_RACEGHOST                ( 1 << 18 )
+#define EF_OUTLINE                  ( 1 << 19 )
+#define EF_GHOSTITEM                ( 1 << 20 )
 
 //===============================================================
 // gs_weapons.c

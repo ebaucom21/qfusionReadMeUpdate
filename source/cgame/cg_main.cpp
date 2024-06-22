@@ -2338,6 +2338,30 @@ static void handleShockwaveExplosionEvent( entity_state_t *ent, int parm, bool p
 	}
 }
 
+static void handleGrenadeBounceEvent( entity_state_t *ent, int parm ) {
+	if( getPrimaryViewState()->allowSounds ) {
+		const SoundSet *sound = nullptr;
+		if( parm == FIRE_MODE_STRONG ) {
+			sound = cgs.media.sndGrenadeStrongBounce;
+		} else {
+			sound = cgs.media.sndGrenadeWeakBounce;
+		}
+		SoundSystem::instance()->startRelativeSound( sound, SoundSystem::OriginAttachment, ent->number, CHAN_AUTO, v_volumeEffects.get(), ATTN_IDLE );
+	}
+}
+
+static void handleGrenadeArmOrActivateEvent( entity_state_t *ent ) {
+	if( getPrimaryViewState()->allowSounds ) {
+		const SoundSet *sound = nullptr;
+		if( ent->effects & EF_ACTIVATED ) {
+			sound = cgs.media.sndGrenadeActivate;
+		} else {
+			sound = cgs.media.sndGrenadeArm;
+		}
+		SoundSystem::instance()->startRelativeSound( sound, SoundSystem::OriginAttachment, ent->number, CHAN_AUTO, v_volumeEffects.get(), ATTN_IDLE );
+	}
+}
+
 static void handleGunbladeBlastImpactEvent( entity_state_t *ent, int parm, bool predicted ) {
 	vec3_t dir;
 	ByteToDir( parm, dir );
@@ -2432,7 +2456,9 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 		case EV_GRENADE_EXPLOSION: return handleGrenadeExplosionEvent( ent, parm, predicted );
 		case EV_ROCKET_EXPLOSION: return handleRocketExplosionEvent( ent, parm, predicted );
 		case EV_WAVE_EXPLOSION: return handleShockwaveExplosionEvent( ent, parm, predicted );
-		case EV_GRENADE_BOUNCE: return cg.effectsSystem.spawnGrenadeBounceEffect( ent->number, parm );
+		case EV_GRENADE_BOUNCE: return handleGrenadeBounceEvent( ent, parm );
+		case EV_GRENADE_ARM: return handleGrenadeArmOrActivateEvent( ent );
+		case EV_GRENADE_ACTIVATE: return handleGrenadeArmOrActivateEvent( ent );
 		case EV_BLADE_IMPACT: return cg.effectsSystem.spawnGunbladeBladeHitEffect( ent->origin, ent->origin2, ent->ownerNum );
 		case EV_GUNBLADEBLAST_IMPACT: return handleGunbladeBlastImpactEvent( ent, parm, predicted );
 		case EV_BLOOD: return handleBloodEvent( ent, parm, predicted );
@@ -4449,7 +4475,17 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *drawFromView
 					cg.effectsSystem.touchWeakGrenadeTrail( cent->current.number, cent->ent.origin, cg.time );
 				}
 				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
-				drawSceneRequest->addLight( cent->ent.origin, 200.0f, 96.0f, 0.0f, 0.3f, 1.0f );
+				if( cent->current.effects & EF_STRONG_WEAPON ) {
+					if( cent->current.effects & EF_ACTIVATED ) {
+						drawSceneRequest->addLight( cent->ent.origin, 200.0f, 72.0f, 1.0f, 0.0f, 0.0f );
+					} else if( cent->current.effects & EF_ARMED ) {
+						drawSceneRequest->addLight( cent->ent.origin, 200.0f, 72.0f, 1.0f, 0.8f, 0.3f );
+					} else {
+						drawSceneRequest->addLight( cent->ent.origin, 200.0f, 72.0f, 0.0f, 0.3f, 1.0f );
+					}
+				} else {
+					drawSceneRequest->addLight( cent->ent.origin, 200.0f, 72.0f, 0.0f, 0.3f, 1.0f );
+				}
 				break;
 			case ET_PLASMA:
 				plasmaStateIndices[numPlasmaEnts++] = (uint16_t)stateIndex;

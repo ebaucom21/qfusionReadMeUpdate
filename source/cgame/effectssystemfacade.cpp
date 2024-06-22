@@ -33,12 +33,6 @@ void EffectsSystemFacade::startSound( const SoundSet *sound, const float *origin
 	}
 }
 
-void EffectsSystemFacade::startRelativeSound( const SoundSet *sound, int entNum, float attenuation ) {
-	if( getPrimaryViewState()->allowSounds ) {
-		SoundSystem::instance()->startRelativeSound( sound, SoundSystem::OriginAttachment, entNum, CHAN_AUTO, v_volumeEffects.get(), attenuation );
-	}
-}
-
 void EffectsSystemFacade::spawnRocketExplosionEffect( const float *origin, const float *dir, int mode ) {
 	const SoundSet *sound = mode == FIRE_MODE_STRONG ? cgs.media.sndRocketLauncherStrongHit : cgs.media.sndRocketLauncherWeakHit;
 	const bool addSoundLfe = v_heavyRocketExplosions.get();
@@ -572,17 +566,6 @@ void EffectsSystemFacade::simulateFrame( int64_t currTime ) {
 void EffectsSystemFacade::submitToScene( int64_t currTime, DrawSceneRequest *request, unsigned povPlayerMask ) {
 	m_transientEffectsSystem.submitToScene( currTime, request, povPlayerMask );
 	m_trackedEffectsSystem.submitToScene( currTime, request );
-}
-
-void EffectsSystemFacade::spawnGrenadeBounceEffect( int entNum, int mode ) {
-	assert( mode == FIRE_MODE_STRONG || mode == FIRE_MODE_WEAK );
-	const SoundSet *sound = nullptr;
-	if( mode == FIRE_MODE_STRONG ) {
-		sound = cgs.media.sndGrenadeStrongBounce;
-	} else {
-		sound = cgs.media.sndGrenadeWeakBounce;
-	}
-	startRelativeSound( sound, entNum, ATTN_IDLE );
 }
 
 static const vec4_t kBloodColors[] {
