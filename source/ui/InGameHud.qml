@@ -315,6 +315,7 @@ Item {
                 HudMiniInventoryBar {
                     povDataModel: hudField.povDataModel
                     miniviewScale: hudField.width / rootItem.width
+                    widthLimit: 0.57 * hudField.width
                 }
             }
 
