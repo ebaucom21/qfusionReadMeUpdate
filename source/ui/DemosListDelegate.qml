@@ -5,7 +5,7 @@ import net.warsow 2.6
 
 MouseArea {
     id: root
-    height: compact ? 56 : 22
+    height: compact ? UI.demoCompactRowHeight : UI.demoWideRowHeight
     hoverEnabled: true
 
     property bool compact
@@ -72,8 +72,8 @@ MouseArea {
             }
             AnchorChanges {
                 target: timestampLabel
-                anchors.left: gametypeLabel.right
-                anchors.right: undefined
+                anchors.left: undefined
+                anchors.right: root.right
                 anchors.top: undefined
                 anchors.bottom: root.bottom
             }
@@ -81,22 +81,21 @@ MouseArea {
                 target: demoNameLabel
                 width: demoColumnWidth
                 font.weight: Font.Medium
+                font.capitalization: Font.Normal
             }
             PropertyChanges {
                 target: serverNameLabel
                 horizontalAlignment: Qt.AlignHCenter
-                font.capitalization: Font.AllUppercase
                 font.weight: Font.Medium
+                elide: Text.ElideMiddle
             }
             PropertyChanges {
                 target: mapNameLabel
-                font.capitalization: Font.AllUppercase
                 width: mapColumnWidth
                 font.weight: Font.Medium
             }
             PropertyChanges {
                 target: gametypeLabel
-                font.capitalization: Font.AllUppercase
                 width: gametypeColumnWidth
                 font.weight: Font.Medium
             }
@@ -150,6 +149,7 @@ MouseArea {
             PropertyChanges {
                 target: demoNameLabel
                 width: root.width - timestampLabel.implicitWidth - 24
+                font.capitalization: Font.AllUppercase
                 font.weight: Font.Bold
             }
             PropertyChanges {
@@ -157,6 +157,7 @@ MouseArea {
                 horizontalAlignment: Qt.AlignLeft
                 font.capitalization: Font.MixedCase
                 font.weight: Font.Normal
+                elide: Text.ElideRight
             }
             PropertyChanges {
                 target: mapNameLabel
@@ -187,7 +188,6 @@ MouseArea {
         id: demoNameLabel
         anchors.margins: labelMargins
         horizontalAlignment: Qt.AlignLeft
-        font.capitalization: Font.AllUppercase
         font.weight: Font.Medium
         elide: Text.ElideRight
         text: demoName
@@ -198,9 +198,7 @@ MouseArea {
         width: serverColumnWidth
         anchors.margins: labelMargins
         horizontalAlignment: Qt.AlignHCenter
-        font.capitalization: Font.AllUppercase
         font.weight: Font.Medium
-        elide: Text.ElideMiddle
         text: serverName
         color: textColor
     }
@@ -239,5 +237,6 @@ MouseArea {
         elide: Text.ElideMiddle
         text: tags
         color: textColor
+        opacity: 0.7
     }
 }

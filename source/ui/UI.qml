@@ -38,6 +38,9 @@ QtObject {
 
     readonly property real desiredPopupContentWidth: 420.0
 
+    readonly property real demoCompactRowHeight: 56.0
+    readonly property real demoWideRowHeight: 22
+
     readonly property real settingsRowHeight: 44
     readonly property real settingsRowSpacing: 48
 

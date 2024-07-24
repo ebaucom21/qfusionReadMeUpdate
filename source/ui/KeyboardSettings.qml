@@ -23,13 +23,23 @@ Item {
     readonly property int headingLetterSpacing: UI.labelLetterSpacing + 0.5
     readonly property int headingFontSize: UI.labelFontSize
 
+    readonly property real spacingOfPanes: 64
+    readonly property real headerMargin: 64
+    readonly property real totalHeightOfPanes: keys.height + commandsPane.height + spacingOfPanes
+    readonly property real verticalSeparatorY: 0.5 * (root.height - totalHeightOfPanes) + keys.height
+
+    readonly property real regularKeysY: verticalSeparatorY - 0.5 * spacingOfPanes - keys.height
+    readonly property real regularCommandsY: verticalSeparatorY + 0.5 * spacingOfPanes
+    readonly property real exclusiveKeysY: 0.5 * (root.height - keys.height)
+    readonly property real exclusiveCommandsY: 0.5 * (root.height - commandsPane.height)
+
     // TODO: Generalize?
     Loader {
         id: keysHeaderLoader
         active: pendingCommandToBind >= 0 && !isAnimating
         width: root.width
         anchors.bottom: keys.top
-        anchors.bottomMargin: 64
+        anchors.bottomMargin: headerMargin
         anchors.horizontalCenter: parent.horizontalCenter
         transform: keysGroupTransform
 
@@ -59,6 +69,7 @@ Item {
         width: parent.width - 96
         height: implicitHeight
         anchors.horizontalCenter: parent.horizontalCenter
+        y: regularKeysY
         transform: keysGroupTransform
         isInEditorMode: pendingCommandToBind >= 0
         onUnbindingRequested: {
@@ -89,9 +100,9 @@ Item {
         id: commandsHeaderLoader
         active: pendingKeyToBind && !isAnimating
         width: root.width
-        anchors.bottom: commandsPane.top
-        anchors.bottomMargin: 64
         anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: commandsPane.top
+        anchors.bottomMargin: headerMargin
         transform: commandsGroupTransform
 
         sourceComponent: ColumnLayout {
@@ -127,9 +138,8 @@ Item {
 
     CommandsPane {
         id: commandsPane
-        anchors.top: keys.bottom
-        anchors.topMargin: 64
         anchors.horizontalCenter: parent.horizontalCenter
+        y: regularCommandsY
         transform: commandsGroupTransform
         isInEditorMode: pendingKeyToBind
         allowMultiBind: commandsHeaderLoader.item && commandsHeaderLoader.item.allowMultiBind
@@ -191,6 +201,15 @@ Item {
     }
 
     NumberAnimation {
+        id: hideCommandsAnim
+        target: commandsGroupTransform
+        property: "y"
+        from: 0; to: 9999
+        duration: 333
+        easing.type: Easing.OutQuad
+    }
+
+    NumberAnimation {
         id: returnKeysAnim
         target: keysGroupTransform
         property: "y"
@@ -199,39 +218,33 @@ Item {
         easing.type: Easing.OutQuad
     }
 
-    NumberAnimation {
-        id: dropKeysAnim
-        target: keysGroupTransform
-        property: "y"
-        from: 0; to: 200
-        duration: 200
-        easing.type: Easing.OutQuad
-    }
-
-    NumberAnimation {
-        id: liftCommandsAnim
-        target: commandsGroupTransform
-        property: "y"
-        from: 0; to: -200
-        duration: 200
-        easing.type: Easing.OutQuad
-    }
-
+    // Uncenter commands anim
     NumberAnimation {
         id: returnCommandsAnim
         target: commandsGroupTransform
         property: "y"
-        from: -200; to: 0
+        from: exclusiveCommandsY - regularCommandsY; to: 0
         duration: 200
         easing.type: Easing.OutQuad
     }
 
+    // Center keys anim
     NumberAnimation {
-        id: hideCommandsAnim
+        id: dropKeysAnim
+        target: keysGroupTransform
+        property: "y"
+        from: 0; to: exclusiveKeysY - regularKeysY
+        duration: 200
+        easing.type: Easing.OutQuad
+    }
+
+    // Center commands anim
+    NumberAnimation {
+        id: liftCommandsAnim
         target: commandsGroupTransform
         property: "y"
-        from: 0; to: 9999
-        duration: 333
+        from: 0; to: exclusiveCommandsY - regularCommandsY
+        duration: 200
         easing.type: Easing.OutQuad
     }
 

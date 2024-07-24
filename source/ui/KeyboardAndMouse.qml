@@ -20,7 +20,6 @@ Item {
 
         anchors {
             top: parent.top
-            topMargin: 32
             horizontalCenter: parent.horizontalCenter
         }
 

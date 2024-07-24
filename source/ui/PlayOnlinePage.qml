@@ -26,6 +26,44 @@ Item {
         UI.ui.startServerListUpdates(flags)
     }
 
+    readonly property bool centered: tableView.contentHeight < root.height + optionsBar.height +
+        optionsBar.topMargin + tableView.topMargin + tableView.bottomMargin
+
+    states: [
+        State {
+            name: "centered"
+            when: centered
+            AnchorChanges {
+                target: tableView
+                anchors.top: undefined
+                anchors.bottom: undefined
+                anchors.horizontalCenter: root.horizontalCenter
+                anchors.verticalCenter: root.verticalCenter
+            }
+            PropertyChanges {
+                target: tableView
+                height: contentHeight
+                boundsBehavior: Flickable.StopAtBounds
+            }
+        },
+        State {
+            name: "fullHeight"
+            when: !centered
+            AnchorChanges {
+                target: tableView
+                anchors.top: optionsBar.bottom
+                anchors.bottom: root.bottom
+                anchors.horizontalCenter: root.horizontalCenter
+                anchors.verticalCenter: undefined
+            }
+            PropertyChanges {
+                target: tableView
+                height: root.height - optionsBar.height - optionsBar.topMargin - tableView.topMargin - tableView.bottomMargin
+                boundsBehavior: Flickable.OvershootBounds
+            }
+        }
+    ]
+
     RowLayout {
         id: optionsBar
         anchors.top: parent.top
@@ -52,12 +90,9 @@ Item {
     TableView {
         id: tableView
         visible: !scanTimer.running
-        anchors.top: optionsBar.bottom
-        anchors.topMargin: 16
-        anchors.bottom: parent.bottom
-        // Ok, let it go slightly out of bounds in side directions
-        anchors.horizontalCenter: parent.horizontalCenter
         width: parent.width + columnSpacing
+        anchors.topMargin: columnSpacing
+        anchors.bottomMargin: columnSpacing
         columnSpacing: 28
         rowSpacing: 40
         interactive: true

@@ -13,13 +13,19 @@ Item {
     readonly property real gametypeColumnWidth: 100
     readonly property real timestampColumnWidth: 144
 
-    readonly property real demoNameWeight: 1.0
+    readonly property real demoNameWeight: 1.1
     readonly property real serverNameWeight: 1.0
 
-    readonly property real leftListMargin: 100
-    readonly property real rightListMargin: 100
-
     readonly property real rowSpacing: selectedIndex >= 0 ? 22 : 16
+    readonly property real headerAndListSpacing: rowSpacing
+    readonly property real queryAndHeaderSpacing: 48
+
+    readonly property real maxListViewHeight: (listView.count === 0) ? 0 :
+        ((selectedIndex >= 0 ? UI.demoCompactRowHeight : UI.demoWideRowHeight) * listView.count +
+            listView.spacing * (listView.count - 1))
+
+    readonly property bool centered: maxListViewHeight < root.height + listHeader.height +
+        queryAndHeaderSpacing + headerAndListSpacing + listView.anchors.bottomMargin
 
     property int selectedIndex: -1
     property var selectedGametype
@@ -31,6 +37,64 @@ Item {
     property var selectedTags
 
     Component.onCompleted: UI.demosResolver.reload()
+
+    states: [
+        State {
+            name: "centered"
+            when: centered
+            AnchorChanges {
+                target: listHeader
+                anchors.top: undefined
+                anchors.bottom: listView.top
+            }
+            AnchorChanges {
+                target: listView
+                anchors.top: undefined
+                anchors.bottom: undefined
+                anchors.left: root.left
+                anchors.verticalCenter: root.verticalCenter
+            }
+            PropertyChanges {
+                target: listHeader
+                anchors.topMargin: 0
+                anchors.bottomMargin: headerAndListSpacing
+            }
+            PropertyChanges {
+                target: listView
+                height: contentHeight
+                clip: false
+                boundsBehavior: Flickable.StopAtBounds
+            }
+        },
+        State {
+            name: "fullHeight"
+            when: !centered
+            AnchorChanges {
+                target: listHeader
+                anchors.top: queryField.bottom
+                anchors.bottom: undefined
+            }
+            AnchorChanges {
+                target: listView
+                anchors.top: listHeader.bottom
+                anchors.bottom: root.bottom
+                anchors.left: root.left
+                anchors.verticalCenter: undefined
+                anchors.horizontalCenter: undefined
+            }
+            PropertyChanges {
+                target: listHeader
+                anchors.topMargin: queryAndHeaderSpacing
+                anchors.bottomMargin: 0
+            }
+            PropertyChanges {
+                target: listView
+                height: maxListViewHeight
+                clip: true
+                boundsBehavior: Flickable.OvershootBounds
+            }
+        }
+    ]
 
     UITextField {
         id: queryField
@@ -82,13 +146,12 @@ Item {
 
     RowLayout {
         id: listHeader
-        visible: selectedIndex < 0
-        anchors.top: queryField.bottom
-        anchors.topMargin: 48
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.leftMargin: leftListMargin + rowSpacing / 2
-        anchors.rightMargin: rightListMargin + rowSpacing / 2
+        visible: selectedIndex < 0 && listView.count > 0
+        // Keep it anchored to the parent item so supplied heading widths are consistent (TODO: This design is questionable)
+        anchors.left: root.left
+        anchors.right: root.right
+        anchors.leftMargin: listView.anchors.leftMargin + rowSpacing / 3
+        anchors.rightMargin: listView.anchors.leftMargin + rowSpacing / 3
         width: listView.width
         height: visible ? implicitHeight : 0
         spacing: rowSpacing / 2
@@ -132,15 +195,11 @@ Item {
     ListView {
         id: listView
         model: UI.demosModel
-        anchors.top: listHeader.bottom
-        anchors.topMargin: 16
-        anchors.bottom: parent.bottom
+        anchors.topMargin: 24
         anchors.bottomMargin: 32
-        anchors.left: parent.left
-        anchors.leftMargin: leftListMargin
-        width: (selectedIndex >= 0 ? 0.6 * parent.width : parent.width) - leftListMargin - rightListMargin
-        spacing: selectedIndex >= 0 ? 1.5 * rowSpacing : rowSpacing
-        clip: true
+        anchors.leftMargin: 24
+        width: selectedIndex >= 0 ? 0.5 * root.width : (root.width - 2 * anchors.leftMargin)
+        spacing: selectedIndex >= 0 ? 1.75 * rowSpacing : rowSpacing
 
         delegate: DemosListDelegate {
             width: listView.width
@@ -197,13 +256,14 @@ Item {
     }
 
     Loader {
+        id: detailsLoader
         active: selectedIndex >= 0
         anchors.left: listView.right
         anchors.leftMargin: 48
         anchors.verticalCenter: parent.verticalCenter
         sourceComponent: Item {
-            width: root.width - listView.width - leftListMargin - rightListMargin
-            height: 240
+            width: root.width - listView.width - 4 * listView.anchors.leftMargin - anchors.leftMargin
+            height: (9.0 / 16.0) * width
 
             Column {
                 anchors.horizontalCenter: parent.horizontalCenter
