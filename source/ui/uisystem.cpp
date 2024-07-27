@@ -901,7 +901,6 @@ void QtUISystem::retrieveVideoModes() {
 QmlSandbox::~QmlSandbox() {
 	// Try being explicit with regard to deinitialization order. This is mandatory for the GL context.
 	if( m_rootObject ) {
-		uiNotice() << "Deleting root object" << m_rootObject;
 		if( auto *const item = qobject_cast<QQuickItem *>( m_rootObject ) ) {
 			item->setParentItem( nullptr );
 			item->setParent( nullptr );
@@ -909,10 +908,8 @@ QmlSandbox::~QmlSandbox() {
 		delete m_rootObject;
 		m_rootObject = nullptr;
 	}
-	uiNotice() << "Resetting component";
 	m_component.reset();
 	if( m_controlContext ) {
-		uiNotice() << "Detroying GL context";
 		const bool wasInUIRenderingMode = m_uiSystem->isInUIRenderingMode();
 		if( !wasInUIRenderingMode ) {
 			m_uiSystem->enterUIRenderingMode();
@@ -938,11 +935,8 @@ QmlSandbox::~QmlSandbox() {
 		assert( !m_framebufferObject );
 		assert( !m_control );
 	}
-	uiNotice() << "Resetting engine";
 	m_engine.reset();
-	uiNotice() << "Resetting surface";
 	m_surface.reset();
-	uiNotice() << "Resetting window";
 	m_window.reset();
 }
 
@@ -1169,6 +1163,12 @@ void QtUISystem::renderQml( QmlSandbox *sandbox ) {
 		// Consider this a fatal error
 		Com_Error( ERR_FATAL, "Failed to make the dedicated Qt OpenGL rendering context current\n" );
 	}
+
+	// It gets reset by QQucikWindow::resetOpenGLState() calls (and nothing gets ever bound),
+	// hence it has to be restored prior to every render() invocation
+	// (Qt VAO handling does not seem to be correct at all).
+	// If we run into VAO mismanagement bugs, nothing gets drawn.
+	sandbox->m_controlContext->extraFunctions()->glBindVertexArray( sandbox->m_vao );
 
 	sandbox->m_control->render();
 
