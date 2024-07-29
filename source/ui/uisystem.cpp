@@ -121,7 +121,6 @@ private:
 	QObject *m_rootObject { nullptr };
 	QtUISystem *const m_uiSystem;
 
-	GLuint m_vao { 0 };
 	bool m_hasPendingSceneChange { false };
 	bool m_hasPendingRedraw { false };
 	bool m_hasSucceededLoading { false };
@@ -915,11 +914,6 @@ QmlSandbox::~QmlSandbox() {
 			m_uiSystem->enterUIRenderingMode();
 		}
 		if( m_controlContext->makeCurrent( m_surface.get() ) ) {
-			if( m_vao ) {
-				auto *const f = m_controlContext->extraFunctions();
-				f->glBindVertexArray( 0 );
-				f->glDeleteVertexArrays( 1, &m_vao );
-			}
 			if( m_framebufferObject ) {
 				m_framebufferObject.reset( nullptr );
 			}
@@ -1105,13 +1099,9 @@ auto QtUISystem::createQmlSandbox( int logicalWidth, int logicalHeight, SandboxK
 
 	bool hadErrors = true;
 	if( sandbox->m_controlContext->makeCurrent( sandbox->m_surface.get() ) ) {
-		// Bind a dummy VAO in the Qt context. That's something it fails to do on its own.
-		auto *const f = sandbox->m_controlContext->extraFunctions();
-		f->glGenVertexArrays( 1, &sandbox->m_vao );
-		f->glBindVertexArray( sandbox->m_vao );
 		sandbox->m_control->initialize( sandbox->m_controlContext.get() );
-		sandbox->m_window->resetOpenGLState();
-		hadErrors = f->glGetError() != GL_NO_ERROR;
+		hadErrors = sandbox->m_controlContext->functions()->glGetError() != GL_NO_ERROR;
+		sandbox->m_controlContext->doneCurrent();
 	} else {
 		uiError() << "Failed to make the dedicated Qt OpenGL rendering context current";
 	}
@@ -1146,6 +1136,11 @@ auto QtUISystem::createQmlSandbox( int logicalWidth, int logicalHeight, SandboxK
 void QtUISystem::renderQml( QmlSandbox *sandbox ) {
 	assert( sandbox->m_hasPendingSceneChange || sandbox->m_hasPendingRedraw );
 
+	if( !sandbox->m_controlContext->makeCurrent( sandbox->m_surface.get() ) ) {
+		// Consider this a fatal error
+		Com_Error( ERR_FATAL, "Failed to make the dedicated Qt OpenGL rendering context current\n" );
+	}
+
 	assert( !sandbox->m_control->m_windowForDensityRetrieval );
 	// Just setting QT_SCALE_FACTOR is insufficient as the Qt backend uses 1.0 as density
 	// if QQuickRenderControl::renderWindowFor() returns nullptr (it always does).
@@ -1153,22 +1148,13 @@ void QtUISystem::renderQml( QmlSandbox *sandbox ) {
 	sandbox->m_control->m_windowForDensityRetrieval = sandbox->m_window.get();
 
 	if( sandbox->m_hasPendingSceneChange ) {
+		// This MUST be performed in the GL context of the control.
+		// Namely, these calls may create VAO-handled geometry, and VAOs are not shareable among contexts.
 		sandbox->m_control->polishItems();
 		sandbox->m_control->sync();
 	}
 
 	sandbox->m_hasPendingSceneChange = sandbox->m_hasPendingRedraw = false;
-
-	if( !sandbox->m_controlContext->makeCurrent( sandbox->m_surface.get() ) ) {
-		// Consider this a fatal error
-		Com_Error( ERR_FATAL, "Failed to make the dedicated Qt OpenGL rendering context current\n" );
-	}
-
-	// It gets reset by QQucikWindow::resetOpenGLState() calls (and nothing gets ever bound),
-	// hence it has to be restored prior to every render() invocation
-	// (Qt VAO handling does not seem to be correct at all).
-	// If we run into VAO mismanagement bugs, nothing gets drawn.
-	sandbox->m_controlContext->extraFunctions()->glBindVertexArray( sandbox->m_vao );
 
 	sandbox->m_control->render();
 
@@ -1177,6 +1163,8 @@ void QtUISystem::renderQml( QmlSandbox *sandbox ) {
 	// Note that setting it once at construction leads to malfunction of some other parts, hence we reset it asap.
 	// This is a hack, but at least we can avoid fragile patching of Qt.
 	sandbox->m_control->m_windowForDensityRetrieval = nullptr;
+
+	sandbox->m_controlContext->doneCurrent();
 }
 
 void QtUISystem::enterUIRenderingMode() {
