@@ -38,6 +38,10 @@ Item {
             title: "FPS"
             altTitle: "FRME<br>TIME"
             primaryValueText: Math.round(1000 / Hud.commonDataModel.frametimeDataRow.average)
+            fixedVisualMin: 0.0
+            maxVisualFrac: 0.9
+            useFixedLevelIfSteady: true
+            displayLowerBar: true
             rowData: Hud.commonDataModel.frametimeDataRow
             strokeColor: Hud.ui.colorWithAlpha("white", 0.7)
             valueFormatter: v => '' + Math.round(v)
@@ -48,6 +52,8 @@ Item {
             title: "PING"
             primaryValueText: Math.round(Hud.commonDataModel.pingDataRow.average)
             fixedVisualMin: 0.0
+            useFixedLevelIfSteady: true
+            steadyVisualFrac: 0.75
             rowData: Hud.commonDataModel.pingDataRow
             strokeColor: Hud.ui.colorWithAlpha("white", 0.7)
             HudPerfRow {

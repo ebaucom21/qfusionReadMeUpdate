@@ -15,12 +15,22 @@ Item {
     property var rowData
     property var fixedVisualMin: undefined
     property var fixedVisualMax: undefined
+    property real minVisualFrac: 0.0
+    property real maxVisualFrac: 1.0
+    property bool useFixedLevelIfSteady: false
+    // This property is meaningful even if useFixedLevelIfSteady is not set
+    // (we have to show it on this level if no fixed bounds are defined)
+    property real steadyVisualFrac: 0.5
+    property bool displayLowerBar: false
+    // Let us just skip the upper bar for now
 
     property var valueFormatter: (v) => '' + v
 
     onRowDataChanged: updateYValues()
     onFixedVisualMinChanged: updateYValues()
     onFixedVisualMaxChanged: updateYValues()
+    onUseFixedLevelIfSteadyChanged: updateYValues()
+    onDisplayLowerBarChanged: updateYValues()
 
     HudLabel {
         id: titleLabel
@@ -105,6 +115,14 @@ Item {
             PathLine {} PathLine {} PathLine {} PathLine {}
             PathLine {} PathLine {} PathLine {}
         }
+        ShapePath {
+            id: lowerBarPath
+            fillColor: "transparent"
+            strokeColor: "transparent"
+            Behavior on strokeColor { ColorAnimation { duration: 250 } }
+            strokeWidth: 2
+            PathLine {}
+        }
     }
 
     function updateXValues() {
@@ -117,6 +135,10 @@ Item {
     function updateYValues() {
         const count = rowData.samples.length
         console.assert(count === path.pathElements.length + 1)
+        console.assert(steadyVisualFrac >= 0.0 && steadyVisualFrac <= 1.0)
+        console.assert(minVisualFrac >= 0.0 && minVisualFrac < 1.0)
+        console.assert(maxVisualFrac > 0.0 && maxVisualFrac <= 1.0)
+        console.assert(minVisualFrac < maxVisualFrac)
         let minToUse = rowData.actualMin
         if (typeof(fixedVisualMin) !== "undefined") {
             minToUse = fixedVisualMin
@@ -125,22 +147,37 @@ Item {
         if (typeof(fixedVisualMax) !== "undefined") {
             maxToUse = fixedVisualMax
         }
-        if (minToUse !== maxToUse) {
+        if (minToUse !== maxToUse && !(useFixedLevelIfSteady && rowData.actualMin === rowData.actualMax)) {
             console.assert(minToUse < maxToUse)
             const rcpDelta = 1.0 / (maxToUse - minToUse)
             let frac = (rowData.samples[0] - minToUse) * rcpDelta
+            // Clip it
             frac = Math.min(1.0, Math.max(0.0, frac))
+            // Level it
+            frac = minVisualFrac + (maxVisualFrac - minVisualFrac) * frac
+            // Calc flipped Y
             path.startY = shape.height * (1.0 - frac)
             for (let i = 1; i < count; ++i) {
                 frac = (rowData.samples[i] - minToUse) * rcpDelta
+                // Clip it
                 frac = Math.min(1.0, Math.max(0.0, frac))
+                // Level it
+                frac = minVisualFrac + (maxVisualFrac - minVisualFrac) * frac
+                // Calc flipped Y
                 path.pathElements[i - 1].y = shape.height * (1.0 - frac)
             }
+            lowerBarPath.strokeColor       = UI.ui.colorWithAlpha(root.strokeColor, 0.2)
+            lowerBarPath.startX            = 0
+            lowerBarPath.startY            = shape.height * (1.0 - minVisualFrac)
+            lowerBarPath.pathElements[0].x = shape.width
+            lowerBarPath.pathElements[0].y = shape.height * (1.0 - minVisualFrac)
         } else {
-            path.startY = 0.5 * shape.height
+            const frac = 1.0 - steadyVisualFrac
+            path.startY = frac * shape.height
             for (let i = 1; i < count; ++i) {
-                path.pathElements[i - 1].y = 0.5 * shape.height
+                path.pathElements[i - 1].y = frac * shape.height
             }
+            lowerBarPath.strokeColor = "transparent"
         }
     }
 }
