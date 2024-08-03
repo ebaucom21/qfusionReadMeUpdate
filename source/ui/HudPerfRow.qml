@@ -51,7 +51,7 @@ Item {
         anchors.right: altTitleLabel.left
         anchors.bottom: parent.verticalCenter
         horizontalAlignment: Qt.AlignHCenter
-        text: valueFormatter(rowData.actualMax)
+        text: valueFormatter(rowData.displayedPeakMax)
         font.weight: Font.Bold
         font.family: Hud.ui.numbersFontFamily
         font.pointSize: 12
@@ -61,7 +61,7 @@ Item {
         anchors.right: altTitleLabel.left
         anchors.top: parent.verticalCenter
         horizontalAlignment: Qt.AlignHCenter
-        text: valueFormatter(rowData.actualMin)
+        text: valueFormatter(rowData.displayedPeakMin)
         font.weight: Font.Bold
         font.family: Hud.ui.numbersFontFamily
         font.pointSize: 12

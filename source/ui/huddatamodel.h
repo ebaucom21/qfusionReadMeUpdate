@@ -245,11 +245,15 @@ struct PerfDataRow {
 public:
 	Q_PROPERTY( qreal actualMin MEMBER m_actualMin );
 	Q_PROPERTY( qreal actualMax MEMBER m_actualMax );
+	Q_PROPERTY( qreal displayedPeakMin MEMBER m_displayedPeakMin );
+	Q_PROPERTY( qreal displayedPeakMax MEMBER m_displayedPeakMax );
 	Q_PROPERTY( qreal average MEMBER m_average );
 	Q_PROPERTY( QVector<qreal> samples MEMBER m_samples );
 
 	qreal m_actualMin { 0.0 };
 	qreal m_actualMax { 0.0 };
+	qreal m_displayedPeakMin { 0.0 };
+	qreal m_displayedPeakMax { 0.0 };
 	qreal m_average { 0.0 };
 	QVector<qreal> m_samples;
 };
@@ -538,9 +542,9 @@ public:
 	void addAward( unsigned playerNum, const wsw::StringView &award, int64_t timestamp );
 	void addStatusMessage( unsigned playerNum, const wsw::StringView &message, int64_t timestamp );
 
-	void addToFpsTimelime( float fps );
-	void addToPingTimelime( float ping );
-	void addToPacketlossTimeline( bool hadPacketloss );
+	void addToFrametimeTimeline( int64_t timestamp, float frametime );
+	void addToPingTimeline( int64_t timestamp, float ping );
+	void addToPacketlossTimeline( int64_t timestamp, bool hadPacketloss );
 
 	void checkPropertyChanges( int64_t currTime );
 	void updateScoreboardData( const ReplicatedScoreboardData &scoreboardData );
@@ -599,10 +603,12 @@ private:
 
 	// Acutually, this is not only for tracking, but should help to reuse objects and reduce allocations
 	struct TrackedPerfDataRow {
+		int64_t peakMinTimestamp { 0 }, peakMaxTimestamp { 0 };
+		qreal peakMin { 0.0 }, peakMax { 0.0 };
 		PerfDataRow prev, curr;
 		TrackedPerfDataRow();
 		[[nodiscard]]
-		bool update( float valueToAdd );
+		bool update( int64_t timestamp, float valueToAdd );
 	};
 
 	TrackedPerfDataRow m_frametimeDataRow;

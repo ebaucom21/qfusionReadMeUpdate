@@ -204,9 +204,9 @@ public:
 
 	void addStatusMessage( unsigned playerNum, const wsw::StringView &message ) override;
 
-	void addToFrametimeTimeline( float ) override;
-	void addToPingTimeline( float ) override;
-	void addToPacketlossTimeline( bool ) override;
+	void addToFrametimeTimeline( int64_t timestamp, float frametime ) override;
+	void addToPingTimeline( int64_t timestamp, float ping ) override;
+	void addToPacketlossTimeline( int64_t timestamp, bool hadPacketloss ) override;
 
 	void notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour rectonnectBehaviour, ConnectionDropStage dropStage );
 
@@ -2600,16 +2600,16 @@ void QtUISystem::addStatusMessage( unsigned playerNum, const wsw::StringView &me
 	}
 }
 
-void QtUISystem::addToFrametimeTimeline( float fps ) {
-	m_hudCommonDataModel.addToFpsTimelime( fps );
+void QtUISystem::addToFrametimeTimeline( int64_t timestamp, float frametime ) {
+	m_hudCommonDataModel.addToFrametimeTimeline( timestamp, frametime );
 }
 
-void QtUISystem::addToPingTimeline( float ping ) {
-	m_hudCommonDataModel.addToPingTimelime( ping );
+void QtUISystem::addToPingTimeline( int64_t timestamp, float ping ) {
+	m_hudCommonDataModel.addToPingTimeline( timestamp, ping );
 };
 
-void QtUISystem::addToPacketlossTimeline( bool hadPacketloss ) {
-	m_hudCommonDataModel.addToPacketlossTimeline( hadPacketloss );
+void QtUISystem::addToPacketlossTimeline( int64_t timestamp, bool hadPacketloss ) {
+	m_hudCommonDataModel.addToPacketlossTimeline( timestamp, hadPacketloss );
 }
 
 static const QString kConnectionFailedTitle( "Connection failed" );

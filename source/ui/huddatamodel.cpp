@@ -909,10 +909,23 @@ HudCommonDataModel::TrackedPerfDataRow::TrackedPerfDataRow() {
 	prev = curr;
 }
 
-bool HudCommonDataModel::TrackedPerfDataRow::update( float valueToAdd ) {
+bool HudCommonDataModel::TrackedPerfDataRow::update( int64_t timestamp, float valueToAdd ) {
 	curr.m_samples.removeLast();
 	curr.m_samples.prepend( (qreal)valueToAdd );
-	if( curr.m_samples != prev.m_samples ) {
+
+	bool doUpdate             = false;
+	const int64_t peakTimeout = 333;
+	const bool minTimedOut    = peakMinTimestamp + peakTimeout <= timestamp;
+	const bool maxTimedOut    = peakMaxTimestamp + peakTimeout <= timestamp;
+	if( minTimedOut || maxTimedOut ) {
+		doUpdate = true;
+	} else if( peakMin > valueToAdd || peakMax < valueToAdd ) {
+		doUpdate = true;
+	} else if( curr.m_samples != prev.m_samples ) {
+		doUpdate = true;
+	}
+
+	if( doUpdate ) {
 		qreal average  = 0.0;
 		qreal minValue = std::numeric_limits<qreal>::max();
 		qreal maxValue = std::numeric_limits<qreal>::lowest();
@@ -924,26 +937,37 @@ bool HudCommonDataModel::TrackedPerfDataRow::update( float valueToAdd ) {
 		curr.m_actualMax = maxValue;
 		curr.m_actualMin = minValue;
 		curr.m_average   = average / (qreal)curr.m_samples.size();
+		if( minTimedOut || peakMin > minValue ) {
+			peakMin          = minValue;
+			peakMinTimestamp = timestamp;
+		}
+		if( maxTimedOut || peakMax < maxValue ) {
+			peakMax          = maxValue;
+			peakMaxTimestamp = timestamp;
+		}
+		curr.m_displayedPeakMin = peakMin;
+		curr.m_displayedPeakMax = peakMax;
 		prev = curr;
 		return true;
 	}
+
 	return false;
 }
 
-void HudCommonDataModel::addToFpsTimelime( float fps ) {
-	if( m_frametimeDataRow.update( fps ) ) {
+void HudCommonDataModel::addToFrametimeTimeline( int64_t timestamp, float frametime ) {
+	if( m_frametimeDataRow.update( timestamp, frametime ) ) {
 		Q_EMIT frametimeDataRowChanged( getFrametimeDataRow() );
 	}
 }
 
-void HudCommonDataModel::addToPingTimelime( float ping ) {
-	if( m_pingDataRow.update( ping ) ) {
+void HudCommonDataModel::addToPingTimeline( int64_t timestamp, float ping ) {
+	if( m_pingDataRow.update( timestamp, ping ) ) {
 		Q_EMIT pingDataRowChanged( getPingDataRow() );
 	}
 }
 
-void HudCommonDataModel::addToPacketlossTimeline( bool hadPacketloss ) {
-	if( m_packetlossDataRow.update( hadPacketloss ? 1.0f : 0.0f ) ) {
+void HudCommonDataModel::addToPacketlossTimeline( int64_t timestamp, bool hadPacketloss ) {
+	if( m_packetlossDataRow.update( timestamp, hadPacketloss ? 1.0f : 0.0f ) ) {
 		Q_EMIT packetlossDataRowChanged( getPacketlossDataRow() );
 	}
 }

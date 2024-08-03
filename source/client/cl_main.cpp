@@ -1430,7 +1430,7 @@ void SCR_UpdateScreen( void ) {
 		canRenderView = true;
 
 		assert( cls.frametime > 0 );
-		uiSystem->addToFrametimeTimeline( cls.frametime );
+		uiSystem->addToFrametimeTimeline( cls.realtime, cls.frametime );
 
 		canDrawConsole = true;
 		canDrawConsoleNotify = true;
@@ -3349,8 +3349,8 @@ static void CL_ParseFrame( msg_t *msg ) {
 			}
 		}
 		auto *const uiSystem = wsw::ui::UISystem::instance();
-		uiSystem->addToPingTimeline( ping );
-		uiSystem->addToPacketlossTimeline( cls.netchan.dropped != 0 );
+		uiSystem->addToPingTimeline( cls.realtime, ping );
+		uiSystem->addToPacketlossTimeline( cls.realtime, cls.netchan.dropped != 0 );
 	}
 }
 

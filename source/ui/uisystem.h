@@ -111,9 +111,11 @@ public:
 
 	virtual void addStatusMessage( unsigned playerNum, const wsw::StringView &message ) = 0;
 
-	virtual void addToFrametimeTimeline( float ) = 0;
-	virtual void addToPingTimeline( float ) = 0;
-	virtual void addToPacketlossTimeline( bool hadPacketloss ) = 0;
+	// Accepts a monotonic timestamp purely for presentation purposes.
+	// Currently it regulates whether old peak values are kept on screen upon these submissions.
+	virtual void addToFrametimeTimeline( int64_t timestamp, float frametime ) = 0;
+	virtual void addToPingTimeline( int64_t timestamp, float ping ) = 0;
+	virtual void addToPacketlossTimeline( int64_t timestamp, bool hadPacketloss ) = 0;
 
 	virtual void notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour reconnectBehaviour, ConnectionDropStage dropStage ) = 0;
 
