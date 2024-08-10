@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <cassert>
 #include <cstdlib>
 #include <limits>
+#include <span>
 #include <utility>
 
 class TaskSystem {
@@ -66,7 +67,7 @@ public:
 
 	template <typename Callable>
 	[[nodiscard]]
-	auto add( const TaskHandle *depsBegin, const TaskHandle *depsEnd, Callable &&callable, Affinity affinity = AnyThread ) -> TaskHandle {
+	auto add( std::span<const TaskHandle> deps, Callable &&callable, Affinity affinity = AnyThread ) -> TaskHandle {
 		// This is a specialized replacement for std::function which should not have place in this omnipresent header
 		struct TapeCallableImpl final : public TapeCallable {
 			explicit TapeCallableImpl( Callable &&c ) : m_callable( std::forward<Callable>( c ) ) {}
@@ -79,17 +80,15 @@ public:
 
 		[[maybe_unused]] volatile TapeStateGuard tapeStateGuard( m_impl );
 
-		auto [memForCallable, offsetOfCallable] = allocMemForCallable( alignof( TapeCallableImpl ), sizeof( TapeCallableImpl ) );
-
-		TaskHandle result = addEntry( affinity, offsetOfCallable );
-		addPolledDependenciesToEntry( result, depsBegin, depsEnd );
+		auto [mem, task] = addImpl( deps, alignof( TapeCallableImpl ), sizeof( TapeCallableImpl ), affinity );
 
 		tapeStateGuard.succeeded = true;
 		// Construct it last in nothrowing fashion
 		static_assert( std::is_nothrow_move_constructible_v<Callable> );
-		new( memForCallable )TapeCallableImpl( std::forward<Callable>( callable ) );
+		new( mem )TapeCallableImpl( std::forward<Callable>( callable ) );
 
-		return result;
+		// The tape unlocks here
+		return task;
 	}
 
 	template <typename Callable>
@@ -102,11 +101,8 @@ public:
 	template <typename Callable>
 	[[nodiscard]]
 	auto addForIndicesInRange( std::pair<unsigned, unsigned> indicesRange,
-							   const TaskHandle *depsBegin, const TaskHandle *depsEnd,
+							   std::span<const TaskHandle> deps,
 							   Callable &&callable, Affinity affinity = AnyThread ) -> TaskHandle {
-		const auto [indicesBegin, indicesEnd] = indicesRange;
-		assert( indicesBegin <= indicesEnd );
-
 		// This is a specialized replacement for std::function which should not have place in this omnipresent header
 		struct TapeCallableImpl final : public TapeCallable {
 			explicit TapeCallableImpl( Callable &&c ) : m_callable( std::forward<Callable>( c ) ) {}
@@ -119,25 +115,16 @@ public:
 
 		[[maybe_unused]] volatile TapeStateGuard tapeStateGuard( m_impl );
 
-		auto [memForCallable, offsetOfCallable] = allocMemForCallable( alignof( TapeCallableImpl ), sizeof( TapeCallableImpl ) );
-
-		TaskHandle forkTask = addEntry( affinity, ~0u );
-		// Launches when all tasks in range [depsBegin, depsEnd) are completed
-		addPolledDependenciesToEntry( forkTask, depsBegin, depsEnd );
-
-		// This call adds dependencies between parallel and join tasks as well
-		auto [rangeOfParallelTasks, joinTask] = addParallelAndJoinEntries( affinity, offsetOfCallable, indicesEnd - indicesBegin );
-		// Make parallel tasks depend of the fork task
-		addPushedDependentsToEntry( forkTask, rangeOfParallelTasks.first, rangeOfParallelTasks.second );
-
-		setupIotaInstanceArgs( rangeOfParallelTasks, indicesBegin );
+		auto [mem, task] = addForIndicesInRangeImpl( indicesRange, deps, sizeof( TapeCallableImpl ),
+													 alignof( TapeCallableImpl ), affinity );
 
 		tapeStateGuard.succeeded = true;
 		// Construct it last in a nothrowing fashion
 		static_assert( std::is_nothrow_move_constructible_v<Callable> );
-		new( memForCallable )TapeCallableImpl( std::forward<Callable>( callable ) );
+		new( mem )TapeCallableImpl( std::forward<Callable>( callable ) );
 
-		return joinTask;
+		// The tape unlocks here
+		return task;
 	}
 
 	template <typename Callable>
@@ -145,19 +132,15 @@ public:
 	auto addForSubrangesInRange( std::pair<unsigned, unsigned> indicesRange, unsigned subrangeLength,
 								 std::initializer_list<TaskHandle> deps,
 								 Callable &&callable, Affinity affinity = AnyThread ) -> TaskHandle {
-		return addForSubrangesInRange( indicesRange, subrangeLength, deps.begin(), deps.end(),
+		return addForSubrangesInRange( indicesRange, subrangeLength, { deps.begin(), deps.end() },
 									   std::forward<Callable>( callable ), affinity );
 	}
 
 	template <typename Callable>
 	[[nodiscard]]
-	auto addForSubrangesInRange( std::pair<unsigned, unsigned> indicesRange, unsigned subrangeLength,
-								 const TaskHandle *depsBegin, const TaskHandle *depsEnd,
+	auto addForSubrangesInRange( std::pair<unsigned, unsigned> indicesRange,
+								 unsigned subrangeLength, std::span<const TaskHandle> deps,
 								 Callable &&callable, Affinity affinity = AnyThread ) -> TaskHandle {
-		assert( subrangeLength != 0 );
-		const auto [indicesBegin, indicesEnd] = indicesRange;
-		assert( indicesBegin <= indicesEnd );
-
 		// This is a specialized replacement for std::function which should not have place in this omnipresent header
 		struct TapeCallableImpl final : public TapeCallable {
 			explicit TapeCallableImpl( Callable &&c ) : m_callable( std::forward<Callable>( c ) ) {}
@@ -170,33 +153,18 @@ public:
 			Callable m_callable;
 		};
 
-		const auto workload = (unsigned)( indicesEnd - indicesBegin );
-		unsigned numTasks   = workload / subrangeLength;
-		if( workload % subrangeLength ) {
-			numTasks++;
-		}
-
 		[[maybe_unused]] volatile TapeStateGuard tapeStateGuard( m_impl );
 
-		auto [memForCallable, offsetOfCallable] = allocMemForCallable( alignof( TapeCallableImpl ), sizeof( TapeCallableImpl ) );
-
-		TaskHandle forkTask = addEntry( affinity, ~0u );
-		// Launches when all tasks in range [depsBegin, depsEnd) are completed
-		addPolledDependenciesToEntry( forkTask, depsBegin, depsEnd );
-
-		// This call adds dependencies between parallel and join tasks as well
-		auto [rangeOfParallelTasks, joinTask] = addParallelAndJoinEntries( affinity, offsetOfCallable, numTasks );
-		// Make parallel tasks depend of the fork task
-		addPushedDependentsToEntry( forkTask, rangeOfParallelTasks.first, rangeOfParallelTasks.second );
-
-		setupRangeInstanceArgs( rangeOfParallelTasks, indicesBegin, subrangeLength, workload );
+		auto [mem, task] = addForSubrangesInRangeImpl( indicesRange, subrangeLength, deps,
+													   alignof( TapeCallableImpl ), sizeof( TapeCallableImpl ), affinity );
 
 		tapeStateGuard.succeeded = true;
 		// Construct it last in a nothrowing fashion
 		static_assert( std::is_nothrow_move_constructible_v<Callable> );
-		new( memForCallable )TapeCallableImpl( std::forward<Callable>( callable ) );
+		new( mem )TapeCallableImpl( std::forward<Callable>( callable ) );
 
-		return joinTask;
+		// The tape unlocks here
+		return task;
 	}
 
 	void startExecution();
@@ -209,6 +177,18 @@ private:
 	void awakeWorkers();
 
 	[[nodiscard]]
+	auto addImpl( std::span<const TaskHandle> deps, size_t alignment, size_t size, Affinity affinity ) -> std::pair<void *, TaskHandle>;
+
+	[[nodiscard]]
+	auto addForIndicesInRangeImpl( std::pair<unsigned, unsigned> indicesRange, std::span<const TaskHandle> deps,
+								   size_t alignment, size_t size, Affinity affinity ) -> std::pair<void *, TaskHandle>;
+
+	[[nodiscard]]
+	auto addForSubrangesInRangeImpl( std::pair<unsigned, unsigned> indicesRange,
+									 unsigned subrangeLength, std::span<const TaskHandle> deps,
+									 size_t alignment, size_t size, Affinity affinity ) -> std::pair<void *, TaskHandle>;
+
+	[[nodiscard]]
 	auto allocMemForCallable( size_t alignment, size_t size ) -> std::pair<void *, unsigned>;
 
 	[[nodiscard]]
@@ -218,10 +198,12 @@ private:
 	void addPushedDependentsToEntry( TaskHandle taskHandle, unsigned taskRangeBegin, unsigned taskRangeEnd );
 
 	[[nodiscard]]
-	auto addParallelAndJoinEntries( Affinity affinity, unsigned offsetOfCallable, unsigned numTasks ) -> std::pair<std::pair<unsigned, unsigned>, TaskHandle>;
+	auto addParallelAndJoinEntries( Affinity affinity, unsigned offsetOfCallable, unsigned numTasks )
+		-> std::pair<std::pair<unsigned, unsigned>, TaskHandle>;
 
 	void setupIotaInstanceArgs( std::pair<unsigned, unsigned> taskRange, unsigned startValue );
-	void setupRangeInstanceArgs( std::pair<unsigned, unsigned> taskRange, unsigned startValue, unsigned subrangeLength, unsigned totalWorkload );
+	void setupRangeInstanceArgs( std::pair<unsigned, unsigned> taskRange, unsigned startValue,
+								 unsigned subrangeLength, unsigned totalWorkload );
 
 	static void beginTapeModification( struct TaskSystemImpl * );
 	static void endTapeModification( struct TaskSystemImpl *, bool succeeded );

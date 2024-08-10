@@ -306,6 +306,69 @@ void TaskSystem::setupRangeInstanceArgs( std::pair<unsigned, unsigned> taskRange
 	assert( workloadLeft == 0 );
 }
 
+auto TaskSystem::addImpl( std::span<const TaskHandle> deps, size_t alignment, size_t size, Affinity affinity )
+	-> std::pair<void *, TaskHandle> {
+	auto [memForCallable, offsetOfCallable] = allocMemForCallable( alignment, size );
+
+	TaskHandle result = addEntry( affinity, offsetOfCallable );
+	addPolledDependenciesToEntry( result, deps.data(), deps.data() + deps.size() );
+
+	return { memForCallable, result };
+}
+
+auto TaskSystem::addForIndicesInRangeImpl( std::pair<unsigned int, unsigned int> indicesRange,
+										   std::span<const TaskHandle> deps,
+										   size_t alignment, size_t size, Affinity affinity )
+	-> std::pair<void *, TaskHandle> {
+	auto [indicesBegin, indicesEnd] = indicesRange;
+	assert( indicesBegin <= indicesEnd );
+
+	auto [memForCallable, offsetOfCallable] = allocMemForCallable( alignment, size );
+
+	TaskHandle forkTask = addEntry( affinity, ~0u );
+	// Launches when all tasks in range [deps.begin(), deps.end()) are completed
+	addPolledDependenciesToEntry( forkTask, deps.data(), deps.data() + deps.size() );
+
+	// This call adds dependencies between parallel and join tasks as well
+	auto [rangeOfParallelTasks, joinTask] = addParallelAndJoinEntries( affinity, offsetOfCallable, indicesEnd - indicesBegin );
+	// Make parallel tasks depend on the fork task
+	addPushedDependentsToEntry( forkTask, rangeOfParallelTasks.first, rangeOfParallelTasks.second );
+
+	setupIotaInstanceArgs( rangeOfParallelTasks, indicesBegin );
+
+	return { memForCallable, joinTask };
+}
+
+auto TaskSystem::addForSubrangesInRangeImpl( std::pair<unsigned, unsigned> indicesRange,
+											 unsigned subrangeLength, std::span<const TaskHandle> deps,
+											 size_t alignment, size_t size, Affinity affinity )
+	-> std::pair<void *, TaskHandle> {
+	assert( subrangeLength != 0 );
+	const auto [indicesBegin, indicesEnd] = indicesRange;
+	assert( indicesBegin <= indicesEnd );
+
+	const auto workload = indicesEnd - indicesBegin;
+	unsigned numTasks   = workload / subrangeLength;
+	if( workload % subrangeLength ) {
+		numTasks++;
+	}
+
+	auto [memForCallable, offsetOfCallable] = allocMemForCallable( alignment, size );
+
+	TaskHandle forkTask = addEntry( affinity, ~0u );
+	// Launches when all tasks in range [deps.begin(), deps.end()) are completed
+	addPolledDependenciesToEntry( forkTask, deps.data(), deps.data() + deps.size() );
+
+	// This call adds dependencies between parallel and join tasks as well
+	auto [rangeOfParallelTasks, joinTask] = addParallelAndJoinEntries( affinity, offsetOfCallable, numTasks );
+	// Make parallel tasks depend on the fork task
+	addPushedDependentsToEntry( forkTask, rangeOfParallelTasks.first, rangeOfParallelTasks.second );
+
+	setupRangeInstanceArgs( rangeOfParallelTasks, indicesBegin, subrangeLength, workload );
+
+	return { memForCallable, joinTask };
+}
+
 void TaskSystem::clear() {
 	assert( !m_impl->isExecuting );
 
