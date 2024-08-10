@@ -1039,26 +1039,52 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const en
 
 void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const drawSurfaceBSP_t *drawSurf ) {
 	const MergedBspSurface *mergedBspSurf = drawSurf->mergedBspSurf;
-	// shadowBits are shared for all rendering instances (normal view, portals, etc)
-	const unsigned dlightBits = drawSurf->dlightBits;
+	const msurface_t *const surfaces      = rsh.worldBrushModel->surfaces;
 
-	const unsigned numVerts = drawSurf->numSpanVerts;
-	assert( numVerts );
-	const unsigned numElems = drawSurf->numSpanElems;
-	const unsigned firstVert = mergedBspSurf->firstVboVert + drawSurf->firstSpanVert;
-	const unsigned firstElem = mergedBspSurf->firstVboElem + drawSurf->firstSpanElem;
+	assert( !mergedBspSurf->numInstances );
+	assert( drawSurf->numSubspans );
 
+#if 1
+	unsigned subspanNum = 0;
+	do {
+		// TODO: This code duplicates Frontend::submitSortedSurfacesToBackend()
+		// Consider submitting multiple sorted surfaces in case when "draw indirect" is unavailable?
+		// (separate submission with proper sorting can be good for reducing overdraw)
+		// TODO: Alternatively, make RB_DrawElements aware of multiple spans and let it use "draw indirect" on its own
+		if( subspanNum > 0 ) {
+			RB_BindShader( e, shader, fog );
+			RB_SetPortalSurface( portalSurface );
+		}
+		RB_BindVBO( mergedBspSurf->vbo->index, GL_TRIANGLES );
+		RB_SetDlightBits( drawSurf->dlightBits );
+		RB_SetLightstyle( mergedBspSurf->superLightStyle );
+
+		const msurface_t *const firstVisSurf = surfaces + drawSurf->subspans[2 * subspanNum + 0];
+		const msurface_t *const lastVisSurf  = surfaces + drawSurf->subspans[2 * subspanNum + 1];
+		assert( firstVisSurf <= lastVisSurf );
+
+		auto firstVert = mergedBspSurf->firstVboVert + firstVisSurf->firstDrawSurfVert;
+		auto firstElem = mergedBspSurf->firstVboElem + firstVisSurf->firstDrawSurfElem;
+		auto numVerts  = lastVisSurf->mesh.numVerts + ( lastVisSurf->firstDrawSurfVert - firstVisSurf->firstDrawSurfVert );
+		auto numElems  = lastVisSurf->mesh.numElems + ( lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem );
+
+		RB_DrawElements( fsh, firstVert, numVerts, firstElem, numElems );
+	} while( ++subspanNum < drawSurf->numSubspans );
+#else
 	RB_BindVBO( mergedBspSurf->vbo->index, GL_TRIANGLES );
-
-	RB_SetDlightBits( dlightBits );
-
+	RB_SetDlightBits( drawSurf->dlightBits );
 	RB_SetLightstyle( mergedBspSurf->superLightStyle );
 
-	if( mergedBspSurf->numInstances ) {
-		RB_DrawElementsInstanced( fsh, firstVert, numVerts, firstElem, numElems, mergedBspSurf->numInstances, mergedBspSurf->instances );
-	} else {
-		RB_DrawElements( fsh, firstVert, numVerts, firstElem, numElems );
-	}
+	const msurface_t *const firstVisSurf = surfaces + drawSurf->subspans[0];
+	const msurface_t *const lastVisSurf  = surfaces + drawSurf->subspans[2 * drawSurf->numSubspans - 1];
+
+	auto firstVert = mergedBspSurf->firstVboVert + firstVisSurf->firstDrawSurfVert;
+	auto firstElem = mergedBspSurf->firstVboElem + firstVisSurf->firstDrawSurfElem;
+	auto numVerts  = lastVisSurf->mesh.numVerts + ( lastVisSurf->firstDrawSurfVert - firstVisSurf->firstDrawSurfVert );
+	auto numElems  = lastVisSurf->mesh.numElems + ( lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem );
+
+	RB_DrawElements( fsh, firstVert, numVerts, firstElem, numElems );
+#endif
 }
 
 void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const void * ) {

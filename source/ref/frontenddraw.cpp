@@ -440,6 +440,8 @@ auto Frontend::setupStateForCamera( CameraStateGroup stateGroup, const refdef_t 
 	stateForCamera->sortedOccludersBuffer                    = &m_sortedOccludersBuffer[stateIndex];
 	stateForCamera->drawSurfSurfSpansBuffer                  = &m_drawSurfSurfSpansBuffer[stateIndex];
 	stateForCamera->bspDrawSurfacesBuffer                    = &m_bspDrawSurfacesBuffer[stateIndex];
+	stateForCamera->surfVisTableBuffer                       = &m_bspSurfVisTableBuffer[stateIndex];
+	stateForCamera->drawSurfSurfSubspansBuffer               = &m_drawSurfSurfSubspansBuffer[stateIndex];
 	stateForCamera->visTestedModelsBuffer                    = &m_visTestedModelsBuffer[stateIndex];
 	stateForCamera->leafLightBitsOfSurfacesBuffer            = &m_leafLightBitsOfSurfacesBuffer[stateIndex];
 
@@ -566,6 +568,8 @@ void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForC
 	}
 
 	if( drawWorld ) {
+		// TODO: Depends only of culling, can be launched async
+		calcSubspansOfMergedSurfSpans( stateForCamera );
 		// We must know lights at this point
 		addVisibleWorldSurfacesToSortList( stateForCamera, scene );
 	}

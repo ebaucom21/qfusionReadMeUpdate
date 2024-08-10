@@ -387,7 +387,8 @@ auto Frontend::cullLeavesByOccludersArch( StateForCamera *stateForCamera,
 template <unsigned Arch>
 void Frontend::cullSurfacesInVisLeavesByOccludersArch( std::span<const unsigned> indicesOfVisibleLeaves,
 													   std::span<const Frustum> occluderFrusta,
-													   MergedSurfSpan *mergedSurfSpans ) {
+													   MergedSurfSpan *mergedSurfSpans,
+													   uint8_t *surfVisTable ) {
 	assert( !occluderFrusta.empty() );
 
 #ifdef DEBUG_OCCLUDERS
@@ -434,6 +435,7 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( std::span<const unsigned>
 				} while( ++frustumNum != numBestOccluders );
 
 				if( surfVisible ) {
+					surfVisTable[surfNum] = 1;
 					assert( surf->mergedSurfNum > 0 );
 					const unsigned mergedSurfNum = surf->mergedSurfNum - 1;
 					MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];

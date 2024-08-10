@@ -177,8 +177,8 @@ void Frontend::addBrushModelEntitiesToSortList( StateForCamera *stateForCamera, 
 												std::span<const VisTestedModel> models,
 												std::span<const uint16_t> indices, std::span<const Scene::DynamicLight> lights ) {
 	MergedBspSurface *const mergedSurfaces = rsh.worldBrushModel->mergedSurfaces;
-	drawSurfaceBSP_t *const drawSurfaces   = stateForCamera->bspDrawSurfacesBuffer->get();
-	msurface_s *const surfaces             = rsh.worldBrushModel->surfaces;
+	MergedSurfSpan *const mergedSurfSpans  = stateForCamera->drawSurfSurfSpansBuffer->get();
+	unsigned *const subspans               = stateForCamera->drawSurfSurfSubspansBuffer->get();
 
 	for( const auto modelIndex: indices ) {
 		const VisTestedModel &visTestedModel = models[modelIndex];
@@ -191,13 +191,20 @@ void Frontend::addBrushModelEntitiesToSortList( StateForCamera *stateForCamera, 
 		VectorAvg( visTestedModel.absMins, visTestedModel.absMaxs, origin );
 
 		for( unsigned i = 0; i < brushModel->numModelMergedSurfaces; i++ ) {
-			const unsigned surfNum            = brushModel->firstModelMergedSurface + i;
-			drawSurfaceBSP_t *drawSurface     = drawSurfaces + surfNum;
-			MergedBspSurface *mergedSurface   = mergedSurfaces + surfNum;
-			drawSurface->mergedBspSurf        = mergedSurface;
-			msurface_t *const firstVisSurface = surfaces + mergedSurface->firstWorldSurface;
-			msurface_t *const lastVisSurface  = firstVisSurface + mergedSurface->numWorldSurfaces - 1;
-			addMergedBspSurfToSortList( stateForCamera, entity, drawSurface, firstVisSurface, lastVisSurface, origin, lights );
+			const unsigned surfNum          = brushModel->firstModelMergedSurface + i;
+			MergedSurfSpan *surfSpan        = mergedSurfSpans + surfNum;
+			MergedBspSurface *mergedSurface = mergedSurfaces + surfNum;
+
+			surfSpan->firstSurface   = (int)mergedSurface->firstWorldSurface;
+			surfSpan->lastSurface    = (int)( mergedSurface->firstWorldSurface + mergedSurface->numWorldSurfaces - 1 );
+			surfSpan->subspansOffset = stateForCamera->drawSurfSurfSubspansOffset;
+			surfSpan->numSubspans    = 1;
+
+			assert( stateForCamera->drawSurfSurfSubspansOffset + 2 <= stateForCamera->drawSurfSurfSubspansBuffer->capacity() );
+			subspans[stateForCamera->drawSurfSurfSubspansOffset++] = surfSpan->firstSurface;
+			subspans[stateForCamera->drawSurfSurfSubspansOffset++] = surfSpan->lastSurface;
+
+			addMergedBspSurfToSortList( stateForCamera, entity, *surfSpan, surfNum, origin, lights );
 		}
 	}
 }
@@ -216,9 +223,106 @@ void Frontend::addSpriteEntitiesToSortList( StateForCamera *stateForCamera, cons
 	}
 }
 
-void Frontend::addMergedBspSurfToSortList( StateForCamera *stateForCamera, const entity_t *entity, drawSurfaceBSP_t *drawSurf,
-										   msurface_t *firstVisSurf, msurface_t *lastVisSurf, const float *maybeOrigin,
-										   std::span<const Scene::DynamicLight> lightsSpan ) {
+void Frontend::calcSubspansOfMergedSurfSpans( StateForCamera *stateForCamera ) {
+	MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
+	unsigned *const mergedSurfSubspanData = stateForCamera->drawSurfSurfSubspansBuffer->get();
+	const uint8_t *surfVisTable           = stateForCamera->surfVisTableBuffer->get();
+	const unsigned numMergedSurfaces      = rsh.worldBrushModel->numMergedSurfaces;
+
+	unsigned subspanDataOffset = 0;
+	for( unsigned mergedSurfNum = 0; mergedSurfNum < numMergedSurfaces; ++mergedSurfNum ) {
+		MergedSurfSpan *const surfSpan = mergedSurfSpans + mergedSurfNum;
+		if( surfSpan->firstSurface <= surfSpan->lastSurface ) {
+			assert( surfVisTable[surfSpan->firstSurface] );
+			assert( surfVisTable[surfSpan->lastSurface] );
+
+#if 0
+			const MergedBspSurface *const mergedSurfs = rsh.worldBrushModel->mergedSurfaces;
+			[[maybe_unused]] const MergedBspSurface &mergedSurf = mergedSurfs[mergedSurfNum];
+			assert( surfSpan->firstSurface >= mergedSurf.firstWorldSurface );
+			assert( surfSpan->lastSurface < mergedSurf.firstWorldSurface + mergedSurf.numWorldSurfaces );
+			// Make sure no visibility values are set outside of the merged span
+			for( unsigned surfNum = mergedSurf.firstWorldSurface; surfNum < surfSpan->firstSurface; ++surfNum ) {
+				assert( !surfVisTable[surfNum] );
+			}
+			for( unsigned surfNum = surfSpan->lastSurface + 1u; surfNum < mergedSurf.firstWorldSurface +
+				mergedSurf.numWorldSurfaces; ++surfNum ) {
+				assert( !surfVisTable[surfNum] );
+			}
+#endif
+
+#if 0
+			for( int surfNum = surfSpan->firstSurface; surfNum <= surfSpan->lastSurface; ++surfNum ) {
+				if( !surfVisTable[surfNum] ) {
+					const auto &surf = rsh.worldBrushModel->surfaces[surfNum];
+					addDebugLine( surf.mins, surf.maxs );
+				}
+			}
+#endif
+
+			const auto oldDataOffset = subspanDataOffset;
+			unsigned numSubspans     = 0;
+#if 1
+			int subspanStart     = surfSpan->firstSurface;
+			bool isInVisSubspan  = true;
+			for( int surfNum = surfSpan->firstSurface + 1; surfNum <= surfSpan->lastSurface; ++surfNum ) {
+				if( isInVisSubspan != ( surfVisTable[surfNum] != 0 ) ) {
+					if( isInVisSubspan ) {
+						assert( subspanStart <= surfNum - 1 );
+						assert( subspanDataOffset + 2 <= stateForCamera->drawSurfSurfSubspansBuffer->capacity() );
+						mergedSurfSubspanData[subspanDataOffset++] = subspanStart;
+						mergedSurfSubspanData[subspanDataOffset++] = surfNum - 1;
+						isInVisSubspan = false;
+						numSubspans++;
+					} else {
+						subspanStart   = surfNum;
+						isInVisSubspan = true;
+					}
+				}
+			}
+
+			assert( isInVisSubspan );
+			assert( subspanStart <= surfSpan->lastSurface );
+			assert( subspanDataOffset + 2 <= stateForCamera->drawSurfSurfSubspansBuffer->capacity() );
+			mergedSurfSubspanData[subspanDataOffset++] = subspanStart;
+			mergedSurfSubspanData[subspanDataOffset++] = surfSpan->lastSurface;
+			numSubspans++;
+#else
+			// Extreme partitioning for test purposes
+			for( int surfNum = surfSpan->firstSurface; surfNum <= surfSpan->lastSurface; ++surfNum ) {
+				if( surfVisTable[surfNum] ) {
+					mergedSurfSubspanData[subspanDataOffset++] = surfNum;
+					mergedSurfSubspanData[subspanDataOffset++] = surfNum;
+					++numSubspans;
+				}
+			}
+#endif
+
+			surfSpan->subspansOffset = oldDataOffset;
+			surfSpan->numSubspans    = numSubspans;
+
+			assert( subspanDataOffset - oldDataOffset == 2 * numSubspans );
+			assert( mergedSurfSubspanData[surfSpan->subspansOffset] == surfSpan->firstSurface );
+		}
+	}
+
+	// Save for further use for supplying brush models
+	stateForCamera->drawSurfSurfSubspansOffset = subspanDataOffset;
+}
+
+void Frontend::addMergedBspSurfToSortList( StateForCamera *stateForCamera, const entity_t *entity,
+										   const MergedSurfSpan &surfSpan, unsigned mergedSurfNum,
+										   const float *maybeOrigin, std::span<const Scene::DynamicLight> lightsSpan ) {
+	assert( surfSpan.firstSurface <= surfSpan.lastSurface );
+	assert( surfSpan.numSubspans );
+
+	msurface_t *const surfaces                  = rsh.worldBrushModel->surfaces;
+	drawSurfaceBSP_t *const drawSurfaces        = stateForCamera->bspDrawSurfacesBuffer->get();
+	MergedBspSurface *const mergedSurfaces      = rsh.worldBrushModel->mergedSurfaces;
+
+	drawSurfaceBSP_t *const drawSurf = drawSurfaces + mergedSurfNum;
+	drawSurf->mergedBspSurf          = mergedSurfaces + mergedSurfNum;
+
 	const MergedBspSurface *const mergedSurf = drawSurf->mergedBspSurf;
 	const shader_t *const surfMaterial       = mergedSurf->shader;
 
@@ -243,6 +347,8 @@ void Frontend::addMergedBspSurfToSortList( StateForCamera *stateForCamera, const
 
 	float resultDist = 0;
 	if( surfMaterial->flags & ( SHADER_PORTAL ) ) [[unlikely]] {
+		msurface_t *const firstVisSurf = surfaces + surfSpan.firstSurface;
+		msurface_t *const lastVisSurf  = surfaces + surfSpan.lastSurface;
 		for( msurface_s *surf = firstVisSurf; surf <= lastVisSurf; ++surf ) {
 			if( const auto maybeDistance = tryUpdatingPortalSurfaceAndDistance( stateForCamera,
 																				drawSurf, surf, maybeOrigin ) ) {
@@ -251,43 +357,43 @@ void Frontend::addMergedBspSurfToSortList( StateForCamera *stateForCamera, const
 		}
 	}
 
+	drawSurf->subspans    = stateForCamera->drawSurfSurfSubspansBuffer->get() + surfSpan.subspansOffset;
+	drawSurf->numSubspans = surfSpan.numSubspans;
+
 	unsigned dlightBits = 0;
-	// TODO: This should belong to state
 	if( stateForCamera->numVisibleProgramLights ) {
 		const unsigned *const surfaceDlightBits = stateForCamera->leafLightBitsOfSurfacesBuffer->get();
 		const msurface_t *const worldSurfaces   = rsh.worldBrushModel->surfaces;
 		const unsigned numLights                = lightsSpan.size();
 
-		msurface_t *surf = firstVisSurf;
+		unsigned subspanNum = 0;
 		do {
-			// Coarse bits are combined light bits of leaves.
-			// Check against individual surfaces if a coarse bit is set.
-			// TODO: Iterate over all bits in the outer loop?
-			// TODO: Think of using SIMD-friendly indices + left-packing instead of integer bits
-			if( const unsigned coarseBits = surfaceDlightBits[surf - worldSurfaces] ) {
-				assert( numLights );
-				unsigned lightNum = 0;
-				unsigned testedBits = 0;
-				do {
-					const unsigned lightBit = 1u << lightNum;
-					testedBits |= lightBit;
-					if( coarseBits & lightBit ) [[likely]] {
-						const auto *__restrict lightDop = &stateForCamera->lightBoundingDops[lightNum];
-						if( doOverlapTestFor14Dops( lightDop->mins, lightDop->maxs, surf->mins, surf->maxs ) ) {
-							dlightBits |= lightBit;
+			const msurface_t *const firstVisSurf = surfaces + drawSurf->subspans[2 * subspanNum + 0];
+			const msurface_t *const lastVisSurf  = surfaces + drawSurf->subspans[2 * subspanNum + 1];
+			const msurface_t *surf = firstVisSurf;
+			do {
+				// Coarse bits are combined light bits of leaves.
+				// Check against individual surfaces if a coarse bit is set.
+				// TODO: Iterate over all bits in the outer loop?
+				// TODO: Think of using SIMD-friendly indices + left-packing instead of integer bits
+				if( const unsigned coarseBits = surfaceDlightBits[surf - worldSurfaces] ) {
+					assert( numLights );
+					unsigned lightNum = 0;
+					unsigned testedBits = 0;
+					do {
+						const unsigned lightBit = 1u << lightNum;
+						testedBits |= lightBit;
+						if( coarseBits & lightBit ) [[likely]] {
+							const auto *__restrict lightDop = &stateForCamera->lightBoundingDops[lightNum];
+							if( doOverlapTestFor14Dops( lightDop->mins, lightDop->maxs, surf->mins, surf->maxs ) ) {
+								dlightBits |= lightBit;
+							}
 						}
-					}
-				} while( ++lightNum < numLights && testedBits != coarseBits );
-			}
-			// TODO: Exclude culled/occluded surfaces in range [firstVisSurf, lastVisSurf] from light bits computation
-			// TODO: Compute an accumulative table of light bits of visible surfaces for merged surfaces
-		} while( ++surf < lastVisSurf + 1 );
+					} while( ++lightNum < numLights && testedBits != coarseBits );
+				}
+			} while( ++surf <= lastVisSurf );
+		} while( ++subspanNum < surfSpan.numSubspans );
 	}
-
-	drawSurf->firstSpanVert = firstVisSurf->firstDrawSurfVert;
-	drawSurf->firstSpanElem = firstVisSurf->firstDrawSurfElem;
-	drawSurf->numSpanVerts = lastVisSurf->mesh.numVerts + lastVisSurf->firstDrawSurfVert - firstVisSurf->firstDrawSurfVert;
-	drawSurf->numSpanElems = lastVisSurf->mesh.numElems + lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem;
 
 	// update the distance sorting key if it's a portal surface or a normal dlit surface
 	if( resultDist != 0 || dlightBits != 0 ) {
@@ -458,20 +564,13 @@ void Frontend::addVisibleWorldSurfacesToSortList( StateForCamera *stateForCamera
 	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
 
 	const auto numWorldModelMergedSurfaces      = rsh.worldBrushModel->numModelMergedSurfaces;
-	msurface_t *const surfaces                  = rsh.worldBrushModel->surfaces;
-	drawSurfaceBSP_t *const drawSurfaces        = stateForCamera->bspDrawSurfacesBuffer->get();
-	MergedBspSurface *const mergedSurfaces      = rsh.worldBrushModel->mergedSurfaces;
 	const MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
 	std::span<const Scene::DynamicLight> dynamicLights { scene->m_dynamicLights.data(), scene->m_dynamicLights.size() };
 	// TODO: Left-pack instead of branchy scanning?
 	for( unsigned mergedSurfNum = 0; mergedSurfNum < numWorldModelMergedSurfaces; ++mergedSurfNum ) {
 		const MergedSurfSpan &surfSpan = mergedSurfSpans[mergedSurfNum];
 		if( surfSpan.firstSurface <= surfSpan.lastSurface ) {
-			drawSurfaceBSP_t *const drawSurf   = drawSurfaces + mergedSurfNum;
-			drawSurf->mergedBspSurf            = mergedSurfaces + mergedSurfNum;
-			msurface_t *const firstVisSurf     = surfaces + surfSpan.firstSurface;
-			msurface_t *const lastVisSurf      = surfaces + surfSpan.lastSurface;
-			addMergedBspSurfToSortList( stateForCamera, worldEnt, drawSurf, firstVisSurf, lastVisSurf, nullptr, dynamicLights );
+			addMergedBspSurfToSortList( stateForCamera, worldEnt, surfSpan, mergedSurfNum, nullptr, dynamicLights );
 		}
 	}
 }

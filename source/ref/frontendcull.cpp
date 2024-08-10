@@ -99,10 +99,17 @@ auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
 	stateForCamera->drawSurfSurfSpansBuffer->reserve( numMergedSurfaces );
 	stateForCamera->bspDrawSurfacesBuffer->reserve( numMergedSurfaces );
 
+	// Try guessing the required size
+	stateForCamera->drawSurfSurfSubspansBuffer->reserve( 2 * wsw::max( 8 * numMergedSurfaces, numWorldSurfaces ) );
+
+	uint8_t *const surfVisTable = stateForCamera->surfVisTableBuffer->reserveZeroedAndGet( numWorldSurfaces );
+
 	MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
 	for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
-		mergedSurfSpans[i].firstSurface = std::numeric_limits<int>::max();
-		mergedSurfSpans[i].lastSurface  = std::numeric_limits<int>::min();
+		mergedSurfSpans[i].firstSurface   = std::numeric_limits<int>::max();
+		mergedSurfSpans[i].lastSurface    = std::numeric_limits<int>::min();
+		mergedSurfSpans[i].subspansOffset = 0;
+		mergedSurfSpans[i].numSubspans    = 0;
 	}
 
 	// Cull world leaves by the primary frustum
@@ -122,15 +129,15 @@ auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
 	if( occluderFrusta.empty() || ( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
 		// No "good enough" occluders found.
 		// Just mark every surface that falls into the primary frustum visible in this case.
-		markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans );
+		markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans, surfVisTable );
 		nonOccludedLeaves = visibleLeaves;
 	} else {
 		// Test every leaf that falls into the primary frustum against frusta of occluders
 		std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = cullLeavesByOccluders( stateForCamera,
 																						visibleLeaves, occluderFrusta );
-		markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans );
+		markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans, surfVisTable );
 		// Test every surface that belongs to partially occluded leaves
-		cullSurfacesInVisLeavesByOccluders( partiallyOccludedLeaves, occluderFrusta, mergedSurfSpans );
+		cullSurfacesInVisLeavesByOccluders( partiallyOccludedLeaves, occluderFrusta, mergedSurfSpans, surfVisTable );
 	}
 
 	return { occluderFrusta, nonOccludedLeaves, partiallyOccludedLeaves };
@@ -252,7 +259,7 @@ auto Frontend::collectVisibleLights( StateForCamera *stateForCamera, Scene *scen
 }
 
 void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves,
-											  MergedSurfSpan *mergedSurfSpans ) {
+											  MergedSurfSpan *mergedSurfSpans, uint8_t *surfVisTable ) {
 	const auto surfaces = rsh.worldBrushModel->surfaces;
 	const auto leaves   = rsh.worldBrushModel->visleafs;
 	for( const unsigned leafNum: indicesOfLeaves ) {
@@ -260,6 +267,7 @@ void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesO
 		for( unsigned i = 0; i < leaf->numVisSurfaces; ++i ) {
 			const unsigned surfNum = leaf->visSurfaces[i];
 			assert( surfaces[surfNum].mergedSurfNum > 0 );
+			surfVisTable[surfNum] = 1;
 			const unsigned mergedSurfNum = surfaces[surfNum].mergedSurfNum - 1;
 			MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];
 			// TODO: Branchless min/max
@@ -634,8 +642,9 @@ auto Frontend::cullLeavesByOccluders( StateForCamera *stateForCamera, std::span<
 
 void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 												   std::span<const Frustum> occluderFrusta,
-												   MergedSurfSpan *mergedSurfSpans ) {
-	return ( this->*m_cullSurfacesInVisLeavesByOccludersArchMethod )( indicesOfLeaves, occluderFrusta, mergedSurfSpans );
+												   MergedSurfSpan *mergedSurfSpans,
+												   uint8_t *surfVisTable ) {
+	return ( this->*m_cullSurfacesInVisLeavesByOccludersArchMethod )( indicesOfLeaves, occluderFrusta, mergedSurfSpans, surfVisTable );
 }
 
 auto Frontend::cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,

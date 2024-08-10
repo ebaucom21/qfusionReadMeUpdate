@@ -50,8 +50,9 @@ auto Frontend::cullLeavesByOccludersSse41( StateForCamera *stateForCamera, std::
 
 void Frontend::cullSurfacesInVisLeavesByOccludersSse41( std::span<const unsigned> indicesOfLeaves,
 														std::span<const Frustum> occluderFrusta,
-														MergedSurfSpan *mergedSurfSpans ) {
-	return cullSurfacesInVisLeavesByOccludersArch<Sse41>( indicesOfLeaves, occluderFrusta, mergedSurfSpans );
+														MergedSurfSpan *mergedSurfSpans,
+														uint8_t *surfVisTable ) {
+	return cullSurfacesInVisLeavesByOccludersArch<Sse41>( indicesOfLeaves, occluderFrusta, mergedSurfSpans, surfVisTable );
 }
 
 auto Frontend::cullEntriesWithBoundsSse41( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
