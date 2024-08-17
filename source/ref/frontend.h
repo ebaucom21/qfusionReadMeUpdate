@@ -86,6 +86,7 @@ private:
 		int firstSurface;
 		int lastSurface;
 		unsigned subspansOffset;
+		unsigned vertSpansOffset;
 		unsigned numSubspans;
 	};
 
@@ -164,9 +165,12 @@ private:
 		PodBufferHolder<MergedSurfSpan> *drawSurfSurfSpansBuffer;
 
 		PodBufferHolder<uint8_t> *surfVisTableBuffer;
+		PodBufferHolder<VertElemSpan> *drawSurfVertElemSpansBuffer;
+		// For lights
 		PodBufferHolder<unsigned> *drawSurfSurfSubspansBuffer;
 
 		unsigned drawSurfSurfSubspansOffset { 0 };
+		unsigned drawSurfVertElemSpansOffset { 0 };
 
 		PodBufferHolder<VisTestedModel> *visTestedModelsBuffer;
 		PodBufferHolder<uint32_t> *leafLightBitsOfSurfacesBuffer;
@@ -527,6 +531,7 @@ private:
 	PodBufferHolder<MergedSurfSpan> m_drawSurfSurfSpansBuffer[2];
 	PodBufferHolder<uint8_t> m_bspSurfVisTableBuffer[2];
 	PodBufferHolder<unsigned> m_drawSurfSurfSubspansBuffer[2];
+	PodBufferHolder<VertElemSpan> m_drawSurfVertElemSpansBuffer[2];
 
 	PodBufferHolder<VisTestedModel> m_visTestedModelsBuffer[2];
 	PodBufferHolder<uint32_t> m_leafLightBitsOfSurfacesBuffer[2];

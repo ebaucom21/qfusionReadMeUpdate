@@ -33,17 +33,9 @@ typedef struct {
 } rbBonesData_t;
 
 typedef struct {
-	unsigned int firstVert;
-	unsigned int numVerts;
-	unsigned int firstElem;
-	unsigned int numElems;
-	unsigned int numInstances;
-} rbDrawElements_t;
-
-typedef struct {
 	mesh_vbo_t *vbo;
 	uint8_t *vertexData;
-	rbDrawElements_t drawElements;
+	VertElemSpan drawElements;
 } rbDynamicStream_t;
 
 typedef struct {
@@ -57,7 +49,7 @@ typedef struct {
 	int primitive;
 	vec2_t offset;
 	int scissor[4];
-	rbDrawElements_t drawElements;
+	VertElemSpan drawElements;
 } rbDynamicDraw_t;
 
 typedef struct r_backend_s {
@@ -123,10 +115,8 @@ typedef struct r_backend_s {
 	rbDynamicDraw_t dynamicDraws[MAX_DYNAMIC_DRAWS];
 	int numDynamicDraws;
 
-	instancePoint_t *drawInstances;
-	int maxDrawInstances;
-
-	rbDrawElements_t drawElements;
+	VertElemSpan tmpDrawElements[1];
+	std::span<const VertElemSpan> drawElements;
 
 	vattribmask_t currentVAttribs;
 
@@ -170,7 +160,8 @@ typedef struct r_backend_s {
 
 extern rbackend_t rb;
 
-void RB_DrawElementsReal( rbDrawElements_t *de );
+void RB_DrawElementsReal( std::span<const VertElemSpan> spans );
+
 #define RB_IsAlphaBlending( blendsrc,blenddst ) \
 	( ( blendsrc ) == GLSTATE_SRCBLEND_SRC_ALPHA || ( blenddst ) == GLSTATE_DSTBLEND_SRC_ALPHA ) || \
 	( ( blendsrc ) == GLSTATE_SRCBLEND_ONE_MINUS_SRC_ALPHA || ( blenddst ) == GLSTATE_DSTBLEND_ONE_MINUS_SRC_ALPHA )

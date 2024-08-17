@@ -48,12 +48,14 @@ struct MergedBspSurface {
 	unsigned numLightmaps;
 };
 
+struct VertElemSpan;
+
 typedef struct {
 	void *listSurf;                 // only valid if visFrame == rf.frameCount
 	MergedBspSurface *mergedBspSurf;
 	unsigned dlightBits;
-	const unsigned *subspans;
-	unsigned numSubspans;
+	const VertElemSpan *vertElemSpans;
+	unsigned numSpans;
 } drawSurfaceBSP_t;
 
 typedef struct {

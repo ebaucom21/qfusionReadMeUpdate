@@ -673,7 +673,6 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 		draw->drawElements.numVerts = numVerts;
 		draw->drawElements.firstElem = stream->drawElements.firstElem + stream->drawElements.numElems;
 		draw->drawElements.numElems = numElems;
-		draw->drawElements.numInstances = 0;
 	}
 
 	const int destVertOffset = stream->drawElements.firstVert + stream->drawElements.numVerts;
@@ -894,31 +893,26 @@ static void RB_EnableVertexAttribs( void ) {
 	}
 }
 
-void RB_DrawElementsReal( rbDrawElements_t *de ) {
-	if( !( r_drawelements->integer || rb.currentEntity == &rb.nullEnt ) || !de ) {
+void RB_DrawElementsReal( std::span<const VertElemSpan> spans ) {
+	if( !( r_drawelements->integer || rb.currentEntity == &rb.nullEnt ) || spans.empty() ) {
 		return;
 	}
 
 	RB_ApplyScissor();
 
-	const int numVerts = de->numVerts;
-	const int numElems = de->numElems;
-	const int firstVert = de->firstVert;
-	const int firstElem = de->firstElem;
-	const int numInstances = de->numInstances;
+	size_t subspanNum = 0;
+	do {
+		const unsigned numVerts  = spans[subspanNum].numVerts;
+		const unsigned numElems  = spans[subspanNum].numElems;
+		const unsigned firstVert = spans[subspanNum].firstVert;
+		const unsigned firstElem = spans[subspanNum].firstElem;
 
-	if( numInstances ) {
-		// the instance data is contained in vertex attributes
-		qglDrawElementsInstanced( rb.primitive, numElems, GL_UNSIGNED_SHORT,
-								  (GLvoid *)( firstElem * sizeof( elem_t ) ), numInstances );
-	} else {
-		qglDrawRangeElements( rb.primitive, firstVert, firstVert + numVerts - 1, numElems,
-							  GL_UNSIGNED_SHORT, (GLvoid *)( firstElem * sizeof( elem_t ) ) );
-	}
+		qglDrawRangeElements( rb.primitive, firstVert, firstVert + numVerts - 1, (int)numElems, GL_UNSIGNED_SHORT, (GLvoid *)( firstElem * sizeof( elem_t ) ) );
+	} while( ++subspanNum < spans.size() );
 }
 
 static void RB_DrawElements_( const FrontendToBackendShared *fsh ) {
-	if( rb.drawElements.numVerts && rb.drawElements.numElems ) [[likely]] {
+	if( !rb.drawElements.empty() ) [[likely]] {
 		assert( rb.currentShader );
 
 		RB_EnableVertexAttribs();
@@ -932,41 +926,20 @@ static void RB_DrawElements_( const FrontendToBackendShared *fsh ) {
 }
 
 void RB_DrawElements( const FrontendToBackendShared *fsh, int firstVert, int numVerts, int firstElem, int numElems ) {
-	rb.currentVAttribs &= ~VATTRIB_INSTANCES_BITS;
+	rb.tmpDrawElements->firstVert = firstVert;
+	rb.tmpDrawElements->numVerts  = numVerts;
+	rb.tmpDrawElements->firstElem = firstElem;
+	rb.tmpDrawElements->numElems  = numElems;
 
-	rb.drawElements.numVerts = numVerts;
-	rb.drawElements.numElems = numElems;
-	rb.drawElements.firstVert = firstVert;
-	rb.drawElements.firstElem = firstElem;
-	rb.drawElements.numInstances = 0;
-
-	RB_DrawElements_( fsh );
+	RB_DrawElements( fsh, { rb.tmpDrawElements, rb.tmpDrawElements + 1 } );
 }
 
-void RB_DrawElementsInstanced( const FrontendToBackendShared *fsh,
-							   int firstVert, int numVerts, int firstElem, int numElems,
-							   int numInstances, instancePoint_t *instances ) {
-	if( numInstances ) {
-		// currently not supporting dynamic instances
-		// they will need a separate stream so they can be used with both static and dynamic geometry
-		// (dynamic geometry will need changes to rbDynamicDraw_t)
-		assert( rb.currentVBOId > RB_VBO_NONE );
-		if( rb.currentVBOId > RB_VBO_NONE ) {
-			rb.drawElements.numVerts = numVerts;
-			rb.drawElements.numElems = numElems;
-			rb.drawElements.firstVert = firstVert;
-			rb.drawElements.firstElem = firstElem;
-			rb.drawElements.numInstances = 0;
+void RB_DrawElements( const FrontendToBackendShared *fsh, std::span<const VertElemSpan> spans ) {
+	rb.currentVAttribs &= ~VATTRIB_INSTANCES_BITS;
 
-			if( rb.currentVBO->instancesOffset ) {
-				// static VBO's must come with their own set of instance data
-				rb.currentVAttribs |= VATTRIB_INSTANCES_BITS;
-			}
+	rb.drawElements = spans;
 
-			rb.drawElements.numInstances = numInstances;
-			RB_DrawElements_( fsh );
-		}
-	}
+	RB_DrawElements_( fsh );
 }
 
 void RB_SetCamera( const vec3_t cameraOrigin, const mat3_t cameraAxis ) {
@@ -1039,52 +1012,15 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const en
 
 void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const drawSurfaceBSP_t *drawSurf ) {
 	const MergedBspSurface *mergedBspSurf = drawSurf->mergedBspSurf;
-	const msurface_t *const surfaces      = rsh.worldBrushModel->surfaces;
 
 	assert( !mergedBspSurf->numInstances );
-	assert( drawSurf->numSubspans );
+	assert( drawSurf->numSpans );
 
-#if 1
-	unsigned subspanNum = 0;
-	do {
-		// TODO: This code duplicates Frontend::submitSortedSurfacesToBackend()
-		// Consider submitting multiple sorted surfaces in case when "draw indirect" is unavailable?
-		// (separate submission with proper sorting can be good for reducing overdraw)
-		// TODO: Alternatively, make RB_DrawElements aware of multiple spans and let it use "draw indirect" on its own
-		if( subspanNum > 0 ) {
-			RB_BindShader( e, shader, fog );
-			RB_SetPortalSurface( portalSurface );
-		}
-		RB_BindVBO( mergedBspSurf->vbo->index, GL_TRIANGLES );
-		RB_SetDlightBits( drawSurf->dlightBits );
-		RB_SetLightstyle( mergedBspSurf->superLightStyle );
-
-		const msurface_t *const firstVisSurf = surfaces + drawSurf->subspans[2 * subspanNum + 0];
-		const msurface_t *const lastVisSurf  = surfaces + drawSurf->subspans[2 * subspanNum + 1];
-		assert( firstVisSurf <= lastVisSurf );
-
-		auto firstVert = mergedBspSurf->firstVboVert + firstVisSurf->firstDrawSurfVert;
-		auto firstElem = mergedBspSurf->firstVboElem + firstVisSurf->firstDrawSurfElem;
-		auto numVerts  = lastVisSurf->mesh.numVerts + ( lastVisSurf->firstDrawSurfVert - firstVisSurf->firstDrawSurfVert );
-		auto numElems  = lastVisSurf->mesh.numElems + ( lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem );
-
-		RB_DrawElements( fsh, firstVert, numVerts, firstElem, numElems );
-	} while( ++subspanNum < drawSurf->numSubspans );
-#else
 	RB_BindVBO( mergedBspSurf->vbo->index, GL_TRIANGLES );
 	RB_SetDlightBits( drawSurf->dlightBits );
 	RB_SetLightstyle( mergedBspSurf->superLightStyle );
 
-	const msurface_t *const firstVisSurf = surfaces + drawSurf->subspans[0];
-	const msurface_t *const lastVisSurf  = surfaces + drawSurf->subspans[2 * drawSurf->numSubspans - 1];
-
-	auto firstVert = mergedBspSurf->firstVboVert + firstVisSurf->firstDrawSurfVert;
-	auto firstElem = mergedBspSurf->firstVboElem + firstVisSurf->firstDrawSurfElem;
-	auto numVerts  = lastVisSurf->mesh.numVerts + ( lastVisSurf->firstDrawSurfVert - firstVisSurf->firstDrawSurfVert );
-	auto numElems  = lastVisSurf->mesh.numElems + ( lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem );
-
-	RB_DrawElements( fsh, firstVert, numVerts, firstElem, numElems );
-#endif
+	RB_DrawElements( fsh, { drawSurf->vertElemSpans, drawSurf->numSpans } );
 }
 
 void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const void * ) {

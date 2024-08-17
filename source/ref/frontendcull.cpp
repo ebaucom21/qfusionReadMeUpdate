@@ -100,16 +100,20 @@ auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
 	stateForCamera->bspDrawSurfacesBuffer->reserve( numMergedSurfaces );
 
 	// Try guessing the required size
-	stateForCamera->drawSurfSurfSubspansBuffer->reserve( 2 * wsw::max( 8 * numMergedSurfaces, numWorldSurfaces ) );
+	const unsigned estimatedNumSubspans = wsw::max( 8 * numMergedSurfaces, numWorldSurfaces );
+	// Two unsigned elements per each subspan TODO: Allow storing std::pair in this container
+	stateForCamera->drawSurfSurfSubspansBuffer->reserve( 2 * estimatedNumSubspans );
+	stateForCamera->drawSurfVertElemSpansBuffer->reserve( estimatedNumSubspans );
 
 	uint8_t *const surfVisTable = stateForCamera->surfVisTableBuffer->reserveZeroedAndGet( numWorldSurfaces );
 
 	MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
 	for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
-		mergedSurfSpans[i].firstSurface   = std::numeric_limits<int>::max();
-		mergedSurfSpans[i].lastSurface    = std::numeric_limits<int>::min();
-		mergedSurfSpans[i].subspansOffset = 0;
-		mergedSurfSpans[i].numSubspans    = 0;
+		mergedSurfSpans[i].firstSurface    = std::numeric_limits<int>::max();
+		mergedSurfSpans[i].lastSurface     = std::numeric_limits<int>::min();
+		mergedSurfSpans[i].subspansOffset  = 0;
+		mergedSurfSpans[i].vertSpansOffset = 0;
+		mergedSurfSpans[i].numSubspans     = 0;
 	}
 
 	// Cull world leaves by the primary frustum

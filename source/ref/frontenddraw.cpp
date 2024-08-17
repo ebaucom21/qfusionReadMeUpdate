@@ -442,6 +442,7 @@ auto Frontend::setupStateForCamera( CameraStateGroup stateGroup, const refdef_t 
 	stateForCamera->bspDrawSurfacesBuffer                    = &m_bspDrawSurfacesBuffer[stateIndex];
 	stateForCamera->surfVisTableBuffer                       = &m_bspSurfVisTableBuffer[stateIndex];
 	stateForCamera->drawSurfSurfSubspansBuffer               = &m_drawSurfSurfSubspansBuffer[stateIndex];
+	stateForCamera->drawSurfVertElemSpansBuffer              = &m_drawSurfVertElemSpansBuffer[stateIndex];
 	stateForCamera->visTestedModelsBuffer                    = &m_visTestedModelsBuffer[stateIndex];
 	stateForCamera->leafLightBitsOfSurfacesBuffer            = &m_leafLightBitsOfSurfacesBuffer[stateIndex];
 
