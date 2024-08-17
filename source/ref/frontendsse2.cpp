@@ -35,7 +35,7 @@ auto Frontend::collectVisibleWorldLeavesSse2( StateForCamera *stateForCamera ) -
 	return collectVisibleWorldLeavesArch<Sse2>( stateForCamera );
 }
 
-auto Frontend::collectVisibleOccludersSse2( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder> {
+auto Frontend::collectVisibleOccludersSse2( StateForCamera *stateForCamera ) -> std::span<const unsigned> {
 	return collectVisibleOccludersArch<Sse2>( stateForCamera );
 }
 

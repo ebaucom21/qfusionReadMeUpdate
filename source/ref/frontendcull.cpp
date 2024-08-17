@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "frontend.h"
 #include "program.h"
 #include "materiallocal.h"
+#include "../common/wswsortbyfield.h"
 
 #include <algorithm>
 
@@ -123,9 +124,10 @@ auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
 	if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
 		// TODO: Can run in parallel with leaves collection
 		// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
-		const std::span<const SortedOccluder> visibleOccluders = collectVisibleOccluders( stateForCamera );
+		const std::span<const unsigned> visibleOccluders      = collectVisibleOccluders( stateForCamera );
+		const std::span<const SortedOccluder> sortedOccluders = sortOccluders( stateForCamera, visibleOccluders );
 		// Build frusta of occluders, while performing some additional frusta pruning
-		occluderFrusta = buildFrustaOfOccluders( stateForCamera, visibleOccluders );
+		occluderFrusta = buildFrustaOfOccluders( stateForCamera, sortedOccluders );
 	}
 
 	std::span<const unsigned> nonOccludedLeaves;
@@ -629,7 +631,7 @@ auto Frontend::collectVisibleWorldLeaves( StateForCamera *stateForCamera ) -> st
 	return ( this->*m_collectVisibleWorldLeavesArchMethod )( stateForCamera );
 }
 
-auto Frontend::collectVisibleOccluders( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder> {
+auto Frontend::collectVisibleOccluders( StateForCamera *stateForCamera ) -> std::span<const unsigned> {
 	return ( this->*m_collectVisibleOccludersArchMethod )( stateForCamera );
 }
 
@@ -665,6 +667,258 @@ auto Frontend::cullEntryPtrsWithBounds( const void **entryPtrs, unsigned numEntr
 	-> std::span<const uint16_t> {
 	return ( this->*m_cullEntryPtrsWithBoundsArchMethod )( entryPtrs, numEntries, boundsFieldOffset,
 														   primaryFrustum, occluderFrusta, tmpIndices );
+}
+
+[[nodiscard]]
+static auto calcOccluderAreaScore( const OccluderDataEntry &occluder, const float * mvpMatrix ) -> float;
+
+auto Frontend::sortOccluders( StateForCamera *stateForCamera, std::span<const unsigned> visibleOccluders )
+	-> std::span<const SortedOccluder> {
+	const auto *const occluderEntries = rsh.worldBrushModel->occluderDataEntries;
+	const float *const mvpMatrix      = stateForCamera->cameraProjectionMatrix;
+
+	unsigned numSortedOccluders = 0;
+	SortedOccluder *const sortedOccluders = stateForCamera->sortedOccludersBuffer->get();
+	// TODO: This can be performed in parallel
+	for( const unsigned occluderNum: visibleOccluders ) {
+		const float areaScore = calcOccluderAreaScore( occluderEntries[occluderNum], mvpMatrix );
+		if( areaScore > 0.0f ) [[likely]] {
+			sortedOccluders[numSortedOccluders++] = { occluderNum, areaScore };
+		}
+	}
+
+	// TODO: Don't sort, build a heap instead?
+	wsw::sortByFieldDescending( sortedOccluders, sortedOccluders + numSortedOccluders, &SortedOccluder::score );
+
+#ifdef SHOW_OCCLUDERS
+	for( unsigned i = 0; i < numSortedOccluders; ++i ) {
+		const OccluderDataEntry &occluder = occluderEntries[sortedOccluders[i].occluderNum];
+
+		for( unsigned vertIndex = 0; vertIndex < occluder.numVertices; ++vertIndex ) {
+			const float *const v1 = occluder.data[vertIndex + 0];
+			const float *const v2 = occluder.data[( vertIndex + 1 != occluder.numVertices ) ? vertIndex + 1 : 0];
+			const float frac = Q_Sqrt( (float)( i + 1 ) * Q_Rcp( (float)numSortedOccluders ) );
+			addDebugLine( v1, v2, COLOR_RGB( (int)( 255 * frac ), (int)( 255 * ( 1.0f - frac ) ), 0 ) );
+		}
+	}
+#endif
+
+	return { sortedOccluders, sortedOccluders + numSortedOccluders };
+}
+
+// This code is borrowed from https://github.com/zauonlok/renderer and is modified for our purposes
+
+/*
+MIT License
+
+Copyright (c) 2020 Zhou Le
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+struct WPlaneTraits {
+	static wsw_forceinline bool isInside( const vec4_t coord ) {
+		return coord[3] >= glConfig.depthEpsilon;
+	}
+	static wsw_forceinline auto getIntersectionFrac( const vec4_t prev, const vec4_t curr ) -> float {
+		return ( prev[3] - glConfig.depthEpsilon ) / ( prev[3] - curr[3] );
+	}
+};
+
+template <unsigned Coord>
+struct PositivePlaneTraits {
+	static wsw_forceinline bool isInside( const vec4_t coord ) {
+		return coord[Coord] <= +coord[3];
+	}
+	static wsw_forceinline auto getIntersectionFrac( const vec4_t prev, const vec4_t curr ) -> float {
+		return ( prev[3] - prev[Coord] ) * Q_Rcp( (prev[3] - prev[Coord] ) - ( curr[3] - curr[Coord] ) );
+	}
+};
+
+template <unsigned Coord>
+struct NegativePlaneTraits {
+	static wsw_forceinline bool isInside( const vec4_t coord ) {
+		return coord[Coord] >= -coord[3];
+	}
+	static wsw_forceinline auto getIntersectionFrac( const vec4_t prev, const vec4_t curr ) -> float {
+		return ( prev[3] + prev[Coord] ) * Q_Rcp( ( prev[3] + prev[Coord] ) - ( curr[3] + curr[Coord] ) );
+	}
+};
+
+template <typename PlaneTraits>
+[[nodiscard]]
+static auto clipAgainstPlane( unsigned numInVertices, vec4_t inCoords[], vec4_t outCoords[] ) -> unsigned {
+	unsigned numOutVertices = 0;
+
+	unsigned prevIndex = numInVertices - 1;
+	for( unsigned currIndex = 0; currIndex < numInVertices; ++currIndex ) {
+		auto &prevCoord = inCoords[prevIndex];
+		auto &currCoord = inCoords[currIndex];
+
+		const bool isPrevInside = PlaneTraits::isInside( prevCoord );
+		const bool isCurrInside = PlaneTraits::isInside( currCoord );
+
+		if( isPrevInside != isCurrInside ) {
+			const float frac = PlaneTraits::getIntersectionFrac( prevCoord, currCoord );
+
+			auto &destCoord = outCoords[numOutVertices];
+			Vector4Lerp( prevCoord, frac, currCoord, destCoord );
+			numOutVertices += 1;
+		}
+
+		if( isCurrInside ) {
+			auto &destCoord = outCoords[numOutVertices];
+			VectorCopy( currCoord, destCoord );
+			numOutVertices += 1;
+		}
+
+		prevIndex = currIndex;
+	}
+
+	return numOutVertices;
+}
+
+#define CLIP_IN2OUT( PlaneTraits )                                                       \
+    do {                                                                                 \
+        numVertices = clipAgainstPlane<PlaneTraits>( numVertices, inCoords, outCoords ); \
+        if( numVertices < 3 ) [[unlikely]] {                                             \
+            return 0;                                                                    \
+        }                                                                                \
+    } while( 0 )
+
+#define CLIP_OUT2IN( PlaneTraits )                                                       \
+    do {                                                                                 \
+        numVertices = clipAgainstPlane<PlaneTraits>( numVertices, outCoords, inCoords ); \
+        if( numVertices < 3 ) [[unlikely]] {                                             \
+            return 0;                                                                    \
+        }                                                                                \
+    } while( 0 )
+
+[[nodiscard]]
+static auto clipTriangle( vec4_t inCoords[], vec4_t outCoords[] ) -> unsigned {
+	const auto isVertexVisible = []( const vec4_t v ) {
+		return std::fabs( v[0] ) <= v[3] && std::fabs( v[1] ) <= v[3] && std::fabs( v[2] ) <= v[3];
+	};
+	if( isVertexVisible( inCoords[0] ) && isVertexVisible( inCoords[1] ) && isVertexVisible( inCoords[2] ) ) {
+		Vector4Copy( inCoords[0], outCoords[0] );
+		Vector4Copy( inCoords[1], outCoords[1] );
+		Vector4Copy( inCoords[2], outCoords[2] );
+		return 3;
+	} else {
+		unsigned numVertices = 3;
+		CLIP_IN2OUT( WPlaneTraits );
+		CLIP_OUT2IN( PositivePlaneTraits<0> );
+		CLIP_IN2OUT( NegativePlaneTraits<0> );
+		CLIP_OUT2IN( PositivePlaneTraits<1> );
+		CLIP_IN2OUT( NegativePlaneTraits<1> );
+		CLIP_OUT2IN( PositivePlaneTraits<2> );
+		CLIP_IN2OUT( NegativePlaneTraits<2> );
+		return numVertices;
+	}
+}
+
+static auto calcOccluderAreaScore( const OccluderDataEntry &occluder, const float *mvpMatrix ) -> float {
+	const unsigned numOccluderVertices = occluder.numVertices;
+	vec4_t clipspaceOccluderVertices[7];
+
+	unsigned inVertexNum = 0;
+	do {
+		vec4_t temp;
+		temp[0] = occluder.data[inVertexNum][0];
+		temp[1] = occluder.data[inVertexNum][1];
+		temp[2] = occluder.data[inVertexNum][2];
+		temp[3] = 1.0f;
+
+		Matrix4_Multiply_Vector( mvpMatrix, temp, clipspaceOccluderVertices[inVertexNum] );
+		if( clipspaceOccluderVertices[inVertexNum][3] == 0.0f ) [[unlikely]] {
+			return 0.0f;
+		}
+
+		assert( std::isfinite( clipspaceOccluderVertices[inVertexNum][0] ) );
+		assert( std::isfinite( clipspaceOccluderVertices[inVertexNum][1] ) );
+		assert( std::isfinite( clipspaceOccluderVertices[inVertexNum][2] ) );
+		assert( std::isfinite( clipspaceOccluderVertices[inVertexNum][3] ) );
+	} while( ++inVertexNum < numOccluderVertices );
+
+	// Must be of the same size as we exchange them in ping-pong fashion during clipping
+	vec4_t inTriCoords[64];
+	vec4_t outTriCoords[64];
+
+	float areaScore = 0.0f;
+	inVertexNum       = 1;
+	do {
+		const float *const unclippedVert1 = clipspaceOccluderVertices[0];
+		const float *const unclippedVert2 = clipspaceOccluderVertices[inVertexNum + 0];
+		// Notice the "1" in the case of wrapping
+		const float *const unclippedVert3 = clipspaceOccluderVertices[inVertexNum + 1 < numOccluderVertices ? inVertexNum + 1 : 1];
+
+		Vector4Copy( unclippedVert1, inTriCoords[0] );
+		Vector4Copy( unclippedVert2, inTriCoords[1] );
+		Vector4Copy( unclippedVert3, inTriCoords[2] );
+
+		if( const unsigned numOutVertices = clipTriangle( inTriCoords, outTriCoords ) ) {
+			assert( numOutVertices >= 3 );
+			unsigned outVertexNum = 0;
+			do {
+				const float *clipspaceVert1 = outTriCoords[outVertexNum + 0];
+				const float *clipspaceVert2 = outTriCoords[outVertexNum + 1];
+				const float *clipspaceVert3 = outTriCoords[outVertexNum + 2];
+
+				assert( std::isfinite( clipspaceVert1[0] ) && std::isfinite( clipspaceVert1[1] ) );
+				assert( std::isfinite( clipspaceVert1[2] ) && std::isfinite( clipspaceVert1[3] ) );
+
+				assert( std::isfinite( clipspaceVert2[0] ) && std::isfinite( clipspaceVert2[1] ) );
+				assert( std::isfinite( clipspaceVert2[2] ) && std::isfinite( clipspaceVert2[3] ) );
+
+				assert( std::isfinite( clipspaceVert3[0] ) && std::isfinite( clipspaceVert3[1] ) );
+				assert( std::isfinite( clipspaceVert3[2] ) && std::isfinite( clipspaceVert3[3] ) );
+
+				const float w1 = clipspaceVert1[3], w2 = clipspaceVert2[3], w3 = clipspaceVert3[3];
+				if( std::fabs( w1 ) < 1e-6f || std::fabs( w2 ) < 1e-6f || std::fabs( w3 ) < 1e-6f ) [[unlikely]] {
+					return 0.0f;
+				}
+
+				const float rcpW1 = Q_Rcp( w1 );
+				const float rcpW2 = Q_Rcp( w2 );
+				const float rcpW3 = Q_Rcp( w3 );
+				assert( std::isfinite( rcpW1 ) && std::isfinite( rcpW2 ) && std::isfinite( rcpW3 ) );
+
+				vec2_t ndcVert1, ndcVert2, ndcVert3;
+				Vector2Scale( clipspaceVert1, rcpW1, ndcVert1 );
+				Vector2Scale( clipspaceVert2, rcpW2, ndcVert2 );
+				Vector2Scale( clipspaceVert3, rcpW3, ndcVert3 );
+
+				// We don't care of actually mapping NDC to viewport coord units.
+				// We just need some score which monotonically depends of screen-space area.
+				const vec3_t _1To2 { ndcVert2[0] - ndcVert1[0], ndcVert2[1] - ndcVert1[1], 0.0f };
+				const vec3_t _1To3 { ndcVert3[0] - ndcVert1[0], ndcVert3[1] - ndcVert1[1], 0.0f };
+
+				vec3_t cross;
+				CrossProduct( _1To2, _1To3, cross );
+				assert( std::isfinite( cross[0] ) && std::isfinite( cross[1] ) && std::isfinite( cross[2] ) );
+				// See the remark above wrt units
+				areaScore += DotProduct( cross, cross );
+			} while( ++outVertexNum < numOutVertices - 2 );
+		}
+	} while( ++inVertexNum < numOccluderVertices );
+
+	return areaScore;
 }
 
 }

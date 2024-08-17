@@ -135,11 +135,8 @@ private:
 		vec3_t pvsOrigin;
 
 		mat4_t cameraMatrix;
-
 		mat4_t projectionMatrix;
-
 		mat4_t cameraProjectionMatrix;                  // cameraMatrix * projectionMatrix
-		mat4_t modelviewProjectionMatrix;               // modelviewMatrix * projectionMatrix
 
 		float lodScaleForFov;
 
@@ -314,8 +311,10 @@ private:
 	void addCoronaLightsToSortList( StateForCamera *stateForCamera, const entity_t *polyEntity, const Scene::DynamicLight *lights,
 									std::span<const uint16_t> indices );
 
+public:
 	void addDebugLine( const float *p1, const float *p2, int color = COLOR_RGB( 255, 255, 255 ) );
 
+private:
 	void submitDebugStuffToBackend( Scene *scene );
 
 	// The template parameter is needed just to make instatiation of methods in different translation units correct
@@ -328,7 +327,7 @@ private:
 
 	template <unsigned Arch>
 	[[nodiscard]]
-	auto collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder>;
+	auto collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 
 	template <unsigned Arch>
 	[[nodiscard]]
@@ -363,7 +362,7 @@ private:
 	[[nodiscard]]
 	auto collectVisibleWorldLeavesSse2( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 	[[nodiscard]]
-	auto collectVisibleOccludersSse2( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder>;
+	auto collectVisibleOccludersSse2( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 	[[nodiscard]]
 	auto buildFrustaOfOccludersSse2( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 		-> std::span<const Frustum>;
@@ -392,7 +391,7 @@ private:
 	[[nodiscard]]
 	auto collectVisibleWorldLeavesSse41( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 	[[nodiscard]]
-	auto collectVisibleOccludersSse41( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder>;
+	auto collectVisibleOccludersSse41( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 	[[nodiscard]]
 	auto buildFrustaOfOccludersSse41( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 		-> std::span<const Frustum>;
@@ -421,7 +420,12 @@ private:
 	[[nodiscard]]
 	auto collectVisibleWorldLeaves( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 	[[nodiscard]]
-	auto collectVisibleOccluders( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder>;
+	auto collectVisibleOccluders( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
+
+	[[nodiscard]]
+	auto sortOccluders( StateForCamera *stateForCamera, std::span<const unsigned> visibleOccluders )
+		-> std::span<const SortedOccluder>;
+
 	[[nodiscard]]
 	auto buildFrustaOfOccluders( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 		-> std::span<const Frustum>;
@@ -487,7 +491,7 @@ private:
 	void submitSortedSurfacesToBackend( StateForCamera *stateForCamera, Scene *scene );
 
 	auto ( Frontend::*m_collectVisibleWorldLeavesArchMethod )( StateForCamera * ) -> std::span<const unsigned>;
-	auto ( Frontend::*m_collectVisibleOccludersArchMethod )( StateForCamera * ) -> std::span<const SortedOccluder>;
+	auto ( Frontend::*m_collectVisibleOccludersArchMethod )( StateForCamera * ) -> std::span<const unsigned>;
 	auto ( Frontend::*m_buildFrustaOfOccludersArchMethod )( StateForCamera *, std::span<const SortedOccluder> ) -> std::span<const Frustum>;
 	auto ( Frontend::*m_cullLeavesByOccludersArchMethod )( StateForCamera *, std::span<const unsigned>, std::span<const Frustum> )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;

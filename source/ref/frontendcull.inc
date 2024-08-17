@@ -19,8 +19,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
-#include <algorithm>
-
 namespace wsw::ref {
 
 static bool isLockingOccluders = false;
@@ -53,7 +51,7 @@ auto Frontend::collectVisibleWorldLeavesArch( StateForCamera *stateForCamera ) -
 }
 
 template <unsigned Arch>
-auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder> {
+auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> std::span<const unsigned> {
 	const Frustum *__restrict frustum     = &stateForCamera->frustum;
 	const unsigned numWorldModelOccluders = rsh.worldBrushModel->numOccluders;
 	unsigned *const visibleOccluders      = stateForCamera->visibleOccludersBuffer->get();
@@ -92,24 +90,24 @@ auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> 
 		viewAxis   = lockedViewAxis;
 	}
 
-	SortedOccluder *const sortedOccluders = stateForCamera->sortedOccludersBuffer->get();
-	unsigned numSortedOccluders           = 0;
-
+	// Prune bogus occluders
+	unsigned numKeptOccluders = 0;
 	for( unsigned i = 0; i < numVisibleOccluders; ++i ) {
 		const unsigned occluderNum                   = visibleOccluders[i];
 		const OccluderDataEntry &__restrict occluder = occluderDataEntries[occluderNum];
 
 		const float absViewDot = std::abs( DotProduct( viewAxis, occluder.plane ) );
-		if( absViewDot < 0.1f ) {
+		if( absViewDot < 0.05f ) {
 			continue;
 		}
 
-		if( std::fabs(DotProduct( viewOrigin, occluder.plane ) - occluder.plane[3] ) < 16.0f ) {
+		if( std::fabs( DotProduct( viewOrigin, occluder.plane ) - occluder.plane[3] ) < 16.0f ) {
 			continue;
 		}
 
 		vec3_t toOccluderVec;
-		// Hacks, hacks, hacks TODO: Add and use the nearest primary frustum plane?
+		// Hacks, hacks, hacks: reject occluders behind the viewer
+		// TODO: Add and use the nearest primary frustum plane?
 		VectorSubtract( occluder.innerPolyPoint, viewOrigin, toOccluderVec );
 
 		if( DotProduct( viewAxis, toOccluderVec ) <= 0 ) {
@@ -117,31 +115,16 @@ auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> 
 		}
 
 		VectorNormalizeFast( toOccluderVec );
-		if( std::fabs( DotProduct( toOccluderVec, occluder.plane ) ) < 0.3f ) {
+		// Note that this condition is perfectly meaningful (bogus frusta often get built without it),
+		// but it is poorely defined and is way too restrictive TODO: Clarify it, discover more permissive condition.
+		if( std::fabs( DotProduct( toOccluderVec, occluder.plane ) ) < 0.1f ) {
 			continue;
 		}
 
-		// TODO: Try using a distance to the poly?
-		const float score = Q_RSqrt( DistanceSquared( viewOrigin, occluder.innerPolyPoint ) ) * absViewDot;
-		sortedOccluders[numSortedOccluders++] = { occluderNum, score };
+		visibleOccluders[numKeptOccluders++] = occluderNum;
 	}
 
-	// TODO: Don't sort, build a heap instead?
-	std::sort( sortedOccluders, sortedOccluders + numSortedOccluders );
-
-#ifdef SHOW_OCCLUDERS
-	for( unsigned i = 0; i < numSortedOccluders; ++i ) {
-		const OccluderDataEntry &__restrict occluder = occluderDataEntries[sortedOccluders[i].occluderNum];
-
-		for( unsigned vertIndex = 0; vertIndex < occluder.numVertices; ++vertIndex ) {
-			const float *const v1 = occluder.data[vertIndex + 0];
-			const float *const v2 = occluder.data[( vertIndex + 1 != occluder.numVertices ) ? vertIndex + 1 : 0];
-			addDebugLine( v1, v2, COLOR_RGB( 192, 192, 96 ) );
-		}
-	}
-#endif
-
-	return { sortedOccluders, sortedOccluders + numSortedOccluders };
+	return { visibleOccluders, numKeptOccluders };
 }
 
 template <unsigned Arch>
