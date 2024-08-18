@@ -677,12 +677,24 @@ auto Frontend::sortOccluders( StateForCamera *stateForCamera, std::span<const un
 	const auto *const occluderEntries = rsh.worldBrushModel->occluderDataEntries;
 	const float *const mvpMatrix      = stateForCamera->cameraProjectionMatrix;
 
+	// Note: The area units are in NDC, also we don't divide cross products by 2 to get triangle areas,
+	// hence the area of the entire screen appears to be equal to len([-1,+1]) * len([-1,+1]) * 2 = 8
+#if 1
+	const float screenWidthFrac  = (float)stateForCamera->refdef.width * Q_Rcp( (float)glConfig.width );
+	const float screenHeightFrac = (float)stateForCamera->refdef.height * Q_Rcp( (float)glConfig.height );
+	const float screenDimFrac    = wsw::max( screenWidthFrac, screenHeightFrac );
+	const float epsilon          = 2e-2f * Q_Rcp( screenDimFrac );
+	assert( std::isfinite( epsilon ) && epsilon > 0.0f );
+#else
+	const float epsilon = Cvar_Value( "epsilon" );
+#endif
+
 	unsigned numSortedOccluders = 0;
 	SortedOccluder *const sortedOccluders = stateForCamera->sortedOccludersBuffer->get();
 	// TODO: This can be performed in parallel
 	for( const unsigned occluderNum: visibleOccluders ) {
 		const float areaScore = calcOccluderAreaScore( occluderEntries[occluderNum], mvpMatrix );
-		if( areaScore > 0.0f ) [[likely]] {
+		if( areaScore > epsilon ) [[likely]] {
 			sortedOccluders[numSortedOccluders++] = { occluderNum, areaScore };
 		}
 	}
@@ -905,15 +917,15 @@ static auto calcOccluderAreaScore( const OccluderDataEntry &occluder, const floa
 				Vector2Scale( clipspaceVert3, rcpW3, ndcVert3 );
 
 				// We don't care of actually mapping NDC to viewport coord units.
-				// We just need some score which monotonically depends of screen-space area.
+				// We just need some score which linearly depends of screen-space area.
 				const vec3_t _1To2 { ndcVert2[0] - ndcVert1[0], ndcVert2[1] - ndcVert1[1], 0.0f };
 				const vec3_t _1To3 { ndcVert3[0] - ndcVert1[0], ndcVert3[1] - ndcVert1[1], 0.0f };
 
 				vec3_t cross;
 				CrossProduct( _1To2, _1To3, cross );
 				assert( std::isfinite( cross[0] ) && std::isfinite( cross[1] ) && std::isfinite( cross[2] ) );
-				// See the remark above wrt units
-				areaScore += DotProduct( cross, cross );
+				// We have to take the square root for proper summation of triangle areas into resulting area
+				areaScore += VectorLengthFast( cross );
 			} while( ++outVertexNum < numOutVertices - 2 );
 		}
 	} while( ++inVertexNum < numOccluderVertices );
