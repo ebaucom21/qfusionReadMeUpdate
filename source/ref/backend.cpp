@@ -985,7 +985,7 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const en
 
 	skmodel = ( ( mskmodel_t * )mod->extradata );
 	if( skmodel->numbones && skmodel->numframes > 0 ) {
-		cache = R_GetSkeletalCache( e->number, mod->lodnum );
+		cache = R_GetSkeletalCache( e->number, mod->lodnum, fsh->sceneIndex );
 	}
 
 	if( cache ) {

@@ -752,6 +752,9 @@ typedef struct mshaderref_s {
 	shader_t        *shaders[NUM_SHADER_TYPES_BSP];
 } mshaderref_t;
 
+#define MAX_REF_SCENES   16 // max scenes rendered per frame
+#define MAX_REF_CAMERAS  32 // max cameras rendered per frame
+
 typedef struct msurface_s {
 
 	vec4_t plane;
@@ -763,7 +766,7 @@ typedef struct msurface_s {
 	unsigned numInstances;
 	unsigned mergedSurfNum;
 
-	mutable unsigned occlusionCullingFrame;
+	mutable uint8_t occlusionCullingFrames[MAX_REF_CAMERAS];
 
 	mutable unsigned traceFrame;
 
@@ -1153,7 +1156,6 @@ void        Mod_StripLODSuffix( char *name );
 #define RF_CUBEMAPVIEW          ( RF_ENVVIEW )
 #define RF_NONVIEWERREF         ( RF_PORTALVIEW | RF_MIRRORVIEW | RF_ENVVIEW | RF_SHADOWMAPVIEW )
 
-#define MAX_REF_SCENES          32 // max scenes rendered per frame
 #define MAX_REF_ENTITIES        ( MAX_ENTITIES + 48 ) // must not exceed 2048 because of sort key packing
 
 typedef struct portalSurface_s {
@@ -1162,6 +1164,7 @@ typedef struct portalSurface_s {
 	cplane_t plane, untransformed_plane;
 	const shader_t *shader;
 	Texture *texures[2];            // front and back portalmaps
+	void *statesForCamera[2];
 } portalSurface_t;
 
 //====================================================
@@ -1419,6 +1422,7 @@ struct FrontendToBackendShared {
 	mat3_t viewAxis;
 	unsigned renderFlags;
 	unsigned cameraId;
+	unsigned sceneIndex;
 	float fovTangent;
 };
 
@@ -1457,9 +1461,9 @@ struct skmcacheentry_s;
 //
 // r_skm.c
 //
-void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod );
+void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod, unsigned sceneIndex );
 model_t *R_SkeletalModelLOD( const entity_t *e, const float *viewOrigin, float fovLodScale );
-skmcacheentry_s *R_GetSkeletalCache( int entNum, int lodNum );
+skmcacheentry_s *R_GetSkeletalCache( int entNum, int lodNum, unsigned sceneIndex );
 dualquat_t *R_GetSkeletalBones( skmcacheentry_s *cache );
 bool R_SkeletalRenderAsFrame0( skmcacheentry_s *cache );
 void R_SkeletalModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t maxs );

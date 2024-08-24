@@ -1246,6 +1246,7 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 
 			// TODO: Use the same DrawSceneRequest instance but modify POV-specific data
 			DrawSceneRequest *drawSceneRequests[MAX_CLIENTS + 1];
+			CG_ResetTemporaryBoneposesCache();
 			BeginDrawingScenes();
 
 			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
@@ -1300,6 +1301,8 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 				drawSceneRequests[viewNum] = drawSceneRequest;
 			}
 
+			BeginProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } );
+
 			CG_FireEvents( false );
 
 			// Make sure all possible effects in this frame are submitted prior to simulation
@@ -1309,10 +1312,6 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 			cg.polyEffectsSystem.simulateFrame( cg.time );
 			cg.simulatedHullsSystem.simulateFrame( cg.time );
 
-			auto *const uiSystem       = wsw::ui::UISystem::instance();
-			const bool hasModalOverlay = uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard();
-			const bool shouldDrawHuds  = v_showHud.get();
-			const bool shouldDraw2D    = v_draw2D.get();
 			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
 				DrawSceneRequest *const drawSceneRequest = drawSceneRequests[viewNum];
 				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
@@ -1327,8 +1326,17 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 				cg.particleSystem.submitToScene( cg.time, drawSceneRequest );
 				cg.polyEffectsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
 				cg.simulatedHullsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
+			}
 
-				SubmitDrawSceneRequest( drawSceneRequest );
+			EndProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } );
+
+			auto *const uiSystem       = wsw::ui::UISystem::instance();
+			const bool hasModalOverlay = uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard();
+			const bool shouldDrawHuds  = v_showHud.get();
+			const bool shouldDraw2D    = v_draw2D.get();
+			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
+				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
+				CommitProcessedDrawSceneRequest( drawSceneRequests[viewNum] );
 
 				const bool isMiniview = viewNum != 0 || actuallyUseTiledMode;
 				if( shouldDraw2D && viewState->view.draw2D ) {
@@ -1369,8 +1377,6 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 					}
 				}
 
-				CG_ResetTemporaryBoneposesCache(); // clear for next frame
-
 				if( !isMiniview ) {
 					RF_Set2DScissor( 0, 0, cgs.vidWidth, cgs.vidHeight );
 					uiSystem->drawMenuPartInMainContext();
@@ -1379,6 +1385,7 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 			}
 
 			EndDrawingScenes();
+			CG_ResetTemporaryBoneposesCache();
 
 			// Blit the HUD first in this case (this is a hack for the demo playback menu which must be on top)
 			if( actuallyUseTiledMode && !hasModalOverlay ) {

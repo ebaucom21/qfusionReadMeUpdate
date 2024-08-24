@@ -368,7 +368,8 @@ auto Frontend::cullLeavesByOccludersArch( StateForCamera *stateForCamera,
 }
 
 template <unsigned Arch>
-void Frontend::cullSurfacesInVisLeavesByOccludersArch( std::span<const unsigned> indicesOfVisibleLeaves,
+void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
+													   std::span<const unsigned> indicesOfVisibleLeaves,
 													   std::span<const Frustum> occluderFrusta,
 													   MergedSurfSpan *mergedSurfSpans,
 													   uint8_t *surfVisTable ) {
@@ -380,7 +381,7 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( std::span<const unsigned>
 
 	const msurface_t *const surfaces = rsh.worldBrushModel->surfaces;
 	const auto leaves = rsh.worldBrushModel->visleafs;
-	const unsigned occlusionCullingFrame = m_occlusionCullingFrame;
+	const uint8_t occlusionCullingFrame = m_occlusionCullingFrame;
 
 	// Cull individual surfaces by up to 20 best frusta
 	const unsigned numBestOccluders = wsw::min<unsigned>( 20, occluderFrusta.size() );
@@ -392,8 +393,8 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( std::span<const unsigned>
 		for( unsigned surfIndex = 0; surfIndex < numLeafSurfaces; ++surfIndex ) {
 			const unsigned surfNum = leafSurfaceNums[surfIndex];
 			const msurface_t *const __restrict surf = surfaces + surfNum;
-			if( surf->occlusionCullingFrame != occlusionCullingFrame ) {
-				surf->occlusionCullingFrame = occlusionCullingFrame;
+			if( surf->occlusionCullingFrames[cameraIndex] != occlusionCullingFrame ) {
+				surf->occlusionCullingFrames[cameraIndex] = occlusionCullingFrame;
 
 				LOAD_BOX_COMPONENTS( surf->mins, surf->maxs );
 

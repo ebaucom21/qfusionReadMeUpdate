@@ -48,6 +48,7 @@ namespace wsw::ref {
 class alignas( 32 ) Frontend {
 public:
 	Frontend();
+	~Frontend();
 
 	static void init();
 	static void shutdown();
@@ -59,15 +60,17 @@ public:
 
 	[[nodiscard]]
 	auto createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest *;
-	void submitDrawSceneRequest( DrawSceneRequest *request );
+
+	void beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
+	void endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
+
+	void commitProcessedDrawSceneRequest( DrawSceneRequest *request );
 
 	void endDrawingScenes();
 
 	void initVolatileAssets();
 
 	void destroyVolatileAssets();
-
-	void renderScene( Scene *scene, const refdef_t *rd );
 
 	void set2DMode( bool enable );
 	void set2DScissor( int x, int y, int w, int h );
@@ -120,6 +123,8 @@ private:
 		unsigned renderFlags { 0 };
 
 		unsigned cameraId { ~0u };
+		unsigned cameraIndex { ~0u };
+		unsigned sceneIndex { ~0u };
 
 		int viewCluster { -1 };
 		int viewArea { -1 };
@@ -173,6 +178,12 @@ private:
 		PodBufferHolder<uint32_t> *leafLightBitsOfSurfacesBuffer;
 
 		ParticleDrawSurface *particleDrawSurfaces;
+
+		// Saved results of the world occlusion stage
+		std::span<const unsigned> nonOccludedLeaves;
+		std::span<const unsigned> partiallyOccludedLeaves;
+		unsigned numOccluderFrusta { 0 };
+		bool drawWorld { false };
 	};
 
 	static_assert( sizeof( StateForCamera ) % alignof( Frustum ) == 0 );
@@ -194,14 +205,14 @@ private:
 		unsigned renderFlagsToClear { 0 };
 	};
 
-	// Regulates which temporary buffers to use
-	enum class CameraStateGroup { Primary, Portal };
-
 	[[nodiscard]]
-	auto setupStateForCamera( CameraStateGroup stateGroup, const refdef_t *fd,
-							  const std::optional<CameraOverrideParams> &overrideParams = std::nullopt ) -> StateForCamera *;
+	auto setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
+							  std::optional<CameraOverrideParams> overrideParams = std::nullopt ) -> StateForCamera *;
 
-	void renderViewFromThisCamera( Scene *scene, StateForCamera *stateForCamera );
+	void beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras );
+	void endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras );
+
+	void performPreparedRenderingFromThisCamera( Scene *scene, StateForCamera *stateForCamera );
 
 	[[nodiscard]]
 	auto tryAddingPortalSurface( StateForCamera *stateForCamera, const entity_t *ent,
@@ -215,10 +226,6 @@ private:
 							  const float *mins, const float *maxs, const shader_t *shader, void *drawSurf );
 
 	void collectVisiblePolys( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta );
-
-	[[nodiscard]]
-	auto cullWorldSurfaces( StateForCamera *stateForCamera )
-		-> std::tuple<std::span<const Frustum>, std::span<const unsigned>, std::span<const unsigned>>;
 
 	void addVisibleWorldSurfacesToSortList( StateForCamera *stateForCamera, Scene *scene );
 
@@ -342,7 +349,8 @@ private:
 									-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
 	template <unsigned Arch>
-	void cullSurfacesInVisLeavesByOccludersArch( std::span<const unsigned> indicesOfLeaves,
+	void cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
+												 std::span<const unsigned> indicesOfLeaves,
 												 std::span<const Frustum> occluderFrusta,
 												 MergedSurfSpan *mergedSurfSpans,
 												 uint8_t *surfVisTable );
@@ -372,7 +380,8 @@ private:
 									std::span<const Frustum> occluderFrusta )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
-	void cullSurfacesInVisLeavesByOccludersSse2( std::span<const unsigned> indicesOfLeaves,
+	void cullSurfacesInVisLeavesByOccludersSse2( unsigned cameraIndex,
+												 std::span<const unsigned> indicesOfLeaves,
 												 std::span<const Frustum> occluderFrusta,
 												 MergedSurfSpan *mergedSurfSpans,
 												 uint8_t *surfVisTable );
@@ -401,7 +410,8 @@ private:
 									 std::span<const Frustum> occluderFrusta )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
-	void cullSurfacesInVisLeavesByOccludersSse41( std::span<const unsigned> indicesOfLeaves,
+	void cullSurfacesInVisLeavesByOccludersSse41( unsigned cameraIndex,
+												  std::span<const unsigned> indicesOfLeaves,
 												  std::span<const Frustum> occluderFrusta,
 												  MergedSurfSpan *mergedSurfSpans,
 												  uint8_t *surfVisTable );
@@ -435,7 +445,8 @@ private:
 								std::span<const Frustum> occluderFrusta )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
-	void cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
+	void cullSurfacesInVisLeavesByOccluders( unsigned cameraIndex,
+											 std::span<const unsigned> indicesOfLeaves,
 											 std::span<const Frustum> occluderFrusta,
 											 MergedSurfSpan *mergedSurfSpans,
 											 uint8_t *surfVisTable );
@@ -472,8 +483,9 @@ private:
 							  const shader_t *shader, float dist, unsigned order, const portalSurface_t *portalSurf,
 							  const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator = 0 ) -> void *;
 
-	void drawPortals( StateForCamera *stateForPrimaryCamera, Scene *scene );
-	void drawPortalSurface( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface, Scene *scene );
+	// TODO: Task
+	void prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface, Scene *scene,
+									  wsw::PodVector<std::pair<Scene *, StateForCamera *>> *scenesAndStates );
 
 	enum DrawPortalFlags : unsigned {
 		DrawPortalMirror     = 0x1,
@@ -482,8 +494,10 @@ private:
 	};
 
 	[[nodiscard]]
-	auto drawPortalSurfaceSide( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface,
-								Scene *scene, const entity_t *portalEntity, unsigned drawPortalFlags ) -> Texture *;
+	auto prepareDrawingPortalSurfaceSide( StateForCamera *stateForPrimaryCamera,
+										  portalSurface_t *portalSurface, Scene *scene,
+										  const entity_t *portalEntity, unsigned drawPortalFlags )
+										  -> std::optional<std::pair<StateForCamera *, Texture *>>;
 
 	[[nodiscard]]
 	auto findNearestPortalEntity( const portalSurface_t *portalSurface, Scene *scene ) -> const entity_t *;
@@ -496,7 +510,7 @@ private:
 	auto ( Frontend::*m_cullLeavesByOccludersArchMethod )( StateForCamera *, std::span<const unsigned>, std::span<const Frustum> )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 	void ( Frontend::*m_cullSurfacesInVisLeavesByOccludersArchMethod )
-		( std::span<const unsigned>, std::span<const Frustum>, MergedSurfSpan *, uint8_t * );
+		( unsigned, std::span<const unsigned>, std::span<const Frustum>, MergedSurfSpan *, uint8_t * );
 	auto ( Frontend::*m_cullEntriesWithBoundsArchMethod )( const void *, unsigned, unsigned, unsigned, const Frustum *,
 														   std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
 	auto ( Frontend::*m_cullEntryPtrsWithBoundsArchMethod )( const void **, unsigned, unsigned, const Frustum *,
@@ -504,11 +518,14 @@ private:
 
 	shader_t *m_coronaShader { nullptr };
 
-	unsigned m_occlusionCullingFrame { 0 };
+	uint8_t m_occlusionCullingFrame { 0 };
 	unsigned m_drawSceneFrame { 0 };
 	unsigned m_cameraIdCounter { 0 };
+	unsigned m_cameraIndexCounter { 0 };
+	unsigned m_sceneIndexCounter { 0 };
 
-	wsw::StaticVector<DrawSceneRequest, 16> m_drawSceneRequestsHolder;
+	static constexpr unsigned kMaxDrawSceneRequests = 16;
+	wsw::StaticVector<DrawSceneRequest, kMaxDrawSceneRequests> m_drawSceneRequestsHolder;
 
 	struct DebugLine {
 		float p1[3];
@@ -517,30 +534,49 @@ private:
 	};
 	wsw::PodVector<DebugLine> m_debugLines;
 
-	struct StateForCameraStorage { uint8_t data[sizeof( StateForCamera )]; };
-	alignas( alignof( StateForCamera ) ) StateForCameraStorage m_buffersForStateForCamera[2];
+	struct StateForCameraStorage {
+		~StateForCameraStorage() {
+			if( isStateConstructed ) {
+				( (StateForCamera *)theStateStorage )->~StateForCamera();
+			}
+		}
 
-	// Use separate temporary buffers for a primary camera and for camerae of portals
+		alignas( alignof( StateForCamera ) ) uint8_t theStateStorage[sizeof( StateForCamera )];
+		bool isStateConstructed { false };
 
-	wsw::PodVector<sortedDrawSurf_t> m_meshSortList[2];
+		wsw::PodVector<sortedDrawSurf_t> meshSortList;
 
-	PodBufferHolder<unsigned> m_visibleLeavesBuffer[2];
-	PodBufferHolder<unsigned> m_occluderPassFullyVisibleLeavesBuffer[2];
-	PodBufferHolder<unsigned> m_occluderPassPartiallyVisibleLeavesBuffer[2];
+		PodBufferHolder<unsigned> visibleLeavesBuffer;
+		PodBufferHolder<unsigned> occluderPassFullyVisibleLeavesBuffer;
+		PodBufferHolder<unsigned> occluderPassPartiallyVisibleLeavesBuffer;
 
-	PodBufferHolder<unsigned> m_visibleOccludersBuffer[2];
-	PodBufferHolder<SortedOccluder> m_sortedOccludersBuffer[2];
+		PodBufferHolder<unsigned> visibleOccludersBuffer;
+		PodBufferHolder<SortedOccluder> sortedOccludersBuffer;
 
-	PodBufferHolder<drawSurfaceBSP_t> m_bspDrawSurfacesBuffer[2];
-	PodBufferHolder<MergedSurfSpan> m_drawSurfSurfSpansBuffer[2];
-	PodBufferHolder<uint8_t> m_bspSurfVisTableBuffer[2];
-	PodBufferHolder<unsigned> m_drawSurfSurfSubspansBuffer[2];
-	PodBufferHolder<VertElemSpan> m_drawSurfVertElemSpansBuffer[2];
+		PodBufferHolder<drawSurfaceBSP_t> bspDrawSurfacesBuffer;
+		PodBufferHolder<MergedSurfSpan> drawSurfSurfSpansBuffer;
+		PodBufferHolder<uint8_t> bspSurfVisTableBuffer;
+		PodBufferHolder<unsigned> drawSurfSurfSubspansBuffer;
+		PodBufferHolder<VertElemSpan> drawSurfVertElemSpansBuffer;
 
-	PodBufferHolder<VisTestedModel> m_visTestedModelsBuffer[2];
-	PodBufferHolder<uint32_t> m_leafLightBitsOfSurfacesBuffer[2];
+		PodBufferHolder<VisTestedModel> visTestedModelsBuffer;
+		PodBufferHolder<uint32_t> leafLightBitsOfSurfacesBuffer;
 
-	PodBufferHolder<ParticleDrawSurface> m_particleDrawSurfacesBuffer[2];
+		PodBufferHolder<ParticleDrawSurface> particleDrawSurfacesBuffer;
+
+		StateForCameraStorage *prev { nullptr }, *next { nullptr };
+	};
+
+	[[nodiscard]]
+	auto allocStateForCamera() -> StateForCamera *;
+	void recycleFrameCameraStates();
+	void disposeCameraStates();
+
+	// Must be stable wrt relocations hence we use intrusive linked lists
+	StateForCameraStorage *m_freeStatesForCamera { nullptr };
+	StateForCameraStorage *m_usedStatesForCamera { nullptr };
+
+	wsw::PodVector<std::pair<Scene *, StateForCamera *>> m_tmpPortalScenesAndStates;
 };
 
 }

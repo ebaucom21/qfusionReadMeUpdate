@@ -78,77 +78,6 @@ void Frustum::setupFor4Planes( const float *viewOrigin, const mat3_t viewAxis, f
 
 namespace wsw::ref {
 
-auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
-	-> std::tuple<std::span<const Frustum>, std::span<const unsigned>, std::span<const unsigned>> {
-
-	m_occlusionCullingFrame++;
-
-	const unsigned numMergedSurfaces = rsh.worldBrushModel->numMergedSurfaces;
-	const unsigned numWorldSurfaces  = rsh.worldBrushModel->numModelSurfaces;
-	const unsigned numWorldLeaves    = rsh.worldBrushModel->numvisleafs;
-	const unsigned numOccluders      = rsh.worldBrushModel->numOccluders;
-
-	// Put the allocation code here, so we don't bloat the arch-specific code
-	stateForCamera->visibleLeavesBuffer->reserve( numWorldLeaves );
-	stateForCamera->visibleOccludersBuffer->reserve( numWorldSurfaces );
-	stateForCamera->occluderPassFullyVisibleLeavesBuffer->reserve( numWorldLeaves );
-	stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->reserve( numWorldLeaves );
-
-	stateForCamera->visibleOccludersBuffer->reserve( numOccluders );
-	stateForCamera->sortedOccludersBuffer->reserve( numOccluders );
-
-	stateForCamera->drawSurfSurfSpansBuffer->reserve( numMergedSurfaces );
-	stateForCamera->bspDrawSurfacesBuffer->reserve( numMergedSurfaces );
-
-	// Try guessing the required size
-	const unsigned estimatedNumSubspans = wsw::max( 8 * numMergedSurfaces, numWorldSurfaces );
-	// Two unsigned elements per each subspan TODO: Allow storing std::pair in this container
-	stateForCamera->drawSurfSurfSubspansBuffer->reserve( 2 * estimatedNumSubspans );
-	stateForCamera->drawSurfVertElemSpansBuffer->reserve( estimatedNumSubspans );
-
-	uint8_t *const surfVisTable = stateForCamera->surfVisTableBuffer->reserveZeroedAndGet( numWorldSurfaces );
-
-	MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
-	for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
-		mergedSurfSpans[i].firstSurface    = std::numeric_limits<int>::max();
-		mergedSurfSpans[i].lastSurface     = std::numeric_limits<int>::min();
-		mergedSurfSpans[i].subspansOffset  = 0;
-		mergedSurfSpans[i].vertSpansOffset = 0;
-		mergedSurfSpans[i].numSubspans     = 0;
-	}
-
-	// Cull world leaves by the primary frustum
-	const std::span<const unsigned> visibleLeaves = collectVisibleWorldLeaves( stateForCamera );
-
-	std::span<const Frustum> occluderFrusta;
-	if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
-		// TODO: Can run in parallel with leaves collection
-		// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
-		const std::span<const unsigned> visibleOccluders      = collectVisibleOccluders( stateForCamera );
-		const std::span<const SortedOccluder> sortedOccluders = sortOccluders( stateForCamera, visibleOccluders );
-		// Build frusta of occluders, while performing some additional frusta pruning
-		occluderFrusta = buildFrustaOfOccluders( stateForCamera, sortedOccluders );
-	}
-
-	std::span<const unsigned> nonOccludedLeaves;
-	std::span<const unsigned> partiallyOccludedLeaves;
-	if( occluderFrusta.empty() || ( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
-		// No "good enough" occluders found.
-		// Just mark every surface that falls into the primary frustum visible in this case.
-		markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans, surfVisTable );
-		nonOccludedLeaves = visibleLeaves;
-	} else {
-		// Test every leaf that falls into the primary frustum against frusta of occluders
-		std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = cullLeavesByOccluders( stateForCamera,
-																						visibleLeaves, occluderFrusta );
-		markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans, surfVisTable );
-		// Test every surface that belongs to partially occluded leaves
-		cullSurfacesInVisLeavesByOccluders( partiallyOccludedLeaves, occluderFrusta, mergedSurfSpans, surfVisTable );
-	}
-
-	return { occluderFrusta, nonOccludedLeaves, partiallyOccludedLeaves };
-}
-
 void Frontend::collectVisiblePolys( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta ) {
 	VisTestedModel *tmpModels = stateForCamera->visTestedModelsBuffer->reserveAndGet( MAX_QUAD_POLYS );
 	QuadPoly **quadPolys      = scene->m_quadPolys.data();
@@ -646,11 +575,13 @@ auto Frontend::cullLeavesByOccluders( StateForCamera *stateForCamera, std::span<
 	return ( this->*m_cullLeavesByOccludersArchMethod )( stateForCamera, indicesOfLeaves, occluderFrusta );
 }
 
-void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
+void Frontend::cullSurfacesInVisLeavesByOccluders( unsigned cameraIndex,
+												   std::span<const unsigned> indicesOfLeaves,
 												   std::span<const Frustum> occluderFrusta,
 												   MergedSurfSpan *mergedSurfSpans,
 												   uint8_t *surfVisTable ) {
-	return ( this->*m_cullSurfacesInVisLeavesByOccludersArchMethod )( indicesOfLeaves, occluderFrusta, mergedSurfSpans, surfVisTable );
+	return ( this->*m_cullSurfacesInVisLeavesByOccludersArchMethod )( cameraIndex, indicesOfLeaves, occluderFrusta,
+																	  mergedSurfSpans, surfVisTable );
 }
 
 auto Frontend::cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,

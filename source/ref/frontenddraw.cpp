@@ -207,6 +207,7 @@ void Frontend::submitSortedSurfacesToBackend( StateForCamera *stateForCamera, Sc
 	fsh.renderFlags                 = stateForCamera->renderFlags;
 	fsh.fovTangent                  = stateForCamera->lodScaleForFov;
 	fsh.cameraId                    = stateForCamera->cameraId;
+	fsh.sceneIndex                  = stateForCamera->sceneIndex;
 	std::memcpy( fsh.viewAxis, stateForCamera->viewAxis, sizeof( mat3_t ) );
 	VectorCopy( stateForCamera->viewOrigin, fsh.viewOrigin );
 
@@ -402,56 +403,18 @@ void Frontend::submitSortedSurfacesToBackend( StateForCamera *stateForCamera, Sc
 	}
 }
 
-void Frontend::renderScene( Scene *scene, const refdef_s *fd ) {
-	set2DMode( false );
-
-	m_drawSceneFrame++;
-
-	RB_SetTime( fd->time );
-
-	StateForCamera *const stateForSceneCamera = setupStateForCamera( CameraStateGroup::Primary, fd );
-
-	if( stateForSceneCamera->refdef.minLight < 0.1f ) {
-		stateForSceneCamera->refdef.minLight = 0.1f;
+auto Frontend::setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
+									std::optional<CameraOverrideParams> overrideParams ) -> StateForCamera * {
+	auto *const stateForCamera = allocStateForCamera();
+	if( !stateForCamera ) [[unlikely]] {
+		return nullptr;
 	}
 
-	// TODO: Is this first call really needed
-	bindRenderTargetAndViewport( nullptr, stateForSceneCamera );
-
-	renderViewFromThisCamera( scene, stateForSceneCamera );
-
-	bindRenderTargetAndViewport( nullptr, stateForSceneCamera );
-
-	set2DMode( true );
-}
-
-auto Frontend::setupStateForCamera( CameraStateGroup stateGroup, const refdef_t *fd,
-									const std::optional<CameraOverrideParams> &overrideParams ) -> StateForCamera * {
-	const auto stateIndex = (unsigned)stateGroup;
-	assert( stateIndex == 0 || stateIndex == 1 );
-
-	auto *const stateForCamera = new( m_buffersForStateForCamera[stateIndex].data )StateForCamera;
-
-	stateForCamera->sortList                                 = &m_meshSortList[stateIndex];
-	stateForCamera->visibleLeavesBuffer                      = &m_visibleLeavesBuffer[stateIndex];
-	stateForCamera->occluderPassFullyVisibleLeavesBuffer     = &m_occluderPassFullyVisibleLeavesBuffer[stateIndex];
-	stateForCamera->occluderPassPartiallyVisibleLeavesBuffer = &m_occluderPassPartiallyVisibleLeavesBuffer[stateIndex];
-	stateForCamera->visibleOccludersBuffer                   = &m_visibleOccludersBuffer[stateIndex];
-	stateForCamera->sortedOccludersBuffer                    = &m_sortedOccludersBuffer[stateIndex];
-	stateForCamera->drawSurfSurfSpansBuffer                  = &m_drawSurfSurfSpansBuffer[stateIndex];
-	stateForCamera->bspDrawSurfacesBuffer                    = &m_bspDrawSurfacesBuffer[stateIndex];
-	stateForCamera->surfVisTableBuffer                       = &m_bspSurfVisTableBuffer[stateIndex];
-	stateForCamera->drawSurfSurfSubspansBuffer               = &m_drawSurfSurfSubspansBuffer[stateIndex];
-	stateForCamera->drawSurfVertElemSpansBuffer              = &m_drawSurfVertElemSpansBuffer[stateIndex];
-	stateForCamera->visTestedModelsBuffer                    = &m_visTestedModelsBuffer[stateIndex];
-	stateForCamera->leafLightBitsOfSurfacesBuffer            = &m_leafLightBitsOfSurfacesBuffer[stateIndex];
-
-	m_particleDrawSurfacesBuffer[stateIndex].reserve( Scene::kMaxParticleAggregates * Scene::kMaxParticlesInAggregate );
-	stateForCamera->particleDrawSurfaces = m_particleDrawSurfacesBuffer[stateIndex].get();
-	
-	stateForCamera->refdef   = *fd;
-	stateForCamera->farClip  = getDefaultFarClip( fd );
-	stateForCamera->cameraId = m_cameraIdCounter++;
+	stateForCamera->refdef      = *fd;
+	stateForCamera->farClip     = getDefaultFarClip( fd );
+	stateForCamera->cameraId    = m_cameraIdCounter++;
+	stateForCamera->cameraIndex = m_cameraIndexCounter++;
+	stateForCamera->sceneIndex  = sceneIndex;
 
 	stateForCamera->renderFlags = 0;
 	if( r_lightmap->integer ) {
@@ -536,70 +499,181 @@ auto Frontend::setupStateForCamera( CameraStateGroup stateGroup, const refdef_t 
 	return stateForCamera;
 }
 
-void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForCamera ) {
-	std::span<const Frustum> occluderFrusta;
-	std::span<const unsigned> nonOccludedLeaves;
-	std::span<const unsigned> partiallyOccludedLeaves;
+void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {
+	m_occlusionCullingFrame++;
+	for( auto [scene, stateForCamera] : scenesAndCameras ) {
+		if( !( stateForCamera->refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+			if( r_drawworld->integer && rsh.worldModel ) {
+				const unsigned numMergedSurfaces = rsh.worldBrushModel->numMergedSurfaces;
+				const unsigned numWorldSurfaces  = rsh.worldBrushModel->numModelSurfaces;
+				const unsigned numWorldLeaves    = rsh.worldBrushModel->numvisleafs;
+				const unsigned numOccluders      = rsh.worldBrushModel->numOccluders;
+
+				// Put the allocation code here, so we don't bloat the arch-specific code
+				stateForCamera->visibleLeavesBuffer->reserve( numWorldLeaves );
+				stateForCamera->visibleOccludersBuffer->reserve( numWorldSurfaces );
+				stateForCamera->occluderPassFullyVisibleLeavesBuffer->reserve( numWorldLeaves );
+				stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->reserve( numWorldLeaves );
+
+				stateForCamera->visibleOccludersBuffer->reserve( numOccluders );
+				stateForCamera->sortedOccludersBuffer->reserve( numOccluders );
+
+				stateForCamera->drawSurfSurfSpansBuffer->reserve( numMergedSurfaces );
+				stateForCamera->bspDrawSurfacesBuffer->reserve( numMergedSurfaces );
+
+				// Try guessing the required size
+				const unsigned estimatedNumSubspans = wsw::max( 8 * numMergedSurfaces, numWorldSurfaces );
+				// Two unsigned elements per each subspan TODO: Allow storing std::pair in this container
+				stateForCamera->drawSurfSurfSubspansBuffer->reserve( 2 * estimatedNumSubspans );
+				stateForCamera->drawSurfVertElemSpansBuffer->reserve( estimatedNumSubspans );
+
+				uint8_t *const surfVisTable = stateForCamera->surfVisTableBuffer->reserveZeroedAndGet( numWorldSurfaces );
+
+				MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
+				for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
+					mergedSurfSpans[i].firstSurface    = std::numeric_limits<int>::max();
+					mergedSurfSpans[i].lastSurface     = std::numeric_limits<int>::min();
+					mergedSurfSpans[i].subspansOffset  = 0;
+					mergedSurfSpans[i].vertSpansOffset = 0;
+					mergedSurfSpans[i].numSubspans     = 0;
+				}
+
+				// Cull world leaves by the primary frustum
+				const std::span<const unsigned> visibleLeaves = collectVisibleWorldLeaves( stateForCamera );
+
+				std::span<const Frustum> occluderFrusta;
+				if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
+					// TODO: Can run in parallel with leaves collection
+					// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
+					const std::span<const unsigned> visibleOccluders      = collectVisibleOccluders( stateForCamera );
+					const std::span<const SortedOccluder> sortedOccluders = sortOccluders( stateForCamera, visibleOccluders );
+					// Build frusta of occluders, while performing some additional frusta pruning
+					occluderFrusta = buildFrustaOfOccluders( stateForCamera, sortedOccluders );
+				}
+
+				std::span<const unsigned> nonOccludedLeaves;
+				std::span<const unsigned> partiallyOccludedLeaves;
+				if( occluderFrusta.empty() || ( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
+					// No "good enough" occluders found.
+					// Just mark every surface that falls into the primary frustum visible in this case.
+					markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans, surfVisTable );
+					nonOccludedLeaves = visibleLeaves;
+				} else {
+					// Test every leaf that falls into the primary frustum against frusta of occluders
+					std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = cullLeavesByOccluders( stateForCamera,
+																									visibleLeaves, occluderFrusta );
+					markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans, surfVisTable );
+					// Test every surface that belongs to partially occluded leaves
+					cullSurfacesInVisLeavesByOccluders( stateForCamera->cameraIndex, partiallyOccludedLeaves,
+														occluderFrusta, mergedSurfSpans, surfVisTable );
+				}
+
+				// TODO: Update far clip, update view matrices
+
+				// Save for processing entities
+				stateForCamera->numOccluderFrusta       = occluderFrusta.size();
+				stateForCamera->nonOccludedLeaves       = nonOccludedLeaves;
+				stateForCamera->partiallyOccludedLeaves = partiallyOccludedLeaves;
+				stateForCamera->drawWorld               = true;
+
+				calcSubspansOfMergedSurfSpans( stateForCamera );
+			}
+		}
+	}
+}
+
+void Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {
+	for( auto [scene, stateForCamera] : scenesAndCameras ) {
+		const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
+
+		collectVisiblePolys( stateForCamera, scene, occluderFrusta );
+
+		// Note: Dynamically submitted entities may add lights
+		if( const int dynamicLightValue = r_dynamiclight->integer ) {
+			[[maybe_unused]]
+			const auto [visibleProgramLightIndices, visibleCoronaLightIndices] =
+				collectVisibleLights( stateForCamera, scene, occluderFrusta );
+			if( dynamicLightValue & 2 ) {
+				addCoronaLightsToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicLights.data(),
+										   visibleCoronaLightIndices );
+			}
+			if( dynamicLightValue & 1 ) {
+				std::span<const unsigned> spansStorage[2] {
+					stateForCamera->nonOccludedLeaves, stateForCamera->partiallyOccludedLeaves
+				};
+				std::span<std::span<const unsigned>> spansOfLeaves = { spansStorage, 2 };
+				markLightsOfSurfaces( stateForCamera, scene, spansOfLeaves, visibleProgramLightIndices );
+			}
+		}
+
+		if( stateForCamera->drawWorld ) {
+			// We must know lights at this point
+			addVisibleWorldSurfacesToSortList( stateForCamera, scene );
+		}
+
+		if( r_drawentities->integer ) {
+			collectVisibleEntities( stateForCamera, scene, occluderFrusta );
+			collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta );
+		}
+
+		collectVisibleParticles( stateForCamera, scene, occluderFrusta );
+	}
+
+	// Process portals.
+	// This stage relies on portal entities which get submitted during entity submission stage.
+	bool hasPortalsToProcess = false;
+	for( auto [scene, stateForPrimaryCamera] : scenesAndCameras ) {
+		const unsigned renderFlags = stateForPrimaryCamera->renderFlags;
+		// Don't recurse into portals
+		if( !( renderFlags & ( RF_PORTALVIEW | RF_MIRRORVIEW ) ) ) {
+			if( stateForPrimaryCamera->viewCluster >= 0 && !r_fastsky->integer ) {
+				for( unsigned i = 0; i < stateForPrimaryCamera->numPortalSurfaces; ++i ) {
+					prepareDrawingPortalSurface( stateForPrimaryCamera, &stateForPrimaryCamera->portalSurfaces[i], scene,
+												 &m_tmpPortalScenesAndStates );
+					hasPortalsToProcess = true;
+				}
+			}
+		}
+	}
+
+	if( hasPortalsToProcess ) {
+		beginPreparingRenderingFromTheseCameras( m_tmpPortalScenesAndStates );
+		endPreparingRenderingFromTheseCameras( m_tmpPortalScenesAndStates );
+		// Clear it only after actual processing due to reentrancy reasons
+		m_tmpPortalScenesAndStates.clear();
+	}
+
+	const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {
+		// TODO: Avoid runtime composition of keys
+		const auto lhsKey = ( (uint64_t)lhs.distKey << 32 ) | (uint64_t)lhs.sortKey;
+		const auto rhsKey = ( (uint64_t)rhs.distKey << 32 ) | (uint64_t)rhs.sortKey;
+		return lhsKey < rhsKey;
+	};
+
+	// TODO: Can be run earlier in parallel with portal surface processing
+	for( auto [scene, stateForCamera] : scenesAndCameras ) {
+		std::sort( stateForCamera->sortList->begin(), stateForCamera->sortList->end(), cmp );
+	}
+}
+
+void Frontend::performPreparedRenderingFromThisCamera( Scene *scene, StateForCamera *stateForCamera ) {
+	const unsigned renderFlags = stateForCamera->renderFlags;
+	for( unsigned i = 0; i < stateForCamera->numPortalSurfaces; ++i ) {
+		for( void *stateForPortalCamera : stateForCamera->portalSurfaces[i].statesForCamera ) {
+			if( stateForPortalCamera ) {
+				performPreparedRenderingFromThisCamera( scene, (StateForCamera *)stateForPortalCamera );
+			}
+		}
+	}
+	if( r_portalonly->integer ) {
+		return;
+	}
 
 	bool drawWorld = false;
 
 	if( !( stateForCamera->refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 		if( r_drawworld->integer && rsh.worldModel ) {
 			drawWorld = true;
-			std::tie( occluderFrusta, nonOccludedLeaves, partiallyOccludedLeaves ) = cullWorldSurfaces( stateForCamera );
-			// TODO: Update far clip, update view matrices
-		}
-	}
-
-	collectVisiblePolys( stateForCamera, scene, occluderFrusta );
-
-	if( const int dynamicLightValue = r_dynamiclight->integer ) {
-		[[maybe_unused]]
-		const auto [visibleProgramLightIndices, visibleCoronaLightIndices] =
-			collectVisibleLights( stateForCamera, scene, occluderFrusta );
-		if( dynamicLightValue & 2 ) {
-			addCoronaLightsToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicLights.data(),
-									   visibleCoronaLightIndices );
-		}
-		if( dynamicLightValue & 1 ) {
-			std::span<const unsigned> spansStorage[2] { nonOccludedLeaves, partiallyOccludedLeaves };
-			std::span<std::span<const unsigned>> spansOfLeaves = { spansStorage, 2 };
-			markLightsOfSurfaces( stateForCamera, scene, spansOfLeaves, visibleProgramLightIndices );
-		}
-	}
-
-	if( drawWorld ) {
-		// TODO: Depends only of culling, can be launched async
-		calcSubspansOfMergedSurfSpans( stateForCamera );
-		// We must know lights at this point
-		addVisibleWorldSurfacesToSortList( stateForCamera, scene );
-	}
-
-	if( r_drawentities->integer ) {
-		collectVisibleEntities( stateForCamera, scene, occluderFrusta );
-		collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta );
-	}
-
-	collectVisibleParticles( stateForCamera, scene, occluderFrusta );
-
-	const unsigned renderFlags = stateForCamera->renderFlags;
-
-	const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {
-		// TODO: Avoid runtime coposition of keys
-		const auto lhsKey = ( (uint64_t)lhs.distKey << 32 ) | (uint64_t)lhs.sortKey;
-		const auto rhsKey = ( (uint64_t)rhs.distKey << 32 ) | (uint64_t)rhs.sortKey;
-		return lhsKey < rhsKey;
-	};
-
-	std::sort( stateForCamera->sortList->begin(), stateForCamera->sortList->end(), cmp );
-
-	// Don't recurse into portals
-	if( !( renderFlags & ( RF_PORTALVIEW | RF_MIRRORVIEW ) ) ) {
-		if( stateForCamera->viewCluster >= 0 && !r_fastsky->integer ) {
-			drawPortals( stateForCamera, scene );
-			if( r_portalonly->integer ) {
-				return;
-			}
 		}
 	}
 
@@ -680,12 +754,6 @@ void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForC
 	RB_SetShaderStateMask( ~0, 0 );
 }
 
-void Frontend::drawPortals( StateForCamera *stateForPrimaryCamera, Scene *scene ) {
-	for( unsigned i = 0; i < stateForPrimaryCamera->numPortalSurfaces; ++i ) {
-		drawPortalSurface( stateForPrimaryCamera, &stateForPrimaryCamera->portalSurfaces[i], scene );
-	}
-}
-
 auto Frontend::findNearestPortalEntity( const portalSurface_t *portalSurface, Scene *scene ) -> const entity_t * {
 	vec3_t center;
 	VectorAvg( portalSurface->mins, portalSurface->maxs, center );
@@ -705,7 +773,8 @@ auto Frontend::findNearestPortalEntity( const portalSurface_t *portalSurface, Sc
 	return bestEnt;
 }
 
-void Frontend::drawPortalSurface( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface, Scene *scene ) {
+void Frontend::prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface, Scene *scene,
+											wsw::PodVector<std::pair<Scene *, StateForCamera *>> *scenesAndStates ) {
 	const shader_s *surfaceMaterial = portalSurface->shader;
 
 	int startFromTextureIndex = -1;
@@ -762,24 +831,39 @@ void Frontend::drawPortalSurface( StateForCamera *stateForPrimaryCamera, portalS
 	}
 
 	if( startFromTextureIndex >= 0 ) {
+		std::optional<std::pair<StateForCamera *, Texture *>> sideResults[2];
+		unsigned numExpectedResults = 0;
 		drawPortalFlags |= DrawPortalToTexture;
 		if( startFromTextureIndex > 0 ) {
 			drawPortalFlags |= DrawPortalRefraction;
 		}
-		portalSurface->texures[startFromTextureIndex] = drawPortalSurfaceSide( stateForPrimaryCamera, portalSurface,
-																			   scene, portalEntity, drawPortalFlags );
+		sideResults[startFromTextureIndex] = prepareDrawingPortalSurfaceSide( stateForPrimaryCamera, portalSurface, scene, portalEntity, drawPortalFlags );
+		numExpectedResults++;
 		if( shouldDoRefraction && startFromTextureIndex < 1 && ( surfaceMaterial->flags & SHADER_PORTAL_CAPTURE2 ) ) {
 			drawPortalFlags |= DrawPortalRefraction;
-			portalSurface->texures[1] = drawPortalSurfaceSide( stateForPrimaryCamera, portalSurface,
-															   scene, portalEntity, drawPortalFlags );
+			sideResults[1] = prepareDrawingPortalSurfaceSide( stateForPrimaryCamera, portalSurface, scene, portalEntity, drawPortalFlags );
+			numExpectedResults++;
+		}
+		const unsigned numActualResults = ( sideResults[0] != std::nullopt ) + ( sideResults[1] != std::nullopt );
+		if( numActualResults == numExpectedResults ) {
+			for( unsigned textureIndex = 0; textureIndex < 2; ++textureIndex ) {
+				if( sideResults[textureIndex] ) {
+					portalSurface->statesForCamera[textureIndex] = sideResults[textureIndex]->first;
+					portalSurface->texures[textureIndex] = sideResults[textureIndex]->second;
+					scenesAndStates->push_back( { scene, sideResults[textureIndex]->first } );
+				}
+			}
 		}
 	} else {
-		(void)drawPortalSurfaceSide( stateForPrimaryCamera, portalSurface, scene, portalEntity, drawPortalFlags );
+		// TODO: Figure out what to do with mirrors (they aren't functioning properly at the moment of rewrite)
+		//auto result = prepareDrawingPortalSurfaceSide( stateForPrimaryCamera, portalSurface, scene, portalEntity, drawPortalFlags );
 	}
 }
 
-auto Frontend::drawPortalSurfaceSide( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface,
-									  Scene *scene, const entity_t *portalEntity, unsigned drawPortalFlags ) -> Texture * {
+auto Frontend::prepareDrawingPortalSurfaceSide( StateForCamera *stateForPrimaryCamera,
+												portalSurface_t *portalSurface, Scene *scene,
+												const entity_t *portalEntity, unsigned drawPortalFlags )
+	-> std::optional<std::pair<StateForCamera *, Texture *>> {
 	vec3_t origin;
 	mat3_t axis;
 
@@ -875,6 +959,7 @@ auto Frontend::drawPortalSurfaceSide( StateForCamera *stateForPrimaryCamera, por
 
 	Texture *captureTexture = nullptr;
 	if( drawPortalFlags & DrawPortalToTexture ) {
+		// TODO: Should not it be limited per-viewport, not per-frame?
 		if( RenderTargetComponents *components = TextureCache::instance()->getPortalRenderTarget( m_drawSceneFrame ) ) {
 			newRefdef.renderTarget = components;
 			captureTexture         = components->texture;
@@ -886,7 +971,7 @@ auto Frontend::drawPortalSurfaceSide( StateForCamera *stateForPrimaryCamera, por
 
 			renderFlagsToAdd |= RF_PORTAL_CAPTURE;
 		} else {
-			return nullptr;
+			return std::nullopt;
 		}
 	} else {
 		renderFlagsToClear |= RF_PORTAL_CAPTURE;
@@ -895,16 +980,18 @@ auto Frontend::drawPortalSurfaceSide( StateForCamera *stateForPrimaryCamera, por
 	VectorCopy( origin, newRefdef.vieworg );
 	Matrix3_Copy( axis, newRefdef.viewaxis );
 
-	auto *stateForPortalCamera = setupStateForCamera( CameraStateGroup::Portal, &newRefdef, CameraOverrideParams {
+	auto *stateForPortalCamera = setupStateForCamera( &newRefdef, stateForPrimaryCamera->sceneIndex, CameraOverrideParams {
 		.pvsOrigin          = newPvsOrigin,
 		.lodOrigin          = newLodOrigin,
 		.renderFlagsToAdd   = renderFlagsToAdd,
 		.renderFlagsToClear = renderFlagsToClear,
 	});
 
-	renderViewFromThisCamera( scene, stateForPortalCamera );
+	if( !stateForPortalCamera ) {
+		return std::nullopt;
+	}
 
-	return captureTexture;
+	return std::make_pair( stateForPortalCamera, captureTexture );
 }
 
 void Frontend::submitDebugStuffToBackend( Scene *scene ) {

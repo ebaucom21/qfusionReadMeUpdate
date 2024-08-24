@@ -142,7 +142,7 @@ void Frontend::addSkeletalModelEntitiesToSortList( StateForCamera *stateForCamer
 		const mfog_t *const fog = getFogForBounds( stateForCamera, visTestedModel.absMins, visTestedModel.absMaxs );
 
 		const model_t *const mod = visTestedModel.selectedLod;
-		R_AddSkeletalModelCache( entity, mod );
+		R_AddSkeletalModelCache( entity, mod, stateForCamera->sceneIndex );
 
 		const auto *const skmodel = ( const mskmodel_t * )mod->extradata;
 		for( unsigned meshNum = 0; meshNum < skmodel->nummeshes; meshNum++ ) {
@@ -657,7 +657,6 @@ auto Frontend::addEntryToSortList( StateForCamera *stateForCamera, const entity_
 auto Frontend::tryAddingPortalSurface( StateForCamera *stateForCamera, const entity_t *ent,
 									   const shader_t *shader, void *drawSurf ) -> portalSurface_t * {
 	if( shader ) {
-		// TODO: Should be state-specific
 		if( stateForCamera->numPortalSurfaces < MAX_PORTAL_SURFACES ) {
 			const bool depthPortal = !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) );
 			// TOOD: ???

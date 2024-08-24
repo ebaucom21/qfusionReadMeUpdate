@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "program.h"
 #include "materiallocal.h"
 #include "../common/singletonholder.h"
+#include "../common/links.h"
 
 /*
 * R_Set2DMode
@@ -89,18 +90,68 @@ auto Frontend::getFogForSphere( const StateForCamera *stateForCamera, const vec3
 }
 
 void Frontend::beginDrawingScenes() {
+	R_ClearSkeletalCache();
+	recycleFrameCameraStates();
+	m_drawSceneFrame++;
+	m_cameraIndexCounter = 0;
+	m_sceneIndexCounter = 0;
 }
 
 auto Frontend::createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest * {
-	return new( m_drawSceneRequestsHolder.unsafe_grow_back() )DrawSceneRequest( refdef );
+	return new( m_drawSceneRequestsHolder.unsafe_grow_back() )DrawSceneRequest( refdef, m_sceneIndexCounter++ );
 }
 
-void Frontend::submitDrawSceneRequest( DrawSceneRequest *request ) {
-	R_ClearSkeletalCache();
-	renderScene( request, &request->m_refdef );
+void Frontend::beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
+	std::pair<Scene *, StateForCamera *> scenesAndCameras[kMaxDrawSceneRequests];
+	unsigned numScenesAndCameras = 0;
+
+	for( DrawSceneRequest *request: requests ) {
+		if( StateForCamera *const stateForSceneCamera = setupStateForCamera( &request->m_refdef, request->m_index ) ) {
+			if( stateForSceneCamera->refdef.minLight < 0.1f ) {
+				stateForSceneCamera->refdef.minLight = 0.1f;
+			}
+			request->stateForCamera = stateForSceneCamera;
+			scenesAndCameras[numScenesAndCameras++] = std::pair<Scene *, StateForCamera *> { request, stateForSceneCamera };
+		}
+	}
+
+	beginPreparingRenderingFromTheseCameras( { scenesAndCameras, scenesAndCameras + numScenesAndCameras } );
+}
+
+void Frontend::endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
+	std::pair<Scene *, StateForCamera *> scenesAndCameras[kMaxDrawSceneRequests];
+	unsigned numScenesAndCameras = 0;
+
+	for( DrawSceneRequest *request: requests ) {
+		if( auto *const stateForSceneCamera = (StateForCamera *)request->stateForCamera ) {
+			scenesAndCameras[numScenesAndCameras++] = std::pair<Scene *, StateForCamera *> { request, stateForSceneCamera };
+		}
+	}
+
+	endPreparingRenderingFromTheseCameras( { scenesAndCameras, scenesAndCameras + numScenesAndCameras } );
+}
+
+void Frontend::commitProcessedDrawSceneRequest( DrawSceneRequest *request ) {
+	set2DMode( false );
+
+	RB_SetTime( request->m_refdef.time );
+
+	if( auto *const stateForSceneCamera = (StateForCamera *)request->stateForCamera ) {
+		// TODO: Is this first call really needed
+		bindRenderTargetAndViewport( nullptr, stateForSceneCamera );
+
+		performPreparedRenderingFromThisCamera( request, stateForSceneCamera );
+
+		bindRenderTargetAndViewport( nullptr, stateForSceneCamera );
+	} else {
+		// TODO what to do
+	}
+
+	set2DMode( true );
 }
 
 void Frontend::endDrawingScenes() {
+	recycleFrameCameraStates();
 	m_drawSceneRequestsHolder.clear();
 }
 
@@ -124,6 +175,10 @@ Frontend::Frontend() {
 	}
 }
 
+Frontend::~Frontend() {
+	disposeCameraStates();
+}
+
 alignas( 32 ) static SingletonHolder<Frontend> sceneInstanceHolder;
 
 void Frontend::init() {
@@ -144,6 +199,69 @@ void Frontend::initVolatileAssets() {
 
 void Frontend::destroyVolatileAssets() {
 	m_coronaShader = nullptr;
+	disposeCameraStates();
+}
+
+auto Frontend::allocStateForCamera() -> StateForCamera * {
+	if( m_cameraIndexCounter >= MAX_REF_CAMERAS ) [[unlikely]] {
+		return nullptr;
+	}
+
+	StateForCameraStorage *resultStorage = nullptr;
+	if( m_freeStatesForCamera ) {
+		resultStorage = wsw::unlink( m_freeStatesForCamera, &m_freeStatesForCamera );
+	} else {
+		try {
+			resultStorage = new StateForCameraStorage;
+		} catch( ... ) {
+			return nullptr;
+		}
+	}
+
+	wsw::link( resultStorage, &m_usedStatesForCamera );
+	assert( !resultStorage->isStateConstructed );
+
+	auto *stateForCamera = new( resultStorage->theStateStorage )StateForCamera;
+	resultStorage->isStateConstructed = true;
+
+	stateForCamera->sortList                                 = &resultStorage->meshSortList;
+	stateForCamera->visibleLeavesBuffer                      = &resultStorage->visibleLeavesBuffer;
+	stateForCamera->occluderPassFullyVisibleLeavesBuffer     = &resultStorage->occluderPassFullyVisibleLeavesBuffer;
+	stateForCamera->occluderPassPartiallyVisibleLeavesBuffer = &resultStorage->occluderPassPartiallyVisibleLeavesBuffer;
+	stateForCamera->visibleOccludersBuffer                   = &resultStorage->visibleOccludersBuffer;
+	stateForCamera->sortedOccludersBuffer                    = &resultStorage->sortedOccludersBuffer;
+	stateForCamera->drawSurfSurfSpansBuffer                  = &resultStorage->drawSurfSurfSpansBuffer;
+	stateForCamera->bspDrawSurfacesBuffer                    = &resultStorage->bspDrawSurfacesBuffer;
+	stateForCamera->surfVisTableBuffer                       = &resultStorage->bspSurfVisTableBuffer;
+	stateForCamera->drawSurfSurfSubspansBuffer               = &resultStorage->drawSurfSurfSubspansBuffer;
+	stateForCamera->drawSurfVertElemSpansBuffer              = &resultStorage->drawSurfVertElemSpansBuffer;
+	stateForCamera->visTestedModelsBuffer                    = &resultStorage->visTestedModelsBuffer;
+	stateForCamera->leafLightBitsOfSurfacesBuffer            = &resultStorage->leafLightBitsOfSurfacesBuffer;
+
+	resultStorage->particleDrawSurfacesBuffer.reserve( Scene::kMaxParticleAggregates * Scene::kMaxParticlesInAggregate );
+	stateForCamera->particleDrawSurfaces = resultStorage->particleDrawSurfacesBuffer.get();
+
+	return stateForCamera;
+}
+
+void Frontend::recycleFrameCameraStates() {
+	for( StateForCameraStorage *used = m_usedStatesForCamera, *next; used; used = next ) { next = used->next;
+		wsw::unlink( used, &m_usedStatesForCamera );
+		( (StateForCamera *)used->theStateStorage )->~StateForCamera();
+		used->isStateConstructed = false;
+		wsw::link( used, &m_freeStatesForCamera );
+	}
+	assert( m_usedStatesForCamera == nullptr );
+}
+
+void Frontend::disposeCameraStates() {
+	recycleFrameCameraStates();
+	assert( m_usedStatesForCamera == nullptr );
+	for( StateForCameraStorage *storage = m_freeStatesForCamera, *next; storage; storage = next ) { next = storage->next;
+		wsw::unlink( storage, &m_freeStatesForCamera );
+		delete storage;
+	}
+	assert( m_freeStatesForCamera == nullptr );
 }
 
 void Frontend::dynLightDirForOrigin( const vec_t *origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal ) {
@@ -151,7 +269,7 @@ void Frontend::dynLightDirForOrigin( const vec_t *origin, float radius, vec3_t d
 
 }
 
-Scene::Scene() {
+Scene::Scene( unsigned index ) : m_index( index ) {
 	m_worldent = m_localEntities.unsafe_grow_back();
 	memset( m_worldent, 0, sizeof( entity_t ) );
 	m_worldent->rtype = RT_MODEL;

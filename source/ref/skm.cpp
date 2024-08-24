@@ -926,6 +926,7 @@ void R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins
 typedef struct skmcacheentry_s {
 	int entNum;
 	int lodNum;
+	unsigned sceneIndex;
 	int framenum, oldframenum;
 	size_t data_size;
 	const bonepose_t *boneposes, *oldboneposes;
@@ -936,7 +937,7 @@ typedef struct skmcacheentry_s {
 
 static skmcacheentry_t *r_skmcache_head;    // actual entries are linked to this
 static skmcacheentry_t *r_skmcache_free;    // actual entries are linked to this
-static skmcacheentry_t *r_skmcachekeys[MAX_REF_ENTITIES * ( MOD_MAX_LODS + 1 )];      // entities linked to cache entries
+static skmcacheentry_t *r_skmcachekeys[MAX_REF_SCENES][MAX_REF_ENTITIES][MOD_MAX_LODS + 1];      // entities linked to cache entries
 
 /*
 * R_InitSkeletalCache
@@ -946,10 +947,10 @@ void R_InitSkeletalCache( void ) {
 	r_skmcache_free = NULL;
 }
 
-skmcacheentry_t *R_GetSkeletalCache( int entNum, int lodNum ) {
+skmcacheentry_t *R_GetSkeletalCache( int entNum, int lodNum, unsigned sceneIndex ) {
 	skmcacheentry_t *cache;
 
-	cache = r_skmcachekeys[entNum * ( MOD_MAX_LODS + 1 ) + lodNum];
+	cache = r_skmcachekeys[sceneIndex][entNum][lodNum];
 	if( !cache ) {
 		return NULL;
 	}
@@ -972,7 +973,7 @@ bool R_SkeletalRenderAsFrame0( skmcacheentry_s *cache ) {
 * all of the entries in the "allocation" list are moved to the "free" list, to be reused in the
 * later function calls.
 */
-static skmcacheentry_t *R_AllocSkeletalDataCache( int entNum, int lodNum, const mskmodel_t *skmodel ) {
+static skmcacheentry_t *R_AllocSkeletalDataCache( int entNum, int lodNum, unsigned sceneIndex, const mskmodel_t *skmodel ) {
 	size_t best_size;
 	skmcacheentry_t *cache, *prev;
 	skmcacheentry_t *best_prev, *best;
@@ -982,7 +983,7 @@ static skmcacheentry_t *R_AllocSkeletalDataCache( int entNum, int lodNum, const 
 	best_prev = NULL;
 	best_size = 0;
 
-	assert( !r_skmcachekeys[entNum * ( MOD_MAX_LODS + 1 ) + lodNum] );
+	assert( !r_skmcachekeys[sceneIndex][entNum][lodNum] );
 
 	size = sizeof( dualquat_t ) * skmodel->numbones;
 
@@ -1029,12 +1030,13 @@ static skmcacheentry_t *R_AllocSkeletalDataCache( int entNum, int lodNum, const 
 	// and link it to the allocation list
 	best->entNum = entNum;
 	best->lodNum = lodNum;
+	best->sceneIndex = sceneIndex;
 	best->skmodel = skmodel;
 	best->boneposes = best->oldboneposes = NULL;
 	best->framenum = best->oldframenum = 0;
 	best->next = r_skmcache_head;
 	r_skmcache_head = best;
-	r_skmcachekeys[entNum * ( MOD_MAX_LODS + 1 ) + lodNum] = best;
+	r_skmcachekeys[sceneIndex][entNum][lodNum] = best;
 
 	return best;
 }
@@ -1217,7 +1219,7 @@ void R_SkeletalModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec
 	VectorCopy( pframe->maxs, maxs );
 }
 
-void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod ) {
+void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod, unsigned sceneIndex ) {
 	int entNum;
 	int framenum, oldframenum;
 	const mskmodel_t *skmodel;
@@ -1230,13 +1232,13 @@ void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod ) {
 		return;
 	}
 
-	cache = R_GetSkeletalCache( entNum, mod->lodnum );
+	cache = R_GetSkeletalCache( entNum, mod->lodnum, sceneIndex );
 	if( cache != NULL ) {
 		// already cached
 		return;
 	}
 
-	cache = ( skmcacheentry_t * )R_AllocSkeletalDataCache( entNum, mod->lodnum, skmodel );
+	cache = ( skmcacheentry_t * )R_AllocSkeletalDataCache( entNum, mod->lodnum, sceneIndex, skmodel );
 	if( !cache ) {
 		// probably out of memory
 		return;

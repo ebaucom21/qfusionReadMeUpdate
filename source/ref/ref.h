@@ -392,12 +392,14 @@ public:
 		unsigned numParts;
 	};
 protected:
-	Scene();
+	explicit Scene( unsigned index );
 
 	wsw::StaticVector<DynamicLight, 1024> m_dynamicLights;
 
 	entity_t *m_worldent;
 	entity_t *m_polyent;
+
+	const unsigned m_index { ~0u };
 
 	wsw::StaticVector<entity_t *, MAX_ENTITIES + 48> m_entities;
 	wsw::StaticVector<entity_t, 2> m_localEntities;
@@ -430,6 +432,8 @@ class DrawSceneRequest : public Scene {
 
 	// TODO: Get rid of "refdef_t"
 	refdef_t m_refdef;
+
+	void *stateForCamera { nullptr };
 public:
 	void addLight( const float *origin, float programRadius, float coronaRadius, float r, float g, float b );
 	void addLight( const float *origin, float programRadius, float coronaRadius, const float *color ) {
@@ -456,7 +460,7 @@ public:
 		}
 	}
 
-	explicit DrawSceneRequest( const refdef_t &refdef ) : m_refdef( refdef ) {}
+	DrawSceneRequest( const refdef_t &refdef, unsigned sceneIndex ) : Scene( sceneIndex ), m_refdef( refdef ) {}
 };
 
 struct QuadPoly {
@@ -527,7 +531,9 @@ struct DynamicMesh {
 
 void BeginDrawingScenes();
 DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef );
-void SubmitDrawSceneRequest( DrawSceneRequest *request );
+void BeginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
+void EndProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
+void CommitProcessedDrawSceneRequest( DrawSceneRequest *request );
 void EndDrawingScenes();
 
 class Texture;

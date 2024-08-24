@@ -737,8 +737,16 @@ DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef ) {
 	return wsw::ref::Frontend::instance()->createDrawSceneRequest( refdef );
 }
 
-void SubmitDrawSceneRequest( DrawSceneRequest *request ) {
-	wsw::ref::Frontend::instance()->submitDrawSceneRequest( request );
+void BeginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
+	wsw::ref::Frontend::instance()->beginProcessingDrawSceneRequests( requests );
+}
+
+void EndProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
+	wsw::ref::Frontend::instance()->endProcessingDrawSceneRequests( requests );
+}
+
+void CommitProcessedDrawSceneRequest( DrawSceneRequest *request ) {
+	wsw::ref::Frontend::instance()->commitProcessedDrawSceneRequest( request );
 }
 
 void EndDrawingScenes() {
