@@ -112,6 +112,8 @@ static cvar_t *vid_parentwid;      // parent window identifier
 cvar_t *win_noalttab;
 cvar_t *win_nowinkeys;
 
+cvar_t *cl_multithreading;
+
 // Global variables used internally by this module
 viddef_t viddef;             // global video state; used by other modules
 
@@ -1167,6 +1169,8 @@ void VID_Init( void ) {
 
 		win_noalttab = Cvar_Get( "win_noalttab", "0", CVAR_ARCHIVE );
 		win_nowinkeys = Cvar_Get( "win_nowinkeys", "0", CVAR_ARCHIVE );
+
+		cl_multithreading = Cvar_Get( "cl_multithreading", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
 
 		/* Add some console commands that we want to handle */
 		CL_Cmd_Register( "vid_restart"_asView, VID_Restart_f );

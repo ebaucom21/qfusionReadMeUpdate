@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <span>
 
 #include "../common/podbufferholder.h"
+#include "../common/tasksystem.h"
 
 struct alignas( 32 )Frustum {
 	alignas( 32 ) float planeX[8];
@@ -179,7 +180,8 @@ private:
 
 		ParticleDrawSurface *particleDrawSurfaces;
 
-		// Saved results of the world occlusion stage
+		// Saved intermediate results of the world occlusion stage in addition to respective filled buffers
+		std::span<const unsigned > visibleLeaves;
 		std::span<const unsigned> nonOccludedLeaves;
 		std::span<const unsigned> partiallyOccludedLeaves;
 		unsigned numOccluderFrusta { 0 };
@@ -577,6 +579,10 @@ private:
 	StateForCameraStorage *m_usedStatesForCamera { nullptr };
 
 	wsw::PodVector<std::pair<Scene *, StateForCamera *>> m_tmpPortalScenesAndStates;
+
+	// This is not an appropriate place to keep the client-global instance of task system.
+	// However, moving it to the client code is complicated due to lifetime issues related to client global vars.
+	TaskSystem m_taskSystem;
 };
 
 }

@@ -500,86 +500,148 @@ auto Frontend::setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
 }
 
 void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {
-	m_occlusionCullingFrame++;
-	for( auto [scene, stateForCamera] : scenesAndCameras ) {
+	assert( scenesAndCameras.size() <= MAX_REF_CAMERAS );
+
+	wsw::StaticVector<StateForCamera *, MAX_REF_CAMERAS> statesForValidCameras;
+	for( unsigned cameraIndex = 0; cameraIndex < scenesAndCameras.size(); ++cameraIndex ) {
+		StateForCamera *const stateForCamera = scenesAndCameras[cameraIndex].second;
 		if( !( stateForCamera->refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 			if( r_drawworld->integer && rsh.worldModel ) {
-				const unsigned numMergedSurfaces = rsh.worldBrushModel->numMergedSurfaces;
-				const unsigned numWorldSurfaces  = rsh.worldBrushModel->numModelSurfaces;
-				const unsigned numWorldLeaves    = rsh.worldBrushModel->numvisleafs;
-				const unsigned numOccluders      = rsh.worldBrushModel->numOccluders;
-
-				// Put the allocation code here, so we don't bloat the arch-specific code
-				stateForCamera->visibleLeavesBuffer->reserve( numWorldLeaves );
-				stateForCamera->visibleOccludersBuffer->reserve( numWorldSurfaces );
-				stateForCamera->occluderPassFullyVisibleLeavesBuffer->reserve( numWorldLeaves );
-				stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->reserve( numWorldLeaves );
-
-				stateForCamera->visibleOccludersBuffer->reserve( numOccluders );
-				stateForCamera->sortedOccludersBuffer->reserve( numOccluders );
-
-				stateForCamera->drawSurfSurfSpansBuffer->reserve( numMergedSurfaces );
-				stateForCamera->bspDrawSurfacesBuffer->reserve( numMergedSurfaces );
-
-				// Try guessing the required size
-				const unsigned estimatedNumSubspans = wsw::max( 8 * numMergedSurfaces, numWorldSurfaces );
-				// Two unsigned elements per each subspan TODO: Allow storing std::pair in this container
-				stateForCamera->drawSurfSurfSubspansBuffer->reserve( 2 * estimatedNumSubspans );
-				stateForCamera->drawSurfVertElemSpansBuffer->reserve( estimatedNumSubspans );
-
-				uint8_t *const surfVisTable = stateForCamera->surfVisTableBuffer->reserveZeroedAndGet( numWorldSurfaces );
-
-				MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
-				for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
-					mergedSurfSpans[i].firstSurface    = std::numeric_limits<int>::max();
-					mergedSurfSpans[i].lastSurface     = std::numeric_limits<int>::min();
-					mergedSurfSpans[i].subspansOffset  = 0;
-					mergedSurfSpans[i].vertSpansOffset = 0;
-					mergedSurfSpans[i].numSubspans     = 0;
-				}
-
-				// Cull world leaves by the primary frustum
-				const std::span<const unsigned> visibleLeaves = collectVisibleWorldLeaves( stateForCamera );
-
-				std::span<const Frustum> occluderFrusta;
-				if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
-					// TODO: Can run in parallel with leaves collection
-					// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
-					const std::span<const unsigned> visibleOccluders      = collectVisibleOccluders( stateForCamera );
-					const std::span<const SortedOccluder> sortedOccluders = sortOccluders( stateForCamera, visibleOccluders );
-					// Build frusta of occluders, while performing some additional frusta pruning
-					occluderFrusta = buildFrustaOfOccluders( stateForCamera, sortedOccluders );
-				}
-
-				std::span<const unsigned> nonOccludedLeaves;
-				std::span<const unsigned> partiallyOccludedLeaves;
-				if( occluderFrusta.empty() || ( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
-					// No "good enough" occluders found.
-					// Just mark every surface that falls into the primary frustum visible in this case.
-					markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans, surfVisTable );
-					nonOccludedLeaves = visibleLeaves;
-				} else {
-					// Test every leaf that falls into the primary frustum against frusta of occluders
-					std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = cullLeavesByOccluders( stateForCamera,
-																									visibleLeaves, occluderFrusta );
-					markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans, surfVisTable );
-					// Test every surface that belongs to partially occluded leaves
-					cullSurfacesInVisLeavesByOccluders( stateForCamera->cameraIndex, partiallyOccludedLeaves,
-														occluderFrusta, mergedSurfSpans, surfVisTable );
-				}
-
-				// TODO: Update far clip, update view matrices
-
-				// Save for processing entities
-				stateForCamera->numOccluderFrusta       = occluderFrusta.size();
-				stateForCamera->nonOccludedLeaves       = nonOccludedLeaves;
-				stateForCamera->partiallyOccludedLeaves = partiallyOccludedLeaves;
-				stateForCamera->drawWorld               = true;
-
-				calcSubspansOfMergedSurfSpans( stateForCamera );
+				statesForValidCameras.push_back( stateForCamera );
 			}
 		}
 	}
+
+	m_occlusionCullingFrame++;
+	m_taskSystem.startExecution();
+
+	TaskHandle prepareBuffersTaskHandles[MAX_REF_CAMERAS];
+	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
+		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
+		auto prepareBuffersFn = [=, this]( [[maybe_unused]] unsigned workerIndex ) {
+			const unsigned numMergedSurfaces = rsh.worldBrushModel->numMergedSurfaces;
+			const unsigned numWorldSurfaces  = rsh.worldBrushModel->numModelSurfaces;
+			const unsigned numWorldLeaves    = rsh.worldBrushModel->numvisleafs;
+			const unsigned numOccluders      = rsh.worldBrushModel->numOccluders;
+
+			// Put the allocation code here, so we don't bloat the arch-specific code
+			stateForCamera->visibleLeavesBuffer->reserve( numWorldLeaves );
+			stateForCamera->visibleOccludersBuffer->reserve( numWorldSurfaces );
+			stateForCamera->occluderPassFullyVisibleLeavesBuffer->reserve( numWorldLeaves );
+			stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->reserve( numWorldLeaves );
+
+			stateForCamera->visibleOccludersBuffer->reserve( numOccluders );
+			stateForCamera->sortedOccludersBuffer->reserve( numOccluders );
+
+			stateForCamera->drawSurfSurfSpansBuffer->reserve( numMergedSurfaces );
+			stateForCamera->bspDrawSurfacesBuffer->reserve( numMergedSurfaces );
+
+			// Try guessing the required size
+			const unsigned estimatedNumSubspans = wsw::max( 8 * numMergedSurfaces, numWorldSurfaces );
+			// Two unsigned elements per each subspan TODO: Allow storing std::pair in this container
+			stateForCamera->drawSurfSurfSubspansBuffer->reserve( 2 * estimatedNumSubspans );
+			stateForCamera->drawSurfVertElemSpansBuffer->reserve( estimatedNumSubspans );
+
+			stateForCamera->surfVisTableBuffer->reserveZeroed( numWorldSurfaces );
+
+			MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
+			for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
+				mergedSurfSpans[i].firstSurface    = std::numeric_limits<int>::max();
+				mergedSurfSpans[i].lastSurface     = std::numeric_limits<int>::min();
+				mergedSurfSpans[i].subspansOffset  = 0;
+				mergedSurfSpans[i].vertSpansOffset = 0;
+				mergedSurfSpans[i].numSubspans     = 0;
+			}
+
+			stateForCamera->drawWorld = true;
+		};
+
+		prepareBuffersTaskHandles[cameraIndex] = m_taskSystem.add( std::span<const TaskHandle>(), std::move( prepareBuffersFn ) );
+	}
+
+	TaskHandle collectLeavesTaskHandles[MAX_REF_CAMERAS];
+	TaskHandle collectOccludersTaskHandles[MAX_REF_CAMERAS];
+
+	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
+		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
+
+		auto collectLeavesInFrustumFn = [=, this]( [[maybe_unused]] unsigned workerIndex ) {
+			stateForCamera->visibleLeaves = collectVisibleWorldLeaves( stateForCamera );
+		};
+
+		auto collectOccludersFn = [=, this]( [[maybe_unused]] unsigned workerIndex ) {
+			std::span<const Frustum> occluderFrusta;
+			if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
+				// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
+				const std::span<const unsigned> visibleOccluders      = collectVisibleOccluders( stateForCamera );
+				const std::span<const SortedOccluder> sortedOccluders = sortOccluders( stateForCamera, visibleOccluders );
+				// Build frusta of occluders, while performing some additional frusta pruning
+				occluderFrusta = buildFrustaOfOccluders( stateForCamera, sortedOccluders );
+			}
+
+			stateForCamera->numOccluderFrusta = occluderFrusta.size();
+		};
+
+		const TaskHandle dependencies[1] { prepareBuffersTaskHandles[cameraIndex] };
+		collectLeavesTaskHandles[cameraIndex]    = m_taskSystem.add( dependencies, std::move( collectLeavesInFrustumFn ) );
+		collectOccludersTaskHandles[cameraIndex] = m_taskSystem.add( dependencies, std::move( collectOccludersFn ) );
+	}
+
+	TaskHandle processLeavesAndOccludersTasks[MAX_REF_CAMERAS];
+	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
+		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
+
+		auto processLeavesAndOccludersFn = [=, this]( [[maybe_unused]] unsigned workerIndex ) {
+			const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
+			MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
+			uint8_t *const surfVisTable = stateForCamera->surfVisTableBuffer->get();
+			std::span<const unsigned> visibleLeaves = stateForCamera->visibleLeaves;
+
+			std::span<const unsigned> nonOccludedLeaves;
+			std::span<const unsigned> partiallyOccludedLeaves;
+			if( occluderFrusta.empty() || ( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
+				// No "good enough" occluders found.
+				// Just mark every surface that falls into the primary frustum visible in this case.
+				markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans, surfVisTable );
+				nonOccludedLeaves = visibleLeaves;
+			} else {
+				// Test every leaf that falls into the primary frustum against frusta of occluders
+				std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = cullLeavesByOccluders( stateForCamera,
+																								visibleLeaves,
+																								occluderFrusta );
+				markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans, surfVisTable );
+				// Test every surface that belongs to partially occluded leaves
+				cullSurfacesInVisLeavesByOccluders( stateForCamera->cameraIndex, partiallyOccludedLeaves,
+													occluderFrusta, mergedSurfSpans, surfVisTable );
+			}
+
+			stateForCamera->partiallyOccludedLeaves = partiallyOccludedLeaves;
+			stateForCamera->nonOccludedLeaves       = nonOccludedLeaves;
+		};
+
+		TaskHandle dependencies[2] { collectLeavesTaskHandles[cameraIndex], collectOccludersTaskHandles[cameraIndex] };
+		processLeavesAndOccludersTasks[cameraIndex] = m_taskSystem.add( dependencies, std::move( processLeavesAndOccludersFn ) );
+		assert( processLeavesAndOccludersTasks[cameraIndex] );
+	}
+
+	wsw::StaticVector<TaskHandle, MAX_REF_CAMERAS> calcSubspansTasks;
+	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
+		StateForCamera *stateForCamera = statesForValidCameras[cameraIndex];
+		assert( processLeavesAndOccludersTasks[cameraIndex] );
+		const TaskHandle dependencies[1] { processLeavesAndOccludersTasks[cameraIndex] };
+		calcSubspansTasks.push_back( m_taskSystem.add( dependencies, [=, this]( [[maybe_unused]] unsigned workerIndex ) {
+			calcSubspansOfMergedSurfSpans( stateForCamera );
+		}));
+	}
+
+	// This is not needed for the actual code, but it should help to test joining of tasks
+	(void)m_taskSystem.add( calcSubspansTasks, []( unsigned ) {} );
+
+	if( !m_taskSystem.awaitCompletion() ) {
+		wsw::failWithRuntimeError();
+	}
+
+	// TODO: Update far clip, update view matrices
 }
 
 void Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {

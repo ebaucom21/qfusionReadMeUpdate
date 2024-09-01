@@ -25,6 +25,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/singletonholder.h"
 #include "../common/links.h"
 
+extern cvar_t *cl_multithreading;
+
 /*
 * R_Set2DMode
 *
@@ -155,7 +157,21 @@ void Frontend::endDrawingScenes() {
 	m_drawSceneRequestsHolder.clear();
 }
 
-Frontend::Frontend() {
+[[nodiscard]]
+static auto suggestNumExtraThreads() -> unsigned {
+	if( cl_multithreading->integer ) {
+		unsigned numPhysicalProcessors = 0, numLogicalProcessors = 0;
+		Sys_GetNumberOfProcessors( &numPhysicalProcessors, &numLogicalProcessors );
+		if( numPhysicalProcessors > 3 ) {
+			// Not more than 3, starting from 1 extra worker thread in addition to the main one on a 4-core machine.
+			// TODO: Reserve more, park threads dynamically depending on whether the builtin server is really running.
+			return wsw::min<unsigned>( 3, numPhysicalProcessors - 3 );
+		}
+	}
+	return 0;
+}
+
+Frontend::Frontend() : m_taskSystem( { .numExtraThreads = suggestNumExtraThreads() } ) {
 	if( Q_CPU_FEATURE_SSE41 & Sys_GetProcessorFeatures() ) {
 		m_collectVisibleWorldLeavesArchMethod          = &Frontend::collectVisibleWorldLeavesSse41;
 		m_collectVisibleOccludersArchMethod            = &Frontend::collectVisibleOccludersSse41;
