@@ -676,82 +676,72 @@ SOFTWARE.
 */
 
 struct WPlaneTraits {
-	static wsw_forceinline bool isInside( const vec4_t coord ) {
-		return coord[3] >= glConfig.depthEpsilon;
+	static constexpr float kEpsilon = 1e-5;
+	static wsw_forceinline bool isInside( const vec4_t point ) {
+		return point[3] >= kEpsilon;
 	}
 	static wsw_forceinline auto getIntersectionFrac( const vec4_t prev, const vec4_t curr ) -> float {
-		return ( prev[3] - glConfig.depthEpsilon ) / ( prev[3] - curr[3] );
+		return ( prev[3] - kEpsilon ) * Q_Rcp( prev[3] - curr[3] );
 	}
 };
 
-template <unsigned Coord>
-struct PositivePlaneTraits {
-	static wsw_forceinline bool isInside( const vec4_t coord ) {
-		return coord[Coord] <= +coord[3];
+struct XyzPlaneTraits {
+	unsigned coord;
+	float sign;
+	wsw_forceinline bool isInside( const vec4_t point ) {
+		// P: return point[coord] <= +point[3];
+		// N: return point[coord] >= -point[3];
+		// N: return -point[coord] < point[3];
+		// TODO: This is not an exact equivalent
+		return sign * point[coord] <= point[3];
 	}
-	static wsw_forceinline auto getIntersectionFrac( const vec4_t prev, const vec4_t curr ) -> float {
-		return ( prev[3] - prev[Coord] ) * Q_Rcp( (prev[3] - prev[Coord] ) - ( curr[3] - curr[Coord] ) );
-	}
-};
-
-template <unsigned Coord>
-struct NegativePlaneTraits {
-	static wsw_forceinline bool isInside( const vec4_t coord ) {
-		return coord[Coord] >= -coord[3];
-	}
-	static wsw_forceinline auto getIntersectionFrac( const vec4_t prev, const vec4_t curr ) -> float {
-		return ( prev[3] + prev[Coord] ) * Q_Rcp( ( prev[3] + prev[Coord] ) - ( curr[3] + curr[Coord] ) );
+	wsw_forceinline auto getIntersectionFrac( const vec4_t prev, const vec4_t curr ) -> float {
+		// P: return ( prev[3] - prev[coord] ) * Q_Rcp( ( prev[3] - prev[coord] ) - ( curr[3] - curr[coord] ) );
+		// N: return ( prev[3] + prev[coord] ) * Q_Rcp( ( prev[3] + prev[coord] ) - ( curr[3] + curr[coord] ) );
+		const float expr = prev[3] - sign * prev[coord];
+		return expr * Q_Rcp( expr - ( curr[3] - sign * curr[coord] ) );
 	}
 };
 
 template <typename PlaneTraits>
 [[nodiscard]]
-static auto clipAgainstPlane( unsigned numInVertices, vec4_t inCoords[], vec4_t outCoords[] ) -> unsigned {
+wsw_forceinline
+// Pass the traits by value for providing better optimization opportunities
+static auto clipAgainstPlane( PlaneTraits planeTraits, unsigned numInVertices, const vec4_t *__restrict inCoords, vec4_t *__restrict outCoords ) -> unsigned {
 	unsigned numOutVertices = 0;
 
 	unsigned prevIndex = numInVertices - 1;
-	for( unsigned currIndex = 0; currIndex < numInVertices; ++currIndex ) {
-		auto &prevCoord = inCoords[prevIndex];
-		auto &currCoord = inCoords[currIndex];
+	unsigned currIndex = 0;
+	do {
+		assert( prevIndex != currIndex );
+		const float *__restrict prevCoord = inCoords[prevIndex];
+		const float *__restrict currCoord = inCoords[currIndex];
 
-		const bool isPrevInside = PlaneTraits::isInside( prevCoord );
-		const bool isCurrInside = PlaneTraits::isInside( currCoord );
+		const bool isPrevInside = planeTraits.isInside( prevCoord );
+		const bool isCurrInside = planeTraits.isInside( currCoord );
 
 		if( isPrevInside != isCurrInside ) {
-			const float frac = PlaneTraits::getIntersectionFrac( prevCoord, currCoord );
+			const float frac = planeTraits.getIntersectionFrac( prevCoord, currCoord );
+			assert( frac >= 0.0f && frac <= 1.0f );
 
-			auto &destCoord = outCoords[numOutVertices];
+			assert( prevIndex != numOutVertices && currIndex != numOutVertices );
+			float *__restrict destCoord = outCoords[numOutVertices];
 			Vector4Lerp( prevCoord, frac, currCoord, destCoord );
 			numOutVertices += 1;
 		}
 
 		if( isCurrInside ) {
-			auto &destCoord = outCoords[numOutVertices];
-			VectorCopy( currCoord, destCoord );
+			assert( currIndex != numOutVertices );
+			float *__restrict destCoord = outCoords[numOutVertices];
+			Vector4Copy( currCoord, destCoord );
 			numOutVertices += 1;
 		}
 
 		prevIndex = currIndex;
-	}
+	} while( ++currIndex < numInVertices );
 
 	return numOutVertices;
 }
-
-#define CLIP_IN2OUT( PlaneTraits )                                                       \
-    do {                                                                                 \
-        numVertices = clipAgainstPlane<PlaneTraits>( numVertices, inCoords, outCoords ); \
-        if( numVertices < 3 ) [[unlikely]] {                                             \
-            return 0;                                                                    \
-        }                                                                                \
-    } while( 0 )
-
-#define CLIP_OUT2IN( PlaneTraits )                                                       \
-    do {                                                                                 \
-        numVertices = clipAgainstPlane<PlaneTraits>( numVertices, outCoords, inCoords ); \
-        if( numVertices < 3 ) [[unlikely]] {                                             \
-            return 0;                                                                    \
-        }                                                                                \
-    } while( 0 )
 
 [[nodiscard]]
 static auto clipTriangle( vec4_t inCoords[], vec4_t outCoords[] ) -> unsigned {
@@ -764,14 +754,31 @@ static auto clipTriangle( vec4_t inCoords[], vec4_t outCoords[] ) -> unsigned {
 		Vector4Copy( inCoords[2], outCoords[2] );
 		return 3;
 	} else {
-		unsigned numVertices = 3;
-		CLIP_IN2OUT( WPlaneTraits );
-		CLIP_OUT2IN( PositivePlaneTraits<0> );
-		CLIP_IN2OUT( NegativePlaneTraits<0> );
-		CLIP_OUT2IN( PositivePlaneTraits<1> );
-		CLIP_IN2OUT( NegativePlaneTraits<1> );
-		CLIP_OUT2IN( PositivePlaneTraits<2> );
-		CLIP_IN2OUT( NegativePlaneTraits<2> );
+		unsigned numVertices = clipAgainstPlane( WPlaneTraits {}, 3, inCoords, outCoords );
+		if( numVertices < 3 ) {
+			return 0;
+		}
+		// Out->In; 0, +1.0
+		// In->Out; 0, -1.0
+		// Out->In; 1, +1.0
+		// In->Out; 1, -1.0
+		// Out->In; 2, +1.0
+		// In->Out; 2, -1.0
+		vec4_t *turnCoords[2] { outCoords, inCoords };
+		const float turnSigns[2] { +1.0f, -1.0f };
+		unsigned turn = 0;
+		do {
+			unsigned inIndex = turn % 2;
+			const vec4_t *in = turnCoords[inIndex];
+			vec4_t *out      = turnCoords[( turn + 1 ) % 2];
+			unsigned coord   = turn / 2;
+			float sign       = turnSigns[inIndex];
+			numVertices      = clipAgainstPlane( XyzPlaneTraits { coord, sign }, numVertices, in, out );
+			if( numVertices < 3 ) {
+				return 0;
+			}
+		} while( ++turn < 6 );
+		assert( turnCoords[turn % 2] == inCoords );
 		return numVertices;
 	}
 }
