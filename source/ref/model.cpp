@@ -278,7 +278,7 @@ static bool Mod_AddOccludersFromListOfSurfs( const wsw::PodVector<const msurface
 
 	mat3_t toRecastXForm;
 	const vec3_t kRecastGroundNormal { 0.0f, 1.0f, 0.0f };
-	Matrix3_ForRotationOfDirs( surfs.front()->plane, kRecastGroundNormal, toRecastXForm );
+	Matrix3_ForRotationOfDirs( kRecastGroundNormal, surfs.front()->plane, toRecastXForm );
 
 	for( const msurface_t *surf: surfs ) {
 		for( unsigned i = 0; i < surf->mesh.numElems; ++i ) {
