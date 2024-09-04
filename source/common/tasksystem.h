@@ -31,6 +31,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 class TaskSystem {
 	friend struct TaskSystemImpl;
+	friend class CoroTask;
+	friend class TaskAwaiter;
 
 	struct TapeCallable {
 		virtual ~TapeCallable() = default;
@@ -57,12 +59,12 @@ public:
 
 	static constexpr unsigned kMaxTaskEntries = std::numeric_limits<int16_t>::max();
 
-	enum Affinity : uint8_t { AnyThread, OnlyThisThread };
+	enum Affinity : uint8_t { AnyThread = CoroTask::AnyThread, OnlyMainThread = CoroTask::OnlyMainThread };
 
 	template <typename Callable>
 	[[nodiscard]]
 	auto add( std::initializer_list<TaskHandle> deps, Callable &&callable, Affinity affinity = AnyThread ) -> TaskHandle {
-		return add( std::forward<Callable>( callable ), deps.begin(), deps.end(), affinity );
+		return add( std::span<const TaskHandle> { deps.begin(), deps.end() }, std::forward<Callable>( callable ), affinity );
 	}
 
 	template <typename Callable>
@@ -90,6 +92,28 @@ public:
 		// The tape unlocks here
 		return task;
 	}
+
+	template <typename CoroProducerFn>
+	[[nodiscard]]
+	auto addCoro( std::span<const TaskHandle> deps, CoroProducerFn &&producerFn ) -> TaskHandle {
+		[[maybe_unused]] volatile TapeStateGuard tapeStateGuard( m_impl );
+
+		CoroTask coro = producerFn();
+		void *coroMem = allocMemForCoro();
+
+		tapeStateGuard.succeeded = true;
+
+		// Move it to non-relocatable memory in a nonthrowing fashion
+		static_assert( std::is_nothrow_move_constructible_v<CoroTask> );
+		auto *resultCoro = new( coroMem )CoroTask( std::move( coro ) );
+
+		return resultCoro->m_handle.promise().m_task;
+	}
+
+	[[nodiscard]]
+	auto awaiterOf( std::initializer_list<TaskHandle> tasks ) -> TaskAwaiter { return { this, { tasks.begin(), tasks.end() } }; }
+	[[nodiscard]]
+	auto awaiterOf( std::span<const TaskHandle> tasks ) -> TaskAwaiter { return { this, tasks }; }
 
 	template <typename Callable>
 	[[nodiscard]]
@@ -190,6 +214,12 @@ private:
 
 	[[nodiscard]]
 	auto allocMemForCallable( size_t alignment, size_t size ) -> std::pair<void *, unsigned>;
+
+	[[nodiscard]]
+	auto allocMemForCoro() -> void *;
+
+	[[nodiscard]]
+	auto addResumeCoroTask( std::span<const TaskHandle> deps, std::coroutine_handle<CoroTask::promise_type> handle ) -> TaskHandle;
 
 	[[nodiscard]]
 	auto addEntry( Affinity affinity, unsigned offsetOfCallable ) -> TaskHandle;

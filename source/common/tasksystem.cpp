@@ -47,6 +47,8 @@ struct TaskSystemImpl {
 		// Let it crash if not set (~0u is a special value)
 		unsigned offsetOfCallable { ~0u / 2 };
 
+		volatile bool *dynamicCompletionStatusAddress { nullptr };
+
 		unsigned startOfPolledDependencies { 0 }, endOfPolledDependencies { 0 };
 		unsigned startOfPushedDependents { 0 }, endOfPushedDependents { 0 };
 
@@ -57,6 +59,7 @@ struct TaskSystemImpl {
 
 	// In bytes
 	static constexpr size_t kCapacityOfMemOfCallables = 256 * 1024;
+	static constexpr size_t kCapacityOfMemOfCoroTasks = 128 * 1024;
 	static constexpr size_t kMaxTaskEntries           = TaskSystem::kMaxTaskEntries;
 	// Let us assume the average number of dependencies to be 16
 	static constexpr size_t kMaxDependencyIndices     = 16 * kMaxTaskEntries;
@@ -76,6 +79,8 @@ struct TaskSystemImpl {
 	std::unique_ptr<uint8_t[]> memOfTaskEntries { new uint8_t[sizeof( TaskEntry ) * kMaxTaskEntries] };
 	std::unique_ptr<uint16_t[]> dependencyIndices {new uint16_t[kMaxDependencyIndices] };
 
+	std::unique_ptr<uint8_t[]> memOfCoroTasks { new uint8_t[kCapacityOfMemOfCoroTasks] };
+
 	// In bytes
 	unsigned sizeOfUsedMemOfCallables { 0 };
 	unsigned numTaskEntriesSoFar { 0 };
@@ -84,6 +89,8 @@ struct TaskSystemImpl {
 	unsigned savedSizeOfUsedMemOfCallables { 0 };
 	unsigned savedNumTaskEntriesSoFar { 0 };
 	unsigned savedNumDependencyEntriesSoFar { 0 };
+
+	unsigned sizeOfUsedMemOfCoroTasks { 0 };
 
 	wsw::PodVector<uint16_t> tmpOffsetsOfCallables;
 
@@ -147,6 +154,53 @@ void TaskSystem::endTapeModification( TaskSystemImpl *impl, bool succeeded ) {
 		impl->numDependencyEntriesSoFar = impl->savedNumDependencyEntriesSoFar;
 	}
 	impl->globalMutex.unlock();
+}
+
+auto TaskSystem::allocMemForCoro() -> void * {
+	// May happen in runtime. This has to be handled.
+	if( m_impl->sizeOfUsedMemOfCoroTasks + sizeof( CoroTask ) > TaskSystemImpl::kCapacityOfMemOfCoroTasks ) {
+		throw std::runtime_error( "The storage of coro tasks has been exhausted" );
+	}
+	void *result = m_impl->memOfCoroTasks.get() + m_impl->sizeOfUsedMemOfCoroTasks;
+	assert( ( (uintptr_t)result % alignof( CoroTask ) ) == 0 );
+	m_impl->sizeOfUsedMemOfCoroTasks += sizeof( CoroTask );
+	return result;
+}
+
+auto TaskSystem::addResumeCoroTask( std::span<const TaskHandle> deps, std::coroutine_handle<CoroTask::promise_type> handle ) -> TaskHandle {
+	struct ResumeCoroCallable final : public TaskSystem::TapeCallable {
+		explicit ResumeCoroCallable( std::coroutine_handle<CoroTask::promise_type> handle ) : m_handle( handle ) {}
+		void call( unsigned, unsigned ) override { m_handle.resume(); }
+		std::coroutine_handle<CoroTask::promise_type> m_handle;
+	};
+
+	auto [memForCallable, offsetOfCallable] = allocMemForCallable( alignof( ResumeCoroCallable ), sizeof( ResumeCoroCallable ) );
+
+	TaskHandle result = addEntry( (TaskSystem::Affinity)handle.promise().m_affinity, offsetOfCallable );
+	addPolledDependenciesToEntry( result, deps.data(), deps.data() + deps.size() );
+
+	// TODO: Won't be rolled back on failure if enclosing state guard rolls back,
+	// but it seems to be harmless (not talking about being considered unreachable in practice)
+	new( memForCallable )ResumeCoroCallable( handle );
+	return result;
+}
+
+void CoroTask::promise_type::InitialSuspend::await_suspend( std::coroutine_handle<promise_type> h ) const noexcept {
+	// Assumes the enclosing non-reentrant lock is held
+	TaskHandle task = m_taskSystem->addResumeCoroTask( h.promise().m_initialDependencies, h );
+	h.promise().m_task = task;
+	auto *entry = ( (TaskSystemImpl::TaskEntry *)m_taskSystem->m_impl->memOfTaskEntries.get() ) + task.m_opaque - 1;
+	entry->dynamicCompletionStatusAddress = &h.promise().m_completed;
+	assert( entry->status == TaskSystemImpl::TaskEntry::Pending );
+	assert( !*entry->dynamicCompletionStatusAddress );
+}
+
+void TaskAwaiter::await_suspend( std::coroutine_handle<> h ) const {
+	// Like regular add(), but uses the optimized callable
+	auto typedHandle = std::coroutine_handle<CoroTask::promise_type>::from_address( h.address() );
+	[[maybe_unused]] volatile TaskSystem::TapeStateGuard tapeStateGuard( m_taskSystem->m_impl );
+	(void)m_taskSystem->addResumeCoroTask( m_dependencies, typedHandle );
+	tapeStateGuard.succeeded = true;
 }
 
 auto TaskSystem::allocMemForCallable( size_t alignment, size_t size ) -> std::pair<void *, unsigned> {
@@ -417,6 +471,12 @@ void TaskSystem::clear() {
 
 	m_impl->sizeOfUsedMemOfCallables  = 0;
 
+	for( unsigned offset = 0; offset < m_impl->sizeOfUsedMemOfCoroTasks; offset += sizeof( CoroTask ) ) {
+		( (CoroTask *)( m_impl->memOfCoroTasks.get() + offset ) )->~CoroTask();
+	}
+
+	m_impl->sizeOfUsedMemOfCoroTasks = 0;
+
 	// Make sure we can just set count to zero for task entries
 	static_assert( std::is_trivially_destructible_v<TaskSystemImpl::TaskEntry> );
 	m_impl->numTaskEntriesSoFar       = 0;
@@ -493,12 +553,67 @@ void TaskSystem::threadLoopFunc( TaskSystemImpl *__restrict impl, unsigned threa
 
 bool TaskSystem::threadExecTasks( TaskSystemImpl *__restrict impl, unsigned threadNumber ) {
 	assert( impl->isExecuting );
-	try {
-		auto *const __restrict entries = (TaskSystemImpl::TaskEntry *)impl->memOfTaskEntries.get();
-		const size_t numEntries        = impl->numTaskEntriesSoFar;
 
-		constexpr auto kIndexUnset    = (size_t)-1;
-		size_t pendingCompletionIndex = kIndexUnset;
+	auto *const __restrict entries = (TaskSystemImpl::TaskEntry *)impl->memOfTaskEntries.get();
+
+	const auto completeEntry = [=]( unsigned entryIndex ) -> void {
+		TaskSystemImpl::TaskEntry &entry = entries[entryIndex];
+		if( entry.startOfPushedDependents < entry.endOfPushedDependents ) {
+			unsigned dependentIndex = entry.startOfPushedDependents;
+			if( entry.pushedDependentsAddressMode == DependencyAddressMode::RangeOfEntries ) {
+				// Safe under mutex
+				do {
+					auto &dependentEntry = entries[dependentIndex];
+					dependentEntry.numSatisfiedPushDependencies++;
+					assert( dependentEntry.numSatisfiedPushDependencies <= dependentEntry.numTotalPushDependencies );
+				} while( ++dependentIndex < entry.endOfPushedDependents );
+			} else {
+				const auto *dependencyIndices = impl->dependencyIndices.get();
+				do {
+					auto &dependentEntry = entries[dependencyIndices[dependentIndex]];
+					dependentEntry.numSatisfiedPushDependencies++;
+					assert( dependentEntry.numSatisfiedPushDependencies <= dependentEntry.numTotalPushDependencies );
+				} while( ++dependentIndex < entry.endOfPushedDependents );
+			}
+		}
+		assert( !entry.dynamicCompletionStatusAddress || *entry.dynamicCompletionStatusAddress == true );
+		// Safe under mutex.
+		entry.status = TaskSystemImpl::TaskEntry::Completed;
+	};
+
+	const auto checkSatisfiedDependencies = [=]( unsigned entryIndex ) {
+		TaskSystemImpl::TaskEntry &entry = entries[entryIndex];
+		// TODO: These checks can be optimized by tracking indices/masks of already completed dependencies
+		if( entry.startOfPolledDependencies < entry.endOfPolledDependencies ) {
+			unsigned dependencyIndex = entry.startOfPolledDependencies;
+			if( entry.polledDependenciesAddressMode == DependencyAddressMode::RangeOfEntries ) {
+				do {
+					// Safe under mutex
+					if( entries[dependencyIndex].status != TaskSystemImpl::TaskEntry::Completed ) {
+						return false;
+					}
+				} while( ++dependencyIndex < entry.endOfPolledDependencies );
+			} else {
+				const auto *dependencIndices = impl->dependencyIndices.get();
+				do {
+					auto &dependentEntry = entries[dependencIndices[dependencyIndex]];
+					if( dependentEntry.status != TaskSystemImpl::TaskEntry::Completed ) {
+						return false;
+					}
+				} while( ++dependencyIndex < entry.endOfPolledDependencies );
+			}
+		}
+		// Safe under mutex
+		if( entry.numSatisfiedPushDependencies != entry.numTotalPushDependencies ) {
+			assert( entry.numSatisfiedPushDependencies < entry.numTotalPushDependencies );
+			return false;
+		}
+		return true;
+	};
+
+	constexpr auto kIndexUnset    = (size_t)-1;
+	size_t pendingCompletionIndex = kIndexUnset;
+	try {
 		for(;; ) {
 			size_t chosenIndex      = kIndexUnset;
 			bool isInNonPendingSpan = true;
@@ -506,33 +621,14 @@ bool TaskSystem::threadExecTasks( TaskSystemImpl *__restrict impl, unsigned thre
 				[[maybe_unused]] volatile std::scoped_lock<std::mutex> lock( impl->globalMutex );
 
 				if( pendingCompletionIndex != kIndexUnset ) {
-					TaskSystemImpl::TaskEntry &entry = entries[pendingCompletionIndex];
-					if( entry.startOfPushedDependents < entry.endOfPushedDependents ) {
-						unsigned dependentIndex = entry.startOfPushedDependents;
-						if( entry.pushedDependentsAddressMode == DependencyAddressMode::RangeOfEntries ) {
-							// Safe under mutex
-							do {
-								auto &dependentEntry = entries[dependentIndex];
-								dependentEntry.numSatisfiedPushDependencies++;
-								assert( dependentEntry.numSatisfiedPushDependencies <= dependentEntry.numTotalPushDependencies );
-							} while( ++dependentIndex < entry.endOfPushedDependents );
-						} else {
-							const auto *dependencyIndices = impl->dependencyIndices.get();
-							do {
-								auto &dependentEntry = entries[dependencyIndices[dependentIndex]];
-								dependentEntry.numSatisfiedPushDependencies++;
-								assert( dependentEntry.numSatisfiedPushDependencies <= dependentEntry.numTotalPushDependencies );
-							} while( ++dependentIndex < entry.endOfPushedDependents );
-						}
-					}
-					// Mark self as completed in all cases.
-					// Safe under mutex.
-					entry.status = TaskSystemImpl::TaskEntry::Completed;
+					completeEntry( pendingCompletionIndex );
 					pendingCompletionIndex = kIndexUnset;
 				}
 
+				// Caution! This number may grow during execution outside of the lock scope.
+				const size_t numEntries = impl->numTaskEntriesSoFar;
 				// This is similar to scanning the monotonic array-based heap in the AAS routing subsystem
-				size_t entryIndex = impl->startScanFrom.load( std::memory_order_relaxed );
+				size_t entryIndex       = impl->startScanFrom.load( std::memory_order_relaxed );
 				for(; entryIndex < numEntries; ++entryIndex ) {
 					// Safe under mutex
 					TaskSystemImpl::TaskEntry &entry = entries[entryIndex];
@@ -543,40 +639,23 @@ bool TaskSystem::threadExecTasks( TaskSystemImpl *__restrict impl, unsigned thre
 							isInNonPendingSpan = false;
 						}
 						if( entry.affinity == AnyThread || threadNumber == ~0u ) {
-							bool hasSatisfiedDependencies = true;
-							// TODO: These checks can be optimized by tracking indices/masks of already completed dependencies
-							if( entry.startOfPolledDependencies < entry.endOfPolledDependencies ) {
-								unsigned dependencyIndex = entry.startOfPolledDependencies;
-								if( entry.polledDependenciesAddressMode == DependencyAddressMode::RangeOfEntries ) {
-									do {
-										// Safe under mutex
-										if( entries[dependencyIndex].status != TaskSystemImpl::TaskEntry::Completed ) {
-											hasSatisfiedDependencies = false;
-											break;
-										}
-									} while( ++dependencyIndex < entry.endOfPolledDependencies );
-								} else {
-									const auto *dependencIndices = impl->dependencyIndices.get();
-									do {
-										auto &dependentEntry = entries[dependencIndices[dependencyIndex]];
-										if( dependentEntry.status != TaskSystemImpl::TaskEntry::Completed ) {
-											hasSatisfiedDependencies = false;
-											break;
-										}
-									} while( ++dependencyIndex < entry.endOfPolledDependencies );
-								}
-							}
-							if( hasSatisfiedDependencies ) {
-								// Safe under mutex
-								if( entry.numSatisfiedPushDependencies != entry.numTotalPushDependencies ) {
-									assert( entry.numSatisfiedPushDependencies < entry.numTotalPushDependencies );
-									hasSatisfiedDependencies = false;
-								}
-							}
-							if( hasSatisfiedDependencies ) {
+							if( checkSatisfiedDependencies( entryIndex ) ) {
 								entry.status = TaskSystemImpl::TaskEntry::Busy;
 								chosenIndex  = entryIndex;
 								break;
+							}
+						}
+					} else if( status == TaskSystemImpl::TaskEntry::Busy ) {
+						if( entry.dynamicCompletionStatusAddress ) [[unlikely]] {
+							// Keep scanning from this position
+							// TODO: Separate tapes for regular and dynamically signaled tasks to reduce scan times
+							if( isInNonPendingSpan ) {
+								impl->startScanFrom.store( entryIndex, std::memory_order_relaxed );
+								isInNonPendingSpan = false;
+							}
+							// Safe under mutex
+							if( *entry.dynamicCompletionStatusAddress == true ) {
+								completeEntry( entryIndex );
 							}
 						}
 					}
@@ -592,8 +671,10 @@ bool TaskSystem::threadExecTasks( TaskSystemImpl *__restrict impl, unsigned thre
 					const unsigned workerIndex = threadNumber + 1;
 					callable->call( workerIndex, entries[chosenIndex].instanceArg );
 				}
-				// Postpone completion so we don't have to lock twice
-				pendingCompletionIndex = chosenIndex;
+				if( !entries[chosenIndex].dynamicCompletionStatusAddress ) [[likely]] {
+					// Postpone completion so we don't have to lock twice
+					pendingCompletionIndex = chosenIndex;
+				}
 			} else {
 				// If all tasks are completed or busy
 				if( isInNonPendingSpan ) {

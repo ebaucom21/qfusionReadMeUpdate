@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "materiallocal.h"
 
 #include <algorithm>
+#include <thread>
 
 static void R_TransformForWorld( void ) {
 	RB_LoadObjectMatrix( mat4x4_identity );
@@ -499,6 +500,24 @@ auto Frontend::setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
 	return stateForCamera;
 }
 
+[[nodiscard]]
+static auto getThreadId() -> uintptr_t {
+	const auto id = std::this_thread::get_id();
+	uintptr_t result;
+	static_assert( sizeof( id ) == sizeof( uintptr_t ) );
+	std::memcpy( &result, &id, sizeof( id ) );
+	return result;
+}
+
+[[nodiscard]]
+static auto makeCoro( TaskSystem *taskSystem, std::span<const TaskHandle> dependencies, CoroTask::Affinity affinity ) -> CoroTask {
+	rNotice() << "(1)" << getThreadId();
+	co_await taskSystem->awaiterOf( {} );
+	rNotice() << "(2)" << getThreadId();
+	co_await taskSystem->awaiterOf( {} );
+	rNotice() << "(3)" << getThreadId();
+};
+
 void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {
 	assert( scenesAndCameras.size() <= MAX_REF_CAMERAS );
 
@@ -587,9 +606,20 @@ void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scen
 		collectOccludersTaskHandles[cameraIndex] = m_taskSystem.add( dependencies, std::move( collectOccludersFn ) );
 	}
 
+	// Just for testing purposes
+	TaskHandle coroTasks[MAX_REF_CAMERAS];
+	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
+		TaskHandle dependencies[2] { collectLeavesTaskHandles[cameraIndex], collectOccludersTaskHandles[cameraIndex] };
+		coroTasks[cameraIndex] = m_taskSystem.addCoro( {}, [=, this]() {
+			return makeCoro( &m_taskSystem, dependencies, CoroTask::AnyThread );
+		});
+	}
+
 	TaskHandle processLeavesAndOccludersTasks[MAX_REF_CAMERAS];
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
+
+		TaskHandle dependencies[1] { coroTasks[cameraIndex] };
 
 		auto processLeavesAndOccludersFn = [=, this]( [[maybe_unused]] unsigned workerIndex ) {
 			const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
@@ -619,7 +649,6 @@ void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scen
 			stateForCamera->nonOccludedLeaves       = nonOccludedLeaves;
 		};
 
-		TaskHandle dependencies[2] { collectLeavesTaskHandles[cameraIndex], collectOccludersTaskHandles[cameraIndex] };
 		processLeavesAndOccludersTasks[cameraIndex] = m_taskSystem.add( dependencies, std::move( processLeavesAndOccludersFn ) );
 		assert( processLeavesAndOccludersTasks[cameraIndex] );
 	}
