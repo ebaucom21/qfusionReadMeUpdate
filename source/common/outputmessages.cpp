@@ -6,8 +6,6 @@
 #include "common.h"
 #include "../server/server.h"
 
-#include <mutex>
-
 using wsw::operator""_asView;
 
 // We dislike the idea to add "null" values to the base enum definitions, as well as making them flags per se.
@@ -107,7 +105,7 @@ static const char *kPrintedMessageColorForCategory[4] {
 };
 
 class alignas( 16 ) MessageStreamsAllocator {
-	std::recursive_mutex m_mutex;
+	wsw::Mutex m_mutex;
 	wsw::HeapBasedFreelistAllocator m_allocator;
 
 	static constexpr size_t kSize = MAX_PRINTMSG + sizeof( wsw::OutputMessageStream );
@@ -143,7 +141,7 @@ public:
 
 	[[nodiscard]]
 	auto alloc( wsw::MessageDomain domain, wsw::MessageCategory category ) -> wsw::OutputMessageStream * {
-		[[maybe_unused]] volatile std::lock_guard guard( m_mutex );
+		[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 		if( !m_allocator.isFull() ) [[likely]] {
 			uint8_t *mem = m_allocator.allocOrNull();
 			auto *buffer = (char *)( mem + sizeof( wsw::OutputMessageStream ) );
@@ -159,7 +157,7 @@ public:
 	[[nodiscard]]
 	auto free( wsw::OutputMessageStream *stream ) {
 		if( !isANullStream( stream ) ) [[likely]] {
-			[[maybe_unused]] volatile std::lock_guard guard( m_mutex );
+			[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 			stream->~OutputMessageStream();
 			if( m_allocator.mayOwn( stream ) ) [[likely]] {
 				m_allocator.free( stream );

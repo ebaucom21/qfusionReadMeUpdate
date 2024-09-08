@@ -327,8 +327,6 @@ void Qcommon_Init( int argc, char **argv ) {
 	wsw::PodVector<std::optional<wsw::StringView>> otherArgs;
 	CmdSystem::classifyExecutableCmdArgs( argc, argv, &setArgs, &setAndExecArgs, &otherArgs );
 
-	QThreads_Init();
-
 	com_print_mutex = QMutex_Create();
 
 #ifndef DEDICATED_ONLY
@@ -585,8 +583,6 @@ void Qcommon_Shutdown( void ) {
 	Cmd_Shutdown();
 
 	QMutex_Destroy( &com_print_mutex );
-
-	QThreads_Shutdown();
 }
 
 void Cmd_PreInit( void ) {

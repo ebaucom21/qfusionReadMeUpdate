@@ -55,8 +55,6 @@ char *argv[MAX_NUM_ARGVS];
 
 void Sys_InitTime( void );
 
-void Sys_InitThreads( void );
-
 /*
 ===============================================================================
 
@@ -116,8 +114,6 @@ void Sys_Init( void ) {
 	timeBeginPeriod( 1 );
 
 	Sys_InitTime();
-
-	Sys_InitThreads();
 
 	if( dedicated->integer || developer->integer ) {
 		SetPriorityClass( GetCurrentProcess(), HIGH_PRIORITY_CLASS );

@@ -4,7 +4,6 @@
 #include "../common/singletonholder.h"
 
 #include <limits>
-#include <mutex>
 #include <random>
 #include <vector>
 #include <memory>
@@ -491,7 +490,7 @@ protected:
 
 	PodBufferHolder<PropagationTable::PropagationProps> m_table;
 
-	std::mutex m_workloadMutex;
+	wsw::Mutex m_workloadMutex;
 	int m_executedWorkload { 0 };
 	int m_lastShownProgress { 0 };
 	int m_totalWorkload { -1 };
@@ -606,7 +605,7 @@ PodBufferHolder<PropagationTable::PropagationProps> PropagationTableBuilder::Rel
 }
 
 void PropagationTableBuilder::AddTaskProgress( int taskWorkloadDelta ) {
-	[[maybe_unused]] volatile std::lock_guard<std::mutex> lockGuard( m_workloadMutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_workloadMutex );
 
 	assert( taskWorkloadDelta > 0 );
 	assert( m_totalWorkload > 0 && "The total workload value has not been set" );

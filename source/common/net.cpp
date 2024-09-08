@@ -45,7 +45,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <utility>
 #include <tuple>
-#include <mutex>
 
 #define MAX_LOOPBACK    4
 
@@ -821,13 +820,13 @@ static int NET_TCP_SetNoDelay( socket_t *socket, int nodelay ) {
 //===================================================================
 
 // TODO: Send frames over pipes?
-static std::mutex g_loopbackMutex;
+static wsw::Mutex g_loopbackMutex;
 
 /*
 * NET_Loopback_GetPacket
 */
 static int NET_Loopback_GetPacket( const socket_t *socket, netadr_t *address, msg_t *net_message ) {
-	[[maybe_unused]] volatile std::lock_guard lockGuard( g_loopbackMutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_loopbackMutex );
 
 	int i;
 	loopback_t *loop;
@@ -860,7 +859,7 @@ static int NET_Loopback_GetPacket( const socket_t *socket, netadr_t *address, ms
 */
 static bool NET_Loopback_SendPacket( const socket_t *socket, const void *data, size_t length,
 									 const netadr_t *address ) {
-	[[maybe_unused]] volatile std::lock_guard lockGuard( g_loopbackMutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_loopbackMutex );
 
 	int i;
 	loopback_t *loop;
@@ -890,7 +889,7 @@ static bool NET_Loopback_SendPacket( const socket_t *socket, const void *data, s
 * NET_Loopback_OpenSocket
 */
 static bool NET_Loopback_OpenSocket( socket_t *socket, const netadr_t *address, bool server ) {
-	[[maybe_unused]] volatile std::lock_guard lockGuard( g_loopbackMutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_loopbackMutex );
 
 	int i;
 
@@ -928,7 +927,7 @@ static bool NET_Loopback_OpenSocket( socket_t *socket, const netadr_t *address, 
 * NET_Loopback_CloseSocket
 */
 static void NET_Loopback_CloseSocket( socket_t *socket ) {
-	[[maybe_unused]] volatile std::lock_guard lockGuard( g_loopbackMutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_loopbackMutex );
 
 	assert( socket->type == SOCKET_LOOPBACK );
 

@@ -1,5 +1,6 @@
 /*
 Copyright (C) 2013 Victor Luchits
+Copyright (C) 2024 Chasseur de Bots
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -40,6 +41,51 @@ void QMutex_Destroy( qmutex_t **pmutex );
 void QMutex_Lock( qmutex_t *mutex );
 void QMutex_Unlock( qmutex_t *mutex );
 
+class TaskSystem;
+
+namespace wsw {
+
+[[noreturn]]
+void failWithRuntimeError( const char * );
+
+class Mutex {
+	template <typename> friend class ScopedLock;
+	friend class ::TaskSystem;
+public:
+	Mutex( const Mutex & ) = delete;
+	auto operator=( const Mutex & ) -> Mutex & = delete;
+	Mutex( Mutex && ) = delete;
+	auto operator=( Mutex && ) -> Mutex & = delete;
+
+	Mutex() {
+		if( !( m_underlying = QMutex_Create() ) ) [[unlikely]] {
+			wsw::failWithRuntimeError( "Failed to create a mutex" );
+		}
+	}
+	~Mutex() { QMutex_Destroy( &m_underlying ); }
+private:
+	void lock() { QMutex_Lock( m_underlying ); }
+	void unlock() { QMutex_Unlock( m_underlying ); }
+
+	qmutex_t *m_underlying;
+};
+
+template <typename T>
+class ScopedLock {
+public:
+	ScopedLock( const ScopedLock<T> & ) = delete;
+	auto operator=( const ScopedLock<T> & ) -> ScopedLock<T> & = delete;
+	ScopedLock( ScopedLock<T> && ) = delete;
+	auto operator=( ScopedLock<T> && ) -> ScopedLock & = delete;
+
+	explicit ScopedLock( T *lockable ) : m_lockable( lockable ) { m_lockable->lock(); }
+	~ScopedLock() { m_lockable->unlock(); }
+private:
+	T *m_lockable;
+};
+
+}
+
 qcondvar_t *QCondVar_Create( void );
 void QCondVar_Destroy( qcondvar_t **pcond );
 bool QCondVar_Wait( qcondvar_t *cond, qmutex_t *mutex, unsigned int timeout_msec );
@@ -49,9 +95,6 @@ qthread_t *QThread_Create( void *( *routine )( void* ), void *param );
 void QThread_Join( qthread_t *thread );
 int QThread_Cancel( qthread_t *thread );
 void QThread_Yield( void );
-
-void QThreads_Init( void );
-void QThreads_Shutdown( void );
 
 qbufPipe_t *QBufPipe_Create( size_t bufSize, int flags );
 void QBufPipe_Destroy( qbufPipe_t **pqueue );

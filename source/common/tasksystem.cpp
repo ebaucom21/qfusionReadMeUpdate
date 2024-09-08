@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "tasksystem.h"
 #include "wswpodvector.h"
 #include "wswalgorithm.h"
+#include "qthreads.h"
 
 #include <atomic>
 #include <cassert>
@@ -29,7 +30,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <deque>
 #include <variant>
 #include <span>
-#include <mutex>
 #include <barrier>
 
 struct TaskSystemImpl {
@@ -100,7 +100,7 @@ struct TaskSystemImpl {
 	std::deque<std::atomic_flag> signalingFlags;
 	std::deque<std::atomic<unsigned>> completionStatuses;
 	std::atomic<unsigned> startScanFrom { 0 };
-	std::mutex globalMutex;
+	wsw::Mutex globalMutex;
 	std::atomic<bool> isExecuting { false };
 	std::atomic<bool> isShuttingDown { false };
 	std::atomic<bool> awaitsCompletion { false };
@@ -159,7 +159,7 @@ void TaskSystem::endTapeModification( TaskSystemImpl *impl, bool succeeded ) {
 auto TaskSystem::allocMemForCoro() -> void * {
 	// May happen in runtime. This has to be handled.
 	if( m_impl->sizeOfUsedMemOfCoroTasks + sizeof( CoroTask ) > TaskSystemImpl::kCapacityOfMemOfCoroTasks ) {
-		throw std::runtime_error( "The storage of coro tasks has been exhausted" );
+		wsw::failWithRuntimeError( "The storage of coro tasks has been exhausted" );
 	}
 	void *result = m_impl->memOfCoroTasks.get() + m_impl->sizeOfUsedMemOfCoroTasks;
 	assert( ( (uintptr_t)result % alignof( CoroTask ) ) == 0 );
@@ -221,7 +221,7 @@ auto TaskSystem::allocMemForCallable( size_t alignment, size_t size ) -> std::pa
 
 	// May happen in runtime. This has to be handled.
 	if( m_impl->sizeOfUsedMemOfCallables + size + alignmentBytes > TaskSystemImpl::kCapacityOfMemOfCallables ) {
-		throw std::runtime_error( "The storage of callables has been exhausted" );
+		wsw::failWithRuntimeError( "The storage of callables has been exhausted" );
 	}
 
 	const unsigned offsetOfCallable = m_impl->sizeOfUsedMemOfCallables + alignmentBytes;
@@ -235,7 +235,7 @@ auto TaskSystem::allocMemForCallable( size_t alignment, size_t size ) -> std::pa
 auto TaskSystem::addEntry( Affinity affinity, unsigned offsetOfCallable ) -> TaskHandle {
 	// May happen in runtime. This has to be handled.
 	if( m_impl->numTaskEntriesSoFar + 1 >= TaskSystemImpl::kMaxTaskEntries ) [[unlikely]] {
-		throw std::runtime_error( "Too many task entries" );
+		wsw::failWithRuntimeError( "Too many task entries" );
 	}
 
 	void *taskEntryMem = m_impl->memOfTaskEntries.get() + sizeof( TaskSystemImpl::TaskEntry ) * m_impl->numTaskEntriesSoFar;
@@ -256,7 +256,7 @@ void TaskSystem::addPolledDependenciesToEntry( TaskHandle taskHandle, const Task
 	// May happen in runtime. This has to be handled.
 	const size_t newNumDependencyEntries = m_impl->numDependencyEntriesSoFar + ( depsEnd - depsBegin );
 	if( newNumDependencyEntries > (size_t)TaskSystemImpl::kMaxDependencyIndices ) [[unlikely]] {
-		throw std::runtime_error( "Too many dependencies" );
+		wsw::failWithRuntimeError( "Too many dependencies" );
 	}
 
 	const auto offsetOfDependencies = (unsigned)m_impl->numDependencyEntriesSoFar;
@@ -293,7 +293,7 @@ auto TaskSystem::addParallelAndJoinEntries( Affinity affinity, unsigned offsetOf
 	-> std::pair<std::pair<unsigned, unsigned>, TaskHandle> {
 	// May happen in runtime. This has to be handled.
 	if( m_impl->numTaskEntriesSoFar + numTasks + 1 >= TaskSystemImpl::kMaxTaskEntries ) [[unlikely]] {
-		throw std::runtime_error( "Too many task entries" );
+		wsw::failWithRuntimeError( "Too many task entries" );
 	}
 
 	const unsigned parRangeBegin = m_impl->numTaskEntriesSoFar;
@@ -618,7 +618,7 @@ bool TaskSystem::threadExecTasks( TaskSystemImpl *__restrict impl, unsigned thre
 			size_t chosenIndex      = kIndexUnset;
 			bool isInNonPendingSpan = true;
 			do {
-				[[maybe_unused]] volatile std::scoped_lock<std::mutex> lock( impl->globalMutex );
+				[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &impl->globalMutex );
 
 				if( pendingCompletionIndex != kIndexUnset ) {
 					completeEntry( pendingCompletionIndex );

@@ -130,18 +130,6 @@ void QThread_Yield( void ) {
 	Sys_Thread_Yield();
 }
 
-/*
-* QThreads_Init
-*/
-void QThreads_Init( void ) {
-}
-
-/*
-* QThreads_Shutdown
-*/
-void QThreads_Shutdown( void ) {
-}
-
 // ============================================================================
 
 struct qbufPipe_s {

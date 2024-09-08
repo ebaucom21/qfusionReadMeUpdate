@@ -32,7 +32,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/wswfs.h"
 
 #include <cctype>
-#include <mutex>
+#include <tuple>
+#include <typeinfo>
 
 using wsw::operator""_asView;
 
@@ -282,7 +283,7 @@ private:
 	wsw::HeapBasedFreelistAllocator m_linesAllocator { sizeof( RegularEntry ) + kUseDefaultHeapLineLimit + 1, kMaxLines };
 	wsw::HeapBasedFreelistAllocator m_historyAllocator { sizeof( HistoryEntry ) + kInputLengthLimit + 1, 32 };
 
-	mutable std::mutex m_mutex;
+	mutable wsw::Mutex m_mutex;
 
 	// TODO: That's why headnode-based design is painful for non-POD types
 	// TODO: Extract Linux-like container_of()-based utilities? That won't function that good for non-POD types as well.
@@ -352,7 +353,7 @@ Console::~Console() {
 }
 
 void Console::destroyAllLines() {
-	[[maybe_unused]] volatile std::scoped_lock<std::mutex> lock( m_mutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
 	for( LineEntry *entry = m_lineEntriesHeadnode.next, *next; entry != &m_lineEntriesHeadnode; entry = next ) {
 		next = entry->next;
@@ -378,7 +379,7 @@ void Console::clearLines() {
 }
 
 void Console::clearNotifications() {
-	[[maybe_unused]] volatile std::scoped_lock<std::mutex> lock( m_mutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
 	for( LineEntry *entry = m_lineEntriesHeadnode.next; entry != &m_lineEntriesHeadnode; entry = entry->next ) {
 		if( RegularEntry *const regularEntry = entryAs<RegularEntry>( entry ) ) {
@@ -409,7 +410,7 @@ void Console::addText( wsw::StringView text, NotificationBehaviour notificationB
 		return;
 	}
 
-	[[maybe_unused]] volatile std::scoped_lock<std::mutex> mutexLock( m_mutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> mutexLock( &m_mutex );
 
 	wsw::StringSplitter splitter( text );
 	while( const auto maybeLine = splitter.getNext( kSeparatorChars, wsw::StringSplitter::AllowEmptyTokens ) ) {
@@ -746,7 +747,7 @@ void Console::drawPane( unsigned width, unsigned height ) {
 
 	// Lock during drawing lines
 
-	[[maybe_unused]] volatile std::lock_guard lock( m_mutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
 	if( m_requestedLineNumOffset ) {
 		// Check how many visual lines are going to be there
@@ -1368,7 +1369,7 @@ void Console::drawNotifications( unsigned width, unsigned height ) {
 		return;
 	}
 
-	[[maybe_unused]] volatile std::lock_guard lock( m_mutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
 	const int64_t minTimestamp = cls.realtime - 1000 * wsw::max( 0, con_maxNotificationTime->integer );
 
@@ -1545,7 +1546,7 @@ void Console::acceptCommandCompletionResult( unsigned requestId, CompletionResul
 					m_inputLine.append( result.front().take( maxCharsToAdd ) );
 				} else {
 					m_inputLine.append( result.getCommonPrefix().take( maxCharsToAdd ) );
-					[[maybe_unused]] volatile std::scoped_lock lock( m_mutex );
+					[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 					// TODO: Keep an original request within a completion result?
 					wsw::StringView originalRequest = m_inputLine.asView().take( m_lastAsyncCompletionFullLength );
 					if( originalRequest.startsWith( '\\' ) || originalRequest.startsWith( '/' ) ) {
@@ -1659,7 +1660,7 @@ void Console::handleCompleteKeyAction() {
 				// Make sure they are identified by the same request id, so they are highlighted interactively as a whole
 				const unsigned requestId = getNextCompletionRequestId();
 				// Add up to 3 entries in an atomic fashion
-				[[maybe_unused]] volatile std::scoped_lock lock( m_mutex );
+				[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 				for( auto &nonEmptyResultTuple: nonEmptyResults ) {
 					CompletionResult *completionResult = std::get<0>( nonEmptyResultTuple );
 					const wsw::StringView &itemDesc    = std::get<1>( nonEmptyResultTuple );
@@ -1935,7 +1936,7 @@ void Console::handleCharInputEvent( int key ) {
 }
 
 auto Console::dumpLinesToBuffer() const -> wsw::PodVector<char> {
-	[[maybe_unused]] volatile std::lock_guard lock( m_mutex );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
 	size_t bufferSize = 0;
 	for( LineEntry *entry = m_lineEntriesHeadnode.prev; entry != &m_lineEntriesHeadnode; entry = entry->prev ) {

@@ -501,21 +501,12 @@ auto Frontend::setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
 }
 
 [[nodiscard]]
-static auto getThreadId() -> uintptr_t {
-	const auto id = std::this_thread::get_id();
-	uintptr_t result;
-	static_assert( sizeof( id ) == sizeof( uintptr_t ) );
-	std::memcpy( &result, &id, sizeof( id ) );
-	return result;
-}
-
-[[nodiscard]]
 static auto makeCoro( TaskSystem *taskSystem, std::span<const TaskHandle> dependencies, CoroTask::Affinity affinity ) -> CoroTask {
-	rNotice() << "(1)" << getThreadId();
+	//rNotice() << "(1)" << getThreadId();
 	co_await taskSystem->awaiterOf( {} );
-	rNotice() << "(2)" << getThreadId();
+	//rNotice() << "(2)" << getThreadId();
 	co_await taskSystem->awaiterOf( {} );
-	rNotice() << "(3)" << getThreadId();
+	//rNotice() << "(3)" << getThreadId();
 };
 
 void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {
