@@ -83,6 +83,13 @@ public:
 		}
 	}
 
+	struct StartInfo {
+		TaskSystem *taskSystem;
+		// Caution: it usually points to temporary (i.e. stack) memory, don't use upon initial suspend!
+		std::span<const TaskHandle> initialDependencies;
+		Affinity affinity { AnyThread };
+	};
+
 	struct promise_type {
 		friend class TaskSystem;
 		friend class TaskAwaiter;
@@ -91,8 +98,6 @@ public:
 			void await_suspend( std::coroutine_handle<promise_type> h ) const noexcept;
 			void await_resume() const noexcept {}
 			TaskSystem *m_taskSystem;
-			std::span<TaskHandle> m_dependencies;
-			Affinity m_affinity;
 		};
 		struct FinalSuspend {
 			bool await_ready() noexcept { return false; }
@@ -103,7 +108,7 @@ public:
 		};
 
 		[[nodiscard]] auto initial_suspend() noexcept -> InitialSuspend {
-			return { m_taskSystem, {}, m_affinity };
+			return { m_startInfo.taskSystem };
 		}
 		[[nodiscard]] auto final_suspend() noexcept -> FinalSuspend { return {}; }
 		[[nodiscard]] auto get_return_object() -> CoroTask {
@@ -113,22 +118,19 @@ public:
 		void return_void() noexcept {}
 		void unhandled_exception() { assert( false ); }
 
-		promise_type( TaskSystem *taskSystem, std::span<const TaskHandle> initialDependencies, Affinity affinity = AnyThread )
-			: m_taskSystem( taskSystem ), m_initialDependencies( initialDependencies ), m_affinity( affinity ) {}
+		template <typename... Args>
+		promise_type( const StartInfo &startInfo, Args... args ) : m_startInfo( startInfo ) {}
 
 		promise_type() = delete;
 		promise_type( const promise_type & ) = delete;
 		auto operator=( const promise_type & ) = delete;
 
 	private:
-		TaskSystem *m_taskSystem { nullptr };
-		// Caution: it usually points to temporary (i.e. stack) memory, don't use upon initial suspend!
-		std::span<const TaskHandle> m_initialDependencies;
+		StartInfo m_startInfo;
 		// The head task of the coroutine
 		TaskHandle m_task;
 		// An opaque storage for atomic value (actually, it gets read under mutex)
 		alignas( void *) volatile bool m_completed { false };
-		Affinity m_affinity;
 	};
 
 private:

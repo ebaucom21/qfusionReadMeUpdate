@@ -95,7 +95,7 @@ public:
 
 	template <typename CoroProducerFn>
 	[[nodiscard]]
-	auto addCoro( std::span<const TaskHandle> deps, CoroProducerFn &&producerFn ) -> TaskHandle {
+	auto addCoro( CoroProducerFn &&producerFn ) -> TaskHandle {
 		[[maybe_unused]] volatile TapeStateGuard tapeStateGuard( m_impl );
 
 		CoroTask coro = producerFn();
@@ -114,6 +114,15 @@ public:
 	auto awaiterOf( std::initializer_list<TaskHandle> tasks ) -> TaskAwaiter { return { this, { tasks.begin(), tasks.end() } }; }
 	[[nodiscard]]
 	auto awaiterOf( std::span<const TaskHandle> tasks ) -> TaskAwaiter { return { this, tasks }; }
+
+	struct SingleTaskAwaiter : public TaskAwaiter {
+		SingleTaskAwaiter( TaskSystem *taskSystem, TaskHandle taskHandle )
+			: TaskAwaiter( taskSystem, { &m_taskHandle, 1 } ), m_taskHandle( taskHandle ) {}
+		const TaskHandle m_taskHandle;
+	};
+
+	[[nodiscard]]
+	auto awaiterOf( TaskHandle taskHandle ) -> SingleTaskAwaiter { return { this, taskHandle }; }
 
 	template <typename Callable>
 	[[nodiscard]]

@@ -500,14 +500,47 @@ auto Frontend::setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
 	return stateForCamera;
 }
 
-[[nodiscard]]
-static auto makeCoro( TaskSystem *taskSystem, std::span<const TaskHandle> dependencies, CoroTask::Affinity affinity ) -> CoroTask {
-	//rNotice() << "(1)" << getThreadId();
-	co_await taskSystem->awaiterOf( {} );
-	//rNotice() << "(2)" << getThreadId();
-	co_await taskSystem->awaiterOf( {} );
-	//rNotice() << "(3)" << getThreadId();
-};
+auto Frontend::processLeavesAndOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask {
+	const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
+	MergedSurfSpan *const mergedSurfSpans   = stateForCamera->drawSurfSurfSpansBuffer->get();
+	uint8_t *const surfVisTable             = stateForCamera->surfVisTableBuffer->get();
+	std::span<const unsigned> visibleLeaves = stateForCamera->visibleLeaves;
+
+	std::span<const unsigned> nonOccludedLeaves;
+	std::span<const unsigned> partiallyOccludedLeaves;
+	if( occluderFrusta.empty() || ( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
+		// No "good enough" occluders found.
+		// Just mark every surface that falls into the primary frustum visible in this case.
+		self->markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans, surfVisTable );
+		nonOccludedLeaves = visibleLeaves;
+	} else {
+		// If we want to limit the number of frusta for occluding surfaces, do it prior to occluding of leaves.
+		// Otherwise, surfaces of leaves which are only occluded by less-important occluders cannot be really occluded
+		// by the set of best occluders, and this case adds some fruitless work for the surface occlusion stage.
+		// Also, occluding leaves is expensive as well, so we want to put some limitations for this part as well.
+		std::span<const Frustum> bestFrusta( occluderFrusta.data(), wsw::min<size_t>( 24, occluderFrusta.size() ) );
+
+		// Test every leaf that falls into the primary frustum against frusta of occluders
+		std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = self->cullLeavesByOccluders( stateForCamera,
+																						      visibleLeaves,
+																						      bestFrusta );
+		self->markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans, surfVisTable );
+
+		auto cullSubrangeFn = [=]( unsigned, unsigned start, unsigned end ) {
+			std::span<const unsigned> workloadSpan { partiallyOccludedLeaves.data() + start, partiallyOccludedLeaves.data() + end };
+			self->cullSurfacesInVisLeavesByOccluders( stateForCamera->cameraIndex, workloadSpan, bestFrusta, mergedSurfSpans, surfVisTable );
+		};
+
+		TaskHandle newTask = si.taskSystem->addForSubrangesInRange( { 0, partiallyOccludedLeaves.size() }, 8,
+																	std::span<const TaskHandle>{},
+																	std::move( cullSubrangeFn ),
+																	(TaskSystem::Affinity)si.affinity );
+		co_await si.taskSystem->awaiterOf( newTask );
+	}
+
+	stateForCamera->partiallyOccludedLeaves = partiallyOccludedLeaves;
+	stateForCamera->nonOccludedLeaves       = nonOccludedLeaves;
+}
 
 void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {
 	assert( scenesAndCameras.size() <= MAX_REF_CAMERAS );
@@ -597,56 +630,13 @@ void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scen
 		collectOccludersTaskHandles[cameraIndex] = m_taskSystem.add( dependencies, std::move( collectOccludersFn ) );
 	}
 
-	// Just for testing purposes
-	TaskHandle coroTasks[MAX_REF_CAMERAS];
-	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
-		TaskHandle dependencies[2] { collectLeavesTaskHandles[cameraIndex], collectOccludersTaskHandles[cameraIndex] };
-		coroTasks[cameraIndex] = m_taskSystem.addCoro( {}, [=, this]() {
-			return makeCoro( &m_taskSystem, dependencies, CoroTask::AnyThread );
-		});
-	}
-
 	TaskHandle processLeavesAndOccludersTasks[MAX_REF_CAMERAS];
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
-
-		TaskHandle dependencies[1] { coroTasks[cameraIndex] };
-
-		auto processLeavesAndOccludersFn = [=, this]( [[maybe_unused]] unsigned workerIndex ) {
-			const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
-			MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
-			uint8_t *const surfVisTable = stateForCamera->surfVisTableBuffer->get();
-			std::span<const unsigned> visibleLeaves = stateForCamera->visibleLeaves;
-
-			std::span<const unsigned> nonOccludedLeaves;
-			std::span<const unsigned> partiallyOccludedLeaves;
-			if( occluderFrusta.empty() || ( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
-				// No "good enough" occluders found.
-				// Just mark every surface that falls into the primary frustum visible in this case.
-				markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans, surfVisTable );
-				nonOccludedLeaves = visibleLeaves;
-			} else {
-				// If we want to limit the number of frusta for occluding surfaces, do it prior to occluding of leaves.
-				// Otherwise, surfaces of leaves which are only occluded by less-important occluders cannot be really occluded
-				// by the set of best occluders, and this case adds some fruitless work for the surface occlusion stage.
-				// Also, occluding leaves is expensive as well, so we want to put some limitations for this part as well.
-				std::span<const Frustum> bestFrusta( occluderFrusta.data(), wsw::min<size_t>( 24, occluderFrusta.size() ) );
-
-				// Test every leaf that falls into the primary frustum against frusta of occluders
-				std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = cullLeavesByOccluders( stateForCamera,
-																								visibleLeaves,
-																								bestFrusta );
-				markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans, surfVisTable );
-				// Test every surface that belongs to partially occluded leaves
-				cullSurfacesInVisLeavesByOccluders( stateForCamera->cameraIndex, partiallyOccludedLeaves,
-													bestFrusta, mergedSurfSpans, surfVisTable );
-			}
-
-			stateForCamera->partiallyOccludedLeaves = partiallyOccludedLeaves;
-			stateForCamera->nonOccludedLeaves       = nonOccludedLeaves;
-		};
-
-		processLeavesAndOccludersTasks[cameraIndex] = m_taskSystem.add( dependencies, std::move( processLeavesAndOccludersFn ) );
+		TaskHandle dependencies[2] { collectLeavesTaskHandles[cameraIndex], collectOccludersTaskHandles[cameraIndex] };
+		processLeavesAndOccludersTasks[cameraIndex] = m_taskSystem.addCoro( [=, this]() {
+			return processLeavesAndOccluders( { &m_taskSystem, dependencies, CoroTask::AnyThread }, this, stateForCamera );
+		});
 		assert( processLeavesAndOccludersTasks[cameraIndex] );
 	}
 

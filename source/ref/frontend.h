@@ -465,6 +465,9 @@ private:
 											 uint8_t *surfVisTable );
 
 	[[nodiscard]]
+	static auto processLeavesAndOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;
+
+	[[nodiscard]]
 	auto cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
 								unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
 								std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;

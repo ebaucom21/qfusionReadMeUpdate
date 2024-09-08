@@ -19,6 +19,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
+#include <atomic>
+
 namespace wsw::ref {
 
 static bool isLockingOccluders = false;
@@ -397,11 +399,32 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
 	const int pinnedOccluderNum = Cvar_Integer( "pinnedOccluderNum" );
 #endif
 
+	// TODO: Use library functions once they are available, use intrinsics on ARM64
+
+	auto setMinAtomic = []( int *addr, int newValue ) {
+		assert( ( (uintptr_t)addr % alignof( std::atomic<int> ) ) == 0 );
+		auto *const a = (std::atomic<int> *)addr;
+		int oldValue  = a->load();
+		// TODO: Can we do something smarter with memory loads
+		while( oldValue > newValue && !a->compare_exchange_weak( oldValue, newValue ) ) {
+			oldValue = a->load();
+		}
+	};
+
+	auto setMaxAtomic = []( int *addr, int newValue ) {
+		assert( ( (uintptr_t)addr % alignof( std::atomic<int> ) ) == 0 );
+		auto *a      = (std::atomic<int> *)addr;
+		int oldValue = a->load();
+		// TODO: Can we do something smarter with memory loads
+		while( oldValue < newValue && !a->compare_exchange_weak( oldValue, newValue ) ) {
+			oldValue = a->load();
+		}
+	};
+
 	const msurface_t *const surfaces    = rsh.worldBrushModel->surfaces;
 	const auto leaves                   = rsh.worldBrushModel->visleafs;
 	const uint8_t occlusionCullingFrame = m_occlusionCullingFrame;
 	const unsigned numOccluders         = occluderFrusta.size();
-
 	for( const unsigned leafNum: indicesOfVisibleLeaves ) {
 		const mleaf_s *const leaf             = leaves[leafNum];
 		const unsigned *const leafSurfaceNums = leaf->visSurfaces;
@@ -410,6 +433,9 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
 		for( unsigned surfIndex = 0; surfIndex < numLeafSurfaces; ++surfIndex ) {
 			const unsigned surfNum = leafSurfaceNums[surfIndex];
 			const msurface_t *const __restrict surf = surfaces + surfNum;
+			// Note: This is correct, assuming byte reads are not torn.
+			// Given this assumption, in the worst case we get duplicated checks
+			// which store the same result in the vis table.
 			if( surf->occlusionCullingFrames[cameraIndex] != occlusionCullingFrame ) {
 				surf->occlusionCullingFrames[cameraIndex] = occlusionCullingFrame;
 
@@ -440,9 +466,8 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
 					assert( surf->mergedSurfNum > 0 );
 					const unsigned mergedSurfNum = surf->mergedSurfNum - 1;
 					MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];
-					// TODO: Branchless min/max
-					span->firstSurface = wsw::min( span->firstSurface, (int)surfNum );
-					span->lastSurface = wsw::max( span->lastSurface, (int)surfNum );
+					setMinAtomic( &span->firstSurface, (int)surfNum );
+					setMaxAtomic( &span->lastSurface, (int)surfNum );
 				}
 			}
 		}

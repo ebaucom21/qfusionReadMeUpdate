@@ -176,7 +176,7 @@ auto TaskSystem::addResumeCoroTask( std::span<const TaskHandle> deps, std::corou
 
 	auto [memForCallable, offsetOfCallable] = allocMemForCallable( alignof( ResumeCoroCallable ), sizeof( ResumeCoroCallable ) );
 
-	TaskHandle result = addEntry( (TaskSystem::Affinity)handle.promise().m_affinity, offsetOfCallable );
+	TaskHandle result = addEntry( (TaskSystem::Affinity)handle.promise().m_startInfo.affinity, offsetOfCallable );
 	addPolledDependenciesToEntry( result, deps.data(), deps.data() + deps.size() );
 
 	// TODO: Won't be rolled back on failure if enclosing state guard rolls back,
@@ -187,7 +187,7 @@ auto TaskSystem::addResumeCoroTask( std::span<const TaskHandle> deps, std::corou
 
 void CoroTask::promise_type::InitialSuspend::await_suspend( std::coroutine_handle<promise_type> h ) const noexcept {
 	// Assumes the enclosing non-reentrant lock is held
-	TaskHandle task = m_taskSystem->addResumeCoroTask( h.promise().m_initialDependencies, h );
+	TaskHandle task = m_taskSystem->addResumeCoroTask( h.promise().m_startInfo.initialDependencies, h );
 	h.promise().m_task = task;
 	auto *entry = ( (TaskSystemImpl::TaskEntry *)m_taskSystem->m_impl->memOfTaskEntries.get() ) + task.m_opaque - 1;
 	entry->dynamicCompletionStatusAddress = &h.promise().m_completed;
