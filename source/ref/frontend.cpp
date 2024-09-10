@@ -172,12 +172,17 @@ static auto suggestNumExtraThreads() -> unsigned {
 }
 
 Frontend::Frontend() : m_taskSystem( { .numExtraThreads = suggestNumExtraThreads() } ) {
-	if( Q_CPU_FEATURE_SSE41 & Sys_GetProcessorFeatures() ) {
+	const auto features = Sys_GetProcessorFeatures();
+	if( Q_CPU_FEATURE_SSE41 & features ) {
 		m_collectVisibleWorldLeavesArchMethod          = &Frontend::collectVisibleWorldLeavesSse41;
 		m_collectVisibleOccludersArchMethod            = &Frontend::collectVisibleOccludersSse41;
 		m_buildFrustaOfOccludersArchMethod             = &Frontend::buildFrustaOfOccludersSse41;
 		m_cullLeavesByOccludersArchMethod              = &Frontend::cullLeavesByOccludersSse41;
-		m_cullSurfacesInVisLeavesByOccludersArchMethod = &Frontend::cullSurfacesInVisLeavesByOccludersSse41;
+		if( Q_CPU_FEATURE_AVX & features ) {
+			m_cullSurfacesInVisLeavesByOccludersArchMethod = &Frontend::cullSurfacesInVisLeavesByOccludersAvx;
+		} else {
+			m_cullSurfacesInVisLeavesByOccludersArchMethod = &Frontend::cullSurfacesInVisLeavesByOccludersSse41;
+		}
 		m_cullEntriesWithBoundsArchMethod              = &Frontend::cullEntriesWithBoundsSse41;
 		m_cullEntryPtrsWithBoundsArchMethod            = &Frontend::cullEntryPtrsWithBoundsSse41;
 	} else {

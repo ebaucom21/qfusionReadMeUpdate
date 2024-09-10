@@ -237,13 +237,13 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif()
 
 if (MSVC)
+	set_source_files_properties("../ref/frontendavx.cpp" PROPERTIES COMPILE_FLAGS "/arch:AVX")
 	set_source_files_properties("../common/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "/arch:AVX")
-	set_source_files_properties("../../third-party/sqlite-amalgamation/sqlite3.c" PROPERTIES COMPILE_FLAGS "/fp:precise")
 else()
 	set_source_files_properties("../ref/frontendsse41.cpp" PROPERTIES COMPILE_FLAGS "-msse4.1")
+	set_source_files_properties("../ref/frontendavx.cpp" PROPERTIES COMPILE_FLAGS "-mavx")
 	set_source_files_properties("../common/cm_trace_sse42.cpp" PROPERTIES COMPILE_FLAGS "-msse4.2")
 	set_source_files_properties("../common/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "-mavx")
-	set_source_files_properties("../../third-party/sqlite-amalgamation/sqlite3.c" PROPERTIES COMPILE_FLAGS "-fno-fast-math")
 endif()
 
 add_executable(${QFUSION_CLIENT_NAME} ${CLIENT_BINARY_TYPE}

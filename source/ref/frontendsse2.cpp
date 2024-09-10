@@ -23,6 +23,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // https://fgiesen.wordpress.com/2016/04/03/sse-mind-the-gap/
 #define CULLING_BLEND( a, b, mask ) _mm_or_ps( _mm_and_ps( a, mask ), _mm_andnot_ps( mask, b ) )
 
+#define IMPLEMENT_collectVisisbleWorldLeaves
+#define IMPLEMENT_collectVisibleOccluders
+#define IMPLEMENT_buildFrustaOfOccluders
+#define IMPLEMENT_cullLeavesByOccluders
+#define IMPLEMENT_cullSurfacesInVisLeavesByOccluders
+#define IMPLEMENT_cullEntriesWithBounds
+#define IMPLEMENT_cullEntryPtrsWithBounds
+
 #include "frontendsse.inc"
 
 #include "local.h"

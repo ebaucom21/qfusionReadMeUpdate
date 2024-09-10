@@ -328,7 +328,7 @@ private:
 
 	// The template parameter is needed just to make instatiation of methods in different translation units correct
 
-	enum : unsigned { Sse2 = 1, Sse41 = 2 };
+	enum : unsigned { Sse2 = 1, Sse41 = 2, Avx = 3 };
 
 	template <unsigned Arch>
 	[[nodiscard]]
@@ -428,6 +428,13 @@ private:
 	auto cullEntryPtrsWithBoundsSse41( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
 									   const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 									   uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+
+	void cullSurfacesInVisLeavesByOccludersAvx( unsigned cameraIndex,
+												std::span<const unsigned> indicesOfLeaves,
+												std::span<const Frustum> occluderFrusta,
+												MergedSurfSpan *mergedSurfSpans,
+												uint8_t *surfVisTable );
 
 	[[nodiscard]]
 	auto collectVisibleWorldLeaves( StateForCamera *stateForCamera ) -> std::span<const unsigned>;

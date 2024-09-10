@@ -21,6 +21,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define CULLING_BLEND( a, b, mask ) _mm_blendv_ps( b, a, mask )
 
+#define IMPLEMENT_collectVisisbleWorldLeaves
+#define IMPLEMENT_collectVisibleOccluders
+#define IMPLEMENT_buildFrustaOfOccluders
+#define IMPLEMENT_cullLeavesByOccluders
+#define IMPLEMENT_cullSurfacesInVisLeavesByOccluders
+#define IMPLEMENT_cullEntriesWithBounds
+#define IMPLEMENT_cullEntryPtrsWithBounds
+
 #include "frontendsse.inc"
 
 #include "local.h"

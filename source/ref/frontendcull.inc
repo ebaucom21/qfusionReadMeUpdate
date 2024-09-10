@@ -25,6 +25,8 @@ static bool isLockingOccluders = false;
 static vec3_t lockedViewOrigin;
 static vec3_t lockedViewAxis;
 
+#ifdef IMPLEMENT_collectVisisbleWorldLeaves
+
 template <unsigned Arch>
 auto Frontend::collectVisibleWorldLeavesArch( StateForCamera *stateForCamera ) -> std::span<const unsigned> {
 	const auto *const pvs             = Mod_ClusterPVS( stateForCamera->viewCluster, rsh.worldModel );
@@ -49,6 +51,10 @@ auto Frontend::collectVisibleWorldLeavesArch( StateForCamera *stateForCamera ) -
 
 	return { visibleLeaves, visibleLeaves + numVisibleLeaves };
 }
+
+#endif
+
+#ifdef IMPLEMENT_collectVisibleOccluders
 
 template <unsigned Arch>
 auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> std::span<const unsigned> {
@@ -126,6 +132,10 @@ auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> 
 
 	return { visibleOccluders, numKeptOccluders };
 }
+
+#endif
+
+#ifdef IMPLEMENT_buildFrustaOfOccluders
 
 template <unsigned Arch>
 auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
@@ -309,6 +319,10 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 	return { occluderFrusta, occluderFrusta + numSelectedOccluders };
 }
 
+#endif
+
+#ifdef IMPLEMENT_cullLeavesByOccluders
+
 template <unsigned Arch>
 auto Frontend::cullLeavesByOccludersArch( StateForCamera *stateForCamera,
 										  std::span<const unsigned> indicesOfLeaves,
@@ -366,6 +380,10 @@ auto Frontend::cullLeavesByOccludersArch( StateForCamera *stateForCamera,
 
 	return { { fullyVisibleLeaves, numFullyVisibleLeaves }, { partiallyVisibleLeaves, numPartiallyVisibleLeaves } };
 }
+
+#endif
+
+#ifdef IMPLEMENT_cullSurfacesInVisLeavesByOccluders
 
 template <unsigned Arch>
 void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
@@ -432,6 +450,10 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
 	}
 }
 
+#endif
+
+#ifdef IMPLEMENT_cullEntriesWithBounds
+
 template <unsigned Arch>
 auto Frontend::cullEntriesWithBoundsArch( const void *entries, unsigned numEntries, unsigned boundsFieldOffset, unsigned strideInBytes,
 										  const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
@@ -487,6 +509,10 @@ auto Frontend::cullEntriesWithBoundsArch( const void *entries, unsigned numEntri
 	return { tmpIndices, numPassedEntries };
 }
 
+#endif
+
+#ifdef IMPLEMENT_cullEntryPtrsWithBounds
+
 template <unsigned Arch>
 auto Frontend::cullEntryPtrsWithBoundsArch( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
 											const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
@@ -537,5 +563,7 @@ auto Frontend::cullEntryPtrsWithBoundsArch( const void **entryPtrs, unsigned num
 
 	return { tmpIndices, numPassedEntries };
 }
+
+#endif
 
 }
