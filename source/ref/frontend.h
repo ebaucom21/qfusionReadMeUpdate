@@ -435,6 +435,10 @@ private:
 												std::span<const Frustum> occluderFrusta,
 												MergedSurfSpan *mergedSurfSpans,
 												uint8_t *surfVisTable );
+	[[nodiscard]]
+	auto cullLeavesByOccludersAvx( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
+								   std::span<const Frustum> occluderFrusta )
+		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
 	[[nodiscard]]
 	auto collectVisibleWorldLeaves( StateForCamera *stateForCamera ) -> std::span<const unsigned>;

@@ -180,8 +180,10 @@ Frontend::Frontend() : m_taskSystem( { .numExtraThreads = suggestNumExtraThreads
 		m_cullLeavesByOccludersArchMethod              = &Frontend::cullLeavesByOccludersSse41;
 		if( Q_CPU_FEATURE_AVX & features ) {
 			m_cullSurfacesInVisLeavesByOccludersArchMethod = &Frontend::cullSurfacesInVisLeavesByOccludersAvx;
+			m_cullLeavesByOccludersArchMethod              = &Frontend::cullLeavesByOccludersAvx;
 		} else {
 			m_cullSurfacesInVisLeavesByOccludersArchMethod = &Frontend::cullSurfacesInVisLeavesByOccludersSse41;
+			m_cullLeavesByOccludersArchMethod              = &Frontend::cullLeavesByOccludersSse41;
 		}
 		m_cullEntriesWithBoundsArchMethod              = &Frontend::cullEntriesWithBoundsSse41;
 		m_cullEntryPtrsWithBoundsArchMethod            = &Frontend::cullEntryPtrsWithBoundsSse41;
