@@ -236,6 +236,8 @@ private:
 	void addPolledDependenciesToEntry( TaskHandle taskHandle, const TaskHandle *depsBegin, const TaskHandle *depsEnd );
 	void addPushedDependentsToEntry( TaskHandle taskHandle, unsigned taskRangeBegin, unsigned taskRangeEnd );
 
+	void setScanJump( TaskHandle taskHandle, unsigned scanJump );
+
 	[[nodiscard]]
 	auto addParallelAndJoinEntries( Affinity affinity, unsigned offsetOfCallable, unsigned numTasks )
 		-> std::pair<std::pair<unsigned, unsigned>, TaskHandle>;

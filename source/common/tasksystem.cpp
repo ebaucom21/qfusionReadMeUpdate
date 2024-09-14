@@ -49,6 +49,8 @@ struct TaskSystemImpl {
 
 		volatile bool *dynamicCompletionStatusAddress { nullptr };
 
+		unsigned extraScanJump { 0 };
+
 		unsigned startOfPolledDependencies { 0 }, endOfPolledDependencies { 0 };
 		unsigned startOfPushedDependents { 0 }, endOfPushedDependents { 0 };
 
@@ -288,6 +290,11 @@ void TaskSystem::addPushedDependentsToEntry( TaskHandle taskHandle, unsigned tas
 	}
 }
 
+void TaskSystem::setScanJump( TaskHandle taskHandle, unsigned scanJump ) {
+	auto *const entry = (TaskSystemImpl::TaskEntry *)m_impl->memOfTaskEntries.get() + ( taskHandle.m_opaque - 1 );
+	entry->extraScanJump = scanJump;
+}
+
 [[nodiscard]]
 auto TaskSystem::addParallelAndJoinEntries( Affinity affinity, unsigned offsetOfCallable, unsigned numTasks )
 	-> std::pair<std::pair<unsigned, unsigned>, TaskHandle> {
@@ -384,9 +391,11 @@ auto TaskSystem::addForIndicesInRangeImpl( std::pair<unsigned int, unsigned int>
 	addPolledDependenciesToEntry( forkTask, deps.data(), deps.data() + deps.size() );
 
 	// This call adds dependencies between parallel and join tasks as well
-	auto [rangeOfParallelTasks, joinTask] = addParallelAndJoinEntries( affinity, offsetOfCallable, indicesEnd - indicesBegin );
+	auto [rangeOfParallelTasks, joinTask] = addParallelAndJoinEntries( affinity, offsetOfCallable, ( indicesEnd - indicesBegin ) );
 	// Make parallel tasks depend on the fork task
 	addPushedDependentsToEntry( forkTask, rangeOfParallelTasks.first, rangeOfParallelTasks.second );
+	// If the forkTask has unsatisfied dependencies, allow jumping over its subsequent dependents
+	setScanJump( forkTask, indicesEnd - indicesBegin );
 
 	setupIotaInstanceArgs( rangeOfParallelTasks, indicesBegin );
 
@@ -417,6 +426,8 @@ auto TaskSystem::addForSubrangesInRangeImpl( std::pair<unsigned, unsigned> indic
 	auto [rangeOfParallelTasks, joinTask] = addParallelAndJoinEntries( affinity, offsetOfCallable, numTasks );
 	// Make parallel tasks depend on the fork task
 	addPushedDependentsToEntry( forkTask, rangeOfParallelTasks.first, rangeOfParallelTasks.second );
+	// If the forkTask has unsatisfied dependencies, allow jumping over its subsequent dependents
+	setScanJump( forkTask, indicesEnd - indicesBegin );
 
 	setupRangeInstanceArgs( rangeOfParallelTasks, indicesBegin, subrangeLength, workload );
 
@@ -629,9 +640,10 @@ bool TaskSystem::threadExecTasks( TaskSystemImpl *__restrict impl, unsigned thre
 				const size_t numEntries = impl->numTaskEntriesSoFar;
 				// This is similar to scanning the monotonic array-based heap in the AAS routing subsystem
 				size_t entryIndex       = impl->startScanFrom.load( std::memory_order_relaxed );
-				for(; entryIndex < numEntries; ++entryIndex ) {
+				for( size_t entryScanJump; entryIndex < numEntries; entryIndex += entryScanJump ) {
 					// Safe under mutex
 					TaskSystemImpl::TaskEntry &entry = entries[entryIndex];
+					entryScanJump                    = 1;
 					const unsigned status            = entry.status;
 					if( status == TaskSystemImpl::TaskEntry::Pending ) {
 						if( isInNonPendingSpan ) {
@@ -644,6 +656,8 @@ bool TaskSystem::threadExecTasks( TaskSystemImpl *__restrict impl, unsigned thre
 								chosenIndex  = entryIndex;
 								break;
 							}
+							// Apply it in the case of having unsatisfied dependencies
+							entryScanJump += entry.extraScanJump;
 						}
 					} else if( status == TaskSystemImpl::TaskEntry::Busy ) {
 						if( entry.dynamicCompletionStatusAddress ) [[unlikely]] {
@@ -659,6 +673,7 @@ bool TaskSystem::threadExecTasks( TaskSystemImpl *__restrict impl, unsigned thre
 							}
 						}
 					}
+					assert( entryScanJump > 0 );
 				}
 				// The global mutex unlocks here
 			} while( false );
