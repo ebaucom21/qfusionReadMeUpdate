@@ -397,12 +397,11 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
 	const int pinnedOccluderNum = Cvar_Integer( "pinnedOccluderNum" );
 #endif
 
-	const msurface_t *const surfaces = rsh.worldBrushModel->surfaces;
-	const auto leaves = rsh.worldBrushModel->visleafs;
+	const msurface_t *const surfaces    = rsh.worldBrushModel->surfaces;
+	const auto leaves                   = rsh.worldBrushModel->visleafs;
 	const uint8_t occlusionCullingFrame = m_occlusionCullingFrame;
+	const unsigned numOccluders         = occluderFrusta.size();
 
-	// Cull individual surfaces by up to 20 best frusta
-	const unsigned numBestOccluders = wsw::min<unsigned>( 20, occluderFrusta.size() );
 	for( const unsigned leafNum: indicesOfVisibleLeaves ) {
 		const mleaf_s *const leaf             = leaves[leafNum];
 		const unsigned *const leafSurfaceNums = leaf->visSurfaces;
@@ -434,7 +433,7 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
 						SHOW_OCCLUDED( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
 						break;
 					}
-				} while( ++frustumNum != numBestOccluders );
+				} while( ++frustumNum != numOccluders );
 
 				if( surfVisible ) {
 					surfVisTable[surfNum] = 1;

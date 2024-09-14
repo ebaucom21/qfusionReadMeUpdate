@@ -626,14 +626,20 @@ void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scen
 				markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans, surfVisTable );
 				nonOccludedLeaves = visibleLeaves;
 			} else {
+				// If we want to limit the number of frusta for occluding surfaces, do it prior to occluding of leaves.
+				// Otherwise, surfaces of leaves which are only occluded by less-important occluders cannot be really occluded
+				// by the set of best occluders, and this case adds some fruitless work for the surface occlusion stage.
+				// Also, occluding leaves is expensive as well, so we want to put some limitations for this part as well.
+				std::span<const Frustum> bestFrusta( occluderFrusta.data(), wsw::min<size_t>( 24, occluderFrusta.size() ) );
+
 				// Test every leaf that falls into the primary frustum against frusta of occluders
 				std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = cullLeavesByOccluders( stateForCamera,
 																								visibleLeaves,
-																								occluderFrusta );
+																								bestFrusta );
 				markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans, surfVisTable );
 				// Test every surface that belongs to partially occluded leaves
 				cullSurfacesInVisLeavesByOccluders( stateForCamera->cameraIndex, partiallyOccludedLeaves,
-													occluderFrusta, mergedSurfSpans, surfVisTable );
+													bestFrusta, mergedSurfSpans, surfVisTable );
 			}
 
 			stateForCamera->partiallyOccludedLeaves = partiallyOccludedLeaves;
