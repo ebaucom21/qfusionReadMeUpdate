@@ -733,16 +733,28 @@ void BeginDrawingScenes() {
 	wsw::ref::Frontend::instance()->beginDrawingScenes();
 }
 
+TaskSystem *BeginProcessingOfTasks() {
+	auto *result = wsw::ref::Frontend::instance()->getTaskSystem();
+	result->startExecution();
+	return result;
+}
+
+void EndProcessingOfTasks() {
+	if( !wsw::ref::Frontend::instance()->getTaskSystem()->awaitCompletion() ) {
+		wsw::failWithLogicError( "" );
+	}
+}
+
 DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef ) {
 	return wsw::ref::Frontend::instance()->createDrawSceneRequest( refdef );
 }
 
-void BeginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
-	wsw::ref::Frontend::instance()->beginProcessingDrawSceneRequests( requests );
+TaskHandle BeginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
+	return wsw::ref::Frontend::instance()->beginProcessingDrawSceneRequests( requests );
 }
 
-void EndProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
-	wsw::ref::Frontend::instance()->endProcessingDrawSceneRequests( requests );
+TaskHandle EndProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
+	return wsw::ref::Frontend::instance()->endProcessingDrawSceneRequests( requests );
 }
 
 void CommitProcessedDrawSceneRequest( DrawSceneRequest *request ) {
@@ -751,6 +763,21 @@ void CommitProcessedDrawSceneRequest( DrawSceneRequest *request ) {
 
 void EndDrawingScenes() {
 	wsw::ref::Frontend::instance()->endDrawingScenes();
+}
+
+[[nodiscard]]
+static auto coPrepareDrawSceneRequest( CoroTask::StartInfo si, DrawSceneRequest *drawSceneRequest ) -> CoroTask {
+	co_await si.taskSystem->awaiterOf( BeginProcessingDrawSceneRequests( { &drawSceneRequest, 1 } ) );
+	co_await si.taskSystem->awaiterOf( EndProcessingDrawSceneRequests( { &drawSceneRequest, 1 } ) );
+}
+
+void ExecuteSingleDrawSceneRequestNonSpeedCritical( DrawSceneRequest *request ) {
+	TaskSystem *taskSystem = BeginProcessingOfTasks();
+	(void)taskSystem->addCoro( [=]() {
+		return coPrepareDrawSceneRequest( { taskSystem, {}, CoroTask::OnlyMainThread }, request );
+	});
+	EndProcessingOfTasks();
+	CommitProcessedDrawSceneRequest( request );
 }
 
 bool R_SurfPotentiallyFragmented( const msurface_t *surf ) {

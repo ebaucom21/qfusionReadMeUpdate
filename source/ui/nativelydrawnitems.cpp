@@ -392,9 +392,7 @@ void NativelyDrawnModel::drawSelfNatively( int64_t, int64_t timeDelta, int pixel
 	DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( refdef );
 	CG_SetBoneposesForTemporaryEntity( &entity );
 	drawSceneRequest->addEntity( &entity );
-	BeginProcessingDrawSceneRequests( { &drawSceneRequest, 1 } );
-	EndProcessingDrawSceneRequests( { &drawSceneRequest, 1 } );
-	CommitProcessedDrawSceneRequest( drawSceneRequest );
+	ExecuteSingleDrawSceneRequestNonSpeedCritical( drawSceneRequest );
 	EndDrawingScenes();
 }
 

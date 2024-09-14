@@ -1115,6 +1115,249 @@ static void CG_DrawCrosshair( ViewState *viewState, std::optional<float> minivie
 static void drawNamesAndBeacons( ViewState *viewState, std::optional<float> miniviewScale );
 static void CG_SCRDrawViewBlend( ViewState *viewState );
 
+static void updateFrameLerpProperties( unsigned extrapolationTime ) {
+	int snapTime = ( cg.frame.serverTime - cg.oldFrame.serverTime );
+	if( !snapTime ) {
+		snapTime = cgs.snapFrameTime;
+	}
+
+	// moved this from CG_Init here
+	cgs.extrapolationTime = extrapolationTime;
+
+	if( cg.oldFrame.serverTime == cg.frame.serverTime ) {
+		cg.lerpfrac = 1.0f;
+	} else {
+		cg.lerpfrac = ( (double)( cg.time - cgs.extrapolationTime ) - (double)cg.oldFrame.serverTime ) / (double)snapTime;
+	}
+
+	if( cgs.extrapolationTime ) {
+		cg.xerpTime = 0.001f * ( (double)cg.time - (double)cg.frame.serverTime );
+		cg.oldXerpTime = 0.001f * ( (double)cg.time - (double)cg.oldFrame.serverTime );
+
+		if( cg.time >= cg.frame.serverTime ) {
+			cg.xerpSmoothFrac = (double)( cg.time - cg.frame.serverTime ) / (double)( cgs.extrapolationTime );
+			Q_clamp( cg.xerpSmoothFrac, 0.0f, 1.0f );
+		} else {
+			cg.xerpSmoothFrac = (double)( cg.frame.serverTime - cg.time ) / (double)( cgs.extrapolationTime );
+			Q_clamp( cg.xerpSmoothFrac, -1.0f, 0.0f );
+			cg.xerpSmoothFrac = 1.0f - cg.xerpSmoothFrac;
+		}
+
+		clamp_low( cg.xerpTime, -( cgs.extrapolationTime * 0.001f ) );
+
+		//clamp( cg.xerpTime, -( cgs.extrapolationTime * 0.001f ), ( cgs.extrapolationTime * 0.001f ) );
+		//clamp( cg.oldXerpTime, 0, ( ( snapTime + cgs.extrapolationTime ) * 0.001f ) );
+	} else {
+		cg.xerpTime = 0.0f;
+		cg.xerpSmoothFrac = 0.0f;
+	}
+
+	if( v_showClamp.get() ) {
+		if( cg.lerpfrac > 1.0f ) {
+			Com_Printf( "high clamp %f\n", cg.lerpfrac );
+		} else if( cg.lerpfrac < 0.0f ) {
+			Com_Printf( "low clamp  %f\n", cg.lerpfrac );
+		}
+	}
+
+	Q_clamp( cg.lerpfrac, 0.0f, 1.0f );
+}
+
+[[nodiscard]]
+static auto prepareViewRectsAndStateIndices( Rect *viewRects, unsigned *viewStateIndices ) -> std::pair<bool, unsigned> {
+	const bool actuallyUseTiledMode = CG_UsesTiledView();
+	unsigned numDisplayedViewStates;
+	if( actuallyUseTiledMode ) {
+		assert( cg.tileMiniviewViewStateIndices.size() == cg.tileMiniviewPositions.size() );
+		// TODO: Std::copy?
+		for( unsigned i = 0; i < cg.tileMiniviewViewStateIndices.size(); ++i ) {
+			viewRects[i]        = cg.tileMiniviewPositions[i];
+			viewStateIndices[i] = cg.tileMiniviewViewStateIndices[i];
+		}
+		numDisplayedViewStates = cg.tileMiniviewViewStateIndices.size();
+	} else {
+		if( const int size = std::round( v_viewSize.get() ); size < 100 ) {
+			// Round to a multiple of 2
+			const int regionWidth  = ( ( cgs.vidWidth * size ) / 100 ) & ( ~1 );
+			const int regionHeight = ( ( cgs.vidHeight * size ) / 100 ) & ( ~1 );
+
+			viewRects[0].x      = ( cgs.vidWidth - regionWidth ) / 2;
+			viewRects[0].y      = ( cgs.vidHeight - regionHeight ) / 2;
+			viewRects[0].width  = regionWidth;
+			viewRects[0].height = regionHeight;
+		} else {
+			viewRects[0].x      = 0;
+			viewRects[0].y      = 0;
+			viewRects[0].width  = cgs.vidWidth;
+			viewRects[0].height = cgs.vidHeight;
+		}
+		viewStateIndices[0] = (unsigned)( getPrimaryViewState() - cg.viewStates );
+		numDisplayedViewStates = 1;
+		numDisplayedViewStates += wsw::ui::UISystem::instance()->retrieveHudControlledMiniviews( viewRects + 1, viewStateIndices + 1 );
+	}
+
+	return { actuallyUseTiledMode, numDisplayedViewStates };
+}
+
+static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool actuallyUseTiledMode,
+									 const Rect *viewRects, const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) {
+	for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
+		ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
+		const Rect viewport        = viewRects[viewNum];
+		const bool isMiniview      = viewNum != 0 || actuallyUseTiledMode;
+
+		int viewDefType  = VIEWDEF_PLAYERVIEW;
+		bool thirdperson = false;
+		if( viewState == getPrimaryViewState() ) {
+			if( cgs.demoPlaying && cg.isDemoCamFree ) {
+				if( !isMiniview ) {
+					viewDefType = VIEWDEF_CAMERA;
+				}
+			} else {
+				// Draw from third-person view only if we have an active pov.
+				// Otherwise we end up with confusing switching of camera location.
+				if( CG_ActivePovOfViewState( cg.chasedViewportIndex ) != std::nullopt ) {
+					if( cg.chaseMode == CAM_INEYES ) {
+						thirdperson = v_thirdPerson.get();
+					} else if( cg.chaseMode == CAM_THIRDPERSON ) {
+						thirdperson = true;
+					}
+				}
+			}
+		}
+
+		CG_SetupViewDef( &viewState->view, viewDefType, thirdperson, viewState, viewport );
+
+		CG_LerpEntities( viewState );  // interpolate packet entities positions
+
+		CG_CalcViewWeapon( &viewState->weapon, viewState );
+
+		refdef_t *rd = &viewState->view.refdef;
+		AnglesToAxis( viewState->view.angles, rd->viewaxis );
+
+		rd->rdflags = CG_RenderFlags( viewState, isMiniview, actuallyUseTiledMode );
+
+		// warp if underwater
+		if( rd->rdflags & RDF_UNDERWATER ) {
+			const float phase = rd->time * 0.001f * 0.6f * M_TWOPI;
+			const float v = 0.015f * ( std::sin( phase ) - 1.0f ) + 1.0f;
+			rd->fov_x *= v;
+			rd->fov_y *= v;
+		}
+
+		DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( viewState->view.refdef );
+
+		CG_AddEntities( drawSceneRequest, viewState );
+		CG_AddViewWeapon( &viewState->weapon, drawSceneRequest, viewState );
+
+		drawSceneRequests[viewNum] = drawSceneRequest;
+	}
+}
+
+[[nodiscard]]
+static auto coPrepareDrawSceneRequests( CoroTask::StartInfo si, DrawSceneRequest **drawSceneRequests,
+										const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) -> CoroTask {
+	co_await si.taskSystem->awaiterOf( BeginProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } ) );
+
+	CG_FireEvents( false );
+
+	// Make sure all possible effects in this frame are submitted prior to simulation
+	// (A simulation timestamp of an effect must match its submission timestamp).
+	cg.effectsSystem.simulateFrame( cg.time );
+	cg.particleSystem.simulateFrame( cg.time );
+	cg.polyEffectsSystem.simulateFrame( cg.time );
+	cg.simulatedHullsSystem.simulateFrame( cg.time );
+
+	for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
+		DrawSceneRequest *const drawSceneRequest = drawSceneRequests[viewNum];
+		ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
+		unsigned povPlayerMask;
+		if( viewState->predictedPlayerState.POVnum > 0 && viewState->predictedPlayerState.POVnum <= MAX_CLIENTS ) {
+			povPlayerMask = 1u << ( viewState->predictedPlayerState.POVnum - 1 );
+		} else {
+			povPlayerMask = ~0u;
+		}
+
+		cg.effectsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
+		cg.particleSystem.submitToScene( cg.time, drawSceneRequest );
+		cg.polyEffectsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
+		cg.simulatedHullsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
+	}
+
+	co_await si.taskSystem->awaiterOf( EndProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } ) );
+}
+
+static void prepareDrawSceneRequests( DrawSceneRequest **drawSceneRequests, const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) {
+	TaskSystem *const taskSystem = BeginProcessingOfTasks();
+
+	(void)taskSystem->addCoro( [=]() {
+		CoroTask::StartInfo si { taskSystem, std::span<const TaskHandle> {}, CoroTask::OnlyMainThread };
+		return coPrepareDrawSceneRequests( si, drawSceneRequests, viewStateIndices, numDisplayedViewStates );
+	});
+
+	EndProcessingOfTasks();
+}
+
+[[nodiscard]]
+static bool blitPreparedViews( DrawSceneRequest **drawSceneRequests, bool actuallyUseTiledMode, bool hasModalOverlay,
+							   const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) {
+	bool hasRenderedTheMenu    = false;
+	auto *const uiSystem       = wsw::ui::UISystem::instance();
+	const bool shouldDrawHuds  = v_showHud.get();
+	const bool shouldDraw2D    = v_draw2D.get();
+	for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
+		ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
+		CommitProcessedDrawSceneRequest( drawSceneRequests[viewNum] );
+
+		const bool isMiniview = viewNum != 0 || actuallyUseTiledMode;
+		if( shouldDraw2D && viewState->view.draw2D ) {
+			bool drawGfx = true;
+			if( hasModalOverlay ) {
+				drawGfx = false;
+				if( cg.chaseMode != CAM_TILED && cg.numSnapViewStates > 0 ) {
+					// Check if its a HUD-hosted miniview
+					for( const auto &paneViewStateIndices: cg.hudControlledMiniviewViewStateIndicesForPane ) {
+						if( wsw::contains( paneViewStateIndices, viewStateIndices[viewNum] ) ) {
+							drawGfx = true;
+							break;
+						}
+					}
+				}
+			}
+			bool drawCrosshair = false;
+			if( CG_ActivePovOfViewState( viewStateIndices[viewNum] ) != std::nullopt ) {
+				if( CG_IsPovAlive( viewStateIndices[viewNum] ) ) {
+					drawCrosshair = true;
+				}
+			}
+
+			const refdef_t &rd = viewState->view.refdef;
+			RF_Set2DScissor( rd.x, rd.y, rd.width, rd.height );
+
+			if( shouldDrawHuds ) {
+				if( drawGfx ) {
+					std::optional<float> miniviewScale;
+					if( isMiniview ) {
+						miniviewScale = wsw::min( (float)rd.width / (float)cgs.vidWidth, (float)rd.height / (float)cgs.vidHeight );
+					}
+					drawNamesAndBeacons( viewState, miniviewScale );
+					if( drawCrosshair ) {
+						CG_DrawCrosshair( viewState, miniviewScale );
+					}
+				}
+			}
+		}
+
+		if( !isMiniview ) {
+			RF_Set2DScissor( 0, 0, cgs.vidWidth, cgs.vidHeight );
+			uiSystem->drawMenuPartInMainContext();
+			hasRenderedTheMenu = true;
+		}
+	}
+
+	return hasRenderedTheMenu;
+}
+
 std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t serverTime, unsigned extrapolationTime ) {
 	bool hasRenderedTheMenu = false;
 	bool hasRenderedTheHud  = false;
@@ -1132,51 +1375,7 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 	if( !cgs.precacheDone || !cg.frame.valid ) {
 		CG_Precache();
 	} else {
-		int snapTime = ( cg.frame.serverTime - cg.oldFrame.serverTime );
-		if( !snapTime ) {
-			snapTime = cgs.snapFrameTime;
-		}
-
-		// moved this from CG_Init here
-		cgs.extrapolationTime = extrapolationTime;
-
-		if( cg.oldFrame.serverTime == cg.frame.serverTime ) {
-			cg.lerpfrac = 1.0f;
-		} else {
-			cg.lerpfrac = ( (double)( cg.time - cgs.extrapolationTime ) - (double)cg.oldFrame.serverTime ) / (double)snapTime;
-		}
-
-		if( cgs.extrapolationTime ) {
-			cg.xerpTime = 0.001f * ( (double)cg.time - (double)cg.frame.serverTime );
-			cg.oldXerpTime = 0.001f * ( (double)cg.time - (double)cg.oldFrame.serverTime );
-
-			if( cg.time >= cg.frame.serverTime ) {
-				cg.xerpSmoothFrac = (double)( cg.time - cg.frame.serverTime ) / (double)( cgs.extrapolationTime );
-				Q_clamp( cg.xerpSmoothFrac, 0.0f, 1.0f );
-			} else {
-				cg.xerpSmoothFrac = (double)( cg.frame.serverTime - cg.time ) / (double)( cgs.extrapolationTime );
-				Q_clamp( cg.xerpSmoothFrac, -1.0f, 0.0f );
-				cg.xerpSmoothFrac = 1.0f - cg.xerpSmoothFrac;
-			}
-
-			clamp_low( cg.xerpTime, -( cgs.extrapolationTime * 0.001f ) );
-
-			//clamp( cg.xerpTime, -( cgs.extrapolationTime * 0.001f ), ( cgs.extrapolationTime * 0.001f ) );
-			//clamp( cg.oldXerpTime, 0, ( ( snapTime + cgs.extrapolationTime ) * 0.001f ) );
-		} else {
-			cg.xerpTime = 0.0f;
-			cg.xerpSmoothFrac = 0.0f;
-		}
-
-		if( v_showClamp.get() ) {
-			if( cg.lerpfrac > 1.0f ) {
-				Com_Printf( "high clamp %f\n", cg.lerpfrac );
-			} else if( cg.lerpfrac < 0.0f ) {
-				Com_Printf( "low clamp  %f\n", cg.lerpfrac );
-			}
-		}
-
-		Q_clamp( cg.lerpfrac, 0.0f, 1.0f );
+		updateFrameLerpProperties( extrapolationTime );
 
 		// TODO: Is it ever going to happen?
 		if( cgs.configStrings.getWorldModel() == std::nullopt ) {
@@ -1212,177 +1411,23 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 
 			Rect viewRects[MAX_CLIENTS + 1];
 			unsigned viewStateIndices[MAX_CLIENTS + 1];
-			unsigned numDisplayedViewStates = 0;
 
-			const bool actuallyUseTiledMode = CG_UsesTiledView();
-			if( actuallyUseTiledMode ) {
-				assert( cg.tileMiniviewViewStateIndices.size() == cg.tileMiniviewPositions.size() );
-				// TODO: Std::copy?
-				for( unsigned i = 0; i < cg.tileMiniviewViewStateIndices.size(); ++i ) {
-					viewRects[i]        = cg.tileMiniviewPositions[i];
-					viewStateIndices[i] = cg.tileMiniviewViewStateIndices[i];
-				}
-				numDisplayedViewStates = cg.tileMiniviewViewStateIndices.size();
-			} else {
-				if( const int size = std::round( v_viewSize.get() ); size < 100 ) {
-					// Round to a multiple of 2
-					const int regionWidth  = ( ( cgs.vidWidth * size ) / 100 ) & ( ~1 );
-					const int regionHeight = ( ( cgs.vidHeight * size ) / 100 ) & ( ~1 );
-
-					viewRects[0].x      = ( cgs.vidWidth - regionWidth ) / 2;
-					viewRects[0].y      = ( cgs.vidHeight - regionHeight ) / 2;
-					viewRects[0].width  = regionWidth;
-					viewRects[0].height = regionHeight;
-				} else {
-					viewRects[0].x      = 0;
-					viewRects[0].y      = 0;
-					viewRects[0].width  = cgs.vidWidth;
-					viewRects[0].height = cgs.vidHeight;
-				}
-				viewStateIndices[0] = (unsigned)( getPrimaryViewState() - cg.viewStates );
-				numDisplayedViewStates = 1;
-				numDisplayedViewStates += wsw::ui::UISystem::instance()->retrieveHudControlledMiniviews( viewRects + 1, viewStateIndices + 1 );
-			}
+			const auto [actuallyUseTiledMode, numDisplayedViewStates] = prepareViewRectsAndStateIndices( viewRects, viewStateIndices );
 
 			// TODO: Use the same DrawSceneRequest instance but modify POV-specific data
 			DrawSceneRequest *drawSceneRequests[MAX_CLIENTS + 1];
 			CG_ResetTemporaryBoneposesCache();
+
 			BeginDrawingScenes();
 
-			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
-				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
-				const Rect viewport        = viewRects[viewNum];
-				const bool isMiniview      = viewNum != 0 || actuallyUseTiledMode;
+			createDrawSceneRequests( drawSceneRequests, actuallyUseTiledMode, viewRects, viewStateIndices, numDisplayedViewStates );
 
-				int viewDefType  = VIEWDEF_PLAYERVIEW;
-				bool thirdperson = false;
-				if( viewState == getPrimaryViewState() ) {
-					if( cgs.demoPlaying && cg.isDemoCamFree ) {
-						if( !isMiniview ) {
-							viewDefType = VIEWDEF_CAMERA;
-						}
-					} else {
-						// Draw from third-person view only if we have an active pov.
-						// Otherwise we end up with confusing switching of camera location.
-						if( CG_ActivePovOfViewState( cg.chasedViewportIndex ) != std::nullopt ) {
-							if( cg.chaseMode == CAM_INEYES ) {
-								thirdperson = v_thirdPerson.get();
-							} else if( cg.chaseMode == CAM_THIRDPERSON ) {
-								thirdperson = true;
-							}
-						}
-					}
-				}
-
-				CG_SetupViewDef( &viewState->view, viewDefType, thirdperson, viewState, viewport );
-
-				CG_LerpEntities( viewState );  // interpolate packet entities positions
-
-				CG_CalcViewWeapon( &viewState->weapon, viewState );
-
-				refdef_t *rd = &viewState->view.refdef;
-				AnglesToAxis( viewState->view.angles, rd->viewaxis );
-
-				rd->rdflags = CG_RenderFlags( viewState, isMiniview, actuallyUseTiledMode );
-
-				// warp if underwater
-				if( rd->rdflags & RDF_UNDERWATER ) {
-					const float phase = rd->time * 0.001f * 0.6f * M_TWOPI;
-					const float v = 0.015f * ( std::sin( phase ) - 1.0f ) + 1.0f;
-					rd->fov_x *= v;
-					rd->fov_y *= v;
-				}
-
-				DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( viewState->view.refdef );
-
-				CG_AddEntities( drawSceneRequest, viewState );
-				CG_AddViewWeapon( &viewState->weapon, drawSceneRequest, viewState );
-
-				drawSceneRequests[viewNum] = drawSceneRequest;
-			}
-
-			BeginProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } );
-
-			CG_FireEvents( false );
-
-			// Make sure all possible effects in this frame are submitted prior to simulation
-			// (A simulation timestamp of an effect must match its submission timestamp).
-			cg.effectsSystem.simulateFrame( cg.time );
-			cg.particleSystem.simulateFrame( cg.time );
-			cg.polyEffectsSystem.simulateFrame( cg.time );
-			cg.simulatedHullsSystem.simulateFrame( cg.time );
-
-			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
-				DrawSceneRequest *const drawSceneRequest = drawSceneRequests[viewNum];
-				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
-				unsigned povPlayerMask;
-				if( viewState->predictedPlayerState.POVnum > 0 && viewState->predictedPlayerState.POVnum <= MAX_CLIENTS ) {
-					povPlayerMask = 1u << ( viewState->predictedPlayerState.POVnum - 1 );
-				} else {
-					povPlayerMask = ~0u;
-				}
-
-				cg.effectsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
-				cg.particleSystem.submitToScene( cg.time, drawSceneRequest );
-				cg.polyEffectsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
-				cg.simulatedHullsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
-			}
-
-			EndProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } );
+			prepareDrawSceneRequests( drawSceneRequests, viewStateIndices, numDisplayedViewStates );
 
 			auto *const uiSystem       = wsw::ui::UISystem::instance();
 			const bool hasModalOverlay = uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard();
-			const bool shouldDrawHuds  = v_showHud.get();
-			const bool shouldDraw2D    = v_draw2D.get();
-			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
-				ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
-				CommitProcessedDrawSceneRequest( drawSceneRequests[viewNum] );
-
-				const bool isMiniview = viewNum != 0 || actuallyUseTiledMode;
-				if( shouldDraw2D && viewState->view.draw2D ) {
-					bool drawGfx = true;
-					if( hasModalOverlay ) {
-						drawGfx = false;
-						if( cg.chaseMode != CAM_TILED && cg.numSnapViewStates > 0 ) {
-							// Check if its a HUD-hosted miniview
-							for( const auto &paneViewStateIndices: cg.hudControlledMiniviewViewStateIndicesForPane ) {
-								if( wsw::contains( paneViewStateIndices, viewStateIndices[viewNum] ) ) {
-									drawGfx = true;
-									break;
-								}
-							}
-						}
-					}
-					bool drawCrosshair = false;
-					if( CG_ActivePovOfViewState( viewStateIndices[viewNum] ) != std::nullopt ) {
-						if( CG_IsPovAlive( viewStateIndices[viewNum] ) ) {
-							drawCrosshair = true;
-						}
-					}
-
-					const refdef_t &rd = viewState->view.refdef;
-					RF_Set2DScissor( rd.x, rd.y, rd.width, rd.height );
-
-					if( shouldDrawHuds ) {
-						if( drawGfx ) {
-							std::optional<float> miniviewScale;
-							if( isMiniview ) {
-								miniviewScale = wsw::min( (float)rd.width / (float)cgs.vidWidth, (float)rd.height / (float)cgs.vidHeight );
-							}
-							drawNamesAndBeacons( viewState, miniviewScale );
-							if( drawCrosshair ) {
-								CG_DrawCrosshair( viewState, miniviewScale );
-							}
-						}
-					}
-				}
-
-				if( !isMiniview ) {
-					RF_Set2DScissor( 0, 0, cgs.vidWidth, cgs.vidHeight );
-					uiSystem->drawMenuPartInMainContext();
-					hasRenderedTheMenu = true;
-				}
-			}
+			hasRenderedTheMenu = blitPreparedViews( drawSceneRequests, actuallyUseTiledMode, hasModalOverlay,
+													viewStateIndices, numDisplayedViewStates );
 
 			EndDrawingScenes();
 			CG_ResetTemporaryBoneposesCache();
@@ -1390,7 +1435,7 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 			// Blit the HUD first in this case (this is a hack for the demo playback menu which must be on top)
 			if( actuallyUseTiledMode && !hasModalOverlay ) {
 				RF_Set2DScissor( 0, 0, cgs.vidWidth, cgs.vidHeight );
-				uiSystem->drawHudPartInMainContext();
+				wsw::ui::UISystem::instance()->drawHudPartInMainContext();
 				hasRenderedTheHud = true;
 			}
 

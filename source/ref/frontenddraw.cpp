@@ -500,7 +500,7 @@ auto Frontend::setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
 	return stateForCamera;
 }
 
-auto Frontend::processLeavesAndOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask {
+auto Frontend::coProcessLeavesAndOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask {
 	const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
 	MergedSurfSpan *const mergedSurfSpans   = stateForCamera->drawSurfSurfSpansBuffer->get();
 	uint8_t *const surfVisTable             = stateForCamera->surfVisTableBuffer->get();
@@ -542,7 +542,8 @@ auto Frontend::processLeavesAndOccluders( CoroTask::StartInfo si, Frontend *self
 	stateForCamera->nonOccludedLeaves       = nonOccludedLeaves;
 }
 
-void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {
+auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
+														  std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> CoroTask {
 	assert( scenesAndCameras.size() <= MAX_REF_CAMERAS );
 
 	wsw::StaticVector<StateForCamera *, MAX_REF_CAMERAS> statesForValidCameras;
@@ -555,13 +556,12 @@ void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scen
 		}
 	}
 
-	m_occlusionCullingFrame++;
-	m_taskSystem.startExecution();
+	self->m_occlusionCullingFrame++;
 
 	TaskHandle prepareBuffersTaskHandles[MAX_REF_CAMERAS];
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
-		auto prepareBuffersFn = [=, this]( [[maybe_unused]] unsigned workerIndex ) {
+		auto prepareBuffersFn = [=]( [[maybe_unused]] unsigned workerIndex ) {
 			const unsigned numMergedSurfaces = rsh.worldBrushModel->numMergedSurfaces;
 			const unsigned numWorldSurfaces  = rsh.worldBrushModel->numModelSurfaces;
 			const unsigned numWorldLeaves    = rsh.worldBrushModel->numvisleafs;
@@ -599,7 +599,7 @@ void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scen
 			stateForCamera->drawWorld = true;
 		};
 
-		prepareBuffersTaskHandles[cameraIndex] = m_taskSystem.add( std::span<const TaskHandle>(), std::move( prepareBuffersFn ) );
+		prepareBuffersTaskHandles[cameraIndex] = si.taskSystem->add( std::span<const TaskHandle>(), std::move( prepareBuffersFn ) );
 	}
 
 	TaskHandle collectLeavesTaskHandles[MAX_REF_CAMERAS];
@@ -608,34 +608,34 @@ void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scen
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
 
-		auto collectLeavesInFrustumFn = [=, this]( [[maybe_unused]] unsigned workerIndex ) {
-			stateForCamera->visibleLeaves = collectVisibleWorldLeaves( stateForCamera );
+		auto collectLeavesInFrustumFn = [=]( [[maybe_unused]] unsigned workerIndex ) {
+			stateForCamera->visibleLeaves = self->collectVisibleWorldLeaves( stateForCamera );
 		};
 
-		auto collectOccludersFn = [=, this]( [[maybe_unused]] unsigned workerIndex ) {
+		auto collectOccludersFn = [=]( [[maybe_unused]] unsigned workerIndex ) {
 			std::span<const Frustum> occluderFrusta;
 			if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
 				// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
-				const std::span<const unsigned> visibleOccluders      = collectVisibleOccluders( stateForCamera );
-				const std::span<const SortedOccluder> sortedOccluders = sortOccluders( stateForCamera, visibleOccluders );
+				const std::span<const unsigned> visibleOccluders      = self->collectVisibleOccluders( stateForCamera );
+				const std::span<const SortedOccluder> sortedOccluders = self->sortOccluders( stateForCamera, visibleOccluders );
 				// Build frusta of occluders, while performing some additional frusta pruning
-				occluderFrusta = buildFrustaOfOccluders( stateForCamera, sortedOccluders );
+				occluderFrusta = self->buildFrustaOfOccluders( stateForCamera, sortedOccluders );
 			}
 
 			stateForCamera->numOccluderFrusta = occluderFrusta.size();
 		};
 
 		const TaskHandle dependencies[1] { prepareBuffersTaskHandles[cameraIndex] };
-		collectLeavesTaskHandles[cameraIndex]    = m_taskSystem.add( dependencies, std::move( collectLeavesInFrustumFn ) );
-		collectOccludersTaskHandles[cameraIndex] = m_taskSystem.add( dependencies, std::move( collectOccludersFn ) );
+		collectLeavesTaskHandles[cameraIndex]    = si.taskSystem->add( dependencies, std::move( collectLeavesInFrustumFn ) );
+		collectOccludersTaskHandles[cameraIndex] = si.taskSystem->add( dependencies, std::move( collectOccludersFn ) );
 	}
 
 	TaskHandle processLeavesAndOccludersTasks[MAX_REF_CAMERAS];
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
 		TaskHandle dependencies[2] { collectLeavesTaskHandles[cameraIndex], collectOccludersTaskHandles[cameraIndex] };
-		processLeavesAndOccludersTasks[cameraIndex] = m_taskSystem.addCoro( [=, this]() {
-			return processLeavesAndOccluders( { &m_taskSystem, dependencies, CoroTask::AnyThread }, this, stateForCamera );
+		processLeavesAndOccludersTasks[cameraIndex] = si.taskSystem->addCoro( [=]() {
+			return coProcessLeavesAndOccluders( { si.taskSystem, dependencies, CoroTask::AnyThread }, self, stateForCamera );
 		});
 		assert( processLeavesAndOccludersTasks[cameraIndex] );
 	}
@@ -645,56 +645,61 @@ void Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scen
 		StateForCamera *stateForCamera = statesForValidCameras[cameraIndex];
 		assert( processLeavesAndOccludersTasks[cameraIndex] );
 		const TaskHandle dependencies[1] { processLeavesAndOccludersTasks[cameraIndex] };
-		calcSubspansTasks.push_back( m_taskSystem.add( dependencies, [=, this]( [[maybe_unused]] unsigned workerIndex ) {
-			calcSubspansOfMergedSurfSpans( stateForCamera );
+		calcSubspansTasks.push_back( si.taskSystem->add( dependencies, [=]( [[maybe_unused]] unsigned workerIndex ) {
+			self->calcSubspansOfMergedSurfSpans( stateForCamera );
 		}));
 	}
 
-	// This is not needed for the actual code, but it should help to test joining of tasks
-	(void)m_taskSystem.add( calcSubspansTasks, []( unsigned ) {} );
-
-	if( !m_taskSystem.awaitCompletion() ) {
-		wsw::failWithRuntimeError();
-	}
-
-	// TODO: Update far clip, update view matrices
+	co_await si.taskSystem->awaiterOf( calcSubspansTasks );
 }
 
-void Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {
+auto Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle {
+	return m_taskSystem.addCoro( [=, this]() {
+		return coBeginPreparingRenderingFromTheseCameras( { &m_taskSystem, {}, CoroTask::OnlyMainThread }, this, scenesAndCameras );
+	});
+}
+
+auto Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle {
+	return m_taskSystem.addCoro( [=, this]() {
+		return coEndPreparingRenderingFromTheseCameras( { &m_taskSystem, {}, CoroTask::OnlyMainThread }, this, scenesAndCameras );
+	});
+}
+
+auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
+														std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> CoroTask {
 	for( auto [scene, stateForCamera] : scenesAndCameras ) {
 		const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
 
-		collectVisiblePolys( stateForCamera, scene, occluderFrusta );
+		self->collectVisiblePolys( stateForCamera, scene, occluderFrusta );
 
 		// Note: Dynamically submitted entities may add lights
 		if( const int dynamicLightValue = r_dynamiclight->integer ) {
 			[[maybe_unused]]
 			const auto [visibleProgramLightIndices, visibleCoronaLightIndices] =
-				collectVisibleLights( stateForCamera, scene, occluderFrusta );
+				self->collectVisibleLights( stateForCamera, scene, occluderFrusta );
 			if( dynamicLightValue & 2 ) {
-				addCoronaLightsToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicLights.data(),
-										   visibleCoronaLightIndices );
+				self->addCoronaLightsToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicLights.data(), visibleCoronaLightIndices );
 			}
 			if( dynamicLightValue & 1 ) {
 				std::span<const unsigned> spansStorage[2] {
 					stateForCamera->nonOccludedLeaves, stateForCamera->partiallyOccludedLeaves
 				};
 				std::span<std::span<const unsigned>> spansOfLeaves = { spansStorage, 2 };
-				markLightsOfSurfaces( stateForCamera, scene, spansOfLeaves, visibleProgramLightIndices );
+				self->markLightsOfSurfaces( stateForCamera, scene, spansOfLeaves, visibleProgramLightIndices );
 			}
 		}
 
 		if( stateForCamera->drawWorld ) {
 			// We must know lights at this point
-			addVisibleWorldSurfacesToSortList( stateForCamera, scene );
+			self->addVisibleWorldSurfacesToSortList( stateForCamera, scene );
 		}
 
 		if( r_drawentities->integer ) {
-			collectVisibleEntities( stateForCamera, scene, occluderFrusta );
-			collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta );
+			self->collectVisibleEntities( stateForCamera, scene, occluderFrusta );
+			self->collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta );
 		}
 
-		collectVisibleParticles( stateForCamera, scene, occluderFrusta );
+		self->collectVisibleParticles( stateForCamera, scene, occluderFrusta );
 	}
 
 	// Process portals.
@@ -706,8 +711,8 @@ void Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene 
 		if( !( renderFlags & ( RF_PORTALVIEW | RF_MIRRORVIEW ) ) ) {
 			if( stateForPrimaryCamera->viewCluster >= 0 && !r_fastsky->integer ) {
 				for( unsigned i = 0; i < stateForPrimaryCamera->numPortalSurfaces; ++i ) {
-					prepareDrawingPortalSurface( stateForPrimaryCamera, &stateForPrimaryCamera->portalSurfaces[i], scene,
-												 &m_tmpPortalScenesAndStates );
+					self->prepareDrawingPortalSurface( stateForPrimaryCamera, &stateForPrimaryCamera->portalSurfaces[i], scene,
+													   &self->m_tmpPortalScenesAndStates );
 					hasPortalsToProcess = true;
 				}
 			}
@@ -715,10 +720,10 @@ void Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene 
 	}
 
 	if( hasPortalsToProcess ) {
-		beginPreparingRenderingFromTheseCameras( m_tmpPortalScenesAndStates );
-		endPreparingRenderingFromTheseCameras( m_tmpPortalScenesAndStates );
+		co_await si.taskSystem->awaiterOf( self->beginPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates ) );
+		co_await si.taskSystem->awaiterOf( self->endPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates ) );
 		// Clear it only after actual processing due to reentrancy reasons
-		m_tmpPortalScenesAndStates.clear();
+		self->m_tmpPortalScenesAndStates.clear();
 	}
 
 	const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {

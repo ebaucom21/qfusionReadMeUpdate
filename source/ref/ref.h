@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/wswstaticvector.h"
 #include "../common/q_math.h"
 #include "../client/animatedvalues.h"
+#include "../common/tasksystem.h"
 
 #include <optional>
 #include <span>
@@ -530,11 +531,16 @@ struct DynamicMesh {
 };
 
 void BeginDrawingScenes();
+TaskSystem *BeginProcessingOfTasks();
 DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef );
-void BeginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
-void EndProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
+TaskHandle BeginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
+TaskHandle EndProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
+void EndProcessingOfTasks();
 void CommitProcessedDrawSceneRequest( DrawSceneRequest *request );
 void EndDrawingScenes();
+
+// For UI purposes
+void ExecuteSingleDrawSceneRequestNonSpeedCritical( DrawSceneRequest *request );
 
 class Texture;
 

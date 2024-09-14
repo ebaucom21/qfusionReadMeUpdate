@@ -1480,10 +1480,7 @@ void QtUISystem::drawBackgroundMapIfNeeded() {
 	std::tie( rdf.scissor_width, rdf.scissor_height ) = widthAndHeight;
 
 	BeginDrawingScenes();
-	auto *drawSceneRequest = CreateDrawSceneRequest( rdf );
-	BeginProcessingDrawSceneRequests( { &drawSceneRequest, 1 } );
-	EndProcessingDrawSceneRequests( { &drawSceneRequest, 1 } );
-	CommitProcessedDrawSceneRequest( drawSceneRequest );
+	ExecuteSingleDrawSceneRequestNonSpeedCritical( CreateDrawSceneRequest( rdf ) );
 	EndDrawingScenes();
 }
 

@@ -103,12 +103,12 @@ auto Frontend::createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequ
 	return new( m_drawSceneRequestsHolder.unsafe_grow_back() )DrawSceneRequest( refdef, m_sceneIndexCounter++ );
 }
 
-void Frontend::beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
+auto Frontend::coBeginProcessingDrawSceneRequests( CoroTask::StartInfo si, Frontend *self, std::span<DrawSceneRequest *> requests ) -> CoroTask {
 	std::pair<Scene *, StateForCamera *> scenesAndCameras[kMaxDrawSceneRequests];
 	unsigned numScenesAndCameras = 0;
 
 	for( DrawSceneRequest *request: requests ) {
-		if( StateForCamera *const stateForSceneCamera = setupStateForCamera( &request->m_refdef, request->m_index ) ) {
+		if( StateForCamera *const stateForSceneCamera = self->setupStateForCamera( &request->m_refdef, request->m_index ) ) {
 			if( stateForSceneCamera->refdef.minLight < 0.1f ) {
 				stateForSceneCamera->refdef.minLight = 0.1f;
 			}
@@ -117,10 +117,10 @@ void Frontend::beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> r
 		}
 	}
 
-	beginPreparingRenderingFromTheseCameras( { scenesAndCameras, scenesAndCameras + numScenesAndCameras } );
+	co_await si.taskSystem->awaiterOf( self->beginPreparingRenderingFromTheseCameras( { scenesAndCameras, scenesAndCameras + numScenesAndCameras } ) );
 }
 
-void Frontend::endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
+auto Frontend::coEndProcessingDrawSceneRequests( CoroTask::StartInfo si, Frontend *self, std::span<DrawSceneRequest *> requests ) -> CoroTask {
 	std::pair<Scene *, StateForCamera *> scenesAndCameras[kMaxDrawSceneRequests];
 	unsigned numScenesAndCameras = 0;
 
@@ -130,7 +130,19 @@ void Frontend::endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> req
 		}
 	}
 
-	endPreparingRenderingFromTheseCameras( { scenesAndCameras, scenesAndCameras + numScenesAndCameras } );
+	co_await si.taskSystem->awaiterOf( self->endPreparingRenderingFromTheseCameras( { scenesAndCameras, scenesAndCameras + numScenesAndCameras } ) );
+}
+
+auto Frontend::beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) -> TaskHandle {
+	CoroTask::StartInfo si { &m_taskSystem, {}, CoroTask::OnlyMainThread };
+	// Note: passing the span should be safe as it resides in cgame code during task system execution
+	return m_taskSystem.addCoro( [=, this]() { return coBeginProcessingDrawSceneRequests( si, this, requests ); } );
+}
+
+auto Frontend::endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) -> TaskHandle {
+	CoroTask::StartInfo si { &m_taskSystem, {}, CoroTask::OnlyMainThread };
+	// Note: passing the span should be safe as it resides in cgame code during task system execution
+	return m_taskSystem.addCoro( [=, this]() { return coEndProcessingDrawSceneRequests( si, this, requests ); } );
 }
 
 void Frontend::commitProcessedDrawSceneRequest( DrawSceneRequest *request ) {

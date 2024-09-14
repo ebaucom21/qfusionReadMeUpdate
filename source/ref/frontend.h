@@ -57,13 +57,19 @@ public:
 	[[nodiscard]]
 	static auto instance() -> Frontend *;
 
+	// TODO: See the remark along with m_taskSystem definition
+	[[nodiscard]]
+	auto getTaskSystem() -> TaskSystem * { return &m_taskSystem; }
+
 	void beginDrawingScenes();
 
 	[[nodiscard]]
 	auto createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest *;
 
-	void beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
-	void endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
+	[[nodiscard]]
+	auto beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) -> TaskHandle;
+	[[nodiscard]]
+	auto endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) -> TaskHandle;
 
 	void commitProcessedDrawSceneRequest( DrawSceneRequest *request );
 
@@ -211,8 +217,22 @@ private:
 	auto setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
 							  std::optional<CameraOverrideParams> overrideParams = std::nullopt ) -> StateForCamera *;
 
-	void beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras );
-	void endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras );
+	[[nodiscard]]
+	static auto coBeginProcessingDrawSceneRequests( CoroTask::StartInfo si, Frontend *self, std::span<DrawSceneRequest *> requests ) -> CoroTask;
+	[[nodiscard]]
+	static auto coEndProcessingDrawSceneRequests( CoroTask::StartInfo si, Frontend *self, std::span<DrawSceneRequest *> requests ) -> CoroTask;
+
+	[[nodiscard]]
+	auto beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle;
+	[[nodiscard]]
+	auto endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle;
+
+	[[nodiscard]]
+	static auto coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
+														   std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> CoroTask;
+	[[nodiscard]]
+	static auto coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
+														 std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> CoroTask;
 
 	void performPreparedRenderingFromThisCamera( Scene *scene, StateForCamera *stateForCamera );
 
@@ -465,7 +485,7 @@ private:
 											 uint8_t *surfVisTable );
 
 	[[nodiscard]]
-	static auto processLeavesAndOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;
+	static auto coProcessLeavesAndOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;
 
 	[[nodiscard]]
 	auto cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
