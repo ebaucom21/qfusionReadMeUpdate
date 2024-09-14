@@ -19,9 +19,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
-// A SSE2 baseline implementation
+// An SSE2 baseline implementation, as explained in
 // https://fgiesen.wordpress.com/2016/04/03/sse-mind-the-gap/
-#define CULLING_BLEND( a, b, mask ) _mm_or_ps( _mm_and_ps( a, mask ), _mm_andnot_ps( mask, b ) )
+#define SSE_BLEND_CORNER_COMPONENTS( maxs, mins, mask ) _mm_or_ps( _mm_and_ps( mins, mask ), _mm_andnot_ps( mask, maxs ) )
 
 #define IMPLEMENT_collectVisisbleWorldLeaves
 #define IMPLEMENT_collectVisibleOccluders

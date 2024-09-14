@@ -39,41 +39,45 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	const __m256 ymmPlaneD  = _mm256_loadu_ps( ( f )->planeD );
 
 /* Note that CULLING_BLEND macro arguments for SSE 4.1 counterpart get reordered for actual application */
-#define BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( resultsSuffix ) \
+#define SELECT_NEAREST_BOX_CORNER_COMPONENTS( resultsSuffix ) \
 	const __m256 ymmSelectedX##resultsSuffix = _mm256_blendv_ps( ymmMaxsX, ymmMinsX, ymmXBlends ); \
 	const __m256 ymmSelectedY##resultsSuffix = _mm256_blendv_ps( ymmMaxsY, ymmMinsY, ymmYBlends ); \
 	const __m256 ymmSelectedZ##resultsSuffix = _mm256_blendv_ps( ymmMaxsZ, ymmMinsZ, ymmZBlends );
 
-#define BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS( resultsSuffix ) \
+#define SELECT_FARTHEST_BOX_CORNER_COMPONENTS( resultsSuffix ) \
 	const __m256 ymmSelectedX##resultsSuffix = _mm256_blendv_ps( ymmMinsX, ymmMaxsX, ymmXBlends ); \
 	const __m256 ymmSelectedY##resultsSuffix = _mm256_blendv_ps( ymmMinsY, ymmMaxsY, ymmYBlends ); \
 	const __m256 ymmSelectedZ##resultsSuffix = _mm256_blendv_ps( ymmMinsZ, ymmMaxsZ, ymmZBlends );
 
-#define COMPUTE_DIFFS_WITH_PLANES( resultsSuffix ) \
+#define COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( resultsSuffix ) \
 	const __m256 ymmMulX##resultsSuffix = _mm256_mul_ps( ymmSelectedX##resultsSuffix, ymmPlaneX ); \
 	const __m256 ymmMulY##resultsSuffix = _mm256_mul_ps( ymmSelectedY##resultsSuffix, ymmPlaneY ); \
 	const __m256 ymmMulZ##resultsSuffix = _mm256_mul_ps( ymmSelectedZ##resultsSuffix, ymmPlaneZ ); \
-	const __m256 ymmDiff##resultsSuffix = _mm256_sub_ps( _mm256_add_ps( _mm256_add_ps( ymmMulX##resultsSuffix, \
-		ymmMulY##resultsSuffix ), ymmMulZ##resultsSuffix ), ymmPlaneD ); \
+	const __m256 ymmXMulX_plus_yMulY##resultsSuffix = \
+		_mm256_add_ps( ymmMulX##resultsSuffix, ymmMulY##resultsSuffix ); \
+	const __m256 ymmZMulZ_minus_ymmPlaneD##resultsSuffix = \
+		_mm256_sub_ps( ymmMulZ##resultsSuffix, ymmPlaneD ); \
+	const __m256 ymmDist##resultsSuffix = \
+		_mm256_add_ps( ymmXMulX_plus_yMulY##resultsSuffix,  ymmZMulZ_minus_ymmPlaneD##resultsSuffix );
 
 #define COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( f, zeroIfFullyInside ) \
 	LOAD_COMPONENTS_OF_8_FRUSTUM_PLANES( f ) \
-	/* Select farthest corners */ \
-	BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS() \
-	COMPUTE_DIFFS_WITH_PLANES() \
-	zeroIfFullyInside = _mm256_movemask_ps( ymmDiff );
+	SELECT_FARTHEST_BOX_CORNER_COMPONENTS() \
+	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE() \
+	/* Note: We assume that signed zeros are negative, this is fine for culling purposes */ \
+	zeroIfFullyInside = _mm256_movemask_ps( ymmDist );
 
 #define COMPUTE_TRISTATE_RESULT_FOR_8_PLANES( f, nonZeroIfOutside, nonZeroIfPartiallyOutside ) \
 	LOAD_COMPONENTS_OF_8_FRUSTUM_PLANES( f ) \
-	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( _nearest ) \
-	BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS( _farthest ) \
+	SELECT_NEAREST_BOX_CORNER_COMPONENTS( _nearest ) \
+	SELECT_FARTHEST_BOX_CORNER_COMPONENTS( _farthest ) \
 	/* Compute distances between planes and nearest box corners to check whether the box is fully outside */ \
-	COMPUTE_DIFFS_WITH_PLANES( _nearest ) \
+	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( _nearest ) \
 	/* Compute distances between planes and farthest box corners to check whether the box is partially outside */ \
-	COMPUTE_DIFFS_WITH_PLANES( _farthest ) \
+	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( _farthest ) \
 	/* Note: We assume that signed zeros are negative, this is fine for culling purposes */ \
-	nonZeroIfOutside          = _mm256_movemask_ps( ymmDiff_nearest ); \
-	nonZeroIfPartiallyOutside = _mm256_movemask_ps( ymmDiff_farthest );
+	nonZeroIfOutside          = _mm256_movemask_ps( ymmDist_nearest ); \
+	nonZeroIfPartiallyOutside = _mm256_movemask_ps( ymmDist_farthest );
 
 #define IMPLEMENT_cullLeavesByOccluders
 #define IMPLEMENT_cullSurfacesInVisLeavesByOccluders

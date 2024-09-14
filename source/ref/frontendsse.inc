@@ -53,81 +53,64 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	const __m128 xmmPlaneZ_47  = _mm_load_ps( ( frustum )->planeZ + 4 ); \
 	const __m128 xmmPlaneD_47  = _mm_load_ps( ( frustum )->planeD + 4 );
 
-#define BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( resultsSuffix, masksSuffix ) \
-	const __m128 xmmSelectedX##resultsSuffix = CULLING_BLEND( xmmMinsX, xmmMaxsX, xmmXBlends##masksSuffix ); \
-	const __m128 xmmSelectedY##resultsSuffix = CULLING_BLEND( xmmMinsY, xmmMaxsY, xmmYBlends##masksSuffix ); \
-	const __m128 xmmSelectedZ##resultsSuffix = CULLING_BLEND( xmmMinsZ, xmmMaxsZ, xmmZBlends##masksSuffix );
+#define SELECT_NEAREST_BOX_CORNER_COMPONENTS( resultsSuffix, masksSuffix ) \
+	const __m128 xmmSelectedX##resultsSuffix = SSE_BLEND_CORNER_COMPONENTS( xmmMaxsX, xmmMinsX, xmmXBlends##masksSuffix ); \
+	const __m128 xmmSelectedY##resultsSuffix = SSE_BLEND_CORNER_COMPONENTS( xmmMaxsY, xmmMinsY, xmmYBlends##masksSuffix ); \
+	const __m128 xmmSelectedZ##resultsSuffix = SSE_BLEND_CORNER_COMPONENTS( xmmMaxsZ, xmmMinsZ, xmmZBlends##masksSuffix );
 
-#define BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS( resultsSuffix, masksSuffix ) \
-	const __m128 xmmSelectedX##resultsSuffix = CULLING_BLEND( xmmMaxsX, xmmMinsX, xmmXBlends##masksSuffix ); \
-	const __m128 xmmSelectedY##resultsSuffix = CULLING_BLEND( xmmMaxsY, xmmMinsY, xmmYBlends##masksSuffix ); \
-	const __m128 xmmSelectedZ##resultsSuffix = CULLING_BLEND( xmmMaxsZ, xmmMinsZ, xmmZBlends##masksSuffix );
+#define SELECT_FARTHEST_BOX_CORNER_COMPONENTS( resultsSuffix, masksSuffix ) \
+	const __m128 xmmSelectedX##resultsSuffix = SSE_BLEND_CORNER_COMPONENTS( xmmMinsX, xmmMaxsX, xmmXBlends##masksSuffix ); \
+	const __m128 xmmSelectedY##resultsSuffix = SSE_BLEND_CORNER_COMPONENTS( xmmMinsY, xmmMaxsY, xmmYBlends##masksSuffix ); \
+	const __m128 xmmSelectedZ##resultsSuffix = SSE_BLEND_CORNER_COMPONENTS( xmmMinsZ, xmmMaxsZ, xmmZBlends##masksSuffix );
 
-#define COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( boxSuffix, planesSuffix ) \
-	const __m128 xMulX##boxSuffix = _mm_mul_ps( xmmSelectedX##boxSuffix, xmmPlaneX##planesSuffix ); \
-	const __m128 yMulY##boxSuffix = _mm_mul_ps( xmmSelectedY##boxSuffix, xmmPlaneY##planesSuffix ); \
-	const __m128 zMulZ##boxSuffix = _mm_mul_ps( xmmSelectedZ##boxSuffix, xmmPlaneZ##planesSuffix ); \
-	const __m128 xmmDot##boxSuffix = _mm_add_ps( _mm_add_ps( xMulX##boxSuffix, yMulY##boxSuffix ), zMulZ##boxSuffix );
+#define COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( boxSuffix, planesSuffix ) \
+	const __m128 xmmXMulX##boxSuffix            = _mm_mul_ps( xmmSelectedX##boxSuffix, xmmPlaneX##planesSuffix ); \
+	const __m128 xmmYMulY##boxSuffix            = _mm_mul_ps( xmmSelectedY##boxSuffix, xmmPlaneY##planesSuffix ); \
+	const __m128 xmmZMulZ##boxSuffix            = _mm_mul_ps( xmmSelectedZ##boxSuffix, xmmPlaneZ##planesSuffix ); \
+	const __m128 xmmXMulX_plus_yMulY##boxSuffix = _mm_add_ps( xmmXMulX##boxSuffix, xmmYMulY##boxSuffix ); \
+	const __m128 xmmZMulZ_minus_D##boxSuffix    = _mm_sub_ps( xmmZMulZ##boxSuffix, xmmPlaneD##planesSuffix ); \
+	const __m128 xmmDist##boxSuffix             = _mm_add_ps( xmmXMulX_plus_yMulY##boxSuffix, xmmZMulZ_minus_D##boxSuffix );
 
 // Assumes that LOAD_BOX_COMPONENTS was expanded in the scope
 #define COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( f, nonZeroIfFullyOutside ) \
 	LOAD_COMPONENTS_OF_4_FRUSTUM_PLANES( f ) \
 	/* Select mins/maxs using masks for respective plane signbits */ \
-	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( , ) \
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( , ) \
-	nonZeroIfFullyOutside = _mm_movemask_ps( _mm_sub_ps( xmmDot, xmmPlaneD ) );
-
-// Assumes that LOAD_BOX_COMPONENTS was expanded in the scope
-#define COMPUTE_TRISTATE_RESULT_FOR_4_PLANES( frustum, nonZeroIfOutside, nonZeroIfPartiallyOutside ) \
-	LOAD_COMPONENTS_OF_4_FRUSTUM_PLANES( frustum ) \
-	/* Select mins/maxs using masks for respective plane signbits */ \
-	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( _nearest, ) \
-	/* Select maxs/mins using masks for respective plane signbits (as if masks were inverted) */ \
-	BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS( _farthest, ) \
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _nearest, ) \
-	/* If some bit is set, the nearest dot is < plane distance at least for some plane (separating plane in this case) */ \
-	nonZeroIfOutside = _mm_movemask_ps( _mm_sub_ps( xmmDot_nearest, xmmPlaneD ) ); \
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _farthest, ) \
-	/* If some bit is set, the farthest dot is < plane distance at least for some plane */ \
-	nonZeroIfPartiallyOutside = _mm_movemask_ps( _mm_sub_ps( xmmDot_farthest, xmmPlaneD ) );
+	SELECT_NEAREST_BOX_CORNER_COMPONENTS( , ) \
+	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( , ) \
+	/* We do not need an exact match with masks of AVX version, just checking for non-zero bits is sufficient */ \
+	/* Note: We assume that signed zeros are negative, this is fine for culling purposes */ \
+	nonZeroIfFullyOutside = _mm_movemask_ps( xmmDist );
 
 // Assumes that LOAD_BOX_COMPONENTS was expanded in the scope
 #define COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( f, zeroIfFullyInside ) \
 	LOAD_COMPONENTS_OF_8_FRUSTUM_PLANES( f ) \
-    /* Select a farthest corner using masks for respective plane signbits */ \
-	BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS( _03_farthest, _03 ) \
-	BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS( _47_farthest, _47 ) \
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _03_farthest, _03 ) \
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _47_farthest, _47 ) \
-	const __m128 xmmDiff_03_farthest = _mm_sub_ps( xmmDot_03_farthest, xmmPlaneD_03 ); \
-	const __m128 xmmDiff_47_farthest = _mm_sub_ps( xmmDot_47_farthest, xmmPlaneD_47 ); \
-    /* Set non-zero bits if some of these distances were negative (this means the box is not fully inside) */ \
-	zeroIfFullyInside = _mm_movemask_ps( _mm_or_ps( xmmDiff_03_farthest, xmmDiff_47_farthest ) );
+	/* Select a farthest corner using masks for respective plane signbits */ \
+	SELECT_FARTHEST_BOX_CORNER_COMPONENTS( _03_farthest, _03 ) \
+	SELECT_FARTHEST_BOX_CORNER_COMPONENTS( _47_farthest, _47 ) \
+	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( _03_farthest, _03 ) \
+	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( _47_farthest, _47 ) \
+	/* We do not need an exact match with masks of AVX version, just checking for non-zero bits is sufficient */ \
+	/* Note: We assume that signed zeros are negative, this is fine for culling purposes */ \
+	zeroIfFullyInside = _mm_movemask_ps( _mm_or_ps( xmmDist_03_farthest, xmmDist_47_farthest ) );
 
 // Assumes that LOAD_BOX_COMPONENTS was expanded in the scope
-#define COMPUTE_TRISTATE_RESULT_FOR_8_PLANES( f, nonZeroIfOutside, nonZeroIfPartiallyOutside ) \
+#define COMPUTE_TRISTATE_RESULT_FOR_8_PLANES( f, nonZeroIfFullyOutside, nonZeroIfPartiallyOutside ) \
 	LOAD_COMPONENTS_OF_8_FRUSTUM_PLANES( f ) \
 	/* Select mins/maxs using masks for respective plane signbits, planes 0..3 */ \
-	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( _03_nearest, _03 ) \
+	SELECT_NEAREST_BOX_CORNER_COMPONENTS( _03_nearest, _03 ) \
 	/* Select mins/maxs using masks for respective plane signbits, planes 4..7 */ \
-	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( _47_nearest, _47 ) \
-	/* The same but as if masks were inverted */ \
-	BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS( _03_farthest, _03 ) \
-	BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS( _47_farthest, _47 ) \
-    /* Compute dot products of planes and nearest box corners to check whether the box is fully outside */ \
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _03_nearest, _03 ) \
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _47_nearest, _47 ) \
-    /* Compute dot products of planes and farthest box corners to check whether the box is partially outside */ \
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _03_farthest, _03 ) \
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _47_farthest, _47 ) \
-    /* Compute distances of corners to planes using the dot products */ \
-	const __m128 xmmDiff_03_nearest = _mm_sub_ps( xmmDot_03_nearest, xmmPlaneD_03 ); \
-	const __m128 xmmDiff_47_nearest = _mm_sub_ps( xmmDot_47_nearest, xmmPlaneD_47 ); \
-	const __m128 xmmDiff_03_farthest = _mm_sub_ps( xmmDot_03_farthest, xmmPlaneD_03 ); \
-	const __m128 xmmDiff_47_farthest = _mm_sub_ps( xmmDot_47_farthest, xmmPlaneD_47 ); \
-    /* Set non-zero result bits if some distances were negative */ \
-    /* We do not need an exact match with masks of AVX version, just checking for non-zero bits is sufficient */ \
-    /* Note: We assume that signed zeros are negativ, this is fine for culling purposes */ \
-	nonZeroIfOutside = _mm_movemask_ps( _mm_or_ps( xmmDiff_03_nearest, xmmDiff_47_nearest ) ); \
-	nonZeroIfPartiallyOutside = _mm_movemask_ps( _mm_or_ps( xmmDiff_03_farthest, xmmDiff_47_farthest ) );
+	SELECT_NEAREST_BOX_CORNER_COMPONENTS( _47_nearest, _47 ) \
+	/* The same but for the farthest corner */ \
+	SELECT_FARTHEST_BOX_CORNER_COMPONENTS( _03_farthest, _03 ) \
+	SELECT_FARTHEST_BOX_CORNER_COMPONENTS( _47_farthest, _47 ) \
+	/* Compute dot products of planes and nearest box corners to check whether the box is fully outside */ \
+	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( _03_nearest, _03 ) \
+	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( _47_nearest, _47 ) \
+	/* Compute dot products of planes and farthest box corners to check whether the box is partially outside */ \
+	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( _03_farthest, _03 ) \
+	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( _47_farthest, _47 ) \
+	/* We do not need an exact match with masks of AVX version, just checking for non-zero bits is sufficient */ \
+	/* Note: We assume that signed zeros are negative, this is fine for culling purposes */ \
+	nonZeroIfFullyOutside     = _mm_movemask_ps( _mm_or_ps( xmmDist_03_nearest, xmmDist_47_nearest ) ); \
+	nonZeroIfPartiallyOutside = _mm_movemask_ps( _mm_or_ps( xmmDist_03_farthest, xmmDist_47_farthest ) );
 

@@ -19,7 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
-#define CULLING_BLEND( a, b, mask ) _mm_blendv_ps( b, a, mask )
+#define SSE_BLEND_CORNER_COMPONENTS( maxs, mins, mask ) _mm_blendv_ps( maxs, mins, mask )
 
 #define IMPLEMENT_collectVisisbleWorldLeaves
 #define IMPLEMENT_collectVisibleOccluders

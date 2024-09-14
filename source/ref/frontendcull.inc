@@ -358,15 +358,15 @@ auto Frontend::cullLeavesByOccludersArch( StateForCamera *stateForCamera,
 			}
 #endif
 
-			COMPUTE_TRISTATE_RESULT_FOR_8_PLANES( f, const int nonZeroIfOutside, const int nonZeroIfPartiallyOutside )
+			COMPUTE_TRISTATE_RESULT_FOR_8_PLANES( f, const int nonZeroIfFullyOutside, const int nonZeroIfPartiallyOutside )
 
-			if( !( nonZeroIfOutside | nonZeroIfPartiallyOutside ) ) {
+			if( !( nonZeroIfFullyOutside | nonZeroIfPartiallyOutside ) ) {
 				wasFullyInside = true;
 				SHOW_OCCLUDED( leaf->mins, leaf->maxs, COLOR_RGB( 255, 0, 255 ) );
 				break;
 			}
 
-			wasPartiallyInside |= nonZeroIfPartiallyOutside;
+			wasPartiallyInside |= nonZeroIfPartiallyOutside && ( nonZeroIfFullyOutside == 0 );
 		} while( ++frustumNum != numOccluders );
 
 		if( !wasFullyInside ) [[likely]] {
@@ -429,7 +429,7 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
 
 					COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( f, const int zeroIfFullyInside )
 
-					if( !zeroIfFullyInside ) [[unlikely]] {
+					if( zeroIfFullyInside == 0 ) [[unlikely]] {
 						surfVisible = false;
 						SHOW_OCCLUDED( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
 						break;
