@@ -31,7 +31,7 @@ class alignas( alignof( void * ) ) [[nodiscard]] TaskHandle {
 public:
 	[[nodiscard]]
 	operator bool() const { return m_opaque != 0; }
-	uintptr_t m_opaque { 0 };
+	intptr_t m_opaque { 0 };
 };
 
 class TaskSystem;

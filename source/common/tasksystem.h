@@ -57,7 +57,7 @@ public:
 	[[nodiscard]]
 	auto getNumberOfWorkers() const -> unsigned;
 
-	static constexpr unsigned kMaxTaskEntries = std::numeric_limits<int16_t>::max();
+	static constexpr unsigned kMaxTaskEntries = std::numeric_limits<int16_t>::max() - 1;
 
 	enum Affinity : uint8_t { AnyThread = CoroTask::AnyThread, OnlyMainThread = CoroTask::OnlyMainThread };
 
@@ -98,14 +98,14 @@ public:
 	auto addCoro( CoroProducerFn &&producerFn ) -> TaskHandle {
 		[[maybe_unused]] volatile TapeStateGuard tapeStateGuard( m_impl );
 
-		CoroTask coro = producerFn();
-		void *coroMem = allocMemForCoro();
+		CoroTask coroTask = producerFn();
+		void *coroTaskMem = allocMemForCoroTask();
 
 		tapeStateGuard.succeeded = true;
 
 		// Move it to non-relocatable memory in a nonthrowing fashion
 		static_assert( std::is_nothrow_move_constructible_v<CoroTask> );
-		auto *resultCoro = new( coroMem )CoroTask( std::move( coro ) );
+		auto *resultCoro = new( coroTaskMem )CoroTask( std::move( coroTask ) );
 
 		return resultCoro->m_handle.promise().m_task;
 	}
@@ -204,7 +204,7 @@ public:
 	[[nodiscard]] bool awaitCompletion();
 private:
 	enum CompletionStatus : unsigned { CompletionPending, CompletionSuccess, CompletionFailure };
-	enum DependencyAddressMode : uint8_t { RangeOfEntries, RangeOfEntryIndices };
+	enum DependencyAddressMode : uint8_t { RangeOfEntries, RangeOfEntryHandles };
 
 	void clear();
 	void awakeWorkers();
@@ -225,15 +225,23 @@ private:
 	auto allocMemForCallable( size_t alignment, size_t size ) -> std::pair<void *, unsigned>;
 
 	[[nodiscard]]
-	auto allocMemForCoro() -> void *;
+	auto allocMemForCoroTask() -> void *;
 
 	[[nodiscard]]
-	auto addResumeCoroTask( std::span<const TaskHandle> deps, std::coroutine_handle<CoroTask::promise_type> handle ) -> TaskHandle;
+	auto addResumeCoroTask( int tapeIndex, std::span<const TaskHandle> deps, std::coroutine_handle<CoroTask::promise_type> handle ) -> TaskHandle;
 
 	[[nodiscard]]
-	auto addEntry( Affinity affinity, unsigned offsetOfCallable ) -> TaskHandle;
+	auto addRegularEntry( Affinity affinity, unsigned offsetOfCallable ) -> TaskHandle;
 
+	auto addEntryToTape( int tapeIndex, Affinity affinity, unsigned offsetOfCallable ) -> TaskHandle;
+
+	// A template workaround for working with implementation-private type
+	template <typename Entry>
+	static auto getEntryByHandle( struct TaskSystemImpl *impl, TaskHandle taskHandle ) -> Entry *;
+
+	// Handles are allowed to point to any tape
 	void addPolledDependenciesToEntry( TaskHandle taskHandle, const TaskHandle *depsBegin, const TaskHandle *depsEnd );
+	// The range must point to the regular tape
 	void addPushedDependentsToEntry( TaskHandle taskHandle, unsigned taskRangeBegin, unsigned taskRangeEnd );
 
 	void setScanJump( TaskHandle taskHandle, unsigned scanJump );
