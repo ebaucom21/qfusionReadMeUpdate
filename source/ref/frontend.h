@@ -466,7 +466,10 @@ private:
 	auto collectVisibleOccluders( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 
 	[[nodiscard]]
-	auto sortOccluders( StateForCamera *stateForCamera, std::span<const unsigned> visibleOccluders )
+	auto calcOccluderScores( StateForCamera *stateForCamera, std::span<const unsigned> visibleOccluders ) -> TaskHandle;
+
+	[[nodiscard]]
+	auto pruneAndSortOccludersByScores( StateForCamera *stateForCamera, std::span<const unsigned> visibleOccluders )
 		-> std::span<const SortedOccluder>;
 
 	[[nodiscard]]
@@ -483,6 +486,9 @@ private:
 											 std::span<const Frustum> occluderFrusta,
 											 MergedSurfSpan *mergedSurfSpans,
 											 uint8_t *surfVisTable );
+
+	[[nodiscard]]
+	static auto coPrepareOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;
 
 	[[nodiscard]]
 	static auto coProcessLeavesAndOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;

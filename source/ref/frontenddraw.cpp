@@ -542,6 +542,26 @@ auto Frontend::coProcessLeavesAndOccluders( CoroTask::StartInfo si, Frontend *se
 	stateForCamera->nonOccludedLeaves       = nonOccludedLeaves;
 }
 
+auto Frontend::coPrepareOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask {
+	std::span<const Frustum> occluderFrusta;
+	if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
+		// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
+		const std::span<const unsigned> visibleOccluders = self->collectVisibleOccluders( stateForCamera );
+		if( !visibleOccluders.empty() ) {
+			co_await si.taskSystem->awaiterOf( self->calcOccluderScores( stateForCamera, visibleOccluders ) );
+
+			const std::span<const SortedOccluder> sortedOccluders = self->pruneAndSortOccludersByScores( stateForCamera,
+																										 visibleOccluders );
+			if( !sortedOccluders.empty() ) {
+				// Build frusta of occluders, while performing some additional frusta pruning
+				occluderFrusta = self->buildFrustaOfOccluders( stateForCamera, sortedOccluders );
+			}
+		}
+	}
+
+	stateForCamera->numOccluderFrusta = occluderFrusta.size();
+}
+
 auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
 														  std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> CoroTask {
 	assert( scenesAndCameras.size() <= MAX_REF_CAMERAS );
@@ -608,26 +628,14 @@ auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
 
-		auto collectLeavesInFrustumFn = [=]( [[maybe_unused]] unsigned workerIndex ) {
-			stateForCamera->visibleLeaves = self->collectVisibleWorldLeaves( stateForCamera );
-		};
-
-		auto collectOccludersFn = [=]( [[maybe_unused]] unsigned workerIndex ) {
-			std::span<const Frustum> occluderFrusta;
-			if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
-				// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
-				const std::span<const unsigned> visibleOccluders      = self->collectVisibleOccluders( stateForCamera );
-				const std::span<const SortedOccluder> sortedOccluders = self->sortOccluders( stateForCamera, visibleOccluders );
-				// Build frusta of occluders, while performing some additional frusta pruning
-				occluderFrusta = self->buildFrustaOfOccluders( stateForCamera, sortedOccluders );
-			}
-
-			stateForCamera->numOccluderFrusta = occluderFrusta.size();
-		};
-
 		const TaskHandle dependencies[1] { prepareBuffersTaskHandles[cameraIndex] };
-		collectLeavesTaskHandles[cameraIndex]    = si.taskSystem->add( dependencies, std::move( collectLeavesInFrustumFn ) );
-		collectOccludersTaskHandles[cameraIndex] = si.taskSystem->add( dependencies, std::move( collectOccludersFn ) );
+
+		collectLeavesTaskHandles[cameraIndex] = si.taskSystem->add( dependencies, [=]( unsigned ) {
+			stateForCamera->visibleLeaves = self->collectVisibleWorldLeaves( stateForCamera );
+		});
+		collectOccludersTaskHandles[cameraIndex] = si.taskSystem->addCoro( [=]() {
+			return coPrepareOccluders( { si.taskSystem, dependencies, CoroTask::AnyThread }, self, stateForCamera );
+		});
 	}
 
 	TaskHandle processLeavesAndOccludersTasks[MAX_REF_CAMERAS];

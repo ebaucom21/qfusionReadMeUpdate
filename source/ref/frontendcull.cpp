@@ -601,12 +601,26 @@ auto Frontend::cullEntryPtrsWithBounds( const void **entryPtrs, unsigned numEntr
 }
 
 [[nodiscard]]
-static auto calcOccluderAreaScore( const OccluderDataEntry &occluder, const float * mvpMatrix ) -> float;
+static auto calcOccluderAreaScore( const OccluderDataEntry &occluder, const float *mvpMatrix ) -> float;
 
-auto Frontend::sortOccluders( StateForCamera *stateForCamera, std::span<const unsigned> visibleOccluders )
-	-> std::span<const SortedOccluder> {
+auto Frontend::calcOccluderScores( StateForCamera *stateForCamera, std::span<const unsigned> visibleOccluders ) -> TaskHandle {
+	SortedOccluder *const sortedOccluders = stateForCamera->sortedOccludersBuffer->get();
+	const auto *const occluderEntries     = rsh.worldBrushModel->occluderDataEntries;
+	const float *const mvpMatrix          = stateForCamera->cameraProjectionMatrix;
+	auto fn = [=]( unsigned, unsigned startIndex, unsigned endIndex ) {
+		assert( startIndex < endIndex );
+		unsigned index = startIndex;
+		do {
+			const unsigned occluderNum = visibleOccluders[index];
+			sortedOccluders[index] = { occluderNum, calcOccluderAreaScore( occluderEntries[occluderNum], mvpMatrix ) };
+		} while( ++index < endIndex );
+	};
+	return m_taskSystem.addForSubrangesInRange( { 0u, (unsigned)visibleOccluders.size() }, 16, {}, std::move( fn ) );
+}
+
+auto Frontend::pruneAndSortOccludersByScores( StateForCamera *stateForCamera,
+											  std::span<const unsigned> visibleOccluders ) -> std::span<const SortedOccluder> {
 	const auto *const occluderEntries = rsh.worldBrushModel->occluderDataEntries;
-	const float *const mvpMatrix      = stateForCamera->cameraProjectionMatrix;
 
 	// Note: The area units are in NDC, also we don't divide cross products by 2 to get triangle areas,
 	// hence the area of the entire screen appears to be equal to len([-1,+1]) * len([-1,+1]) * 2 = 8
@@ -620,13 +634,13 @@ auto Frontend::sortOccluders( StateForCamera *stateForCamera, std::span<const un
 	const float epsilon = Cvar_Value( "epsilon" );
 #endif
 
-	unsigned numSortedOccluders = 0;
+	// Prune non-feasible occluders prior to sorting
+	// TODO: Experiment with doing it afterwards using binary search?
 	SortedOccluder *const sortedOccluders = stateForCamera->sortedOccludersBuffer->get();
-	// TODO: This can be performed in parallel
-	for( const unsigned occluderNum: visibleOccluders ) {
-		const float areaScore = calcOccluderAreaScore( occluderEntries[occluderNum], mvpMatrix );
-		if( areaScore > epsilon ) [[likely]] {
-			sortedOccluders[numSortedOccluders++] = { occluderNum, areaScore };
+	unsigned numSortedOccluders           = 0;
+	for( unsigned index = 0; index < visibleOccluders.size(); ++index ) {
+		if( sortedOccluders[index].score > epsilon ) [[likely]] {
+			sortedOccluders[numSortedOccluders++] = sortedOccluders[index];
 		}
 	}
 
