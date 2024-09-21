@@ -173,6 +173,7 @@ private:
 		PodBufferHolder<drawSurfaceBSP_t> *bspDrawSurfacesBuffer;
 		PodBufferHolder<MergedSurfSpan> *drawSurfSurfSpansBuffer;
 
+
 		PodBufferHolder<uint8_t> *surfVisTableBuffer;
 		PodBufferHolder<VertElemSpan> *drawSurfVertElemSpansBuffer;
 		// For lights
@@ -185,6 +186,9 @@ private:
 		PodBufferHolder<uint32_t> *leafLightBitsOfSurfacesBuffer;
 
 		ParticleDrawSurface *particleDrawSurfaces;
+		DynamicMeshDrawSurface *dynamicMeshDrawSurfaces;
+
+		unsigned numDynamicMeshDrawSurfaces { 0 };
 
 		// Saved intermediate results of the world occlusion stage in addition to respective filled buffers
 		std::span<const unsigned > visibleLeaves;
@@ -225,14 +229,16 @@ private:
 	[[nodiscard]]
 	auto beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle;
 	[[nodiscard]]
-	auto endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle;
+	auto endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+												bool areCamerasPortalCameras ) -> TaskHandle;
 
 	[[nodiscard]]
 	static auto coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
 														   std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> CoroTask;
 	[[nodiscard]]
 	static auto coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
-														 std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> CoroTask;
+														 std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+														 bool areCamerasPortalCameras ) -> CoroTask;
 
 	void performPreparedRenderingFromThisCamera( Scene *scene, StateForCamera *stateForCamera );
 
@@ -336,6 +342,8 @@ private:
 
 	void addCompoundDynamicMeshesToSortList( StateForCamera *stateForCamera, const entity_t *meshEntity,
 											 const Scene::CompoundDynamicMesh *meshes, std::span<const uint16_t> indicesOfMeshes );
+
+	void addDynamicMeshToSortList( StateForCamera *stateForCamera, const entity_t *meshEntity, const DynamicMesh *mesh, float distance );
 
 	void addCoronaLightsToSortList( StateForCamera *stateForCamera, const entity_t *polyEntity, const Scene::DynamicLight *lights,
 									std::span<const uint16_t> indices );
@@ -595,6 +603,7 @@ private:
 		PodBufferHolder<unsigned> visibleOccludersBuffer;
 		PodBufferHolder<SortedOccluder> sortedOccludersBuffer;
 
+		PodBufferHolder<DynamicMeshDrawSurface> dynamicMeshDrawSurfacesBuffer;
 		PodBufferHolder<drawSurfaceBSP_t> bspDrawSurfacesBuffer;
 		PodBufferHolder<MergedSurfSpan> drawSurfSurfSpansBuffer;
 		PodBufferHolder<uint8_t> bspSurfVisTableBuffer;
@@ -619,6 +628,33 @@ private:
 	StateForCameraStorage *m_usedStatesForCamera { nullptr };
 
 	wsw::PodVector<std::pair<Scene *, StateForCamera *>> m_tmpPortalScenesAndStates;
+
+	struct alignas( 16 ) DynamicMeshData {
+		// Maximum supported icosphere subdiv level
+		// TODO check these values, share with the icosphere code
+		// TODO we do not have to transfer icosphere indices every frame
+		static constexpr auto maxStorageVertices = 2 * 2562;
+		static constexpr auto maxStorageIndices  = 2 * 15360;
+
+		// TODO: Point to the dynamic stream memory
+		alignas( 16 ) vec4_t positions[maxStorageVertices];
+		alignas( 16 ) vec4_t normals[maxStorageVertices];
+		alignas( 16 ) vec2_t texCoords[maxStorageVertices];
+		alignas( 16 ) byte_vec4_t colors[maxStorageVertices];
+		alignas( 16 ) uint16_t indices[maxStorageIndices];
+		mesh_t mesh;
+	};
+
+	struct DynamicMeshFillDataWorkload {
+		Scene *scene;
+		StateForCamera *stateForCamera;
+		DynamicMeshData *destData;
+		DynamicMeshDrawSurface *drawSurface;
+	};
+
+	// For regular pass and nested portal pass
+	wsw::PodVector<DynamicMeshData> m_tmpDynamicMeshData[2];
+	wsw::PodVector<DynamicMeshFillDataWorkload> m_tmpDynamicMeshFillDataWorkload[2];
 
 	// This is not an appropriate place to keep the client-global instance of task system.
 	// However, moving it to the client code is complicated due to lifetime issues related to client global vars.

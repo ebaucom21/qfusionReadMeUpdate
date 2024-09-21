@@ -148,8 +148,8 @@ public:
 
 		[[maybe_unused]] volatile TapeStateGuard tapeStateGuard( m_impl );
 
-		auto [mem, task] = addForIndicesInRangeImpl( indicesRange, deps, sizeof( TapeCallableImpl ),
-													 alignof( TapeCallableImpl ), affinity );
+		auto [mem, task] = addForIndicesInRangeImpl( indicesRange, deps, alignof( TapeCallableImpl ),
+													 sizeof( TapeCallableImpl ), affinity );
 
 		tapeStateGuard.succeeded = true;
 		// Construct it last in a nothrowing fashion

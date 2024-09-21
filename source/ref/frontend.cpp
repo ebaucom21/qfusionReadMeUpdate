@@ -130,7 +130,8 @@ auto Frontend::coEndProcessingDrawSceneRequests( CoroTask::StartInfo si, Fronten
 		}
 	}
 
-	co_await si.taskSystem->awaiterOf( self->endPreparingRenderingFromTheseCameras( { scenesAndCameras, scenesAndCameras + numScenesAndCameras } ) );
+	co_await si.taskSystem->awaiterOf( self->endPreparingRenderingFromTheseCameras(
+		{ scenesAndCameras, scenesAndCameras + numScenesAndCameras }, false ) );
 }
 
 auto Frontend::beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) -> TaskHandle {
@@ -275,6 +276,10 @@ auto Frontend::allocStateForCamera() -> StateForCamera * {
 
 	resultStorage->particleDrawSurfacesBuffer.reserve( Scene::kMaxParticleAggregates * Scene::kMaxParticlesInAggregate );
 	stateForCamera->particleDrawSurfaces = resultStorage->particleDrawSurfacesBuffer.get();
+
+	resultStorage->dynamicMeshDrawSurfacesBuffer.reserve( Scene::kMaxCompoundDynamicMeshes * Scene::kMaxPartsInCompoundMesh );
+	stateForCamera->dynamicMeshDrawSurfaces = resultStorage->dynamicMeshDrawSurfacesBuffer.get();
+	assert( stateForCamera->numDynamicMeshDrawSurfaces == 0 );
 
 	return stateForCamera;
 }

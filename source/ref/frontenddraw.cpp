@@ -161,7 +161,7 @@ static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] =
 		/* ST_QUAD_POLY */
 		nullptr,
 		/* ST_DYNAMIC_MESH */
-		nullptr,
+		( drawSurf_cb ) &R_SubmitDynamicMeshToBackend,
 		/* ST_PARTICLE */
 		nullptr,
 		/* ST_CORONA */
@@ -185,7 +185,7 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 		/* ST_QUAD_POLY */
 		( batchDrawSurf_cb ) & R_SubmitQuadPolysToBackend,
 		/* ST_DYNAMIC_MESH */
-		( batchDrawSurf_cb ) & R_SubmitDynamicMeshesToBackend,
+		nullptr,
 		/* ST_PARTICLE */
 		( batchDrawSurf_cb ) & R_SubmitParticleSurfsToBackend,
 		/* ST_CORONA */
@@ -667,33 +667,128 @@ auto Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scen
 	});
 }
 
-auto Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle {
+auto Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+													  bool areCamerasPortalCameras ) -> TaskHandle {
 	return m_taskSystem.addCoro( [=, this]() {
-		return coEndPreparingRenderingFromTheseCameras( { &m_taskSystem, {}, CoroTask::OnlyMainThread }, this, scenesAndCameras );
+		return coEndPreparingRenderingFromTheseCameras( { &m_taskSystem, {}, CoroTask::OnlyMainThread },
+														this, scenesAndCameras, areCamerasPortalCameras );
 	});
 }
 
 auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
-														std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> CoroTask {
-	for( auto [scene, stateForCamera] : scenesAndCameras ) {
+														std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+														bool areCamerasPortalCameras ) -> CoroTask {
+	wsw::PodVector<DynamicMeshFillDataWorkload> *tmpDynamicMeshFillDataWorkload;
+	if( areCamerasPortalCameras ) {
+		tmpDynamicMeshFillDataWorkload = &self->m_tmpDynamicMeshFillDataWorkload[1];
+	} else {
+		tmpDynamicMeshFillDataWorkload = &self->m_tmpDynamicMeshFillDataWorkload[0];
+	}
+
+	tmpDynamicMeshFillDataWorkload->clear();
+
+	if( r_drawentities->integer ) {
+		for( auto [scene, stateForCamera] : scenesAndCameras ) {
+			const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
+			self->collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta );
+
+			for( unsigned i = 0; i < stateForCamera->numDynamicMeshDrawSurfaces; ++i ) {
+				assert( dynamic_cast<const DynamicMesh *>( stateForCamera->dynamicMeshDrawSurfaces[i].dynamicMesh ) );
+				tmpDynamicMeshFillDataWorkload->append( DynamicMeshFillDataWorkload {
+					.scene          = scene,
+					.stateForCamera = stateForCamera,
+					.drawSurface    = &stateForCamera->dynamicMeshDrawSurfaces[i],
+				});
+			}
+		}
+		if( !tmpDynamicMeshFillDataWorkload->empty() ) {
+			wsw::PodVector<DynamicMeshData> *tmpDynamicMeshData = &self->m_tmpDynamicMeshData[areCamerasPortalCameras ? 1 : 0];
+			tmpDynamicMeshData->resize( tmpDynamicMeshFillDataWorkload->size() );
+			for( unsigned i = 0; i < tmpDynamicMeshFillDataWorkload->size(); ++i ) {
+				tmpDynamicMeshFillDataWorkload->operator[]( i ).destData = tmpDynamicMeshData->data() + i;
+			}
+		}
+	}
+
+	// Collect lights as well
+	// Note: Dynamically submitted entities may add lights
+	std::span<const uint16_t> visibleProgramLightIndices[MAX_REF_CAMERAS];
+	std::span<const uint16_t> visibleCoronaLightIndices[MAX_REF_CAMERAS];
+	if( r_dynamiclight->integer ) {
+		for( unsigned i = 0; i < scenesAndCameras.size(); ++i ) {
+			auto [scene, stateForCamera] = scenesAndCameras[i];
+			const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
+			std::tie( visibleProgramLightIndices[i], visibleCoronaLightIndices[i] ) =
+				self->collectVisibleLights( stateForCamera, scene, occluderFrusta );
+		}
+	}
+
+	TaskHandle fillMeshBuffersTask;
+	if( !tmpDynamicMeshFillDataWorkload->empty() ) {
+		auto fn = [=]( unsigned, unsigned elemIndex ) {
+			DynamicMeshFillDataWorkload &workload = tmpDynamicMeshFillDataWorkload->operator[]( elemIndex );
+			assert( workload.drawSurface );
+			const DynamicMesh *dynamicMesh = workload.drawSurface->dynamicMesh;
+			assert( dynamicMesh );
+
+			unsigned numAffectingLights     = 0;
+			uint16_t *affectingLightIndices = nullptr;
+			std::span<const uint16_t> lightIndicesSpan;
+			if( dynamicMesh->applyVertexDynLight && r_dynamiclight->integer && workload.stateForCamera->numAllVisibleLights ) {
+				std::span<const uint16_t> availableLights { workload.stateForCamera->allVisibleLightIndices,
+															workload.stateForCamera->numAllVisibleLights };
+
+				affectingLightIndices = (uint16_t *)alloca( sizeof( uint16_t ) * workload.stateForCamera->numAllVisibleLights );
+				numAffectingLights = findLightsThatAffectBounds( workload.scene->m_dynamicLights.data(), availableLights,
+																 dynamicMesh->cullMins, dynamicMesh->cullMaxs, affectingLightIndices );
+
+				lightIndicesSpan = { affectingLightIndices, numAffectingLights };
+			}
+
+			auto [numVertices, numIndices] = dynamicMesh->fillMeshBuffers( workload.stateForCamera->viewOrigin,
+																		   workload.stateForCamera->viewAxis,
+																		   workload.stateForCamera->lodScaleForFov,
+																		   workload.stateForCamera->cameraId,
+																		   workload.scene->m_dynamicLights.data(),
+																		   lightIndicesSpan,
+																		   workload.drawSurface->scratchpad,
+																		   workload.destData->positions,
+																		   workload.destData->normals,
+																		   workload.destData->texCoords,
+																		   workload.destData->colors,
+																		   workload.destData->indices );
+
+			std::memset( &workload.destData->mesh, 0, sizeof( mesh_t ) );
+			workload.destData->mesh.numVerts       = numVertices;
+			workload.destData->mesh.numElems       = numIndices;
+			workload.destData->mesh.xyzArray       = workload.destData->positions;
+			workload.destData->mesh.stArray        = workload.destData->texCoords;
+			workload.destData->mesh.colorsArray[0] = workload.destData->colors;
+			workload.destData->mesh.elems          = workload.destData->indices;
+
+			workload.drawSurface->legacyMesh = &workload.destData->mesh;
+		};
+		fillMeshBuffersTask = si.taskSystem->addForIndicesInRange( { 0u, (unsigned)tmpDynamicMeshFillDataWorkload->size() },
+																   std::span<const TaskHandle> {}, std::move( fn ) );
+	}
+
+	for( unsigned i = 0; i < scenesAndCameras.size(); ++i ) {
+		auto [scene, stateForCamera] = scenesAndCameras[i];
+
 		const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
 
 		self->collectVisiblePolys( stateForCamera, scene, occluderFrusta );
 
-		// Note: Dynamically submitted entities may add lights
 		if( const int dynamicLightValue = r_dynamiclight->integer ) {
-			[[maybe_unused]]
-			const auto [visibleProgramLightIndices, visibleCoronaLightIndices] =
-				self->collectVisibleLights( stateForCamera, scene, occluderFrusta );
 			if( dynamicLightValue & 2 ) {
-				self->addCoronaLightsToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicLights.data(), visibleCoronaLightIndices );
+				self->addCoronaLightsToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicLights.data(), visibleCoronaLightIndices[i] );
 			}
 			if( dynamicLightValue & 1 ) {
 				std::span<const unsigned> spansStorage[2] {
 					stateForCamera->nonOccludedLeaves, stateForCamera->partiallyOccludedLeaves
 				};
 				std::span<std::span<const unsigned>> spansOfLeaves = { spansStorage, 2 };
-				self->markLightsOfSurfaces( stateForCamera, scene, spansOfLeaves, visibleProgramLightIndices );
+				self->markLightsOfSurfaces( stateForCamera, scene, spansOfLeaves, visibleProgramLightIndices[i] );
 			}
 		}
 
@@ -704,7 +799,6 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 
 		if( r_drawentities->integer ) {
 			self->collectVisibleEntities( stateForCamera, scene, occluderFrusta );
-			self->collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta );
 		}
 
 		self->collectVisibleParticles( stateForCamera, scene, occluderFrusta );
@@ -713,14 +807,13 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 	// Process portals.
 	// This stage relies on portal entities which get submitted during entity submission stage.
 	bool hasPortalsToProcess = false;
-	for( auto [scene, stateForPrimaryCamera] : scenesAndCameras ) {
-		const unsigned renderFlags = stateForPrimaryCamera->renderFlags;
-		// Don't recurse into portals
-		if( !( renderFlags & ( RF_PORTALVIEW | RF_MIRRORVIEW ) ) ) {
+	if( !areCamerasPortalCameras ) {
+		self->m_tmpPortalScenesAndStates.clear();
+		for( auto [scene, stateForPrimaryCamera] : scenesAndCameras ) {
 			if( stateForPrimaryCamera->viewCluster >= 0 && !r_fastsky->integer ) {
 				for( unsigned i = 0; i < stateForPrimaryCamera->numPortalSurfaces; ++i ) {
-					self->prepareDrawingPortalSurface( stateForPrimaryCamera, &stateForPrimaryCamera->portalSurfaces[i], scene,
-													   &self->m_tmpPortalScenesAndStates );
+					self->prepareDrawingPortalSurface( stateForPrimaryCamera, &stateForPrimaryCamera->portalSurfaces[i],
+													   scene, &self->m_tmpPortalScenesAndStates );
 					hasPortalsToProcess = true;
 				}
 			}
@@ -729,9 +822,7 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 
 	if( hasPortalsToProcess ) {
 		co_await si.taskSystem->awaiterOf( self->beginPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates ) );
-		co_await si.taskSystem->awaiterOf( self->endPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates ) );
-		// Clear it only after actual processing due to reentrancy reasons
-		self->m_tmpPortalScenesAndStates.clear();
+		co_await si.taskSystem->awaiterOf( self->endPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates, true ) );
 	}
 
 	const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {
@@ -744,6 +835,10 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 	// TODO: Can be run earlier in parallel with portal surface processing
 	for( auto [scene, stateForCamera] : scenesAndCameras ) {
 		std::sort( stateForCamera->sortList->begin(), stateForCamera->sortList->end(), cmp );
+	}
+
+	if( fillMeshBuffersTask ) {
+		co_await si.taskSystem->awaiterOf( fillMeshBuffersTask );
 	}
 }
 

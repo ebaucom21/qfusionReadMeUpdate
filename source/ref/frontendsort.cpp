@@ -492,16 +492,13 @@ void Frontend::addDynamicMeshesToSortList( StateForCamera *stateForCamera, const
 	const float *const __restrict viewOrigin = stateForCamera->viewOrigin;
 
 	for( const unsigned meshIndex: indicesOfMeshes ) {
-		const DynamicMesh *const __restrict mesh = meshes[meshIndex];
+		const DynamicMesh *const mesh = meshes[meshIndex];
 
 		vec3_t meshCenter;
 		VectorAvg( mesh->cullMins, mesh->cullMaxs, meshCenter );
 		const float distance = DistanceFast( meshCenter, viewOrigin );
 
-		const mfog_t *fog = nullptr;
-		const void *drawSurf = mesh;
-		const shader_s *material = mesh->material ? mesh->material : rsh.whiteShader;
-		addEntryToSortList( stateForCamera, meshEntity, fog, material, distance, 0, nullptr, drawSurf, ST_DYNAMIC_MESH );
+		addDynamicMeshToSortList( stateForCamera, meshEntity, mesh, distance );
 	}
 }
 
@@ -552,29 +549,39 @@ void Frontend::addCompoundDynamicMeshesToSortList( StateForCamera *stateForCamer
 			wsw::sortByField( drawnInFrontParts, drawnInFrontParts + numDrawnInFrontParts, &std::pair<unsigned, float>::second );
 		}
 
-		const auto addMeshToSortList = [&]( const DynamicMesh *mesh, float distance ) {
-			// TODO: Account for fogs
-			const mfog_t *fog        = nullptr;
-			const void *drawSurf     = mesh;
-			const shader_s *material = mesh->material ? mesh->material : rsh.whiteShader;
-			addEntryToSortList( stateForCamera, meshEntity, fog, material, distance, 0, nullptr, drawSurf, ST_DYNAMIC_MESH );
-		};
-
 		for( unsigned partNum = 0; partNum < numDrawnBehindParts; ++partNum ) {
 			const float distance = maxDistance + (float)( numDrawnBehindParts + 1 - partNum );
-			addMeshToSortList( compoundMesh->parts[drawnBehindParts[partNum].first], distance );
+			addDynamicMeshToSortList( stateForCamera, meshEntity, compoundMesh->parts[drawnBehindParts[partNum].first], distance );
 		}
 
 		for( unsigned partIndex = 0; partIndex < compoundMesh->numParts; ++partIndex ) {
 			if( !meshOrderDesignators || meshOrderDesignators[partIndex] == 0.0f ) {
-				addMeshToSortList( compoundMesh->parts[partIndex], distances[partIndex ] );
+				addDynamicMeshToSortList( stateForCamera, meshEntity, compoundMesh->parts[partIndex], distances[partIndex ] );
 			}
 		}
 
 		for( unsigned partNum = 0; partNum < numDrawnInFrontParts; ++partNum ) {
 			const float distance = wsw::max( 0.0f, minDistance - (float)( partNum + 1 ) );
-			addMeshToSortList( compoundMesh->parts[drawnInFrontParts[partNum].first], distance );
+			addDynamicMeshToSortList( stateForCamera, meshEntity, compoundMesh->parts[drawnInFrontParts[partNum].first], distance );
 		}
+	}
+}
+
+void Frontend::addDynamicMeshToSortList( StateForCamera *stateForCamera, const entity_t *meshEntity,
+										 const DynamicMesh *mesh, float distance ) {
+	DynamicMeshDrawSurface *const drawSurface = stateForCamera->dynamicMeshDrawSurfaces + stateForCamera->numDynamicMeshDrawSurfaces;
+	std::optional<std::pair<unsigned, unsigned>> storageRequirements;
+	storageRequirements = mesh->getStorageRequirements( stateForCamera->viewOrigin, stateForCamera->viewAxis,
+														stateForCamera->lodScaleForFov, stateForCamera->cameraId,
+														drawSurface->scratchpad );
+	if( storageRequirements ) [[likely]] {
+		drawSurface->requiredNumVertices = storageRequirements->first;
+		drawSurface->requiredNumIndices  = storageRequirements->second;
+		drawSurface->dynamicMesh         = mesh;
+		const mfog_t *fog                = nullptr;
+		const shader_s *material         = mesh->material ? mesh->material : rsh.whiteShader;
+		addEntryToSortList( stateForCamera, meshEntity, fog, material, distance, 0, nullptr, drawSurface, ST_DYNAMIC_MESH );
+		stateForCamera->numDynamicMeshDrawSurfaces++;
 	}
 }
 

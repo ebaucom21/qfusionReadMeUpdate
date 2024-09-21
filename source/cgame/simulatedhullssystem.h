@@ -156,14 +156,11 @@ private:
 	// We have to supply solid and cloud parts separately for a proper handling of surface sorting in the renderer.
 	// Still, they share many properties.
 	struct SharedMeshData {
-		wsw::PodVector<uint32_t> *overrideColorsBuffer { nullptr };
-
 		// We don't know what gets drawn first, the solid mesh or the cloud mesh.
 		// Some expensive computations can be performed in order-independent fashion and cached.
 		// Results are supposed to be valid for drawing from a given camera during the frame.
 		struct CacheEntry {
 			unsigned cameraId { ~0u };
-			std::optional<std::variant<std::pair<unsigned, unsigned>, std::monostate>> overrideColorsSpanInBuffer;
 			std::optional<std::variant<unsigned, std::monostate>> chosenSubdivLevel;
 		};
 
@@ -189,6 +186,7 @@ private:
 		ZFade zFade { ZFade::NoFade };
 		bool tesselateClosestLod { false };
 		bool lerpNextLevelColors { false };
+		// TODO: Unused for now (performing shared color calculations in multithreaded enviroment is tricky)
 		bool hasSibling { false };
 
 		// currently for keyframed hull shading
@@ -219,14 +217,12 @@ private:
 								 bool applyViewDotFade, bool applyZFade, bool applyLights ) const;
 
 		[[nodiscard]]
-		auto getOverrideColorsCheckingSiblingCache( byte_vec4_t *__restrict localBuffer,
-													const float *__restrict viewOrigin,
-													const float *__restrict viewAxis,
-													unsigned chosenSubdivLevel,
-													SharedMeshData::CacheEntry *cacheEntry,
-													const Scene::DynamicLight *lights,
-													std::span<const uint16_t> affectingLightIndices ) const
-														-> const byte_vec4_t *;
+		auto getOverrideColors( byte_vec4_t *__restrict localBuffer,
+								const float *__restrict viewOrigin,
+								const float *__restrict viewAxis,
+								unsigned chosenSubdivLevel,
+								const Scene::DynamicLight *lights,
+								std::span<const uint16_t> affectingLightIndices ) const	-> const byte_vec4_t *;
 	};
 
 	class HullSolidDynamicMesh : public HullDynamicMesh {
@@ -676,9 +672,6 @@ private:
 	wsw::HeapBasedFreelistAllocator m_smokeHullsAllocator { sizeof( SmokeHull ), kMaxSmokeHulls };
 	wsw::HeapBasedFreelistAllocator m_toonSmokeHullsAllocator { sizeof( ToonSmokeHull ), kMaxToonSmokeHulls };
 	wsw::HeapBasedFreelistAllocator m_waveHullsAllocator { sizeof( WaveHull ), kMaxWaveHulls };
-
-	// Can't specify byte_vec4_t as the template parameter
-	wsw::PodVector<uint32_t> m_frameSharedOverrideColorsBuffer;
 
 	// We may submit solid and cloud meshes for each layer, so it's twice as much as the number of layers
 	static constexpr unsigned kMaxMeshesPerHullGeneral = ( 2 * kMaxHullLayers );

@@ -903,8 +903,6 @@ void SimulatedHullsSystem::simulateFrame( int64_t currTime ) {
 
 		m_lastTime = currTime;
 	}
-
-	m_frameSharedOverrideColorsBuffer.clear();
 }
 
 void SimulatedHullsSystem::submitToScene( int64_t currTime, DrawSceneRequest *drawSceneRequest, unsigned povPlayerMask ) {
@@ -982,8 +980,7 @@ void SimulatedHullsSystem::submitToScene( int64_t currTime, DrawSceneRequest *dr
 		sharedMeshData->cacheEntriesInitial.clear();
 		sharedMeshData->cacheEntriesHeapalloc.clear();
 
-		sharedMeshData->overrideColorsBuffer = &m_frameSharedOverrideColorsBuffer;
-		sharedMeshData->hasSibling           = solidAppearanceRules && cloudAppearanceRules;
+		sharedMeshData->hasSibling = solidAppearanceRules && cloudAppearanceRules;
 
 		assert( hull->subdivLevel );
 		if( solidAppearanceRules ) [[likely]] {
@@ -1118,8 +1115,7 @@ void SimulatedHullsSystem::submitToScene( int64_t currTime, DrawSceneRequest *dr
 			sharedMeshData->cacheEntriesInitial.clear();
 			sharedMeshData->cacheEntriesHeapalloc.clear();
 
-			sharedMeshData->overrideColorsBuffer = &m_frameSharedOverrideColorsBuffer;
-			sharedMeshData->hasSibling           = solidAppearanceRules && cloudAppearanceRules;
+			sharedMeshData->hasSibling = solidAppearanceRules && cloudAppearanceRules;
 
 			sharedMeshData->isAKeyframedHull = true;
 
@@ -1284,8 +1280,7 @@ void SimulatedHullsSystem::submitToScene( int64_t currTime, DrawSceneRequest *dr
 			sharedMeshData->cacheEntriesInitial.clear();
 			sharedMeshData->cacheEntriesHeapalloc.clear();
 
-			sharedMeshData->overrideColorsBuffer             = &m_frameSharedOverrideColorsBuffer;
-			sharedMeshData->hasSibling                       = solidAppearanceRules && cloudAppearanceRules;
+			sharedMeshData->hasSibling = solidAppearanceRules && cloudAppearanceRules;
 
 			if( solidAppearanceRules ) [[likely]] {
 				HullSolidDynamicMesh *const __restrict mesh = layer->submittedSolidMesh;
@@ -2256,7 +2251,7 @@ void MeshTesselationHelper::runSmoothVerticesPass( unsigned numNextLevelVertices
 	}
 }
 
-static MeshTesselationHelper meshTesselationHelper;
+static thread_local MeshTesselationHelper meshTesselationHelper;
 
 template <SimulatedHullsSystem::ViewDotFade Fade>
 [[nodiscard]]
@@ -2627,54 +2622,27 @@ void SimulatedHullsSystem::HullDynamicMesh::calcOverrideColors( byte_vec4_t *__r
 	}
 }
 
-auto SimulatedHullsSystem::HullDynamicMesh::getOverrideColorsCheckingSiblingCache( byte_vec4_t *__restrict localBuffer,
-																				   const float *__restrict viewOrigin,
-																				   const float *__restrict viewAxis,
-																				   unsigned chosenSubdivLevel,
-																				   SharedMeshData::CacheEntry *cacheEntry,
-																				   const Scene::DynamicLight *lights,
-																				   std::span<const uint16_t>
-																				       affectingLightIndices ) const
+auto SimulatedHullsSystem::HullDynamicMesh::getOverrideColors( byte_vec4_t *__restrict localBuffer,
+															   const float *__restrict viewOrigin,
+															   const float *__restrict viewAxis,
+															   unsigned chosenSubdivLevel,
+															   const Scene::DynamicLight *lights,
+															   std::span<const uint16_t> affectingLightIndices ) const
 	-> const byte_vec4_t * {
-	if( cacheEntry->overrideColorsSpanInBuffer != std::nullopt ) {
-		auto *maybeSpanAddress = std::addressof( *cacheEntry->overrideColorsSpanInBuffer );
-		if( auto *span = std::get_if<std::pair<unsigned, unsigned>>( maybeSpanAddress ) ) {
-			static_assert( sizeof( byte_vec4_t ) == sizeof( uint32_t ) );
-			return (byte_vec4_t *)( m_shared->overrideColorsBuffer->data() + span->first );
-		}
-	}
-
 	const bool shouldApplyViewDotFade   = m_shared->viewDotFade != ViewDotFade::NoFade;
 	const bool actuallyApplyViewDotFade = shouldApplyViewDotFade;
 	const bool shouldApplyZFade         = m_shared->zFade != ZFade::NoFade;
 	const bool actuallyApplyZFade       = shouldApplyZFade && m_shared->maxZLastFrame - m_shared->minZLastFrame > 1.0f;
 	const bool actuallyApplyLights      = applyVertexDynLight && !affectingLightIndices.empty();
 
-	// Nothing to do, save this fact
 	if( !( actuallyApplyViewDotFade | actuallyApplyZFade | actuallyApplyLights ) ) {
-		cacheEntry->overrideColorsSpanInBuffer = std::monostate();
 		return nullptr;
 	}
 
-	byte_vec4_t *buffer = localBuffer;
-	// If a dynamic allocation is worth it
-	if( m_shared->hasSibling ) {
-		// Allocate some room within the global buffer for frame colors allocation.
-		wsw::PodVector<uint32_t> *const sharedBuffer = m_shared->overrideColorsBuffer;
-		const auto offset = sharedBuffer->size();
-		const auto length = ::basicHullsHolder.getIcosphereForLevel( m_shared->simulatedSubdivLevel ).vertices.size();
-		sharedBuffer->resize( sharedBuffer->size() + length );
-		// The data could have been reallocated during resize, retrieve the data pointer after the resize() call
-		static_assert( sizeof( byte_vec4_t ) == sizeof( uint32_t ) );
-		buffer = (byte_vec4_t *)( sharedBuffer->data() + offset );
-		// Store as a relative offset, so it's stable regardless of reallocations
-		cacheEntry->overrideColorsSpanInBuffer = std::make_pair<unsigned, unsigned>( offset, length );
-	}
-
-	calcOverrideColors( buffer, viewOrigin, viewAxis, chosenSubdivLevel, lights, affectingLightIndices,
+	calcOverrideColors( localBuffer, viewOrigin, viewAxis, chosenSubdivLevel, lights, affectingLightIndices,
 						actuallyApplyViewDotFade, actuallyApplyZFade, actuallyApplyLights );
 
-	return buffer;
+	return localBuffer;
 }
 
 struct SolidMeshScratchpad {
@@ -2866,9 +2834,8 @@ auto SimulatedHullsSystem::HullSolidDynamicMesh::fillMeshBuffers( const float *_
 
 	const byte_vec4_t *overrideColors;
 	if( !m_shared->isAKeyframedHull ) {
-		overrideColors = getOverrideColorsCheckingSiblingCache( overrideColorsBuffer, viewOrigin, viewAxis,
-																chosenSubdivLevel, scratchpad->cacheEntry,
-																lights, affectingLightIndices );
+		overrideColors = getOverrideColors( overrideColorsBuffer, viewOrigin, viewAxis,
+											chosenSubdivLevel, lights, affectingLightIndices );
 	} else {
 		const unsigned dataLevelToUse     = wsw::min( chosenSubdivLevel, m_shared->simulatedSubdivLevel );
 		const IcosphereData &lodDataToUse = ::basicHullsHolder.getIcosphereForLevel( dataLevelToUse );
@@ -3144,10 +3111,8 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *_
 	assert( colorsBufferSize && colorsBufferSize < ( 1 << 12 ) );
 	auto *const overrideColorsBuffer = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * colorsBufferSize );
 
-	const byte_vec4_t *overrideColors = getOverrideColorsCheckingSiblingCache( overrideColorsBuffer, viewOrigin,
-																			   viewAxis, chosenSubdivLevel,
-																			   scratchpad->cacheEntry,
-																			   lights, affectingLightIndices );
+	const byte_vec4_t *overrideColors = getOverrideColors( overrideColorsBuffer, viewOrigin, viewAxis,
+														   chosenSubdivLevel, lights, affectingLightIndices );
 
 	const byte_vec4_t *colorsToUse = overrideColors ? overrideColors : m_shared->simulatedColors;
 

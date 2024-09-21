@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 #include "program.h"
+#include "frontend.h"
 #include "backendlocal.h"
 #include "../common/memspecbuilder.h"
 
@@ -1030,10 +1031,8 @@ void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity
 	RB_DrawElements( fsh, 0, 6, 0, 6 );
 }
 
-[[nodiscard]]
-static auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::span<const uint16_t> lightIndicesSpan,
-										const float *mins, const float *maxs,
-										uint16_t *affectingLightIndices ) -> unsigned {
+auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::span<const uint16_t> lightIndicesSpan,
+								 const float *mins, const float *maxs, uint16_t *affectingLightIndices ) -> unsigned {
 	assert( mins[3] == 0.0f && maxs[3] == 1.0f );
 
 	const uint16_t *lightIndices = lightIndicesSpan.data();
@@ -1235,79 +1234,10 @@ void R_SubmitQuadPolysToBackend( const FrontendToBackendShared *fsh, const entit
 	}
 }
 
-void R_SubmitDynamicMeshesToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
-									const mfog_t *fog, const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
-	// Maximum supported icosphere subdiv level
-	// TODO check these values, share with the icosphere code
-	// TODO we do not have to transfer icosphere indices every frame
-	constexpr auto maxStorageVertices = 2562;
-	constexpr auto maxStorageIndices  = 15360;
-
-	// TODO: Point to the dynamic stream memory
-	alignas( 16 ) vec4_t positions[maxStorageVertices];
-	alignas( 16 ) vec4_t normals[maxStorageVertices];
-	alignas( 16 ) vec2_t texCoords[maxStorageVertices];
-	alignas( 16 ) byte_vec4_t colors[maxStorageVertices];
-	alignas( 16 ) uint16_t indices[maxStorageIndices];
-
-	uint16_t *affectingLightsStorage = nullptr;
-	const bool hasAvailableLights    = r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty();
-
-	alignas( alignof( void * ) ) uint8_t scratchpad[64];
-	for( const sortedDrawSurf_t &sds: surfSpan ) {
-		const auto *__restrict mesh = (const DynamicMesh *)sds.drawSurf;
-
-		// This call is more useful if dynamic stream memory is used directly
-		// (we can flush the existing buffer if needed and write to now-free space).
-		const auto maybeMaxRequirements = mesh->getStorageRequirements( fsh->viewOrigin, fsh->viewAxis, fsh->fovTangent,
-																		fsh->cameraId, scratchpad );
-		// Won't draw itself
-		if( !maybeMaxRequirements ) {
-			continue;
-		}
-
-		const auto [maxMeshVertices, maxMeshIndices] = *maybeMaxRequirements;
-		if( maxMeshVertices > maxStorageVertices || maxMeshIndices > maxStorageIndices ) [[unlikely]] {
-			continue;
-		}
-
-		std::span<const uint16_t> affectingLightIndices;
-		if( mesh->applyVertexDynLight && hasAvailableLights ) {
-			// Do alloca() once per loop
-			if( !affectingLightsStorage ) [[unlikely]] {
-				affectingLightsStorage = (uint16_t *)alloca( sizeof( uint16_t ) * fsh->allVisibleLightIndices.size() );
-			}
-			const auto numAffectingLights = findLightsThatAffectBounds( fsh->dynamicLights,
-																		fsh->allVisibleLightIndices,
-																		mesh->cullMins, mesh->cullMaxs,
-																		affectingLightsStorage );
-			affectingLightIndices = { affectingLightsStorage, numAffectingLights };
-		}
-
-		const auto [numPolyVertices, numPolyIndices] = mesh->fillMeshBuffers( fsh->viewOrigin, fsh->viewAxis,
-																			  fsh->fovTangent,
-																			  fsh->cameraId,
-																			  fsh->dynamicLights, affectingLightIndices,
-																			  scratchpad,
-																			  positions, normals,
-																			  texCoords, colors, indices );
-
-		// TODO....
-		RB_FlushDynamicMeshes();
-		// TODO: Get rid of "mesh_", write to the dynamic stream memory directly
-
-		mesh_t mesh_;
-		memset( &mesh_, 0, sizeof( mesh_ ) );
-
-		mesh_.elems          = indices;
-		mesh_.numElems       = numPolyIndices;
-		mesh_.numVerts       = numPolyVertices;
-		mesh_.xyzArray       = positions;
-		mesh_.stArray        = texCoords;
-		mesh_.colorsArray[0] = colors;
-
-		RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh_, GL_TRIANGLES, 0.0f, 0.0f );
-	}
+void R_SubmitDynamicMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
+									const mfog_t *fog, const portalSurface_t *portalSurface, const DynamicMeshDrawSurface *drawSurface ) {
+	// TODO: Write to the dynamic stream memory directly
+	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, drawSurface->legacyMesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
 static wsw_forceinline void calcAddedParticleLight( const float *__restrict particleOrigin,

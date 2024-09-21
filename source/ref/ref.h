@@ -493,6 +493,7 @@ struct QuadPoly {
 
 struct DynamicMesh {
 	struct shader_s *material;
+
 	float cullMins[4], cullMaxs[4];
 
 	bool applyVertexDynLight { false };

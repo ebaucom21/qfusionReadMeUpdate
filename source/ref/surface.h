@@ -35,6 +35,14 @@ enum drawSurfaceType_t : unsigned {
 	ST_MAX_TYPES,
 };
 
+struct DynamicMeshDrawSurface {
+	unsigned requiredNumVertices;
+	unsigned requiredNumIndices;
+	const struct DynamicMesh *dynamicMesh;
+	struct mesh_s *legacyMesh;
+	char scratchpad[32];
+};
+
 struct MergedBspSurface {
 	struct shader_s *shader;
 	struct mfog_s *fog;
