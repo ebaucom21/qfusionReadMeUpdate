@@ -130,7 +130,6 @@ private:
 		unsigned renderFlags { 0 };
 
 		unsigned cameraId { ~0u };
-		unsigned cameraIndex { ~0u };
 		unsigned sceneIndex { ~0u };
 
 		int viewCluster { -1 };
@@ -173,6 +172,8 @@ private:
 		PodBufferHolder<drawSurfaceBSP_t> *bspDrawSurfacesBuffer;
 		PodBufferHolder<MergedSurfSpan> *drawSurfSurfSpansBuffer;
 
+		PodBufferHolder<uint8_t> *leafSurfTableBuffer;
+		PodBufferHolder<unsigned> *leafSurfNumsBuffer;
 
 		PodBufferHolder<uint8_t> *surfVisTableBuffer;
 		PodBufferHolder<VertElemSpan> *drawSurfVertElemSpansBuffer;
@@ -382,11 +383,10 @@ private:
 									-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
 	template <unsigned Arch>
-	void cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
-												 std::span<const unsigned> indicesOfLeaves,
-												 std::span<const Frustum> occluderFrusta,
-												 MergedSurfSpan *mergedSurfSpans,
-												 uint8_t *surfVisTable );
+	void cullSurfacesByOccludersArch( std::span<const unsigned> indicesOfSurfaces,
+									  std::span<const Frustum> occluderFrusta,
+									  MergedSurfSpan *mergedSurfSpans,
+									  uint8_t *surfVisTable );
 
 	template <unsigned Arch>
 	[[nodiscard]]
@@ -413,11 +413,10 @@ private:
 									std::span<const Frustum> occluderFrusta )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
-	void cullSurfacesInVisLeavesByOccludersSse2( unsigned cameraIndex,
-												 std::span<const unsigned> indicesOfLeaves,
-												 std::span<const Frustum> occluderFrusta,
-												 MergedSurfSpan *mergedSurfSpans,
-												 uint8_t *surfVisTable );
+	void cullSurfacesByOccludersSse2( std::span<const unsigned> indicesOfSurfaces,
+									  std::span<const Frustum> occluderFrusta,
+									  MergedSurfSpan *mergedSurfSpans,
+									  uint8_t *surfVisTable );
 
 	[[nodiscard]]
 	auto cullEntriesWithBoundsSse2( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
@@ -443,11 +442,10 @@ private:
 									 std::span<const Frustum> occluderFrusta )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
-	void cullSurfacesInVisLeavesByOccludersSse41( unsigned cameraIndex,
-												  std::span<const unsigned> indicesOfLeaves,
-												  std::span<const Frustum> occluderFrusta,
-												  MergedSurfSpan *mergedSurfSpans,
-												  uint8_t *surfVisTable );
+	void cullSurfacesByOccludersSse41( std::span<const unsigned> indicesOfSurfaces,
+									   std::span<const Frustum> occluderFrusta,
+									   MergedSurfSpan *mergedSurfSpans,
+									   uint8_t *surfVisTable );
 
 	[[nodiscard]]
 	auto cullEntriesWithBoundsSse41( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
@@ -461,11 +459,10 @@ private:
 									   uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 
-	void cullSurfacesInVisLeavesByOccludersAvx( unsigned cameraIndex,
-												std::span<const unsigned> indicesOfLeaves,
-												std::span<const Frustum> occluderFrusta,
-												MergedSurfSpan *mergedSurfSpans,
-												uint8_t *surfVisTable );
+	void cullSurfacesByOccludersAvx( std::span<const unsigned> indicesOfSurfaces,
+									 std::span<const Frustum> occluderFrusta,
+									 MergedSurfSpan *mergedSurfSpans,
+									 uint8_t *surfVisTable );
 	[[nodiscard]]
 	auto cullLeavesByOccludersAvx( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
 								   std::span<const Frustum> occluderFrusta )
@@ -492,11 +489,8 @@ private:
 								std::span<const Frustum> occluderFrusta )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
-	void cullSurfacesInVisLeavesByOccluders( unsigned cameraIndex,
-											 std::span<const unsigned> indicesOfLeaves,
-											 std::span<const Frustum> occluderFrusta,
-											 MergedSurfSpan *mergedSurfSpans,
-											 uint8_t *surfVisTable );
+	void cullSurfacesByOccluders( std::span<const unsigned> indicesOfSurfaces, std::span<const Frustum> occluderFrusta,
+								  MergedSurfSpan *mergedSurfSpans, uint8_t *surfVisTable );
 
 	[[nodiscard]]
 	static auto coPrepareOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;
@@ -562,8 +556,7 @@ private:
 	auto ( Frontend::*m_buildFrustaOfOccludersArchMethod )( StateForCamera *, std::span<const SortedOccluder> ) -> std::span<const Frustum>;
 	auto ( Frontend::*m_cullLeavesByOccludersArchMethod )( StateForCamera *, std::span<const unsigned>, std::span<const Frustum> )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
-	void ( Frontend::*m_cullSurfacesInVisLeavesByOccludersArchMethod )
-		( unsigned, std::span<const unsigned>, std::span<const Frustum>, MergedSurfSpan *, uint8_t * );
+	void ( Frontend::*m_cullSurfacesByOccludersArchMethod )( std::span<const unsigned>, std::span<const Frustum>, MergedSurfSpan *, uint8_t * );
 	auto ( Frontend::*m_cullEntriesWithBoundsArchMethod )( const void *, unsigned, unsigned, unsigned, const Frustum *,
 														   std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
 	auto ( Frontend::*m_cullEntryPtrsWithBoundsArchMethod )( const void **, unsigned, unsigned, const Frustum *,
@@ -605,6 +598,9 @@ private:
 
 		PodBufferHolder<unsigned> visibleOccludersBuffer;
 		PodBufferHolder<SortedOccluder> sortedOccludersBuffer;
+
+		PodBufferHolder<uint8_t> leafSurfTableBuffer;
+		PodBufferHolder<unsigned> leafSurfNumsBuffer;
 
 		PodBufferHolder<DynamicMeshDrawSurface> dynamicMeshDrawSurfacesBuffer;
 		PodBufferHolder<drawSurfaceBSP_t> bspDrawSurfacesBuffer;

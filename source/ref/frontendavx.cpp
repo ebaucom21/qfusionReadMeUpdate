@@ -80,19 +80,18 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	nonZeroIfPartiallyOutside = _mm256_movemask_ps( ymmDist_farthest );
 
 #define IMPLEMENT_cullLeavesByOccluders
-#define IMPLEMENT_cullSurfacesInVisLeavesByOccluders
+#define IMPLEMENT_cullSurfacesByOccluders
 
 #include "frontendcull.inc"
 
 namespace wsw::ref {
 
-void Frontend::cullSurfacesInVisLeavesByOccludersAvx( unsigned cameraIndex,
-													  std::span<const unsigned> indicesOfVisibleLeaves,
-													  std::span<const Frustum> occluderFrusta,
-													  MergedSurfSpan *mergedSurfSpans,
-													  uint8_t *surfVisTable ) {
+void Frontend::cullSurfacesByOccludersAvx( std::span<const unsigned> indicesOfSurfaces,
+										   std::span<const Frustum> occluderFrusta,
+										   MergedSurfSpan *mergedSurfSpans,
+										   uint8_t *surfVisTable ) {
 	_mm256_zeroupper();
-	cullSurfacesInVisLeavesByOccludersArch<Avx>( cameraIndex, indicesOfVisibleLeaves, occluderFrusta, mergedSurfSpans, surfVisTable );
+	cullSurfacesByOccludersArch<Avx>( indicesOfSurfaces, occluderFrusta, mergedSurfSpans, surfVisTable );
 	_mm256_zeroupper();
 }
 

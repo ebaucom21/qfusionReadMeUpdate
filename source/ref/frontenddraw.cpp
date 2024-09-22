@@ -414,7 +414,6 @@ auto Frontend::setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
 	stateForCamera->refdef      = *fd;
 	stateForCamera->farClip     = getDefaultFarClip( fd );
 	stateForCamera->cameraId    = m_cameraIdCounter++;
-	stateForCamera->cameraIndex = m_cameraIndexCounter++;
 	stateForCamera->sceneIndex  = sceneIndex;
 
 	stateForCamera->renderFlags = 0;
@@ -524,18 +523,51 @@ auto Frontend::coProcessLeavesAndOccluders( CoroTask::StartInfo si, Frontend *se
 		std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = self->cullLeavesByOccluders( stateForCamera,
 																						      visibleLeaves,
 																						      bestFrusta );
+
 		self->markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans, surfVisTable );
 
-		auto cullSubrangeFn = [=]( unsigned, unsigned start, unsigned end ) {
-			std::span<const unsigned> workloadSpan { partiallyOccludedLeaves.data() + start, partiallyOccludedLeaves.data() + end };
-			self->cullSurfacesInVisLeavesByOccluders( stateForCamera->cameraIndex, workloadSpan, bestFrusta, mergedSurfSpans, surfVisTable );
-		};
+		if( !partiallyOccludedLeaves.empty() ) {
+			const unsigned numAllSurfaces = rsh.worldBrushModel->numModelSurfaces;
 
-		TaskHandle newTask = si.taskSystem->addForSubrangesInRange( { 0, partiallyOccludedLeaves.size() }, 8,
-																	std::span<const TaskHandle>{},
-																	std::move( cullSubrangeFn ),
-																	(TaskSystem::Affinity)si.affinity );
-		co_await si.taskSystem->awaiterOf( newTask );
+			// We preallocate it earlier so this is actually a memset call
+			uint8_t *__restrict leafSurfTable = stateForCamera->leafSurfTableBuffer->reserveZeroedAndGet( numAllSurfaces );
+
+			auto fillTableFn = [=]( unsigned, unsigned start, unsigned end ) {
+				const auto leaves = rsh.worldBrushModel->visleafs;
+				for( unsigned index = start; index < end; ++index ) {
+					const auto *leaf = leaves[partiallyOccludedLeaves[index]];
+					const unsigned *__restrict leafSurfaces = leaf->visSurfaces;
+					const unsigned numLeafSurfaces = leaf->numVisSurfaces;
+					unsigned surfIndex = 0;
+					do {
+						leafSurfTable[leafSurfaces[surfIndex]] = 1;
+					} while( ++surfIndex < numLeafSurfaces );
+				}
+			};
+
+			TaskHandle fillTask = si.taskSystem->addForSubrangesInRange( { 0, partiallyOccludedLeaves.size() }, 48,
+																		 std::span<const TaskHandle> {},
+																		 std::move( fillTableFn ) );
+			co_await si.taskSystem->awaiterOf( fillTask );
+
+			unsigned *__restrict surfNums = stateForCamera->leafSurfNumsBuffer->get();
+			unsigned numSurfNums = 0;
+			unsigned surfNum     = 0;
+			do {
+				surfNums[numSurfNums] = surfNum;
+				numSurfNums += leafSurfTable[surfNum];
+			} while( ++surfNum < numAllSurfaces );
+
+			auto cullSubrangeFn = [=]( unsigned, unsigned start, unsigned end ) {
+				std::span<const unsigned> workloadSpan { surfNums + start, surfNums + end };
+				self->cullSurfacesByOccluders( workloadSpan, bestFrusta, mergedSurfSpans, surfVisTable );
+			};
+
+			TaskHandle cullTask = si.taskSystem->addForSubrangesInRange( { 0, numSurfNums }, 384,
+																		std::span<const TaskHandle>{},
+																		std::move( cullSubrangeFn ) );
+			co_await si.taskSystem->awaiterOf( cullTask );
+		}
 	}
 
 	stateForCamera->partiallyOccludedLeaves = partiallyOccludedLeaves;
@@ -606,6 +638,13 @@ auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si
 			stateForCamera->drawSurfVertElemSpansBuffer->reserve( estimatedNumSubspans );
 
 			stateForCamera->surfVisTableBuffer->reserveZeroed( numWorldSurfaces );
+
+			if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
+				if( !( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
+					stateForCamera->leafSurfTableBuffer->reserve( numWorldSurfaces );
+					stateForCamera->leafSurfNumsBuffer->reserve( numWorldSurfaces );
+				}
+			}
 
 			MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
 			for( unsigned i = 0; i < numMergedSurfaces; ++i ) {

@@ -774,8 +774,6 @@ typedef struct msurface_s {
 	unsigned numInstances;
 	unsigned mergedSurfNum;
 
-	mutable uint8_t occlusionCullingFrames[MAX_REF_CAMERAS];
-
 	mutable unsigned traceFrame;
 
 	mesh_t mesh;

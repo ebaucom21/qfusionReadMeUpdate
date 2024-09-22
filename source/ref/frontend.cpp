@@ -187,27 +187,27 @@ static auto suggestNumExtraThreads() -> unsigned {
 Frontend::Frontend() : m_taskSystem( { .numExtraThreads = suggestNumExtraThreads() } ) {
 	const auto features = Sys_GetProcessorFeatures();
 	if( Q_CPU_FEATURE_SSE41 & features ) {
-		m_collectVisibleWorldLeavesArchMethod          = &Frontend::collectVisibleWorldLeavesSse41;
-		m_collectVisibleOccludersArchMethod            = &Frontend::collectVisibleOccludersSse41;
-		m_buildFrustaOfOccludersArchMethod             = &Frontend::buildFrustaOfOccludersSse41;
-		m_cullLeavesByOccludersArchMethod              = &Frontend::cullLeavesByOccludersSse41;
+		m_collectVisibleWorldLeavesArchMethod = &Frontend::collectVisibleWorldLeavesSse41;
+		m_collectVisibleOccludersArchMethod   = &Frontend::collectVisibleOccludersSse41;
+		m_buildFrustaOfOccludersArchMethod    = &Frontend::buildFrustaOfOccludersSse41;
+		m_cullLeavesByOccludersArchMethod     = &Frontend::cullLeavesByOccludersSse41;
 		if( Q_CPU_FEATURE_AVX & features ) {
-			m_cullSurfacesInVisLeavesByOccludersArchMethod = &Frontend::cullSurfacesInVisLeavesByOccludersAvx;
-			m_cullLeavesByOccludersArchMethod              = &Frontend::cullLeavesByOccludersAvx;
+			m_cullSurfacesByOccludersArchMethod = &Frontend::cullSurfacesByOccludersAvx;
+			m_cullLeavesByOccludersArchMethod   = &Frontend::cullLeavesByOccludersAvx;
 		} else {
-			m_cullSurfacesInVisLeavesByOccludersArchMethod = &Frontend::cullSurfacesInVisLeavesByOccludersSse41;
-			m_cullLeavesByOccludersArchMethod              = &Frontend::cullLeavesByOccludersSse41;
+			m_cullSurfacesByOccludersArchMethod = &Frontend::cullSurfacesByOccludersSse41;
+			m_cullLeavesByOccludersArchMethod   = &Frontend::cullLeavesByOccludersSse41;
 		}
-		m_cullEntriesWithBoundsArchMethod              = &Frontend::cullEntriesWithBoundsSse41;
-		m_cullEntryPtrsWithBoundsArchMethod            = &Frontend::cullEntryPtrsWithBoundsSse41;
+		m_cullEntriesWithBoundsArchMethod   = &Frontend::cullEntriesWithBoundsSse41;
+		m_cullEntryPtrsWithBoundsArchMethod = &Frontend::cullEntryPtrsWithBoundsSse41;
 	} else {
-		m_collectVisibleWorldLeavesArchMethod          = &Frontend::collectVisibleWorldLeavesSse2;
-		m_collectVisibleOccludersArchMethod            = &Frontend::collectVisibleOccludersSse2;
-		m_buildFrustaOfOccludersArchMethod             = &Frontend::buildFrustaOfOccludersSse2;
-		m_cullLeavesByOccludersArchMethod              = &Frontend::cullLeavesByOccludersSse2;
-		m_cullSurfacesInVisLeavesByOccludersArchMethod = &Frontend::cullSurfacesInVisLeavesByOccludersSse2;
-		m_cullEntriesWithBoundsArchMethod              = &Frontend::cullEntriesWithBoundsSse2;
-		m_cullEntryPtrsWithBoundsArchMethod            = &Frontend::cullEntryPtrsWithBoundsSse2;
+		m_collectVisibleWorldLeavesArchMethod = &Frontend::collectVisibleWorldLeavesSse2;
+		m_collectVisibleOccludersArchMethod   = &Frontend::collectVisibleOccludersSse2;
+		m_buildFrustaOfOccludersArchMethod    = &Frontend::buildFrustaOfOccludersSse2;
+		m_cullLeavesByOccludersArchMethod     = &Frontend::cullLeavesByOccludersSse2;
+		m_cullSurfacesByOccludersArchMethod   = &Frontend::cullSurfacesByOccludersSse2;
+		m_cullEntriesWithBoundsArchMethod     = &Frontend::cullEntriesWithBoundsSse2;
+		m_cullEntryPtrsWithBoundsArchMethod   = &Frontend::cullEntryPtrsWithBoundsSse2;
 	}
 }
 
@@ -266,6 +266,8 @@ auto Frontend::allocStateForCamera() -> StateForCamera * {
 	stateForCamera->occluderPassPartiallyVisibleLeavesBuffer = &resultStorage->occluderPassPartiallyVisibleLeavesBuffer;
 	stateForCamera->visibleOccludersBuffer                   = &resultStorage->visibleOccludersBuffer;
 	stateForCamera->sortedOccludersBuffer                    = &resultStorage->sortedOccludersBuffer;
+	stateForCamera->leafSurfTableBuffer                      = &resultStorage->leafSurfTableBuffer;
+	stateForCamera->leafSurfNumsBuffer                       = &resultStorage->leafSurfNumsBuffer;
 	stateForCamera->drawSurfSurfSpansBuffer                  = &resultStorage->drawSurfSurfSpansBuffer;
 	stateForCamera->bspDrawSurfacesBuffer                    = &resultStorage->bspDrawSurfacesBuffer;
 	stateForCamera->surfVisTableBuffer                       = &resultStorage->bspSurfVisTableBuffer;

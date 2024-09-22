@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define IMPLEMENT_collectVisibleOccluders
 #define IMPLEMENT_buildFrustaOfOccluders
 #define IMPLEMENT_cullLeavesByOccluders
-#define IMPLEMENT_cullSurfacesInVisLeavesByOccluders
+#define IMPLEMENT_cullSurfacesByOccluders
 #define IMPLEMENT_cullEntriesWithBounds
 #define IMPLEMENT_cullEntryPtrsWithBounds
 
@@ -58,12 +58,11 @@ auto Frontend::cullLeavesByOccludersSse2( StateForCamera *stateForCamera, std::s
 	return cullLeavesByOccludersArch<Sse2>( stateForCamera, indicesOfLeaves, occluderFrusta );
 }
 
-void Frontend::cullSurfacesInVisLeavesByOccludersSse2( unsigned cameraIndex,
-													   std::span<const unsigned> indicesOfLeaves,
-													   std::span<const Frustum> occluderFrusta,
-													   MergedSurfSpan *mergedSurfSpans,
-													   uint8_t *surfVisTable ) {
-	return cullSurfacesInVisLeavesByOccludersArch<Sse2>( cameraIndex, indicesOfLeaves, occluderFrusta, mergedSurfSpans, surfVisTable );
+void Frontend::cullSurfacesByOccludersSse2( std::span<const unsigned> indicesOfSurfaces,
+											std::span<const Frustum> occluderFrusta,
+											MergedSurfSpan *mergedSurfSpans,
+											uint8_t *surfVisTable ) {
+	return cullSurfacesByOccludersArch<Sse2>( indicesOfSurfaces, occluderFrusta, mergedSurfSpans, surfVisTable );
 }
 
 auto Frontend::cullEntriesWithBoundsSse2( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,

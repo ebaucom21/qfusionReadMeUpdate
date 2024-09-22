@@ -577,13 +577,9 @@ auto Frontend::cullLeavesByOccluders( StateForCamera *stateForCamera, std::span<
 	return ( this->*m_cullLeavesByOccludersArchMethod )( stateForCamera, indicesOfLeaves, occluderFrusta );
 }
 
-void Frontend::cullSurfacesInVisLeavesByOccluders( unsigned cameraIndex,
-												   std::span<const unsigned> indicesOfLeaves,
-												   std::span<const Frustum> occluderFrusta,
-												   MergedSurfSpan *mergedSurfSpans,
-												   uint8_t *surfVisTable ) {
-	return ( this->*m_cullSurfacesInVisLeavesByOccludersArchMethod )( cameraIndex, indicesOfLeaves, occluderFrusta,
-																	  mergedSurfSpans, surfVisTable );
+void Frontend::cullSurfacesByOccluders( std::span<const unsigned> indicesOfSurfaces, std::span<const Frustum> occluderFrusta,
+										MergedSurfSpan *mergedSurfSpans, uint8_t *surfVisTable ) {
+	return ( this->*m_cullSurfacesByOccludersArchMethod )( indicesOfSurfaces, occluderFrusta, mergedSurfSpans, surfVisTable );
 }
 
 auto Frontend::cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,

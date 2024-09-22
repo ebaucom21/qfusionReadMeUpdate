@@ -385,15 +385,13 @@ auto Frontend::cullLeavesByOccludersArch( StateForCamera *stateForCamera,
 
 #endif
 
-#ifdef IMPLEMENT_cullSurfacesInVisLeavesByOccluders
+#ifdef IMPLEMENT_cullSurfacesByOccluders
 
 template <unsigned Arch>
-void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
-													   std::span<const unsigned> indicesOfVisibleLeaves,
-													   std::span<const Frustum> occluderFrusta,
-													   MergedSurfSpan *mergedSurfSpans,
-													   uint8_t *surfVisTable ) {
+void Frontend::cullSurfacesByOccludersArch( std::span<const unsigned> surfNums, std::span<const Frustum> occluderFrusta,
+											MergedSurfSpan *mergedSurfSpans, uint8_t *surfVisTable ) {
 	assert( !occluderFrusta.empty() );
+	assert( !surfNums.empty() );
 
 #ifdef DEBUG_OCCLUDERS
 	const int pinnedOccluderNum = Cvar_Integer( "pinnedOccluderNum" );
@@ -421,57 +419,45 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( unsigned cameraIndex,
 		}
 	};
 
-	const msurface_t *const surfaces    = rsh.worldBrushModel->surfaces;
-	const auto leaves                   = rsh.worldBrushModel->visleafs;
-	const uint8_t occlusionCullingFrame = m_occlusionCullingFrame;
-	const unsigned numOccluders         = occluderFrusta.size();
-	for( const unsigned leafNum: indicesOfVisibleLeaves ) {
-		const mleaf_s *const leaf             = leaves[leafNum];
-		const unsigned *const leafSurfaceNums = leaf->visSurfaces;
-		const unsigned numLeafSurfaces        = leaf->numVisSurfaces;
+	const msurface_t *const surfaces = rsh.worldBrushModel->surfaces;
+	const unsigned numOccluders      = occluderFrusta.size();
 
-		for( unsigned surfIndex = 0; surfIndex < numLeafSurfaces; ++surfIndex ) {
-			const unsigned surfNum = leafSurfaceNums[surfIndex];
-			const msurface_t *const __restrict surf = surfaces + surfNum;
-			// Note: This is correct, assuming byte reads are not torn.
-			// Given this assumption, in the worst case we get duplicated checks
-			// which store the same result in the vis table.
-			if( surf->occlusionCullingFrames[cameraIndex] != occlusionCullingFrame ) {
-				surf->occlusionCullingFrames[cameraIndex] = occlusionCullingFrame;
+	size_t surfIndex = 0;
+	do {
+		const unsigned surfNum                  = surfNums[surfIndex];
+		const msurface_t *const __restrict surf = surfaces + surfNum;
 
-				LOAD_BOX_COMPONENTS( surf->mins, surf->maxs );
+		LOAD_BOX_COMPONENTS( surf->mins, surf->maxs );
 
-				bool surfVisible = true;
-				unsigned frustumNum = 0;
-				do {
-					const Frustum *__restrict f = &occluderFrusta[frustumNum];
+		bool surfVisible = true;
+		unsigned frustumNum = 0;
+		do {
+			const Frustum *__restrict f = &occluderFrusta[frustumNum];
 
 #ifdef DEBUG_OCCLUDERS
-					if( pinnedOccluderNum && pinnedOccluderNum != (int)( 1 + frustumNum ) ) {
-						continue;
-					}
+			if( pinnedOccluderNum && pinnedOccluderNum != (int)( 1 + frustumNum ) ) {
+				continue;
+			}
 #endif
 
-					COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( f, const int zeroIfFullyInside )
+			COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( f, const int zeroIfFullyInside )
 
-					if( zeroIfFullyInside == 0 ) [[unlikely]] {
-						surfVisible = false;
-						SHOW_OCCLUDED( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
-						break;
-					}
-				} while( ++frustumNum != numOccluders );
-
-				if( surfVisible ) {
-					surfVisTable[surfNum] = 1;
-					assert( surf->mergedSurfNum > 0 );
-					const unsigned mergedSurfNum = surf->mergedSurfNum - 1;
-					MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];
-					setMinAtomic( &span->firstSurface, (int)surfNum );
-					setMaxAtomic( &span->lastSurface, (int)surfNum );
-				}
+			if( zeroIfFullyInside == 0 ) [[unlikely]] {
+				surfVisible = false;
+				SHOW_OCCLUDED( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
+				break;
 			}
+		} while( ++frustumNum != numOccluders );
+
+		if( surfVisible ) {
+			surfVisTable[surfNum] = 1;
+			assert( surf->mergedSurfNum > 0 );
+			const unsigned mergedSurfNum = surf->mergedSurfNum - 1;
+			MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];
+			setMinAtomic( &span->firstSurface, (int)surfNum );
+			setMaxAtomic( &span->lastSurface, (int)surfNum );
 		}
-	}
+	} while( ++surfIndex != surfNums.size() );
 }
 
 #endif
