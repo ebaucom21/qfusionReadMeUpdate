@@ -111,6 +111,15 @@ typedef struct r_backend_s {
 	int currentRegProgramType;
 	uint64_t currentRegProgramFeatures;
 
+	// We have to use two buffers as we currently have to perform a separate pass for portals
+	struct {
+		unsigned vertexDataSize;
+		unsigned indexDataSize;
+		mesh_vbo_t *vbo;
+		void *vboData;
+		void *iboData;
+	} frameUploads[2];
+
 	rbDynamicStream_t dynamicStreams[RB_VBO_NUM_STREAMS];
 	rbDynamicDraw_t dynamicDraws[MAX_DYNAMIC_DRAWS];
 	int numDynamicDraws;

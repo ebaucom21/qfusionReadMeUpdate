@@ -128,19 +128,21 @@ void Frontend::collectVisibleParticles( StateForCamera *stateForCamera, Scene *s
 	addParticlesToSortList( stateForCamera, scene->m_polyent, scene->m_particles.data(), visibleAggregateIndices );
 }
 
-void Frontend::collectVisibleDynamicMeshes( StateForCamera *stateForCamera,  Scene *scene, std::span<const Frustum> occluderFrusta ) {
+void Frontend::collectVisibleDynamicMeshes( StateForCamera *stateForCamera,  Scene *scene, std::span<const Frustum> occluderFrusta,
+											std::pair<unsigned, unsigned> *offsetsOfVerticesAndIndices ) {
 	uint16_t tmpIndices[wsw::max( Scene::kMaxDynamicMeshes, Scene::kMaxCompoundDynamicMeshes )];
 
 	const std::span<const DynamicMesh *> meshes = scene->m_dynamicMeshes;
 	const auto visibleDynamicMeshIndices = cullDynamicMeshes( stateForCamera, meshes.data(),
 															  meshes.size(), occluderFrusta, tmpIndices );
-	addDynamicMeshesToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicMeshes.data(), visibleDynamicMeshIndices );
+	addDynamicMeshesToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicMeshes.data(),
+								visibleDynamicMeshIndices, offsetsOfVerticesAndIndices );
 
 	const std::span<const Scene::CompoundDynamicMesh> compoundMeshes = scene->m_compoundDynamicMeshes;
 	const auto visibleCompoundMeshesIndices = cullCompoundDynamicMeshes( stateForCamera, compoundMeshes,
 																		 occluderFrusta, tmpIndices );
-	addCompoundDynamicMeshesToSortList( stateForCamera, scene->m_polyent,
-										scene->m_compoundDynamicMeshes.data(), visibleCompoundMeshesIndices );
+	addCompoundDynamicMeshesToSortList( stateForCamera, scene->m_polyent, scene->m_compoundDynamicMeshes.data(),
+										visibleCompoundMeshesIndices, offsetsOfVerticesAndIndices );
 }
 
 auto Frontend::collectVisibleLights( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> occluderFrusta )

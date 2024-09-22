@@ -302,7 +302,8 @@ private:
 	auto cullParticleAggregates( StateForCamera *stateForCamera, std::span<const Scene::ParticlesAggregate> aggregates,
 								 std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
-	void collectVisibleDynamicMeshes( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta );
+	void collectVisibleDynamicMeshes( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta,
+									  std::pair<unsigned, unsigned> *offsetsOfVerticesAndIndices );
 
 	[[nodiscard]]
 	auto cullCompoundDynamicMeshes( StateForCamera *stateForCamera, std::span<const Scene::CompoundDynamicMesh> meshes,
@@ -338,12 +339,14 @@ private:
 								 const Scene::ParticlesAggregate *particles, std::span<const uint16_t> aggregateIndices );
 
 	void addDynamicMeshesToSortList( StateForCamera *stateForCamera, const entity_t *meshEntity, const DynamicMesh **meshes,
-									 std::span<const uint16_t> indicesOfMeshes );
+									 std::span<const uint16_t> indicesOfMeshes, std::pair<unsigned, unsigned> *offsetsOfVerticesAndIndices );
 
 	void addCompoundDynamicMeshesToSortList( StateForCamera *stateForCamera, const entity_t *meshEntity,
-											 const Scene::CompoundDynamicMesh *meshes, std::span<const uint16_t> indicesOfMeshes );
+											 const Scene::CompoundDynamicMesh *meshes, std::span<const uint16_t> indicesOfMeshes,
+											 std::pair<unsigned, unsigned> *offsetsOfVerticesAndIndices );
 
-	void addDynamicMeshToSortList( StateForCamera *stateForCamera, const entity_t *meshEntity, const DynamicMesh *mesh, float distance );
+	void addDynamicMeshToSortList( StateForCamera *stateForCamera, const entity_t *meshEntity, const DynamicMesh *mesh,
+								   float distance, std::pair<unsigned, unsigned> *offsetsOfVerticesAndIndices );
 
 	void addCoronaLightsToSortList( StateForCamera *stateForCamera, const entity_t *polyEntity, const Scene::DynamicLight *lights,
 									std::span<const uint16_t> indices );
@@ -642,7 +645,6 @@ private:
 		alignas( 16 ) vec2_t texCoords[maxStorageVertices];
 		alignas( 16 ) byte_vec4_t colors[maxStorageVertices];
 		alignas( 16 ) uint16_t indices[maxStorageIndices];
-		mesh_t mesh;
 	};
 
 	struct DynamicMeshFillDataWorkload {

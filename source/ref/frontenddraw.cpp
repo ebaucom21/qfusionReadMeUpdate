@@ -679,25 +679,30 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 														std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
 														bool areCamerasPortalCameras ) -> CoroTask {
 	wsw::PodVector<DynamicMeshFillDataWorkload> *tmpDynamicMeshFillDataWorkload;
+	unsigned frameUploadGroup;
 	if( areCamerasPortalCameras ) {
 		tmpDynamicMeshFillDataWorkload = &self->m_tmpDynamicMeshFillDataWorkload[1];
+		frameUploadGroup = 1;
 	} else {
 		tmpDynamicMeshFillDataWorkload = &self->m_tmpDynamicMeshFillDataWorkload[0];
+		frameUploadGroup = 0;
 	}
 
 	tmpDynamicMeshFillDataWorkload->clear();
 
 	if( r_drawentities->integer ) {
+		std::pair<unsigned, unsigned> offsetsOfVerticesAndIndices { 0, 0 };
 		for( auto [scene, stateForCamera] : scenesAndCameras ) {
 			const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
-			self->collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta );
+			self->collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta, &offsetsOfVerticesAndIndices );
 
 			for( unsigned i = 0; i < stateForCamera->numDynamicMeshDrawSurfaces; ++i ) {
-				assert( dynamic_cast<const DynamicMesh *>( stateForCamera->dynamicMeshDrawSurfaces[i].dynamicMesh ) );
+				DynamicMeshDrawSurface *drawSurface = &stateForCamera->dynamicMeshDrawSurfaces[i];
+				drawSurface->frameUploadGroup       = frameUploadGroup;
 				tmpDynamicMeshFillDataWorkload->append( DynamicMeshFillDataWorkload {
 					.scene          = scene,
 					.stateForCamera = stateForCamera,
-					.drawSurface    = &stateForCamera->dynamicMeshDrawSurfaces[i],
+					.drawSurface    = drawSurface,
 				});
 			}
 		}
@@ -757,17 +762,28 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 																		   workload.destData->texCoords,
 																		   workload.destData->colors,
 																		   workload.destData->indices );
+			assert( numVertices <= workload.drawSurface->requestedNumVertices );
+			assert( numIndices <= workload.drawSurface->requestedNumIndices );
+			workload.drawSurface->actualNumVertices = numVertices;
+			workload.drawSurface->actualNumIndices  = numIndices;
 
-			std::memset( &workload.destData->mesh, 0, sizeof( mesh_t ) );
-			workload.destData->mesh.numVerts       = numVertices;
-			workload.destData->mesh.numElems       = numIndices;
-			workload.destData->mesh.xyzArray       = workload.destData->positions;
-			workload.destData->mesh.stArray        = workload.destData->texCoords;
-			workload.destData->mesh.colorsArray[0] = workload.destData->colors;
-			workload.destData->mesh.elems          = workload.destData->indices;
+			// fillMeshBuffers() may legally return zeroes (even if the initially requested numbers were non-zero)
+			if( numVertices && numIndices ) {
+				mesh_t mesh;
 
-			workload.drawSurface->legacyMesh = &workload.destData->mesh;
+				std::memset( &mesh, 0, sizeof( mesh_t ) );
+				mesh.numVerts       = numVertices;
+				mesh.numElems       = numIndices;
+				mesh.xyzArray       = workload.destData->positions;
+				mesh.stArray        = workload.destData->texCoords;
+				mesh.colorsArray[0] = workload.destData->colors;
+				mesh.elems          = workload.destData->indices;
+
+				R_SetFrameUploadMeshSubdata( frameUploadGroup, workload.drawSurface->verticesOffset, workload.drawSurface->indicesOffset, &mesh );
+			}
 		};
+
+		R_BeginFrameUploads( frameUploadGroup );
 		fillMeshBuffersTask = si.taskSystem->addForIndicesInRange( { 0u, (unsigned)tmpDynamicMeshFillDataWorkload->size() },
 																   std::span<const TaskHandle> {}, std::move( fn ) );
 	}
@@ -839,6 +855,7 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 
 	if( fillMeshBuffersTask ) {
 		co_await si.taskSystem->awaiterOf( fillMeshBuffersTask );
+		R_EndFrameUploads( frameUploadGroup );
 	}
 }
 

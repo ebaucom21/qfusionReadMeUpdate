@@ -36,10 +36,15 @@ enum drawSurfaceType_t : unsigned {
 };
 
 struct DynamicMeshDrawSurface {
-	unsigned requiredNumVertices;
-	unsigned requiredNumIndices;
+	// TODO: Do we really need to keep temporaries of algorithms here
+	unsigned requestedNumVertices;
+	unsigned requestedNumIndices;
+	unsigned actualNumVertices;
+	unsigned actualNumIndices;
+	unsigned verticesOffset;
+	unsigned indicesOffset;
+	unsigned frameUploadGroup;
 	const struct DynamicMesh *dynamicMesh;
-	struct mesh_s *legacyMesh;
 	char scratchpad[32];
 };
 
