@@ -190,13 +190,10 @@ Frontend::Frontend() : m_taskSystem( { .numExtraThreads = suggestNumExtraThreads
 		m_collectVisibleWorldLeavesArchMethod = &Frontend::collectVisibleWorldLeavesSse41;
 		m_collectVisibleOccludersArchMethod   = &Frontend::collectVisibleOccludersSse41;
 		m_buildFrustaOfOccludersArchMethod    = &Frontend::buildFrustaOfOccludersSse41;
-		m_cullLeavesByOccludersArchMethod     = &Frontend::cullLeavesByOccludersSse41;
 		if( Q_CPU_FEATURE_AVX & features ) {
 			m_cullSurfacesByOccludersArchMethod = &Frontend::cullSurfacesByOccludersAvx;
-			m_cullLeavesByOccludersArchMethod   = &Frontend::cullLeavesByOccludersAvx;
 		} else {
 			m_cullSurfacesByOccludersArchMethod = &Frontend::cullSurfacesByOccludersSse41;
-			m_cullLeavesByOccludersArchMethod   = &Frontend::cullLeavesByOccludersSse41;
 		}
 		m_cullEntriesWithBoundsArchMethod   = &Frontend::cullEntriesWithBoundsSse41;
 		m_cullEntryPtrsWithBoundsArchMethod = &Frontend::cullEntryPtrsWithBoundsSse41;
@@ -204,7 +201,6 @@ Frontend::Frontend() : m_taskSystem( { .numExtraThreads = suggestNumExtraThreads
 		m_collectVisibleWorldLeavesArchMethod = &Frontend::collectVisibleWorldLeavesSse2;
 		m_collectVisibleOccludersArchMethod   = &Frontend::collectVisibleOccludersSse2;
 		m_buildFrustaOfOccludersArchMethod    = &Frontend::buildFrustaOfOccludersSse2;
-		m_cullLeavesByOccludersArchMethod     = &Frontend::cullLeavesByOccludersSse2;
 		m_cullSurfacesByOccludersArchMethod   = &Frontend::cullSurfacesByOccludersSse2;
 		m_cullEntriesWithBoundsArchMethod     = &Frontend::cullEntriesWithBoundsSse2;
 		m_cullEntryPtrsWithBoundsArchMethod   = &Frontend::cullEntryPtrsWithBoundsSse2;
@@ -260,21 +256,19 @@ auto Frontend::allocStateForCamera() -> StateForCamera * {
 	auto *stateForCamera = new( resultStorage->theStateStorage )StateForCamera;
 	resultStorage->isStateConstructed = true;
 
-	stateForCamera->sortList                                 = &resultStorage->meshSortList;
-	stateForCamera->visibleLeavesBuffer                      = &resultStorage->visibleLeavesBuffer;
-	stateForCamera->occluderPassFullyVisibleLeavesBuffer     = &resultStorage->occluderPassFullyVisibleLeavesBuffer;
-	stateForCamera->occluderPassPartiallyVisibleLeavesBuffer = &resultStorage->occluderPassPartiallyVisibleLeavesBuffer;
-	stateForCamera->visibleOccludersBuffer                   = &resultStorage->visibleOccludersBuffer;
-	stateForCamera->sortedOccludersBuffer                    = &resultStorage->sortedOccludersBuffer;
-	stateForCamera->leafSurfTableBuffer                      = &resultStorage->leafSurfTableBuffer;
-	stateForCamera->leafSurfNumsBuffer                       = &resultStorage->leafSurfNumsBuffer;
-	stateForCamera->drawSurfSurfSpansBuffer                  = &resultStorage->drawSurfSurfSpansBuffer;
-	stateForCamera->bspDrawSurfacesBuffer                    = &resultStorage->bspDrawSurfacesBuffer;
-	stateForCamera->surfVisTableBuffer                       = &resultStorage->bspSurfVisTableBuffer;
-	stateForCamera->drawSurfSurfSubspansBuffer               = &resultStorage->drawSurfSurfSubspansBuffer;
-	stateForCamera->drawSurfVertElemSpansBuffer              = &resultStorage->drawSurfVertElemSpansBuffer;
-	stateForCamera->visTestedModelsBuffer                    = &resultStorage->visTestedModelsBuffer;
-	stateForCamera->leafLightBitsOfSurfacesBuffer            = &resultStorage->leafLightBitsOfSurfacesBuffer;
+	stateForCamera->sortList                      = &resultStorage->meshSortList;
+	stateForCamera->visibleLeavesBuffer           = &resultStorage->visibleLeavesBuffer;
+	stateForCamera->visibleOccludersBuffer        = &resultStorage->visibleOccludersBuffer;
+	stateForCamera->sortedOccludersBuffer         = &resultStorage->sortedOccludersBuffer;
+	stateForCamera->leafSurfTableBuffer           = &resultStorage->leafSurfTableBuffer;
+	stateForCamera->leafSurfNumsBuffer            = &resultStorage->leafSurfNumsBuffer;
+	stateForCamera->drawSurfSurfSpansBuffer       = &resultStorage->drawSurfSurfSpansBuffer;
+	stateForCamera->bspDrawSurfacesBuffer         = &resultStorage->bspDrawSurfacesBuffer;
+	stateForCamera->surfVisTableBuffer            = &resultStorage->bspSurfVisTableBuffer;
+	stateForCamera->drawSurfSurfSubspansBuffer    = &resultStorage->drawSurfSurfSubspansBuffer;
+	stateForCamera->drawSurfVertElemSpansBuffer   = &resultStorage->drawSurfVertElemSpansBuffer;
+	stateForCamera->visTestedModelsBuffer         = &resultStorage->visTestedModelsBuffer;
+	stateForCamera->leafLightBitsOfSurfacesBuffer = &resultStorage->leafLightBitsOfSurfacesBuffer;
 
 	resultStorage->particleDrawSurfacesBuffer.reserve( Scene::kMaxParticleAggregates * Scene::kMaxParticlesInAggregate );
 	stateForCamera->particleDrawSurfaces = resultStorage->particleDrawSurfacesBuffer.get();

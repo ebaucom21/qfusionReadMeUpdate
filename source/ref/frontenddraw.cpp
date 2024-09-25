@@ -499,34 +499,11 @@ auto Frontend::setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
 	return stateForCamera;
 }
 
-auto Frontend::coProcessLeavesAndOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask {
-	const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
-	MergedSurfSpan *const mergedSurfSpans   = stateForCamera->drawSurfSurfSpansBuffer->get();
-	uint8_t *const surfVisTable             = stateForCamera->surfVisTableBuffer->get();
-	std::span<const unsigned> visibleLeaves = stateForCamera->visibleLeaves;
-
-	std::span<const unsigned> nonOccludedLeaves;
-	std::span<const unsigned> partiallyOccludedLeaves;
-	if( occluderFrusta.empty() || ( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
-		// No "good enough" occluders found.
-		// Just mark every surface that falls into the primary frustum visible in this case.
-		self->markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans, surfVisTable );
-		nonOccludedLeaves = visibleLeaves;
-	} else {
-		// If we want to limit the number of frusta for occluding surfaces, do it prior to occluding of leaves.
-		// Otherwise, surfaces of leaves which are only occluded by less-important occluders cannot be really occluded
-		// by the set of best occluders, and this case adds some fruitless work for the surface occlusion stage.
-		// Also, occluding leaves is expensive as well, so we want to put some limitations for this part as well.
-		std::span<const Frustum> bestFrusta( occluderFrusta.data(), wsw::min<size_t>( 24, occluderFrusta.size() ) );
-
-		// Test every leaf that falls into the primary frustum against frusta of occluders
-		std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = self->cullLeavesByOccluders( stateForCamera,
-																						      visibleLeaves,
-																						      bestFrusta );
-
-		self->markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans, surfVisTable );
-
-		if( !partiallyOccludedLeaves.empty() ) {
+auto Frontend::coExecPassUponInitialCullingOfLeaves( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask {
+	std::span<const unsigned> surfNumsSpan;
+	if( stateForCamera->useWorldBspOcclusionCulling ) {
+		std::span<const unsigned> leavesInFrustumAndPvs = stateForCamera->leavesInFrustumAndPvs;
+		if( !leavesInFrustumAndPvs.empty() ) {
 			const unsigned numAllSurfaces = rsh.worldBrushModel->numModelSurfaces;
 
 			// We preallocate it earlier so this is actually a memset call
@@ -535,9 +512,9 @@ auto Frontend::coProcessLeavesAndOccluders( CoroTask::StartInfo si, Frontend *se
 			auto fillTableFn = [=]( unsigned, unsigned start, unsigned end ) {
 				const auto leaves = rsh.worldBrushModel->visleafs;
 				for( unsigned index = start; index < end; ++index ) {
-					const auto *leaf = leaves[partiallyOccludedLeaves[index]];
+					const auto *leaf                        = leaves[leavesInFrustumAndPvs[index]];
 					const unsigned *__restrict leafSurfaces = leaf->visSurfaces;
-					const unsigned numLeafSurfaces = leaf->numVisSurfaces;
+					const unsigned numLeafSurfaces          = leaf->numVisSurfaces;
 					unsigned surfIndex = 0;
 					do {
 						leafSurfTable[leafSurfaces[surfIndex]] = 1;
@@ -545,10 +522,12 @@ auto Frontend::coProcessLeavesAndOccluders( CoroTask::StartInfo si, Frontend *se
 				}
 			};
 
-			TaskHandle fillTask = si.taskSystem->addForSubrangesInRange( { 0, partiallyOccludedLeaves.size() }, 48,
+			TaskHandle fillTask = si.taskSystem->addForSubrangesInRange( { 0, leavesInFrustumAndPvs.size() }, 48,
 																		 std::span<const TaskHandle> {},
 																		 std::move( fillTableFn ) );
 			co_await si.taskSystem->awaiterOf( fillTask );
+
+			// The left-pack can be faster with simd, but it is not a bottleneck - we have to wait for occluders anyway
 
 			unsigned *__restrict surfNums = stateForCamera->leafSurfNumsBuffer->get();
 			unsigned numSurfNums = 0;
@@ -558,25 +537,52 @@ auto Frontend::coProcessLeavesAndOccluders( CoroTask::StartInfo si, Frontend *se
 				numSurfNums += leafSurfTable[surfNum];
 			} while( ++surfNum < numAllSurfaces );
 
-			auto cullSubrangeFn = [=]( unsigned, unsigned start, unsigned end ) {
-				std::span<const unsigned> workloadSpan { surfNums + start, surfNums + end };
-				self->cullSurfacesByOccluders( workloadSpan, bestFrusta, mergedSurfSpans, surfVisTable );
-			};
-
-			TaskHandle cullTask = si.taskSystem->addForSubrangesInRange( { 0, numSurfNums }, 384,
-																		std::span<const TaskHandle>{},
-																		std::move( cullSubrangeFn ) );
-			co_await si.taskSystem->awaiterOf( cullTask );
+			surfNumsSpan = { surfNums, numSurfNums };
 		}
+	} else {
+		// We aren't even going to use occluders for culling world surfaces.
+		// Mark surfaces of leaves in the primary frustum visible in this case.
+		MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
+		uint8_t *const surfVisTable           = stateForCamera->surfVisTableBuffer->get();
+		self->markSurfacesOfLeavesAsVisible( stateForCamera->leavesInFrustumAndPvs, mergedSurfSpans, surfVisTable );
 	}
 
-	stateForCamera->partiallyOccludedLeaves = partiallyOccludedLeaves;
-	stateForCamera->nonOccludedLeaves       = nonOccludedLeaves;
+	stateForCamera->surfsInFrustumAndPvs = surfNumsSpan;
+}
+
+auto Frontend::coExecPassUponPreparingOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask {
+	const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
+
+	// Otherwise, we have marked surfaces of leaves immediately upon initial frustum culling of leaves
+	if( stateForCamera->useWorldBspOcclusionCulling ) {
+		MergedSurfSpan *const mergedSurfSpans   = stateForCamera->drawSurfSurfSpansBuffer->get();
+		uint8_t *const surfVisTable             = stateForCamera->surfVisTableBuffer->get();
+		// We were aiming to use occluders, but did not manage to build any
+		if( occluderFrusta.empty() ) [[unlikely]] {
+			// Just mark every surface that falls into the primary frustum visible in this case.
+			self->markSurfacesOfLeavesAsVisible( stateForCamera->leavesInFrustumAndPvs, mergedSurfSpans, surfVisTable );
+		} else {
+			const std::span<const unsigned> surfNums = stateForCamera->surfsInFrustumAndPvs;
+			if( !surfNums.empty() ) {
+				std::span<const Frustum> bestFrusta( occluderFrusta.data(), wsw::min<size_t>( 24, occluderFrusta.size() ) );
+
+				auto cullSubrangeFn = [=]( unsigned, unsigned start, unsigned end ) {
+					std::span<const unsigned> workloadSpan { surfNums.data() + start, surfNums.data() + end };
+					self->cullSurfacesByOccluders( workloadSpan, bestFrusta, mergedSurfSpans, surfVisTable );
+				};
+
+				TaskHandle cullTask = si.taskSystem->addForSubrangesInRange( { 0, surfNums.size() }, 384,
+																			std::span<const TaskHandle>{},
+																			std::move( cullSubrangeFn ) );
+				co_await si.taskSystem->awaiterOf( cullTask );
+			}
+		}
+	}
 }
 
 auto Frontend::coPrepareOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask {
 	std::span<const Frustum> occluderFrusta;
-	if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
+	if( stateForCamera->useOcclusionCulling ) {
 		// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
 		const std::span<const unsigned> visibleOccluders = self->collectVisibleOccluders( stateForCamera );
 		if( !visibleOccluders.empty() ) {
@@ -608,9 +614,7 @@ auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si
 		}
 	}
 
-	self->m_occlusionCullingFrame++;
-
-	TaskHandle prepareBuffersTaskHandles[MAX_REF_CAMERAS];
+	TaskHandle prepareBuffersTasks[MAX_REF_CAMERAS];
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
 		auto prepareBuffersFn = [=]( [[maybe_unused]] unsigned workerIndex ) {
@@ -621,12 +625,6 @@ auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si
 
 			// Put the allocation code here, so we don't bloat the arch-specific code
 			stateForCamera->visibleLeavesBuffer->reserve( numWorldLeaves );
-			stateForCamera->visibleOccludersBuffer->reserve( numWorldSurfaces );
-			stateForCamera->occluderPassFullyVisibleLeavesBuffer->reserve( numWorldLeaves );
-			stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->reserve( numWorldLeaves );
-
-			stateForCamera->visibleOccludersBuffer->reserve( numOccluders );
-			stateForCamera->sortedOccludersBuffer->reserve( numOccluders );
 
 			stateForCamera->drawSurfSurfSpansBuffer->reserve( numMergedSurfaces );
 			stateForCamera->bspDrawSurfacesBuffer->reserve( numMergedSurfaces );
@@ -639,11 +637,19 @@ auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si
 
 			stateForCamera->surfVisTableBuffer->reserveZeroed( numWorldSurfaces );
 
-			if( !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) ) {
-				if( !( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING ) ) {
-					stateForCamera->leafSurfTableBuffer->reserve( numWorldSurfaces );
-					stateForCamera->leafSurfNumsBuffer->reserve( numWorldSurfaces );
-				}
+			stateForCamera->useOcclusionCulling = numOccluders > 0 && !( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING );
+			if( stateForCamera->useOcclusionCulling ) {
+				stateForCamera->useWorldBspOcclusionCulling = !( stateForCamera->refdef.rdflags & RDF_NOBSPOCCLUSIONCULLING );
+			}
+
+			if( stateForCamera->useOcclusionCulling ) {
+				stateForCamera->visibleOccludersBuffer->reserve( numOccluders );
+				stateForCamera->sortedOccludersBuffer->reserve( numOccluders );
+			}
+
+			if( stateForCamera->useWorldBspOcclusionCulling ) {
+				stateForCamera->leafSurfTableBuffer->reserve( numWorldSurfaces );
+				stateForCamera->leafSurfNumsBuffer->reserve( numWorldSurfaces );
 			}
 
 			MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get();
@@ -658,40 +664,49 @@ auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si
 			stateForCamera->drawWorld = true;
 		};
 
-		prepareBuffersTaskHandles[cameraIndex] = si.taskSystem->add( std::span<const TaskHandle>(), std::move( prepareBuffersFn ) );
+		prepareBuffersTasks[cameraIndex] = si.taskSystem->add( std::span<const TaskHandle>(), std::move( prepareBuffersFn ) );
 	}
 
-	TaskHandle collectLeavesTaskHandles[MAX_REF_CAMERAS];
-	TaskHandle collectOccludersTaskHandles[MAX_REF_CAMERAS];
+	TaskHandle execPassUponInitialCullingOfLeavesTasks[MAX_REF_CAMERAS];
+	TaskHandle collectOccludersTasks[MAX_REF_CAMERAS];
 
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
 
-		const TaskHandle dependencies[1] { prepareBuffersTaskHandles[cameraIndex] };
+		const TaskHandle initialDependencies[1] { prepareBuffersTasks[cameraIndex] };
 
-		collectLeavesTaskHandles[cameraIndex] = si.taskSystem->add( dependencies, [=]( unsigned ) {
-			stateForCamera->visibleLeaves = self->collectVisibleWorldLeaves( stateForCamera );
+		const TaskHandle performInitialCullingOfLeavesTask = si.taskSystem->add( initialDependencies, [=]( unsigned ) {
+			stateForCamera->leavesInFrustumAndPvs = self->collectVisibleWorldLeaves( stateForCamera );
 		});
-		collectOccludersTaskHandles[cameraIndex] = si.taskSystem->addCoro( [=]() {
-			return coPrepareOccluders( { si.taskSystem, dependencies, CoroTask::AnyThread }, self, stateForCamera );
+
+		collectOccludersTasks[cameraIndex] = si.taskSystem->addCoro( [=]() {
+			return coPrepareOccluders( { si.taskSystem, initialDependencies, CoroTask::AnyThread }, self, stateForCamera );
+		});
+
+		const TaskHandle cullLeavesAsDependencies[1] { performInitialCullingOfLeavesTask };
+
+		execPassUponInitialCullingOfLeavesTasks[cameraIndex] = si.taskSystem->addCoro( [=]() {
+			return coExecPassUponInitialCullingOfLeaves( { si.taskSystem, cullLeavesAsDependencies, CoroTask::AnyThread },
+														 self, stateForCamera );
 		});
 	}
 
-	TaskHandle processLeavesAndOccludersTasks[MAX_REF_CAMERAS];
+	TaskHandle execPassUponPreparingOccludersTasks[MAX_REF_CAMERAS];
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *const stateForCamera = statesForValidCameras[cameraIndex];
-		TaskHandle dependencies[2] { collectLeavesTaskHandles[cameraIndex], collectOccludersTaskHandles[cameraIndex] };
-		processLeavesAndOccludersTasks[cameraIndex] = si.taskSystem->addCoro( [=]() {
-			return coProcessLeavesAndOccluders( { si.taskSystem, dependencies, CoroTask::AnyThread }, self, stateForCamera );
+		const TaskHandle dependencies[2] {
+			execPassUponInitialCullingOfLeavesTasks[cameraIndex], collectOccludersTasks[cameraIndex]
+		};
+		execPassUponPreparingOccludersTasks[cameraIndex] = si.taskSystem->addCoro( [=]() {
+			return coExecPassUponPreparingOccluders( { si.taskSystem, dependencies, CoroTask::AnyThread }, self, stateForCamera );
 		});
-		assert( processLeavesAndOccludersTasks[cameraIndex] );
 	}
 
 	wsw::StaticVector<TaskHandle, MAX_REF_CAMERAS> calcSubspansTasks;
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *stateForCamera = statesForValidCameras[cameraIndex];
-		assert( processLeavesAndOccludersTasks[cameraIndex] );
-		const TaskHandle dependencies[1] { processLeavesAndOccludersTasks[cameraIndex] };
+		assert( execPassUponPreparingOccludersTasks[cameraIndex] );
+		const TaskHandle dependencies[1] { execPassUponPreparingOccludersTasks[cameraIndex] };
 		calcSubspansTasks.push_back( si.taskSystem->add( dependencies, [=]( [[maybe_unused]] unsigned workerIndex ) {
 			self->calcSubspansOfMergedSurfSpans( stateForCamera );
 		}));
@@ -839,10 +854,8 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 				self->addCoronaLightsToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicLights.data(), visibleCoronaLightIndices[i] );
 			}
 			if( dynamicLightValue & 1 ) {
-				std::span<const unsigned> spansStorage[2] {
-					stateForCamera->nonOccludedLeaves, stateForCamera->partiallyOccludedLeaves
-				};
-				std::span<std::span<const unsigned>> spansOfLeaves = { spansStorage, 2 };
+				std::span<const unsigned> spansStorage[1] { stateForCamera->leavesInFrustumAndPvs };
+				std::span<std::span<const unsigned>> spansOfLeaves = { spansStorage, 1 };
 				self->markLightsOfSurfaces( stateForCamera, scene, spansOfLeaves, visibleProgramLightIndices[i] );
 			}
 		}

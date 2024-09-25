@@ -323,68 +323,6 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 
 #endif
 
-#ifdef IMPLEMENT_cullLeavesByOccluders
-
-template <unsigned Arch>
-auto Frontend::cullLeavesByOccludersArch( StateForCamera *stateForCamera,
-										  std::span<const unsigned> indicesOfLeaves,
-										  std::span<const Frustum> occluderFrusta )
-	-> std::pair<std::span<const unsigned>, std::span<const unsigned>> {
-#ifdef DEBUG_OCCLUDERS
-	const int pinnedOccluderNum = Cvar_Integer( "pinnedOccluderNum" );
-#endif
-
-	const unsigned numLeaves               = rsh.worldBrushModel->numvisleafs;
-	unsigned *const partiallyVisibleLeaves = stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->get();
-	unsigned *const fullyVisibleLeaves     = stateForCamera->occluderPassFullyVisibleLeavesBuffer->get();
-
-	const unsigned numOccluders        = occluderFrusta.size();
-	const auto leaves                  = rsh.worldBrushModel->visleafs;
-	unsigned numPartiallyVisibleLeaves = 0;
-	unsigned numFullyVisibleLeaves     = 0;
-
-	for( const unsigned leafIndex: indicesOfLeaves ) {
-		const mleaf_t *const leaf = leaves[leafIndex];
-		int wasPartiallyInside   = 0;
-		int wasFullyInside       = 0;
-		unsigned frustumNum      = 0;
-
-		LOAD_BOX_COMPONENTS( leaf->mins, leaf->maxs );
-
-		do {
-			const Frustum *const __restrict f = &occluderFrusta[frustumNum];
-
-#ifdef DEBUG_OCCLUDERS
-			if( pinnedOccluderNum && pinnedOccluderNum != (int)( 1 + frustumNum ) ) {
-				continue;
-			}
-#endif
-
-			COMPUTE_TRISTATE_RESULT_FOR_8_PLANES( f, const int nonZeroIfFullyOutside, const int nonZeroIfPartiallyOutside )
-
-			if( !( nonZeroIfFullyOutside | nonZeroIfPartiallyOutside ) ) {
-				wasFullyInside = true;
-				SHOW_OCCLUDED( leaf->mins, leaf->maxs, COLOR_RGB( 255, 0, 255 ) );
-				break;
-			}
-
-			wasPartiallyInside |= nonZeroIfPartiallyOutside && ( nonZeroIfFullyOutside == 0 );
-		} while( ++frustumNum != numOccluders );
-
-		if( !wasFullyInside ) [[likely]] {
-			if( wasPartiallyInside ) [[unlikely]] {
-				partiallyVisibleLeaves[numPartiallyVisibleLeaves++] = leafIndex;
-			} else {
-				fullyVisibleLeaves[numFullyVisibleLeaves++] = leafIndex;
-			}
-		}
-	}
-
-	return { { fullyVisibleLeaves, numFullyVisibleLeaves }, { partiallyVisibleLeaves, numPartiallyVisibleLeaves } };
-}
-
-#endif
-
 #ifdef IMPLEMENT_cullSurfacesByOccluders
 
 template <unsigned Arch>

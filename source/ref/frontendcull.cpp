@@ -571,12 +571,6 @@ auto Frontend::buildFrustaOfOccluders( StateForCamera *stateForCamera, std::span
 	return ( this->*m_buildFrustaOfOccludersArchMethod )( stateForCamera, sortedOccluders );
 }
 
-auto Frontend::cullLeavesByOccluders( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
-									  std::span<const Frustum> occluderFrusta )
-	-> std::pair<std::span<const unsigned>, std::span<const unsigned>> {
-	return ( this->*m_cullLeavesByOccludersArchMethod )( stateForCamera, indicesOfLeaves, occluderFrusta );
-}
-
 void Frontend::cullSurfacesByOccluders( std::span<const unsigned> indicesOfSurfaces, std::span<const Frustum> occluderFrusta,
 										MergedSurfSpan *mergedSurfSpans, uint8_t *surfVisTable ) {
 	return ( this->*m_cullSurfacesByOccludersArchMethod )( indicesOfSurfaces, occluderFrusta, mergedSurfSpans, surfVisTable );

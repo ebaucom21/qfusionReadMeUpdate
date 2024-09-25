@@ -26,7 +26,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define IMPLEMENT_collectVisisbleWorldLeaves
 #define IMPLEMENT_collectVisibleOccluders
 #define IMPLEMENT_buildFrustaOfOccluders
-#define IMPLEMENT_cullLeavesByOccluders
 #define IMPLEMENT_cullSurfacesByOccluders
 #define IMPLEMENT_cullEntriesWithBounds
 #define IMPLEMENT_cullEntryPtrsWithBounds
@@ -50,12 +49,6 @@ auto Frontend::collectVisibleOccludersSse2( StateForCamera *stateForCamera ) -> 
 auto Frontend::buildFrustaOfOccludersSse2( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 	-> std::span<const Frustum> {
 	return buildFrustaOfOccludersArch<Sse2>( stateForCamera, sortedOccluders );
-}
-
-auto Frontend::cullLeavesByOccludersSse2( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
-										  std::span<const Frustum> occluderFrusta )
-	-> std::pair<std::span<const unsigned>, std::span<const unsigned>> {
-	return cullLeavesByOccludersArch<Sse2>( stateForCamera, indicesOfLeaves, occluderFrusta );
 }
 
 void Frontend::cullSurfacesByOccludersSse2( std::span<const unsigned> indicesOfSurfaces,

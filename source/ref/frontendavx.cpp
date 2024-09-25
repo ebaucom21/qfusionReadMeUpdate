@@ -67,19 +67,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	/* Note: We assume that signed zeros are negative, this is fine for culling purposes */ \
 	zeroIfFullyInside = _mm256_movemask_ps( ymmDist );
 
-#define COMPUTE_TRISTATE_RESULT_FOR_8_PLANES( f, nonZeroIfOutside, nonZeroIfPartiallyOutside ) \
-	LOAD_COMPONENTS_OF_8_FRUSTUM_PLANES( f ) \
-	SELECT_NEAREST_BOX_CORNER_COMPONENTS( _nearest ) \
-	SELECT_FARTHEST_BOX_CORNER_COMPONENTS( _farthest ) \
-	/* Compute distances between planes and nearest box corners to check whether the box is fully outside */ \
-	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( _nearest ) \
-	/* Compute distances between planes and farthest box corners to check whether the box is partially outside */ \
-	COMPUTE_BOX_CORNER_DISTANCE_TO_PLANE( _farthest ) \
-	/* Note: We assume that signed zeros are negative, this is fine for culling purposes */ \
-	nonZeroIfOutside          = _mm256_movemask_ps( ymmDist_nearest ); \
-	nonZeroIfPartiallyOutside = _mm256_movemask_ps( ymmDist_farthest );
-
-#define IMPLEMENT_cullLeavesByOccluders
 #define IMPLEMENT_cullSurfacesByOccluders
 
 #include "frontendcull.inc"
@@ -93,15 +80,6 @@ void Frontend::cullSurfacesByOccludersAvx( std::span<const unsigned> indicesOfSu
 	_mm256_zeroupper();
 	cullSurfacesByOccludersArch<Avx>( indicesOfSurfaces, occluderFrusta, mergedSurfSpans, surfVisTable );
 	_mm256_zeroupper();
-}
-
-auto Frontend::cullLeavesByOccludersAvx( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
-										 std::span<const Frustum> occluderFrusta )
-	-> std::pair<std::span<const unsigned>, std::span<const unsigned>> {
-	_mm256_zeroupper();
-	auto result = cullLeavesByOccludersArch<Avx>( stateForCamera, indicesOfLeaves, occluderFrusta );
-	_mm256_zeroupper();
-	return result;
 }
 
 }

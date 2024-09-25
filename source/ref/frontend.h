@@ -162,9 +162,6 @@ private:
 		wsw::PodVector<sortedDrawSurf_t> *sortList;
 
 		PodBufferHolder<unsigned> *visibleLeavesBuffer;
-		PodBufferHolder<unsigned> *occluderPassFullyVisibleLeavesBuffer;
-		PodBufferHolder<unsigned> *occluderPassPartiallyVisibleLeavesBuffer;
-
 		PodBufferHolder<unsigned> *visibleOccludersBuffer;
 		PodBufferHolder<SortedOccluder> *sortedOccludersBuffer;
 
@@ -192,11 +189,12 @@ private:
 		unsigned numDynamicMeshDrawSurfaces { 0 };
 
 		// Saved intermediate results of the world occlusion stage in addition to respective filled buffers
-		std::span<const unsigned > visibleLeaves;
-		std::span<const unsigned> nonOccludedLeaves;
-		std::span<const unsigned> partiallyOccludedLeaves;
+		std::span<const unsigned> leavesInFrustumAndPvs;
+		std::span<const unsigned> surfsInFrustumAndPvs;
 		unsigned numOccluderFrusta { 0 };
 		bool drawWorld { false };
+		bool useOcclusionCulling { false };
+		bool useWorldBspOcclusionCulling { false };
 	};
 
 	static_assert( sizeof( StateForCamera ) % alignof( Frustum ) == 0 );
@@ -376,13 +374,6 @@ private:
 		-> std::span<const Frustum>;
 
 	template <unsigned Arch>
-	[[nodiscard]]
-	auto cullLeavesByOccludersArch( StateForCamera *stateForCamera,
-									std::span<const unsigned> indicesOfLeaves,
-									std::span<const Frustum> occluderFrusta )
-									-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
-
-	template <unsigned Arch>
 	void cullSurfacesByOccludersArch( std::span<const unsigned> indicesOfSurfaces,
 									  std::span<const Frustum> occluderFrusta,
 									  MergedSurfSpan *mergedSurfSpans,
@@ -408,11 +399,6 @@ private:
 	auto buildFrustaOfOccludersSse2( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 		-> std::span<const Frustum>;
 
-	[[nodiscard]]
-	auto cullLeavesByOccludersSse2( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
-									std::span<const Frustum> occluderFrusta )
-		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
-
 	void cullSurfacesByOccludersSse2( std::span<const unsigned> indicesOfSurfaces,
 									  std::span<const Frustum> occluderFrusta,
 									  MergedSurfSpan *mergedSurfSpans,
@@ -437,11 +423,6 @@ private:
 	auto buildFrustaOfOccludersSse41( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 		-> std::span<const Frustum>;
 
-	[[nodiscard]]
-	auto cullLeavesByOccludersSse41( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
-									 std::span<const Frustum> occluderFrusta )
-		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
-
 	void cullSurfacesByOccludersSse41( std::span<const unsigned> indicesOfSurfaces,
 									   std::span<const Frustum> occluderFrusta,
 									   MergedSurfSpan *mergedSurfSpans,
@@ -463,13 +444,10 @@ private:
 									 std::span<const Frustum> occluderFrusta,
 									 MergedSurfSpan *mergedSurfSpans,
 									 uint8_t *surfVisTable );
-	[[nodiscard]]
-	auto cullLeavesByOccludersAvx( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
-								   std::span<const Frustum> occluderFrusta )
-		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
 	[[nodiscard]]
 	auto collectVisibleWorldLeaves( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
+
 	[[nodiscard]]
 	auto collectVisibleOccluders( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 
@@ -484,11 +462,6 @@ private:
 	auto buildFrustaOfOccluders( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 		-> std::span<const Frustum>;
 
-	[[nodiscard]]
-	auto cullLeavesByOccluders( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
-								std::span<const Frustum> occluderFrusta )
-		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
-
 	void cullSurfacesByOccluders( std::span<const unsigned> indicesOfSurfaces, std::span<const Frustum> occluderFrusta,
 								  MergedSurfSpan *mergedSurfSpans, uint8_t *surfVisTable );
 
@@ -496,7 +469,10 @@ private:
 	static auto coPrepareOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;
 
 	[[nodiscard]]
-	static auto coProcessLeavesAndOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;
+	static auto coExecPassUponInitialCullingOfLeaves( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;
+
+	[[nodiscard]]
+	static auto coExecPassUponPreparingOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;
 
 	[[nodiscard]]
 	auto cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
@@ -554,8 +530,6 @@ private:
 	auto ( Frontend::*m_collectVisibleWorldLeavesArchMethod )( StateForCamera * ) -> std::span<const unsigned>;
 	auto ( Frontend::*m_collectVisibleOccludersArchMethod )( StateForCamera * ) -> std::span<const unsigned>;
 	auto ( Frontend::*m_buildFrustaOfOccludersArchMethod )( StateForCamera *, std::span<const SortedOccluder> ) -> std::span<const Frustum>;
-	auto ( Frontend::*m_cullLeavesByOccludersArchMethod )( StateForCamera *, std::span<const unsigned>, std::span<const Frustum> )
-		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 	void ( Frontend::*m_cullSurfacesByOccludersArchMethod )( std::span<const unsigned>, std::span<const Frustum>, MergedSurfSpan *, uint8_t * );
 	auto ( Frontend::*m_cullEntriesWithBoundsArchMethod )( const void *, unsigned, unsigned, unsigned, const Frustum *,
 														   std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
@@ -564,7 +538,6 @@ private:
 
 	shader_t *m_coronaShader { nullptr };
 
-	uint8_t m_occlusionCullingFrame { 0 };
 	unsigned m_drawSceneFrame { 0 };
 	unsigned m_cameraIdCounter { 0 };
 	unsigned m_cameraIndexCounter { 0 };
@@ -593,9 +566,6 @@ private:
 		wsw::PodVector<sortedDrawSurf_t> meshSortList;
 
 		PodBufferHolder<unsigned> visibleLeavesBuffer;
-		PodBufferHolder<unsigned> occluderPassFullyVisibleLeavesBuffer;
-		PodBufferHolder<unsigned> occluderPassPartiallyVisibleLeavesBuffer;
-
 		PodBufferHolder<unsigned> visibleOccludersBuffer;
 		PodBufferHolder<SortedOccluder> sortedOccludersBuffer;
 
