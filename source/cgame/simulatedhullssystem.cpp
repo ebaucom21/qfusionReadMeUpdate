@@ -2758,52 +2758,93 @@ static void lerpLayerColorsAndRangesBetweenFrames( byte_vec4_t *__restrict destC
 	} while( ++colorNum < numColors );
 }
 
-static void addLayerContributionToResultColor( float rampValue, unsigned numColors,
-											   const byte_vec4_t *__restrict lerpedColors, const float *__restrict lerpedColorRanges,
-											   SimulatedHullsSystem::BlendMode blendMode, SimulatedHullsSystem::AlphaMode alphaMode,
-											   uint8_t *__restrict resultColor, unsigned layerNum ) {
-	unsigned nextColorIndex = 0; // the index of the next color after the point in the color ramp
-	while( rampValue > lerpedColorRanges[nextColorIndex] && nextColorIndex < numColors ) {
-		nextColorIndex++;
-	}
+template <typename LayerType>
+static void addLayerContributionToResultColors( const LayerType *__restrict prevLayer, const LayerType *__restrict nextLayer,
+												const uint16_t *__restrict vertexNums, unsigned numVerticesToProcess, unsigned layerNum,
+												[[maybe_unused]] const float *__restrict viewDotResults, [[maybe_unused]] float lerpFrac,
+												byte_vec4_t *__restrict overrideColorsBuffer ) {
+	assert( numVerticesToProcess > 0 );
 
-	byte_vec4_t layerColor;
-	if( nextColorIndex == 0 ) {
-		Vector4Copy( lerpedColors[0], layerColor );
-	} else if( nextColorIndex == numColors ) {
-		Vector4Copy( lerpedColors[numColors - 1], layerColor );
-	} else {
-		const unsigned prevColorIndex = nextColorIndex - 1;
-		const float offsetInRange     = rampValue - lerpedColorRanges[prevColorIndex];
-		const float rangeLength       = lerpedColorRanges[nextColorIndex] - lerpedColorRanges[prevColorIndex];
-		assert( offsetInRange >= 0.0f && offsetInRange <= rangeLength );
-		const float lerpFrac          = wsw::clamp( offsetInRange * Q_Rcp( rangeLength ), 0.0f, 1.0f );
-		Vector4Lerp( lerpedColors[prevColorIndex], lerpFrac, lerpedColors[nextColorIndex], layerColor );
-	}
+	const unsigned numColors = prevLayer->colors.size();
+	assert( numColors > 0 && numColors <= SimulatedHullsSystem::kMaxLayerColors );
 
-	if( layerNum == 0 ) {
-		Vector4Copy( layerColor, resultColor );
-	} else {
-		if( blendMode == SimulatedHullsSystem::BlendMode::AlphaBlend ) {
-			VectorLerp( resultColor, layerColor[3], layerColor, resultColor );
-		} else if( blendMode == SimulatedHullsSystem::BlendMode::Add ) {
-			for( int i = 0; i < 3; i++ ) {
-				resultColor[i] = wsw::min( resultColor[i] + layerColor[i], 255 );
-			}
-		} else if( blendMode == SimulatedHullsSystem::BlendMode::Subtract ) {
-			for( int i = 0; i < 3; i++ ) {
-				resultColor[i] = wsw::max( resultColor[i] - layerColor[i], 0 );
-			}
+	byte_vec4_t lerpedColors[SimulatedHullsSystem::kMaxLayerColors];
+	float lerpedColorRanges[SimulatedHullsSystem::kMaxLayerColors];
+	lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, lerpFrac,
+										   prevLayer->colors.data(), nextLayer->colors.data(),
+										   prevLayer->colorRanges, nextLayer->colorRanges );
+
+	const SimulatedHullsSystem::BlendMode blendMode = prevLayer->blendMode;
+	const SimulatedHullsSystem::AlphaMode alphaMode = prevLayer->alphaMode;
+
+	unsigned indexOfNum = 0;
+	do {
+		const unsigned vertexNum = vertexNums[indexOfNum];
+
+		float rampValue;
+
+		if constexpr( std::is_same_v<SimulatedHullsSystem::MaskedShadingLayer, LayerType> ) {
+			rampValue = std::lerp( prevLayer->vertexMaskValues[vertexNum], nextLayer->vertexMaskValues[vertexNum], lerpFrac );
+		} else if constexpr( std::is_same_v<SimulatedHullsSystem::DotShadingLayer, LayerType> ) {
+			rampValue = viewDotResults[vertexNum];
+		} else if constexpr( std::is_same_v<SimulatedHullsSystem::CombinedShadingLayer, LayerType> ) {
+			const float vertexDotValue  = viewDotResults[vertexNum];
+			const float vertexMaskValue = std::lerp( prevLayer->vertexMaskValues[vertexNum],
+													 nextLayer->vertexMaskValues[vertexNum],
+													 lerpFrac );
+
+			const float dotInfluence  = prevLayer->dotInfluence;
+			const float maskInfluence = 1.0f - dotInfluence;
+			rampValue = vertexDotValue * dotInfluence + vertexMaskValue * maskInfluence;
+		} else {
+			assert( false );
 		}
 
-		if( alphaMode == SimulatedHullsSystem::AlphaMode::Override ) {
-			resultColor[3] = layerColor[3];
-		} else if( alphaMode == SimulatedHullsSystem::AlphaMode::Add ) {
-			resultColor[3] = wsw::min( resultColor[3] + layerColor[3], 255 );
-		} else if( alphaMode == SimulatedHullsSystem::AlphaMode::Subtract ) {
-			resultColor[3] = wsw::max( resultColor[3] - layerColor[3], 0 );
+		uint8_t *__restrict resultVertexColor = overrideColorsBuffer[vertexNum];
+
+		unsigned nextColorIndex = 0; // the index of the next color after the point in the color ramp
+		while( rampValue > lerpedColorRanges[nextColorIndex] && nextColorIndex < numColors ) {
+			nextColorIndex++;
 		}
-	}
+
+		byte_vec4_t layerColor;
+		if( nextColorIndex == 0 ) {
+			Vector4Copy( lerpedColors[0], layerColor );
+		} else if( nextColorIndex == numColors ) {
+			Vector4Copy( lerpedColors[numColors - 1], layerColor );
+		} else {
+			const unsigned prevColorIndex = nextColorIndex - 1;
+			const float offsetInRange     = rampValue - lerpedColorRanges[prevColorIndex];
+			const float rangeLength       = lerpedColorRanges[nextColorIndex] - lerpedColorRanges[prevColorIndex];
+			assert( offsetInRange >= 0.0f && offsetInRange <= rangeLength );
+			const float colorLerpFrac     = wsw::clamp( offsetInRange * Q_Rcp( rangeLength ), 0.0f, 1.0f );
+			Vector4Lerp( lerpedColors[prevColorIndex], colorLerpFrac, lerpedColors[nextColorIndex], layerColor );
+		}
+
+		if( layerNum == 0 ) {
+			Vector4Copy( layerColor, resultVertexColor );
+		} else {
+			if( blendMode == SimulatedHullsSystem::BlendMode::AlphaBlend ) {
+				VectorLerp( resultVertexColor, layerColor[3], layerColor, resultVertexColor );
+			} else if( blendMode == SimulatedHullsSystem::BlendMode::Add ) {
+				resultVertexColor[0] = wsw::min( resultVertexColor[0] + layerColor[0], 255 );
+				resultVertexColor[1] = wsw::min( resultVertexColor[1] + layerColor[1], 255 );
+				resultVertexColor[2] = wsw::min( resultVertexColor[2] + layerColor[2], 255 );
+			} else if( blendMode == SimulatedHullsSystem::BlendMode::Subtract ) {
+				resultVertexColor[0] = wsw::max( resultVertexColor[0] - layerColor[0], 0 );
+				resultVertexColor[1] = wsw::max( resultVertexColor[1] - layerColor[1], 0 );
+				resultVertexColor[2] = wsw::max( resultVertexColor[2] - layerColor[2], 0 );
+			}
+
+			if( alphaMode == SimulatedHullsSystem::AlphaMode::Override ) {
+				resultVertexColor[3] = layerColor[3];
+			} else if( alphaMode == SimulatedHullsSystem::AlphaMode::Add ) {
+				resultVertexColor[3] = wsw::min( resultVertexColor[3] + layerColor[3], 255 );
+			} else if( alphaMode == SimulatedHullsSystem::AlphaMode::Subtract ) {
+				resultVertexColor[3] = wsw::max( resultVertexColor[3] - layerColor[3], 0 );
+			}
+		}
+	} while( ++indexOfNum < numVerticesToProcess );
 }
 
 auto SimulatedHullsSystem::HullSolidDynamicMesh::fillMeshBuffers( const float *__restrict viewOrigin,
@@ -2900,77 +2941,25 @@ auto SimulatedHullsSystem::HullSolidDynamicMesh::fillMeshBuffers( const float *_
 			for( unsigned layerNum = 0; layerNum < numShadingLayers; ++layerNum ) {
 				const ShadingLayer &prevShadingLayer = m_shared->prevShadingLayers[layerNum];
 				const ShadingLayer &nextShadingLayer = m_shared->nextShadingLayers[layerNum];
+				// Call specialized implementations for respective layer types
 				if( const auto *const prevMaskedLayer = std::get_if<MaskedShadingLayer>( &prevShadingLayer ) ) {
 					const auto *const nextMaskedLayer = std::get_if<MaskedShadingLayer>( &nextShadingLayer );
 
-					const unsigned numColors = prevMaskedLayer->colors.size();
-					assert( numColors > 0 && numColors <= kMaxLayerColors );
-
-					byte_vec4_t lerpedColors[kMaxLayerColors];
-					float lerpedColorRanges[kMaxLayerColors];
-					lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, m_shared->lerpFrac,
-														   prevMaskedLayer->colors.data(), nextMaskedLayer->colors.data(),
-														   prevMaskedLayer->colorRanges, nextMaskedLayer->colorRanges );
-
-					unsigned indexOfNum = 0;
-					do {
-						const unsigned vertexNum = vertexNums[indexOfNum];
-						const float vertexMaskValue = std::lerp( prevMaskedLayer->vertexMaskValues[vertexNum],
-																 nextMaskedLayer->vertexMaskValues[vertexNum],
-																 m_shared->lerpFrac );
-
-						addLayerContributionToResultColor( vertexMaskValue, numColors, lerpedColors, lerpedColorRanges,
-														   prevMaskedLayer->blendMode, prevMaskedLayer->alphaMode,
-														   overrideColorsBuffer[vertexNum], layerNum );
-
-					} while( ++indexOfNum < numVerticesToProcess );
+					addLayerContributionToResultColors( prevMaskedLayer, nextMaskedLayer, vertexNums,
+														numVerticesToProcess, layerNum, viewDotResults,
+														m_shared->lerpFrac, overrideColorsBuffer );
 				} else if( const auto *const prevDotLayer = std::get_if<DotShadingLayer>( &prevShadingLayer ) ) {
 					const auto *const nextDotLayer = std::get_if<DotShadingLayer>( &nextShadingLayer );
 
-					const unsigned numColors = prevDotLayer->colors.size();
-					assert( numColors > 0 && numColors <= kMaxLayerColors );
-
-					byte_vec4_t lerpedColors[kMaxLayerColors];
-					float lerpedColorRanges[kMaxLayerColors];
-					lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, m_shared->lerpFrac,
-														   prevDotLayer->colors.data(), nextDotLayer->colors.data(),
-														   prevDotLayer->colorRanges, nextDotLayer->colorRanges );
-
-					unsigned indexOfNum = 0;
-					do {
-						const unsigned vertexNum = vertexNums[indexOfNum];
-						addLayerContributionToResultColor( viewDotResults[vertexNum], numColors, lerpedColors, lerpedColorRanges,
-														   prevDotLayer->blendMode, prevDotLayer->alphaMode,
-														   overrideColorsBuffer[vertexNum], layerNum );
-					} while( ++indexOfNum < numVerticesToProcess );
+					addLayerContributionToResultColors( prevDotLayer, nextDotLayer, vertexNums,
+														numVerticesToProcess, layerNum, viewDotResults,
+														m_shared->lerpFrac, overrideColorsBuffer );
 				} else if( const auto *const prevCombinedLayer = std::get_if<CombinedShadingLayer>( &prevShadingLayer ) ) {
 					const auto *const nextCombinedLayer = std::get_if<CombinedShadingLayer>( &nextShadingLayer );
 
-					const unsigned numColors = prevCombinedLayer->colors.size();
-					assert( numColors > 0 && numColors <= kMaxLayerColors );
-
-					byte_vec4_t lerpedColors[kMaxLayerColors];
-					float lerpedColorRanges[kMaxLayerColors];
-					lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, m_shared->lerpFrac,
-														   prevCombinedLayer->colors.data(), nextCombinedLayer->colors.data(),
-														   prevCombinedLayer->colorRanges, nextCombinedLayer->colorRanges );
-
-					unsigned indexOfNum = 0;
-					do {
-						const unsigned vertexNum    = vertexNums[indexOfNum];
-						const float vertexDotValue  = viewDotResults[vertexNum];
-						const float vertexMaskValue = std::lerp( prevCombinedLayer->vertexMaskValues[vertexNum],
-																 nextCombinedLayer->vertexMaskValues[vertexNum],
-																 m_shared->lerpFrac );
-
-						const float dotInfluence        = prevCombinedLayer->dotInfluence;
-						const float maskInfluence       = 1.0f - dotInfluence;
-						const float vertexCombinedValue = vertexDotValue * dotInfluence + vertexMaskValue * maskInfluence;
-
-						addLayerContributionToResultColor( vertexCombinedValue, numColors, lerpedColors, lerpedColorRanges,
-														   prevCombinedLayer->blendMode, prevCombinedLayer->alphaMode,
-														   overrideColorsBuffer[vertexNum], layerNum );
-					} while( ++indexOfNum < numVerticesToProcess );
+					addLayerContributionToResultColors( prevCombinedLayer, nextCombinedLayer, vertexNums,
+														numVerticesToProcess, layerNum, viewDotResults,
+														m_shared->lerpFrac, overrideColorsBuffer );
 				} else {
 					wsw::failWithLogicError( "Unreachable" );
 				}
