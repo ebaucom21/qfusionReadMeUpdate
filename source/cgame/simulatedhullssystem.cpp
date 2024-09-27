@@ -2837,30 +2837,23 @@ auto SimulatedHullsSystem::HullSolidDynamicMesh::fillMeshBuffers( const float *_
 		overrideColors = getOverrideColors( overrideColorsBuffer, viewOrigin, viewAxis,
 											chosenSubdivLevel, lights, affectingLightIndices );
 	} else {
+		// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
 		const unsigned dataLevelToUse     = wsw::min( chosenSubdivLevel, m_shared->simulatedSubdivLevel );
 		const IcosphereData &lodDataToUse = ::basicHullsHolder.getIcosphereForLevel( dataLevelToUse );
-		// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
-		const auto numVertices = (unsigned)lodDataToUse.vertices.size();
+		const auto numVertices            = (unsigned)lodDataToUse.vertices.size();
 
-		bool needsViewDotResults = false;
-		float *viewDotResults    = nullptr;
+		// Sanity check
+		assert( numVertices > 0 && numVertices < 4096 );
+		// Calculate vertex normals and view dot products for shading and coarse backface culling purposes.
+		// (excluding vertices with negative view dot products from processing produces good results).
+		// Reducing shading workload is the primary purpose of this "culling".
+		auto *const __restrict viewDotResults = (float *)alloca( sizeof( float ) * numVertices );
+		auto *const __restrict vertexNums     = (uint16_t *)alloca( sizeof( uint16_t ) * numVertices );
+		unsigned numVerticesToProcess         = 0;
 
-		for( const ShadingLayer &layer: m_shared->prevShadingLayers ) {
-			if( !std::holds_alternative<MaskedShadingLayer>( layer ) ) {
-				assert( std::holds_alternative<DotShadingLayer>( layer ) || std::holds_alternative<CombinedShadingLayer>( layer ) );
-				needsViewDotResults = true;
-				break;
-			}
-		}
-
-		if( needsViewDotResults ) {
+		do {
 			const vec4_t *const __restrict positions    = m_shared->simulatedPositions;
 			const uint16_t ( *neighboursOfVertices )[5] = lodDataToUse.vertexNeighbours.data();
-
-			// Sanity check
-			assert( numVertices > 0 && numVertices < 4096 );
-			viewDotResults = (float *)alloca( sizeof( float ) * numVertices );
-
 			unsigned vertexNum = 0;
 			do {
 				const uint16_t *const __restrict neighboursOfVertex = neighboursOfVertices[vertexNum];
@@ -2888,88 +2881,99 @@ auto SimulatedHullsSystem::HullSolidDynamicMesh::fillMeshBuffers( const float *_
 				const float squareRcpNormalizingFactor = squaredNormalLength * squareDistanceToVertex;
 				// check that both the length of the normal and distance to vertex are not 0 in one branch
 				if( squareRcpNormalizingFactor > 1.0f ) [[likely]] {
-					const float normalizingFactor = Q_RSqrt( squareRcpNormalizingFactor );
-					viewDotResults[vertexNum] = std::fabs( DotProduct( viewDir, normal ) ) * normalizingFactor;
+					const float normalizingFactor    = Q_RSqrt( squareRcpNormalizingFactor );
+					const float viewDot              = DotProduct( viewDir, normal ) * normalizingFactor;
+					viewDotResults[vertexNum]        = viewDot;
+					vertexNums[numVerticesToProcess] = vertexNum;
+					numVerticesToProcess += ( viewDot >= 0.0f );
 				} else {
 					viewDotResults[vertexNum] = 0.0f;
 				}
 			} while( ++vertexNum < numVertices );
-		}
+		} while( false );
 
-		const unsigned numShadingLayers = m_shared->prevShadingLayers.size();
-		for( unsigned layerNum = 0; layerNum < numShadingLayers; ++layerNum ) {
-			const ShadingLayer &prevShadingLayer = m_shared->prevShadingLayers[layerNum];
-			const ShadingLayer &nextShadingLayer = m_shared->nextShadingLayers[layerNum];
-			if( const auto *const prevMaskedLayer = std::get_if<MaskedShadingLayer>( &prevShadingLayer ) ) {
-				const auto *const nextMaskedLayer = std::get_if<MaskedShadingLayer>( &nextShadingLayer );
+		std::memset( overrideColorsBuffer, 0, sizeof( overrideColorsBuffer[0] ) * numVertices );
+		// Note: The opposite is perfectly reachable, probably due to getting all-degenerate results
+		// during view dot computations (we rely on various approximations).
+		if( numVerticesToProcess > 0 ) [[likely]] {
+			const unsigned numShadingLayers = m_shared->prevShadingLayers.size();
+			for( unsigned layerNum = 0; layerNum < numShadingLayers; ++layerNum ) {
+				const ShadingLayer &prevShadingLayer = m_shared->prevShadingLayers[layerNum];
+				const ShadingLayer &nextShadingLayer = m_shared->nextShadingLayers[layerNum];
+				if( const auto *const prevMaskedLayer = std::get_if<MaskedShadingLayer>( &prevShadingLayer ) ) {
+					const auto *const nextMaskedLayer = std::get_if<MaskedShadingLayer>( &nextShadingLayer );
 
-				const unsigned numColors = prevMaskedLayer->colors.size();
-				assert( numColors > 0 && numColors <= kMaxLayerColors );
+					const unsigned numColors = prevMaskedLayer->colors.size();
+					assert( numColors > 0 && numColors <= kMaxLayerColors );
 
-				byte_vec4_t lerpedColors[kMaxLayerColors];
-				float lerpedColorRanges[kMaxLayerColors];
-				lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, m_shared->lerpFrac,
-													   prevMaskedLayer->colors.data(), nextMaskedLayer->colors.data(),
-													   prevMaskedLayer->colorRanges, nextMaskedLayer->colorRanges );
+					byte_vec4_t lerpedColors[kMaxLayerColors];
+					float lerpedColorRanges[kMaxLayerColors];
+					lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, m_shared->lerpFrac,
+														   prevMaskedLayer->colors.data(), nextMaskedLayer->colors.data(),
+														   prevMaskedLayer->colorRanges, nextMaskedLayer->colorRanges );
 
-				unsigned vertexNum = 0;
-				do {
-					const float vertexMaskValue = std::lerp( prevMaskedLayer->vertexMaskValues[vertexNum],
-															 nextMaskedLayer->vertexMaskValues[vertexNum],
-															 m_shared->lerpFrac );
+					unsigned indexOfNum = 0;
+					do {
+						const unsigned vertexNum = vertexNums[indexOfNum];
+						const float vertexMaskValue = std::lerp( prevMaskedLayer->vertexMaskValues[vertexNum],
+																 nextMaskedLayer->vertexMaskValues[vertexNum],
+																 m_shared->lerpFrac );
 
-					addLayerContributionToResultColor( vertexMaskValue, numColors, lerpedColors, lerpedColorRanges,
-													   prevMaskedLayer->blendMode, prevMaskedLayer->alphaMode,
-													   overrideColorsBuffer[vertexNum], layerNum );
+						addLayerContributionToResultColor( vertexMaskValue, numColors, lerpedColors, lerpedColorRanges,
+														   prevMaskedLayer->blendMode, prevMaskedLayer->alphaMode,
+														   overrideColorsBuffer[vertexNum], layerNum );
 
-				} while ( ++vertexNum < numVertices );
-			} else if( const auto *const prevDotLayer = std::get_if<DotShadingLayer>( &prevShadingLayer ) ) {
-				const auto *const nextDotLayer = std::get_if<DotShadingLayer>( &nextShadingLayer );
+					} while( ++indexOfNum < numVerticesToProcess );
+				} else if( const auto *const prevDotLayer = std::get_if<DotShadingLayer>( &prevShadingLayer ) ) {
+					const auto *const nextDotLayer = std::get_if<DotShadingLayer>( &nextShadingLayer );
 
-				const unsigned numColors = prevDotLayer->colors.size();
-				assert( numColors > 0 && numColors <= kMaxLayerColors );
+					const unsigned numColors = prevDotLayer->colors.size();
+					assert( numColors > 0 && numColors <= kMaxLayerColors );
 
-				byte_vec4_t lerpedColors[kMaxLayerColors];
-				float lerpedColorRanges[kMaxLayerColors];
-				lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, m_shared->lerpFrac,
-													   prevDotLayer->colors.data(), nextDotLayer->colors.data(),
-													   prevDotLayer->colorRanges, nextDotLayer->colorRanges );
+					byte_vec4_t lerpedColors[kMaxLayerColors];
+					float lerpedColorRanges[kMaxLayerColors];
+					lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, m_shared->lerpFrac,
+														   prevDotLayer->colors.data(), nextDotLayer->colors.data(),
+														   prevDotLayer->colorRanges, nextDotLayer->colorRanges );
 
-				unsigned vertexNum = 0;
-				do {
-					addLayerContributionToResultColor( viewDotResults[vertexNum], numColors, lerpedColors, lerpedColorRanges,
-													   prevDotLayer->blendMode, prevDotLayer->alphaMode,
-													   overrideColorsBuffer[vertexNum], layerNum );
-				} while ( ++vertexNum < numVertices );
-			} else if( const auto *const prevCombinedLayer = std::get_if<CombinedShadingLayer>( &prevShadingLayer ) ) {
-				const auto *const nextCombinedLayer = std::get_if<CombinedShadingLayer>( &nextShadingLayer );
+					unsigned indexOfNum = 0;
+					do {
+						const unsigned vertexNum = vertexNums[indexOfNum];
+						addLayerContributionToResultColor( viewDotResults[vertexNum], numColors, lerpedColors, lerpedColorRanges,
+														   prevDotLayer->blendMode, prevDotLayer->alphaMode,
+														   overrideColorsBuffer[vertexNum], layerNum );
+					} while( ++indexOfNum < numVerticesToProcess );
+				} else if( const auto *const prevCombinedLayer = std::get_if<CombinedShadingLayer>( &prevShadingLayer ) ) {
+					const auto *const nextCombinedLayer = std::get_if<CombinedShadingLayer>( &nextShadingLayer );
 
-				const unsigned numColors = prevCombinedLayer->colors.size();
-				assert( numColors > 0 && numColors <= kMaxLayerColors );
+					const unsigned numColors = prevCombinedLayer->colors.size();
+					assert( numColors > 0 && numColors <= kMaxLayerColors );
 
-				byte_vec4_t lerpedColors[kMaxLayerColors];
-				float lerpedColorRanges[kMaxLayerColors];
-				lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, m_shared->lerpFrac,
-													   prevCombinedLayer->colors.data(), nextCombinedLayer->colors.data(),
-													   prevCombinedLayer->colorRanges, nextCombinedLayer->colorRanges );
+					byte_vec4_t lerpedColors[kMaxLayerColors];
+					float lerpedColorRanges[kMaxLayerColors];
+					lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, m_shared->lerpFrac,
+														   prevCombinedLayer->colors.data(), nextCombinedLayer->colors.data(),
+														   prevCombinedLayer->colorRanges, nextCombinedLayer->colorRanges );
 
-				unsigned vertexNum = 0;
-				do {
-					const float vertexDotValue  = viewDotResults[vertexNum];
-					const float vertexMaskValue = std::lerp( prevCombinedLayer->vertexMaskValues[vertexNum],
-															 nextCombinedLayer->vertexMaskValues[vertexNum],
-															 m_shared->lerpFrac );
+					unsigned indexOfNum = 0;
+					do {
+						const unsigned vertexNum    = vertexNums[indexOfNum];
+						const float vertexDotValue  = viewDotResults[vertexNum];
+						const float vertexMaskValue = std::lerp( prevCombinedLayer->vertexMaskValues[vertexNum],
+																 nextCombinedLayer->vertexMaskValues[vertexNum],
+																 m_shared->lerpFrac );
 
-					const float dotInfluence        = prevCombinedLayer->dotInfluence;
-					const float maskInfluence       = 1.0f - dotInfluence;
-					const float vertexCombinedValue = vertexDotValue * dotInfluence + vertexMaskValue * maskInfluence;
+						const float dotInfluence        = prevCombinedLayer->dotInfluence;
+						const float maskInfluence       = 1.0f - dotInfluence;
+						const float vertexCombinedValue = vertexDotValue * dotInfluence + vertexMaskValue * maskInfluence;
 
-					addLayerContributionToResultColor( vertexCombinedValue, numColors, lerpedColors, lerpedColorRanges,
-													   prevCombinedLayer->blendMode, prevCombinedLayer->alphaMode,
-													   overrideColorsBuffer[vertexNum], layerNum );
-				} while ( ++vertexNum < numVertices );
-			} else {
-				wsw::failWithLogicError( "Unreachable" );
+						addLayerContributionToResultColor( vertexCombinedValue, numColors, lerpedColors, lerpedColorRanges,
+														   prevCombinedLayer->blendMode, prevCombinedLayer->alphaMode,
+														   overrideColorsBuffer[vertexNum], layerNum );
+					} while( ++indexOfNum < numVerticesToProcess );
+				} else {
+					wsw::failWithLogicError( "Unreachable" );
+				}
 			}
 		}
 
