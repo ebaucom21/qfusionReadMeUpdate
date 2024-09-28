@@ -117,7 +117,8 @@ auto Frontend::coBeginProcessingDrawSceneRequests( CoroTask::StartInfo si, Front
 		}
 	}
 
-	co_await si.taskSystem->awaiterOf( self->beginPreparingRenderingFromTheseCameras( { scenesAndCameras, scenesAndCameras + numScenesAndCameras } ) );
+	const std::span<std::pair<Scene *, StateForCamera *>> spanOfScenesAndCameras { scenesAndCameras, numScenesAndCameras };
+	co_await si.taskSystem->awaiterOf( self->beginPreparingRenderingFromTheseCameras( spanOfScenesAndCameras ) );
 }
 
 auto Frontend::coEndProcessingDrawSceneRequests( CoroTask::StartInfo si, Frontend *self, std::span<DrawSceneRequest *> requests ) -> CoroTask {
@@ -130,8 +131,9 @@ auto Frontend::coEndProcessingDrawSceneRequests( CoroTask::StartInfo si, Fronten
 		}
 	}
 
+	// Note: Supplied dependencies are empty as they are taken in account during spawning of the coro instead
 	co_await si.taskSystem->awaiterOf( self->endPreparingRenderingFromTheseCameras(
-		{ scenesAndCameras, scenesAndCameras + numScenesAndCameras }, false ) );
+		{ scenesAndCameras, scenesAndCameras + numScenesAndCameras }, {}, false ) );
 }
 
 auto Frontend::beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) -> TaskHandle {
@@ -140,8 +142,8 @@ auto Frontend::beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> r
 	return m_taskSystem.addCoro( [=, this]() { return coBeginProcessingDrawSceneRequests( si, this, requests ); } );
 }
 
-auto Frontend::endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) -> TaskHandle {
-	CoroTask::StartInfo si { &m_taskSystem, {}, CoroTask::OnlyMainThread };
+auto Frontend::endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests, std::span<const TaskHandle> dependencies ) -> TaskHandle {
+	CoroTask::StartInfo si { &m_taskSystem, dependencies, CoroTask::OnlyMainThread };
 	// Note: passing the span should be safe as it resides in cgame code during task system execution
 	return m_taskSystem.addCoro( [=, this]() { return coEndProcessingDrawSceneRequests( si, this, requests ); } );
 }

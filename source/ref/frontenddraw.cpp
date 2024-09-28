@@ -722,9 +722,10 @@ auto Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scen
 }
 
 auto Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+													  std::span<const TaskHandle> dependencies,
 													  bool areCamerasPortalCameras ) -> TaskHandle {
 	return m_taskSystem.addCoro( [=, this]() {
-		return coEndPreparingRenderingFromTheseCameras( { &m_taskSystem, {}, CoroTask::OnlyMainThread },
+		return coEndPreparingRenderingFromTheseCameras( { &m_taskSystem, dependencies, CoroTask::OnlyMainThread },
 														this, scenesAndCameras, areCamerasPortalCameras );
 	});
 }
@@ -889,8 +890,10 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 	}
 
 	if( hasPortalsToProcess ) {
-		co_await si.taskSystem->awaiterOf( self->beginPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates ) );
-		co_await si.taskSystem->awaiterOf( self->endPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates, true ) );
+		const TaskHandle beginTask = self->beginPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates );
+		const std::span<const TaskHandle> dependencies = { &beginTask, 1 };
+		const TaskHandle endTask = self->endPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates, dependencies, true );
+		co_await si.taskSystem->awaiterOf( endTask );
 	}
 
 	const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {

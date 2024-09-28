@@ -1228,10 +1228,6 @@ static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool 
 
 		CG_SetupViewDef( &viewState->view, viewDefType, thirdperson, viewState, viewport );
 
-		CG_LerpEntities( viewState );  // interpolate packet entities positions
-
-		CG_CalcViewWeapon( &viewState->weapon, viewState );
-
 		refdef_t *rd = &viewState->view.refdef;
 		AnglesToAxis( viewState->view.angles, rd->viewaxis );
 
@@ -1245,19 +1241,25 @@ static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool 
 			rd->fov_y *= v;
 		}
 
-		DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( viewState->view.refdef );
-
-		CG_AddEntities( drawSceneRequest, viewState );
-		CG_AddViewWeapon( &viewState->weapon, drawSceneRequest, viewState );
-
-		drawSceneRequests[viewNum] = drawSceneRequest;
+		drawSceneRequests[viewNum] = CreateDrawSceneRequest( viewState->view.refdef );
 	}
 }
 
 [[nodiscard]]
 static auto coPrepareDrawSceneRequests( CoroTask::StartInfo si, DrawSceneRequest **drawSceneRequests,
 										const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) -> CoroTask {
-	co_await si.taskSystem->awaiterOf( BeginProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } ) );
+	const TaskHandle beginTask = BeginProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } );
+
+	for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
+		ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
+
+		CG_LerpEntities( viewState );  // interpolate packet entities positions
+
+		CG_CalcViewWeapon( &viewState->weapon, viewState );
+
+		CG_AddEntities( drawSceneRequests[viewNum], viewState );
+		CG_AddViewWeapon( &viewState->weapon, drawSceneRequests[viewNum], viewState );
+	}
 
 	CG_FireEvents( false );
 
@@ -1284,7 +1286,9 @@ static auto coPrepareDrawSceneRequests( CoroTask::StartInfo si, DrawSceneRequest
 		cg.simulatedHullsSystem.submitToScene( cg.time, drawSceneRequest, povPlayerMask );
 	}
 
-	co_await si.taskSystem->awaiterOf( EndProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } ) );
+	const std::span<const TaskHandle> endProcessingDependencies { &beginTask, 1 };
+	const std::span<DrawSceneRequest *> spanOfRequests { drawSceneRequests, numDisplayedViewStates };
+	co_await si.taskSystem->awaiterOf( EndProcessingDrawSceneRequests( spanOfRequests, endProcessingDependencies ) );
 }
 
 static void prepareDrawSceneRequests( DrawSceneRequest **drawSceneRequests, const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) {

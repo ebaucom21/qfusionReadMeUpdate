@@ -69,7 +69,7 @@ public:
 	[[nodiscard]]
 	auto beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) -> TaskHandle;
 	[[nodiscard]]
-	auto endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) -> TaskHandle;
+	auto endProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests, std::span<const TaskHandle> dependencies ) -> TaskHandle;
 
 	void commitProcessedDrawSceneRequest( DrawSceneRequest *request );
 
@@ -229,6 +229,7 @@ private:
 	auto beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle;
 	[[nodiscard]]
 	auto endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+												std::span<const TaskHandle> dependencies,
 												bool areCamerasPortalCameras ) -> TaskHandle;
 
 	[[nodiscard]]

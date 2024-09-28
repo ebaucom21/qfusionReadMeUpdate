@@ -535,7 +535,7 @@ void BeginDrawingScenes();
 TaskSystem *BeginProcessingOfTasks();
 DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef );
 TaskHandle BeginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
-TaskHandle EndProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests );
+TaskHandle EndProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests, std::span<const TaskHandle> dependencies );
 void EndProcessingOfTasks();
 void CommitProcessedDrawSceneRequest( DrawSceneRequest *request );
 void EndDrawingScenes();

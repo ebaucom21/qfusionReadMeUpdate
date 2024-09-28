@@ -753,8 +753,8 @@ TaskHandle BeginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> reque
 	return wsw::ref::Frontend::instance()->beginProcessingDrawSceneRequests( requests );
 }
 
-TaskHandle EndProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) {
-	return wsw::ref::Frontend::instance()->endProcessingDrawSceneRequests( requests );
+TaskHandle EndProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests, std::span<const TaskHandle> dependencies ) {
+	return wsw::ref::Frontend::instance()->endProcessingDrawSceneRequests( requests, dependencies );
 }
 
 void CommitProcessedDrawSceneRequest( DrawSceneRequest *request ) {
@@ -768,7 +768,7 @@ void EndDrawingScenes() {
 [[nodiscard]]
 static auto coPrepareDrawSceneRequest( CoroTask::StartInfo si, DrawSceneRequest *drawSceneRequest ) -> CoroTask {
 	co_await si.taskSystem->awaiterOf( BeginProcessingDrawSceneRequests( { &drawSceneRequest, 1 } ) );
-	co_await si.taskSystem->awaiterOf( EndProcessingDrawSceneRequests( { &drawSceneRequest, 1 } ) );
+	co_await si.taskSystem->awaiterOf( EndProcessingDrawSceneRequests( { &drawSceneRequest, 1 }, {} ) );
 }
 
 void ExecuteSingleDrawSceneRequestNonSpeedCritical( DrawSceneRequest *request ) {
