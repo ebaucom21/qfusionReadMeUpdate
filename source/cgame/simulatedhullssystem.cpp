@@ -2758,9 +2758,9 @@ static void lerpLayerColorsAndRangesBetweenFrames( byte_vec4_t *__restrict destC
 	} while( ++colorNum < numColors );
 }
 
-template <typename LayerType>
+template <typename LayerType, bool IsLayer0, SimulatedHullsSystem::BlendMode BlendMode, SimulatedHullsSystem::AlphaMode AlphaMode>
 static void addLayerContributionToResultColors( const LayerType *__restrict prevLayer, const LayerType *__restrict nextLayer,
-												const uint16_t *__restrict vertexNums, unsigned numVerticesToProcess, unsigned layerNum,
+												const uint16_t *__restrict vertexNums, unsigned numVerticesToProcess,
 												[[maybe_unused]] const float *__restrict viewDotResults, [[maybe_unused]] float lerpFrac,
 												byte_vec4_t *__restrict overrideColorsBuffer ) {
 	assert( numVerticesToProcess > 0 );
@@ -2773,9 +2773,6 @@ static void addLayerContributionToResultColors( const LayerType *__restrict prev
 	lerpLayerColorsAndRangesBetweenFrames( lerpedColors, lerpedColorRanges, numColors, lerpFrac,
 										   prevLayer->colors.data(), nextLayer->colors.data(),
 										   prevLayer->colorRanges, nextLayer->colorRanges );
-
-	const SimulatedHullsSystem::BlendMode blendMode = prevLayer->blendMode;
-	const SimulatedHullsSystem::AlphaMode alphaMode = prevLayer->alphaMode;
 
 	unsigned indexOfNum = 0;
 	do {
@@ -2821,31 +2818,82 @@ static void addLayerContributionToResultColors( const LayerType *__restrict prev
 			Vector4Lerp( lerpedColors[prevColorIndex], colorLerpFrac, lerpedColors[nextColorIndex], layerColor );
 		}
 
-		if( layerNum == 0 ) {
+		if constexpr( IsLayer0 ) {
 			Vector4Copy( layerColor, resultVertexColor );
 		} else {
-			if( blendMode == SimulatedHullsSystem::BlendMode::AlphaBlend ) {
+			if constexpr( BlendMode == SimulatedHullsSystem::BlendMode::AlphaBlend ) {
 				VectorLerp( resultVertexColor, layerColor[3], layerColor, resultVertexColor );
-			} else if( blendMode == SimulatedHullsSystem::BlendMode::Add ) {
+			} else if constexpr( BlendMode == SimulatedHullsSystem::BlendMode::Add ) {
 				resultVertexColor[0] = wsw::min( resultVertexColor[0] + layerColor[0], 255 );
 				resultVertexColor[1] = wsw::min( resultVertexColor[1] + layerColor[1], 255 );
 				resultVertexColor[2] = wsw::min( resultVertexColor[2] + layerColor[2], 255 );
-			} else if( blendMode == SimulatedHullsSystem::BlendMode::Subtract ) {
+			} else if constexpr( BlendMode == SimulatedHullsSystem::BlendMode::Subtract ) {
 				resultVertexColor[0] = wsw::max( resultVertexColor[0] - layerColor[0], 0 );
 				resultVertexColor[1] = wsw::max( resultVertexColor[1] - layerColor[1], 0 );
 				resultVertexColor[2] = wsw::max( resultVertexColor[2] - layerColor[2], 0 );
+			} else {
+				assert( false );
 			}
 
-			if( alphaMode == SimulatedHullsSystem::AlphaMode::Override ) {
+			if constexpr( AlphaMode == SimulatedHullsSystem::AlphaMode::Override ) {
 				resultVertexColor[3] = layerColor[3];
-			} else if( alphaMode == SimulatedHullsSystem::AlphaMode::Add ) {
+			} else if constexpr( AlphaMode == SimulatedHullsSystem::AlphaMode::Add ) {
 				resultVertexColor[3] = wsw::min( resultVertexColor[3] + layerColor[3], 255 );
-			} else if( alphaMode == SimulatedHullsSystem::AlphaMode::Subtract ) {
+			} else if constexpr( AlphaMode == SimulatedHullsSystem::AlphaMode::Subtract ) {
 				resultVertexColor[3] = wsw::max( resultVertexColor[3] - layerColor[3], 0 );
+			} else {
+				assert( false );
 			}
 		}
 	} while( ++indexOfNum < numVerticesToProcess );
 }
+
+template <typename LayerType>
+struct ToonLayerShadeFnHolder {
+	using Fn = void (*)( const LayerType *, const LayerType *, const uint16_t *, unsigned, const float *, float, byte_vec4_t * );
+
+	Fn layer0Fn {};
+	Fn blendAndAlphaFnTable[3][3] {};
+
+	[[nodiscard]]
+	auto get( unsigned layerNum, SimulatedHullsSystem::BlendMode blendMode, SimulatedHullsSystem::AlphaMode alphaMode ) -> Fn {
+		assert( (unsigned)blendMode < 3 && (unsigned)alphaMode < 3 );
+		Fn result;
+		if( layerNum ) {
+			result = blendAndAlphaFnTable[(unsigned)blendMode][(unsigned)alphaMode];
+		} else {
+			result = layer0Fn;
+		}
+		assert( result );
+		return result;
+	}
+};
+
+static struct MaskedToonLayerShadeFnHolder : public ToonLayerShadeFnHolder<SimulatedHullsSystem::MaskedShadingLayer> {
+	MaskedToonLayerShadeFnHolder() noexcept {
+		// Generate specializations which we actually use.
+		// Note: Using arbitrary blend/alpha mode for layer0
+		layer0Fn = &addLayerContributionToResultColors<SimulatedHullsSystem::MaskedShadingLayer, true,
+			SimulatedHullsSystem::BlendMode::Add, SimulatedHullsSystem::AlphaMode::Add>;
+		blendAndAlphaFnTable[(unsigned)SimulatedHullsSystem::BlendMode::Add][(unsigned)SimulatedHullsSystem::AlphaMode::Override] =
+			&addLayerContributionToResultColors<SimulatedHullsSystem::MaskedShadingLayer, false,
+				SimulatedHullsSystem::BlendMode::Add, SimulatedHullsSystem::AlphaMode::Override>;
+	}
+} g_maskedToonLayerShadeFnHolder;
+
+static struct DotToonLayerShadeFnHolder : public ToonLayerShadeFnHolder<SimulatedHullsSystem::DotShadingLayer> {
+	DotToonLayerShadeFnHolder() noexcept {
+		// Generate specializations which we actually use
+		blendAndAlphaFnTable[(unsigned)SimulatedHullsSystem::BlendMode::Add][(unsigned)SimulatedHullsSystem::AlphaMode::Add] =
+			&addLayerContributionToResultColors<SimulatedHullsSystem::DotShadingLayer, false,
+				SimulatedHullsSystem::BlendMode::Add, SimulatedHullsSystem::AlphaMode::Add>;
+	}
+} g_dotToonLayerShadeFnHolder;
+
+static struct CombinedToonLayerShadeFnHolder : public ToonLayerShadeFnHolder<SimulatedHullsSystem::CombinedShadingLayer> {
+	// For now, we don't actually use combined layers
+	CombinedToonLayerShadeFnHolder() noexcept = default;
+} g_combinedToonLayerShadeFnHolder;
 
 auto SimulatedHullsSystem::HullSolidDynamicMesh::fillMeshBuffers( const float *__restrict viewOrigin,
 																  const float *__restrict viewAxis,
@@ -2944,22 +2992,25 @@ auto SimulatedHullsSystem::HullSolidDynamicMesh::fillMeshBuffers( const float *_
 				// Call specialized implementations for respective layer types
 				if( const auto *const prevMaskedLayer = std::get_if<MaskedShadingLayer>( &prevShadingLayer ) ) {
 					const auto *const nextMaskedLayer = std::get_if<MaskedShadingLayer>( &nextShadingLayer );
-
-					addLayerContributionToResultColors( prevMaskedLayer, nextMaskedLayer, vertexNums,
-														numVerticesToProcess, layerNum, viewDotResults,
-														m_shared->lerpFrac, overrideColorsBuffer );
+					const auto addLayerContributionFn = g_maskedToonLayerShadeFnHolder.get( layerNum,
+																							prevMaskedLayer->blendMode,
+																							prevMaskedLayer->alphaMode );
+					addLayerContributionFn( prevMaskedLayer, nextMaskedLayer, vertexNums, numVerticesToProcess,
+											viewDotResults, m_shared->lerpFrac, overrideColorsBuffer );
 				} else if( const auto *const prevDotLayer = std::get_if<DotShadingLayer>( &prevShadingLayer ) ) {
-					const auto *const nextDotLayer = std::get_if<DotShadingLayer>( &nextShadingLayer );
-
-					addLayerContributionToResultColors( prevDotLayer, nextDotLayer, vertexNums,
-														numVerticesToProcess, layerNum, viewDotResults,
-														m_shared->lerpFrac, overrideColorsBuffer );
+					const auto *const nextDotLayer    = std::get_if<DotShadingLayer>( &nextShadingLayer );
+					const auto addLayerContributionFn = g_dotToonLayerShadeFnHolder.get( layerNum,
+																						 prevDotLayer->blendMode,
+																						 prevDotLayer->alphaMode );
+					addLayerContributionFn( prevDotLayer, nextDotLayer, vertexNums, numVerticesToProcess,
+											viewDotResults, m_shared->lerpFrac, overrideColorsBuffer );
 				} else if( const auto *const prevCombinedLayer = std::get_if<CombinedShadingLayer>( &prevShadingLayer ) ) {
 					const auto *const nextCombinedLayer = std::get_if<CombinedShadingLayer>( &nextShadingLayer );
-
-					addLayerContributionToResultColors( prevCombinedLayer, nextCombinedLayer, vertexNums,
-														numVerticesToProcess, layerNum, viewDotResults,
-														m_shared->lerpFrac, overrideColorsBuffer );
+					const auto addLayerContributionFn   = g_combinedToonLayerShadeFnHolder.get( layerNum,
+																								prevCombinedLayer->blendMode,
+																								prevCombinedLayer->alphaMode );
+					addLayerContributionFn( prevCombinedLayer, nextCombinedLayer, vertexNums, numVerticesToProcess,
+											viewDotResults, m_shared->lerpFrac, overrideColorsBuffer );
 				} else {
 					wsw::failWithLogicError( "Unreachable" );
 				}
