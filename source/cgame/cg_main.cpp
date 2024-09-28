@@ -4306,21 +4306,6 @@ static void CG_UpdatePortalSurfaceEnt( centity_t *cent ) {
 	}
 }
 
-static void CG_AddPortalSurfaceEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
-	if( !VectorCompare( cent->ent.origin, cent->ent.origin2 ) ) { // construct the view matrix for portal view
-		if( cent->current.effects & EF_ROTATE_AND_BOB ) {
-			float phase = cent->current.frame / 256.0f;
-			float speed = cent->current.modelindex2 ? cent->current.modelindex2 : 50;
-
-			Matrix3_Identity( cent->ent.axis );
-			Matrix3_Rotate( cent->ent.axis, 5 * sin( ( phase + cg.time * 0.001 * speed * 0.01 ) * M_TWOPI ),
-							1, 0, 0, cent->ent.axis );
-		}
-	}
-
-	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
-}
-
 static void CG_AddParticlesEnt( centity_t *cent ) {
 }
 
@@ -4549,7 +4534,8 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest, ViewState *drawFromView
 				break;
 
 			case ET_PORTALSURFACE:
-				CG_AddPortalSurfaceEnt( cent, drawSceneRequest );
+				// We add it separately. Refer to creation of draw scene requests
+				// CG_AddPortalSurfaceEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC, drawFromViewState );
 				break;
 

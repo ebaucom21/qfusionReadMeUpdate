@@ -454,6 +454,10 @@ public:
 
 	void addEntity( const entity_t *ent );
 
+	// Must be added early just before preparing the world model for rendering so we can schedule preparing of portals.
+	// There is an implication that brushmodel-based entities do not have portal surfaces.
+	void addPortalEntity( const entity_t *ent );
+
 	// No copying is being performed
 	void addPoly( QuadPoly *poly ) {
 		if( !m_quadPolys.full() ) [[likely]] {

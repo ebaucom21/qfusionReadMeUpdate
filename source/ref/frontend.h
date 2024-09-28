@@ -152,7 +152,6 @@ private:
 		float lodScaleForFov;
 
 		unsigned numPortalSurfaces;
-		unsigned numDepthPortalSurfaces;
 
 		portalSurface_t portalSurfaces[MAX_PORTAL_SURFACES];
 
@@ -242,16 +241,8 @@ private:
 
 	void performPreparedRenderingFromThisCamera( Scene *scene, StateForCamera *stateForCamera );
 
-	[[nodiscard]]
-	auto tryAddingPortalSurface( StateForCamera *stateForCamera, const entity_t *ent,
-								 const shader_t *shader, void *drawSurf ) -> portalSurface_t *;
-
-	[[nodiscard]]
-	auto tryUpdatingPortalSurfaceAndDistance( StateForCamera *stateForCamera, drawSurfaceBSP_t *drawSurf,
-											  const msurface_t *surf, const float *origin ) -> std::optional<float>;
-
 	void updatePortalSurface( StateForCamera *stateForCamera, portalSurface_t *portalSurface, const mesh_t *mesh,
-							  const float *mins, const float *maxs, const shader_t *shader, void *drawSurf );
+							  const float *mins, const float *maxs, const shader_t *shader );
 
 	void collectVisiblePolys( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta );
 
@@ -264,6 +255,8 @@ private:
 		-> std::pair<std::span<const uint16_t>, std::span<const uint16_t>>;
 
 	void calcSubspansOfMergedSurfSpans( StateForCamera *stateForCamera );
+
+	void processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene *scene );
 
 	[[nodiscard]]
 	auto cullNullModelEntities( StateForCamera *stateForCamera, std::span<const entity_t> nullModelEntities,

@@ -372,10 +372,8 @@ void Frontend::addMergedBspSurfToSortList( StateForCamera *stateForCamera, const
 	const MergedBspSurface *const mergedSurf = drawSurf->mergedBspSurf;
 	const shader_t *const surfMaterial       = mergedSurf->shader;
 
-	portalSurface_t *portalSurface = nullptr;
-	if( surfMaterial->flags & SHADER_PORTAL ) {
-		portalSurface = tryAddingPortalSurface( stateForCamera, entity, surfMaterial, drawSurf );
-	}
+	// Must be set earlier
+	portalSurface_t *portalSurface = drawSurf->portalSurface;
 
 	const mfog_t *fog        = mergedSurf->fog;
 	const unsigned drawOrder = R_PackOpaqueOrder( fog, surfMaterial, mergedSurf->numLightmaps, false );
@@ -389,18 +387,6 @@ void Frontend::addMergedBspSurfToSortList( StateForCamera *stateForCamera, const
 
 	if( portalSurface && !( surfMaterial->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) ) ) {
 		//addEntryToSortList( m_state.portalmasklist, e, nullptr, nullptr, 0, 0, nullptr, drawSurf );
-	}
-
-	float resultDist = 0;
-	if( surfMaterial->flags & ( SHADER_PORTAL ) ) [[unlikely]] {
-		msurface_t *const firstVisSurf = surfaces + surfSpan.firstSurface;
-		msurface_t *const lastVisSurf  = surfaces + surfSpan.lastSurface;
-		for( msurface_s *surf = firstVisSurf; surf <= lastVisSurf; ++surf ) {
-			if( const auto maybeDistance = tryUpdatingPortalSurfaceAndDistance( stateForCamera,
-																				drawSurf, surf, maybeOrigin ) ) {
-				resultDist = wsw::max( resultDist, *maybeDistance );
-			}
-		}
 	}
 
 	drawSurf->vertElemSpans = stateForCamera->drawSurfVertElemSpansBuffer->get() + surfSpan.vertSpansOffset;
@@ -442,6 +428,7 @@ void Frontend::addMergedBspSurfToSortList( StateForCamera *stateForCamera, const
 		} while( ++subspanNum < surfSpan.numSubspans );
 	}
 
+	float resultDist = drawSurf->portalDistance;
 	// update the distance sorting key if it's a portal surface or a normal dlit surface
 	if( resultDist != 0 || dlightBits != 0 ) {
 		drawSurf->dlightBits = dlightBits;
@@ -682,35 +669,71 @@ auto Frontend::addEntryToSortList( StateForCamera *stateForCamera, const entity_
 	return nullptr;
 }
 
-auto Frontend::tryAddingPortalSurface( StateForCamera *stateForCamera, const entity_t *ent,
-									   const shader_t *shader, void *drawSurf ) -> portalSurface_t * {
-	if( shader ) {
-		if( stateForCamera->numPortalSurfaces < MAX_PORTAL_SURFACES ) {
-			const bool depthPortal = !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) );
-			// TOOD: ???
-			if( !depthPortal || ( !r_fastsky->integer && stateForCamera->viewCluster >= 0 ) ) {
+void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene *scene ) {
+	const auto numWorldModelMergedSurfaces       = rsh.worldBrushModel->numModelMergedSurfaces;
+	const MergedSurfSpan *const mergedSurfSpans  = stateForCamera->drawSurfSurfSpansBuffer->get();
+	drawSurfaceBSP_t *const drawSurfaces         = stateForCamera->bspDrawSurfacesBuffer->get();
+	const MergedBspSurface *const mergedSurfaces = rsh.worldBrushModel->mergedSurfaces;
+	const msurface_t *const surfaces             = rsh.worldBrushModel->surfaces;
 
-				portalSurface_t *portalSurface = &stateForCamera->portalSurfaces[stateForCamera->numPortalSurfaces++];
-				memset( portalSurface, 0, sizeof( portalSurface_t ) );
-				portalSurface->entity          = ent;
-				portalSurface->shader          = shader;
-				ClearBounds( portalSurface->mins, portalSurface->maxs );
-				memset( portalSurface->texures, 0, sizeof( portalSurface->texures ) );
-				// ?????
-				if( depthPortal ) {
-					stateForCamera->numDepthPortalSurfaces++;
+	// TODO: Left-pack during calculation of surf subspans
+	for( unsigned mergedSurfNum = 0; mergedSurfNum < numWorldModelMergedSurfaces; ++mergedSurfNum ) {
+		const MergedSurfSpan &surfSpan = mergedSurfSpans[mergedSurfNum];
+		// TODO: Left-pack during calculation of surf subspans
+		if( surfSpan.firstSurface <= surfSpan.lastSurface ) {
+			const MergedBspSurface &mergedSurf = mergedSurfaces[mergedSurfNum];
+			// TODO: Save portal surface in draw surface
+			portalSurface_t *portalSurface = nullptr;
+			if( mergedSurf.shader->flags & SHADER_PORTAL ) [[unlikely]] {
+				if( stateForCamera->numPortalSurfaces < MAX_PORTAL_SURFACES ) {
+					// We currently don't support depth-masked portals, only capturing ones
+					if( mergedSurf.shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) ) {
+						portalSurface = &stateForCamera->portalSurfaces[stateForCamera->numPortalSurfaces++];
+						memset( portalSurface, 0, sizeof( portalSurface_t ) );
+						portalSurface->entity          = scene->m_worldent;
+						portalSurface->shader          = mergedSurf.shader;
+						portalSurface->portalNumber    = stateForCamera->numPortalSurfaces - 1;
+						ClearBounds( portalSurface->mins, portalSurface->maxs );
+						memset( portalSurface->texures, 0, sizeof( portalSurface->texures ) );
+					}
 				}
-
-				return portalSurface;
+			}
+			if( portalSurface ) [[unlikely]] {
+				// For brush models, currently unsupported
+				constexpr const float *modelOrigin = nullptr;
+				// TODO: Save result dist
+				float resultDist = 0.0;
+				const msurface_t *const firstVisSurf = surfaces + surfSpan.firstSurface;
+				const msurface_t *const lastVisSurf  = surfaces + surfSpan.lastSurface;
+				for( const msurface_s *surf = firstVisSurf; surf <= lastVisSurf; ++surf ) {
+					vec3_t center;
+					if( modelOrigin ) {
+						VectorCopy( modelOrigin, center );
+					} else {
+						VectorAdd( surf->mins, surf->maxs, center );
+						VectorScale( center, 0.5, center );
+					}
+					float dist = Distance( stateForCamera->refdef.vieworg, center );
+					// draw portals in front-to-back order
+					dist = 1024 - dist / 100.0f;
+					if( dist < 1 ) {
+						dist = 1;
+					}
+					updatePortalSurface( stateForCamera, portalSurface, &surf->mesh, surf->mins, surf->maxs, mergedSurf.shader );
+					resultDist = wsw::max( resultDist, dist );
+				}
+				drawSurfaces[mergedSurfNum].portalSurface  = portalSurface;
+				drawSurfaces[mergedSurfNum].portalDistance = resultDist;
+			} else {
+				drawSurfaces[mergedSurfNum].portalSurface  = nullptr;
+				drawSurfaces[mergedSurfNum].portalDistance = 0.0f;
 			}
 		}
 	}
-
-	return nullptr;
 }
 
 void Frontend::updatePortalSurface( StateForCamera *stateForCamera, portalSurface_t *portalSurface, const mesh_t *mesh,
-									const float *mins, const float *maxs, const shader_t *shader, void *drawSurf ) {
+									const float *mins, const float *maxs, const shader_t *shader ) {
 	vec3_t v[3];
 	for( unsigned i = 0; i < 3; i++ ) {
 		VectorCopy( mesh->xyzArray[mesh->elems[i]], v[i] );
@@ -786,38 +809,5 @@ void Frontend::updatePortalSurface( StateForCamera *stateForCamera, portalSurfac
 	AddPointToBounds( maxs, portalSurface->mins, portalSurface->maxs );
 	portalSurface->mins[3] = 0.0f, portalSurface->maxs[3] = 1.0f;
 }
-
-auto Frontend::tryUpdatingPortalSurfaceAndDistance( StateForCamera *stateForCamera, drawSurfaceBSP_t *drawSurf,
-													const msurface_t *surf, const float *origin ) -> std::optional<float> {
-	const shader_t *shader = drawSurf->mergedBspSurf->shader;
-	if( shader->flags & SHADER_PORTAL ) {
-		const sortedDrawSurf_t *const sds = (sortedDrawSurf_t *)drawSurf->listSurf;
-
-		unsigned shaderNum, entNum;
-		int portalNum, fogNum;
-		R_UnpackSortKey( sds->sortKey, &shaderNum, &fogNum, &portalNum, &entNum );
-
-		if( portalNum >= 0 ) {
-			portalSurface_t *const portalSurface = stateForCamera->portalSurfaces + portalNum;
-			vec3_t center;
-			if( origin ) {
-				VectorCopy( origin, center );
-			} else {
-				VectorAdd( surf->mins, surf->maxs, center );
-				VectorScale( center, 0.5, center );
-			}
-			float dist = Distance( stateForCamera->refdef.vieworg, center );
-			// draw portals in front-to-back order
-			dist = 1024 - dist / 100.0f;
-			if( dist < 1 ) {
-				dist = 1;
-			}
-			updatePortalSurface( stateForCamera, portalSurface, &surf->mesh, surf->mins, surf->maxs, shader, drawSurf );
-			return dist;
-		}
-	}
-	return std::nullopt;
-}
-
 
 }

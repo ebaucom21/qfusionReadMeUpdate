@@ -454,7 +454,6 @@ auto Frontend::setupStateForCamera( const refdef_t *fd, unsigned sceneIndex,
 	}
 
 	stateForCamera->numPortalSurfaces      = 0;
-	stateForCamera->numDepthPortalSurfaces = 0;
 
 	Matrix4_Modelview( fd->vieworg, fd->viewaxis, stateForCamera->cameraMatrix );
 
@@ -605,11 +604,13 @@ auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si
 	assert( scenesAndCameras.size() <= MAX_REF_CAMERAS );
 
 	wsw::StaticVector<StateForCamera *, MAX_REF_CAMERAS> statesForValidCameras;
+	wsw::StaticVector<Scene *, MAX_REF_CAMERAS> scenesForValidCameras;
 	for( unsigned cameraIndex = 0; cameraIndex < scenesAndCameras.size(); ++cameraIndex ) {
 		StateForCamera *const stateForCamera = scenesAndCameras[cameraIndex].second;
 		if( !( stateForCamera->refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 			if( r_drawworld->integer && rsh.worldModel ) {
 				statesForValidCameras.push_back( stateForCamera );
+				scenesForValidCameras.push_back( scenesAndCameras[cameraIndex].first );
 			}
 		}
 	}
@@ -702,17 +703,27 @@ auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si
 		});
 	}
 
-	wsw::StaticVector<TaskHandle, MAX_REF_CAMERAS> calcSubspansTasks;
+	TaskHandle calcSubspansTasks[MAX_REF_CAMERAS];
 	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
 		StateForCamera *stateForCamera = statesForValidCameras[cameraIndex];
 		assert( execPassUponPreparingOccludersTasks[cameraIndex] );
 		const TaskHandle dependencies[1] { execPassUponPreparingOccludersTasks[cameraIndex] };
-		calcSubspansTasks.push_back( si.taskSystem->add( dependencies, [=]( [[maybe_unused]] unsigned workerIndex ) {
+		calcSubspansTasks[cameraIndex] = si.taskSystem->add( dependencies, [=]( unsigned ) {
 			self->calcSubspansOfMergedSurfSpans( stateForCamera );
-		}));
+		});
 	}
 
-	co_await si.taskSystem->awaiterOf( calcSubspansTasks );
+	TaskHandle processWorldPortalSurfacesTasks[MAX_REF_CAMERAS];
+	for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
+		StateForCamera *stateForCamera = statesForValidCameras[cameraIndex];
+		Scene *sceneForCamera          = scenesForValidCameras[cameraIndex];
+		const TaskHandle dependencies[1] { calcSubspansTasks[cameraIndex] };
+		processWorldPortalSurfacesTasks[cameraIndex] = si.taskSystem->add( dependencies, [=]( unsigned ) {
+			self->processWorldPortalSurfaces( stateForCamera, sceneForCamera );
+		});
+	}
+
+	co_await si.taskSystem->awaiterOf( { processWorldPortalSurfacesTasks, statesForValidCameras.size() } );
 }
 
 auto Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle {
@@ -971,7 +982,7 @@ void Frontend::performPreparedRenderingFromThisCamera( Scene *scene, StateForCam
 		shouldClearColor = stateForCamera->refdef.renderTarget != nullptr;
 		Vector4Set( clearColor, 1, 1, 1, 0 );
 	} else {
-		shouldClearColor = stateForCamera->numDepthPortalSurfaces == 0 || r_fastsky->integer || stateForCamera->viewCluster < 0;
+		shouldClearColor = /*stateForCamera->numDepthPortalSurfaces == 0 ||*/ r_fastsky->integer || stateForCamera->viewCluster < 0;
 		if( rsh.worldBrushModel && rsh.worldBrushModel->globalfog && rsh.worldBrushModel->globalfog->shader ) {
 			Vector4Scale( rsh.worldBrushModel->globalfog->shader->fog_color, 1.0 / 255.0, clearColor );
 		} else {

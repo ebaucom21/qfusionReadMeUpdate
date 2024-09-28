@@ -328,7 +328,8 @@ Scene::Scene( unsigned index ) : m_index( index ) {
 }
 
 void DrawSceneRequest::addEntity( const entity_t *ent ) {
-	if( !m_entities.full() && ent ) [[likely]] {
+	assert( ent->rtype != RT_PORTALSURFACE );
+	if( !m_entities.full() ) [[likely]] {
 		entity_t *added = nullptr;
 
 		if( ent->rtype == RT_MODEL ) {
@@ -351,10 +352,6 @@ void DrawSceneRequest::addEntity( const entity_t *ent ) {
 			m_spriteEntities.push_back( *ent );
 			added = std::addressof( m_spriteEntities.back() );
 			// simplifies further checks
-			added->model = nullptr;
-		} else if( ent->rtype == RT_PORTALSURFACE ) [[unlikely]] {
-			m_portalSurfaceEntities.push_back( *ent );
-			added = std::addressof( m_portalSurfaceEntities.back() );
 			added->model = nullptr;
 		}
 
@@ -385,6 +382,16 @@ void DrawSceneRequest::addEntity( const entity_t *ent ) {
 				addEntity( &tent );
 			}
 		}
+	}
+}
+
+void DrawSceneRequest::addPortalEntity( const entity_t *ent ) {
+	assert( ent->rtype == RT_PORTALSURFACE );
+	if( !m_portalSurfaceEntities.full() ) [[likely]] {
+		m_portalSurfaceEntities.push_back( *ent );
+		// Make sure we don't try using it
+		// TODO: Use a completely different type, the current one is kept for structural compatiblity with existing code
+		m_portalSurfaceEntities.back().number = ~0u / 2;
 	}
 }
 

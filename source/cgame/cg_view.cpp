@@ -1243,6 +1243,30 @@ static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool 
 
 		drawSceneRequests[viewNum] = CreateDrawSceneRequest( viewState->view.refdef );
 	}
+
+	for( int pnum = 0; pnum < cg.frame.numEntities; pnum++ ) {
+		const int stateIndex  = pnum & ( MAX_PARSE_ENTITIES - 1 );
+		entity_state_t *state = &cg.frame.parsedEntities[stateIndex];
+		centity_t *cent       = &cg_entities[state->number];
+
+		// TODO: Use separate bins for each type of entities
+		if( cent->type == ET_PORTALSURFACE ) {
+			if( !VectorCompare( cent->ent.origin, cent->ent.origin2 ) ) { // construct the view matrix for portal view
+				if( cent->current.effects & EF_ROTATE_AND_BOB ) {
+					float phase = cent->current.frame / 256.0f;
+					float speed = cent->current.modelindex2 ? cent->current.modelindex2 : 50;
+
+					Matrix3_Identity( cent->ent.axis );
+					Matrix3_Rotate( cent->ent.axis, 5 * sin( ( phase + cg.time * 0.001 * speed * 0.01 ) * M_TWOPI ),
+									1, 0, 0, cent->ent.axis );
+				}
+			}
+
+			for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
+				drawSceneRequests[viewNum]->addPortalEntity( &cent->ent );
+			}
+		}
+	}
 }
 
 [[nodiscard]]

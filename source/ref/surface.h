@@ -62,13 +62,16 @@ struct MergedBspSurface {
 };
 
 struct VertElemSpan;
+struct portalSurface_s;
 
 typedef struct {
 	void *listSurf;                 // only valid if visFrame == rf.frameCount
 	MergedBspSurface *mergedBspSurf;
 	unsigned dlightBits;
 	const VertElemSpan *vertElemSpans;
+	portalSurface_s *portalSurface;
 	unsigned numSpans;
+	float portalDistance;
 } drawSurfaceBSP_t;
 
 typedef struct {
