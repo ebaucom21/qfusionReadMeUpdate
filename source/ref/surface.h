@@ -43,7 +43,6 @@ struct DynamicMeshDrawSurface {
 	unsigned actualNumIndices;
 	unsigned verticesOffset;
 	unsigned indicesOffset;
-	unsigned frameUploadGroup;
 	const struct DynamicMesh *dynamicMesh;
 	char scratchpad[32];
 };

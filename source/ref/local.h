@@ -690,13 +690,11 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 						const struct mesh_s *mesh, int primitive, float x_offset, float y_offset );
 void RB_FlushDynamicMeshes( void );
 
-int RB_VBOIdForFrameUploadGroup( unsigned group );
+int RB_VBOIdForFrameUploads();
 
-// For now, its either regular group or portal group
-// We must eventually remove these separate groups
-void R_BeginFrameUploads( unsigned group );
-void R_SetFrameUploadMeshSubdata( unsigned group, unsigned verticesOffset, unsigned indicesOffset, const mesh_t *mesh );
-void R_EndFrameUploads( unsigned group );
+void R_BeginFrameUploads();
+void R_SetFrameUploadMeshSubdata( unsigned verticesOffset, unsigned indicesOffset, const mesh_t *mesh );
+void R_EndFrameUploads();
 
 struct VertElemSpan {
 	unsigned firstVert;

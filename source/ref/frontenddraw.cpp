@@ -600,7 +600,8 @@ auto Frontend::coPrepareOccluders( CoroTask::StartInfo si, Frontend *self, State
 }
 
 auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
-														  std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> CoroTask {
+														  std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+														  bool areCamerasPortalCameras ) -> CoroTask {
 	assert( scenesAndCameras.size() <= MAX_REF_CAMERAS );
 
 	wsw::StaticVector<StateForCamera *, MAX_REF_CAMERAS> statesForValidCameras;
@@ -719,16 +720,33 @@ auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si
 		Scene *sceneForCamera          = scenesForValidCameras[cameraIndex];
 		const TaskHandle dependencies[1] { calcSubspansTasks[cameraIndex] };
 		processWorldPortalSurfacesTasks[cameraIndex] = si.taskSystem->add( dependencies, [=]( unsigned ) {
-			self->processWorldPortalSurfaces( stateForCamera, sceneForCamera );
+			// If we don't draw portals or are in portal state (and won't draw portals recursively)
+			// we still have to update respective surfaces for proper sorting
+			self->processWorldPortalSurfaces( stateForCamera, sceneForCamera, areCamerasPortalCameras );
 		});
 	}
 
 	co_await si.taskSystem->awaiterOf( { processWorldPortalSurfacesTasks, statesForValidCameras.size() } );
+
+	if( !areCamerasPortalCameras ) {
+		self->m_tmpPortalScenesAndStates.clear();
+		for( unsigned cameraIndex = 0; cameraIndex < statesForValidCameras.size(); ++cameraIndex ) {
+			for( StateForCamera *stateForPortalCamera: statesForValidCameras[cameraIndex]->portalCameraStates ) {
+				// Portals share scene with the parent state
+				self->m_tmpPortalScenesAndStates.push_back( { scenesForValidCameras[cameraIndex], stateForPortalCamera } );
+			}
+		}
+		if( !self->m_tmpPortalScenesAndStates.empty() ) {
+			co_await si.taskSystem->awaiterOf( self->beginPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates, true ) );
+		}
+	}
 }
 
-auto Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle {
+auto Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+														bool areCamerasPortalCameras ) -> TaskHandle {
 	return m_taskSystem.addCoro( [=, this]() {
-		return coBeginPreparingRenderingFromTheseCameras( { &m_taskSystem, {}, CoroTask::OnlyMainThread }, this, scenesAndCameras );
+		CoroTask::StartInfo startInfo { &m_taskSystem, {}, CoroTask::OnlyMainThread };
+		return coBeginPreparingRenderingFromTheseCameras( startInfo, this, scenesAndCameras, areCamerasPortalCameras );
 	});
 }
 
@@ -736,35 +754,32 @@ auto Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene 
 													  std::span<const TaskHandle> dependencies,
 													  bool areCamerasPortalCameras ) -> TaskHandle {
 	return m_taskSystem.addCoro( [=, this]() {
-		return coEndPreparingRenderingFromTheseCameras( { &m_taskSystem, dependencies, CoroTask::OnlyMainThread },
-														this, scenesAndCameras, areCamerasPortalCameras );
+		CoroTask::StartInfo startInfo { &m_taskSystem, dependencies, CoroTask::OnlyMainThread };
+		return coEndPreparingRenderingFromTheseCameras( startInfo, this, scenesAndCameras, areCamerasPortalCameras );
 	});
 }
 
 auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
 														std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
 														bool areCamerasPortalCameras ) -> CoroTask {
-	wsw::PodVector<DynamicMeshFillDataWorkload> *tmpDynamicMeshFillDataWorkload;
-	unsigned frameUploadGroup;
-	if( areCamerasPortalCameras ) {
-		tmpDynamicMeshFillDataWorkload = &self->m_tmpDynamicMeshFillDataWorkload[1];
-		frameUploadGroup = 1;
-	} else {
-		tmpDynamicMeshFillDataWorkload = &self->m_tmpDynamicMeshFillDataWorkload[0];
-		frameUploadGroup = 0;
+	// Caution! There is an implication that preparing uploads is executed in serial fashion by primary and portal camera groups
+	wsw::PodVector<DynamicMeshFillDataWorkload> *tmpDynamicMeshFillDataWorkload = &self->m_tmpDynamicMeshFillDataWorkload;
+	wsw::PodVector<DynamicMeshData> *tmpDynamicMeshData = &self->m_tmpDynamicMeshData;
+	// The primary call starts uploads, make sure the following portal call dones not reset values
+	if( !areCamerasPortalCameras ) {
+		tmpDynamicMeshFillDataWorkload->clear();
+		tmpDynamicMeshData->clear();
+		self->m_dynamicMeshOffsetsOfVerticesAndIndices = { 0, 0 };
+		R_BeginFrameUploads();
 	}
 
-	tmpDynamicMeshFillDataWorkload->clear();
-
 	if( r_drawentities->integer ) {
-		std::pair<unsigned, unsigned> offsetsOfVerticesAndIndices { 0, 0 };
 		for( auto [scene, stateForCamera] : scenesAndCameras ) {
 			const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
-			self->collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta, &offsetsOfVerticesAndIndices );
+			self->collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta, &self->m_dynamicMeshOffsetsOfVerticesAndIndices );
 
 			for( unsigned i = 0; i < stateForCamera->numDynamicMeshDrawSurfaces; ++i ) {
 				DynamicMeshDrawSurface *drawSurface = &stateForCamera->dynamicMeshDrawSurfaces[i];
-				drawSurface->frameUploadGroup       = frameUploadGroup;
 				tmpDynamicMeshFillDataWorkload->append( DynamicMeshFillDataWorkload {
 					.scene          = scene,
 					.stateForCamera = stateForCamera,
@@ -773,7 +788,6 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 			}
 		}
 		if( !tmpDynamicMeshFillDataWorkload->empty() ) {
-			wsw::PodVector<DynamicMeshData> *tmpDynamicMeshData = &self->m_tmpDynamicMeshData[areCamerasPortalCameras ? 1 : 0];
 			tmpDynamicMeshData->resize( tmpDynamicMeshFillDataWorkload->size() );
 			for( unsigned i = 0; i < tmpDynamicMeshFillDataWorkload->size(); ++i ) {
 				tmpDynamicMeshFillDataWorkload->operator[]( i ).destData = tmpDynamicMeshData->data() + i;
@@ -845,11 +859,10 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 				mesh.colorsArray[0] = workload.destData->colors;
 				mesh.elems          = workload.destData->indices;
 
-				R_SetFrameUploadMeshSubdata( frameUploadGroup, workload.drawSurface->verticesOffset, workload.drawSurface->indicesOffset, &mesh );
+				R_SetFrameUploadMeshSubdata( workload.drawSurface->verticesOffset, workload.drawSurface->indicesOffset, &mesh );
 			}
 		};
 
-		R_BeginFrameUploads( frameUploadGroup );
 		fillMeshBuffersTask = si.taskSystem->addForIndicesInRange( { 0u, (unsigned)tmpDynamicMeshFillDataWorkload->size() },
 																   std::span<const TaskHandle> {}, std::move( fn ) );
 	}
@@ -884,27 +897,11 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 		self->collectVisibleParticles( stateForCamera, scene, occluderFrusta );
 	}
 
-	// Process portals.
-	// This stage relies on portal entities which get submitted during entity submission stage.
-	bool hasPortalsToProcess = false;
+	TaskHandle endPreparingRenderingFromPortalsTask;
 	if( !areCamerasPortalCameras ) {
-		self->m_tmpPortalScenesAndStates.clear();
-		for( auto [scene, stateForPrimaryCamera] : scenesAndCameras ) {
-			if( stateForPrimaryCamera->viewCluster >= 0 && !r_fastsky->integer ) {
-				for( unsigned i = 0; i < stateForPrimaryCamera->numPortalSurfaces; ++i ) {
-					self->prepareDrawingPortalSurface( stateForPrimaryCamera, &stateForPrimaryCamera->portalSurfaces[i],
-													   scene, &self->m_tmpPortalScenesAndStates );
-					hasPortalsToProcess = true;
-				}
-			}
+		if( !self->m_tmpPortalScenesAndStates.empty() ) {
+			endPreparingRenderingFromPortalsTask = self->endPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates, {}, true );
 		}
-	}
-
-	if( hasPortalsToProcess ) {
-		const TaskHandle beginTask = self->beginPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates );
-		const std::span<const TaskHandle> dependencies = { &beginTask, 1 };
-		const TaskHandle endTask = self->endPreparingRenderingFromTheseCameras( self->m_tmpPortalScenesAndStates, dependencies, true );
-		co_await si.taskSystem->awaiterOf( endTask );
 	}
 
 	const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {
@@ -919,9 +916,18 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 		std::sort( stateForCamera->sortList->begin(), stateForCamera->sortList->end(), cmp );
 	}
 
+	// If there's processing of portals, finish it prior to awaiting uploads
+	if( endPreparingRenderingFromPortalsTask ) {
+		co_await si.taskSystem->awaiterOf( endPreparingRenderingFromPortalsTask );
+	}
+
 	if( fillMeshBuffersTask ) {
 		co_await si.taskSystem->awaiterOf( fillMeshBuffersTask );
-		R_EndFrameUploads( frameUploadGroup );
+	}
+
+	// The primary group of cameras ends uploads
+	if( !areCamerasPortalCameras ) {
+		R_EndFrameUploads();
 	}
 }
 
@@ -1042,8 +1048,7 @@ auto Frontend::findNearestPortalEntity( const portalSurface_t *portalSurface, Sc
 	return bestEnt;
 }
 
-void Frontend::prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface, Scene *scene,
-											wsw::PodVector<std::pair<Scene *, StateForCamera *>> *scenesAndStates ) {
+void Frontend::prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamera, Scene *scene, portalSurface_t *portalSurface ) {
 	const shader_s *surfaceMaterial = portalSurface->shader;
 
 	int startFromTextureIndex = -1;
@@ -1119,7 +1124,7 @@ void Frontend::prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamer
 				if( sideResults[textureIndex] ) {
 					portalSurface->statesForCamera[textureIndex] = sideResults[textureIndex]->first;
 					portalSurface->texures[textureIndex] = sideResults[textureIndex]->second;
-					scenesAndStates->push_back( { scene, sideResults[textureIndex]->first } );
+					stateForPrimaryCamera->portalCameraStates.push_back( sideResults[textureIndex]->first );
 				}
 			}
 		}
@@ -1228,8 +1233,13 @@ auto Frontend::prepareDrawingPortalSurfaceSide( StateForCamera *stateForPrimaryC
 
 	Texture *captureTexture = nullptr;
 	if( drawPortalFlags & DrawPortalToTexture ) {
+		RenderTargetComponents *components;
+		do {
+			[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_portalTextureLock );
+			components = TextureCache::instance()->getPortalRenderTarget( m_drawSceneFrame );
+		} while( false );
 		// TODO: Should not it be limited per-viewport, not per-frame?
-		if( RenderTargetComponents *components = TextureCache::instance()->getPortalRenderTarget( m_drawSceneFrame ) ) {
+		if( components ) {
 			newRefdef.renderTarget = components;
 			captureTexture         = components->texture;
 

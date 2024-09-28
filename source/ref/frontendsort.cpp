@@ -669,7 +669,7 @@ auto Frontend::addEntryToSortList( StateForCamera *stateForCamera, const entity_
 	return nullptr;
 }
 
-void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene *scene ) {
+void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene *scene, bool isCameraAPortalCamera ) {
 	const auto numWorldModelMergedSurfaces       = rsh.worldBrushModel->numModelMergedSurfaces;
 	const MergedSurfSpan *const mergedSurfSpans  = stateForCamera->drawSurfSurfSpansBuffer->get();
 	drawSurfaceBSP_t *const drawSurfaces         = stateForCamera->bspDrawSurfacesBuffer->get();
@@ -728,6 +728,14 @@ void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene
 				drawSurfaces[mergedSurfNum].portalSurface  = nullptr;
 				drawSurfaces[mergedSurfNum].portalDistance = 0.0f;
 			}
+		}
+	}
+
+	// Note: Looks like we have to properly update portal surfaces even if portals are disabled (for sorting reasons).
+	// Check whether actual drawing is enabled upon doing that.
+	if( !isCameraAPortalCamera && stateForCamera->viewCluster >= 0 && !r_fastsky->integer ) {
+		for( unsigned i = 0; i < stateForCamera->numPortalSurfaces; ++i ) {
+			prepareDrawingPortalSurface( stateForCamera, scene, &stateForCamera->portalSurfaces[i] );
 		}
 	}
 }

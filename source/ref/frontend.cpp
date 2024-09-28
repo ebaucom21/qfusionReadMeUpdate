@@ -97,6 +97,7 @@ void Frontend::beginDrawingScenes() {
 	m_drawSceneFrame++;
 	m_cameraIndexCounter = 0;
 	m_sceneIndexCounter = 0;
+	m_tmpPortalScenesAndStates.clear();
 }
 
 auto Frontend::createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest * {
@@ -118,7 +119,7 @@ auto Frontend::coBeginProcessingDrawSceneRequests( CoroTask::StartInfo si, Front
 	}
 
 	const std::span<std::pair<Scene *, StateForCamera *>> spanOfScenesAndCameras { scenesAndCameras, numScenesAndCameras };
-	co_await si.taskSystem->awaiterOf( self->beginPreparingRenderingFromTheseCameras( spanOfScenesAndCameras ) );
+	co_await si.taskSystem->awaiterOf( self->beginPreparingRenderingFromTheseCameras( spanOfScenesAndCameras, false ) );
 }
 
 auto Frontend::coEndProcessingDrawSceneRequests( CoroTask::StartInfo si, Frontend *self, std::span<DrawSceneRequest *> requests ) -> CoroTask {
@@ -237,22 +238,25 @@ void Frontend::destroyVolatileAssets() {
 }
 
 auto Frontend::allocStateForCamera() -> StateForCamera * {
-	if( m_cameraIndexCounter >= MAX_REF_CAMERAS ) [[unlikely]] {
-		return nullptr;
-	}
-
 	StateForCameraStorage *resultStorage = nullptr;
-	if( m_freeStatesForCamera ) {
-		resultStorage = wsw::unlink( m_freeStatesForCamera, &m_freeStatesForCamera );
-	} else {
-		try {
-			resultStorage = new StateForCameraStorage;
-		} catch( ... ) {
+	do {
+		// Portal drawing code may perform concurrent allocation of states
+		[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_stateAllocLock );
+		if( m_cameraIndexCounter >= MAX_REF_CAMERAS ) [[unlikely]] {
 			return nullptr;
 		}
-	}
+		if( m_freeStatesForCamera ) {
+			resultStorage = wsw::unlink( m_freeStatesForCamera, &m_freeStatesForCamera );
+		} else {
+			try {
+				resultStorage = new StateForCameraStorage;
+			} catch( ... ) {
+				return nullptr;
+			}
+		}
+		wsw::link( resultStorage, &m_usedStatesForCamera );
+	} while( false );
 
-	wsw::link( resultStorage, &m_usedStatesForCamera );
 	assert( !resultStorage->isStateConstructed );
 
 	auto *stateForCamera = new( resultStorage->theStateStorage )StateForCamera;

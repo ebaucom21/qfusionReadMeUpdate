@@ -194,6 +194,8 @@ private:
 		bool drawWorld { false };
 		bool useOcclusionCulling { false };
 		bool useWorldBspOcclusionCulling { false };
+
+		wsw::StaticVector<StateForCamera *, MAX_REF_CAMERAS> portalCameraStates;
 	};
 
 	static_assert( sizeof( StateForCamera ) % alignof( Frustum ) == 0 );
@@ -225,7 +227,8 @@ private:
 	static auto coEndProcessingDrawSceneRequests( CoroTask::StartInfo si, Frontend *self, std::span<DrawSceneRequest *> requests ) -> CoroTask;
 
 	[[nodiscard]]
-	auto beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> TaskHandle;
+	auto beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+												  bool areCamerasPortalCameras ) -> TaskHandle;
 	[[nodiscard]]
 	auto endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
 												std::span<const TaskHandle> dependencies,
@@ -233,7 +236,8 @@ private:
 
 	[[nodiscard]]
 	static auto coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
-														   std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) -> CoroTask;
+														   std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+														   bool areCamerasPortalCameras ) -> CoroTask;
 	[[nodiscard]]
 	static auto coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
 														 std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
@@ -256,7 +260,7 @@ private:
 
 	void calcSubspansOfMergedSurfSpans( StateForCamera *stateForCamera );
 
-	void processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene *scene );
+	void processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene *scene, bool isCameraAPortalCamera );
 
 	[[nodiscard]]
 	auto cullNullModelEntities( StateForCamera *stateForCamera, std::span<const entity_t> nullModelEntities,
@@ -500,9 +504,7 @@ private:
 							  const shader_t *shader, float dist, unsigned order, const portalSurface_t *portalSurf,
 							  const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator = 0 ) -> void *;
 
-	// TODO: Task
-	void prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface, Scene *scene,
-									  wsw::PodVector<std::pair<Scene *, StateForCamera *>> *scenesAndStates );
+	void prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamera, Scene *scene, portalSurface_t *portalSurface );
 
 	enum DrawPortalFlags : unsigned {
 		DrawPortalMirror     = 0x1,
@@ -581,6 +583,9 @@ private:
 		StateForCameraStorage *prev { nullptr }, *next { nullptr };
 	};
 
+	wsw::Mutex m_stateAllocLock;
+	wsw::Mutex m_portalTextureLock;
+
 	[[nodiscard]]
 	auto allocStateForCamera() -> StateForCamera *;
 	void recycleFrameCameraStates();
@@ -590,7 +595,7 @@ private:
 	StateForCameraStorage *m_freeStatesForCamera { nullptr };
 	StateForCameraStorage *m_usedStatesForCamera { nullptr };
 
-	wsw::PodVector<std::pair<Scene *, StateForCamera *>> m_tmpPortalScenesAndStates;
+	wsw::StaticVector<std::pair<Scene *, StateForCamera *>, MAX_REF_CAMERAS> m_tmpPortalScenesAndStates;
 
 	struct alignas( 16 ) DynamicMeshData {
 		// Maximum supported icosphere subdiv level
@@ -614,9 +619,9 @@ private:
 		DynamicMeshDrawSurface *drawSurface;
 	};
 
-	// For regular pass and nested portal pass
-	wsw::PodVector<DynamicMeshData> m_tmpDynamicMeshData[2];
-	wsw::PodVector<DynamicMeshFillDataWorkload> m_tmpDynamicMeshFillDataWorkload[2];
+	wsw::PodVector<DynamicMeshData> m_tmpDynamicMeshData;
+	wsw::PodVector<DynamicMeshFillDataWorkload> m_tmpDynamicMeshFillDataWorkload;
+	std::pair<unsigned, unsigned> m_dynamicMeshOffsetsOfVerticesAndIndices { 0, 0 };
 
 	// This is not an appropriate place to keep the client-global instance of task system.
 	// However, moving it to the client code is complicated due to lifetime issues related to client global vars.

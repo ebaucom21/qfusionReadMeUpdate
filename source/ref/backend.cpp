@@ -55,12 +55,10 @@ void RB_Shutdown() {
 		Q_free( ds.vertexData );
 		ds.vertexData = nullptr;
 	}
-	for( auto &fru: rb.frameUploads ) {
-		Q_free( fru.vboData );
-		fru.vboData = nullptr;
-		Q_free( fru.iboData );
-		fru.iboData = nullptr;
-	}
+	Q_free( rb.frameUploads.vboData );
+	rb.frameUploads.vboData = nullptr;
+	Q_free( rb.frameUploads.iboData );
+	rb.frameUploads.iboData = nullptr;
 }
 
 void RB_BeginRegistration() {
@@ -561,16 +559,14 @@ void RB_RegisterStreamVBOs() {
 		}
 	}
 
-	for( auto &fru: rb.frameUploads ) {
-		if( fru.vbo ) {
-			R_TouchMeshVBO( fru.vbo );
-		} else {
-			constexpr vattribmask_t vattribs = VATTRIB_POSITION_BIT | VATTRIB_COLOR0_BIT | VATTRIB_TEXCOORDS_BIT;
-			constexpr unsigned maxVertices   = std::numeric_limits<uint16_t>::max();
-			fru.vbo = R_CreateMeshVBO( &rb, maxVertices, 6 * maxVertices, 0, vattribs, VBO_TAG_STREAM, 0 );
-			fru.vboData = Q_malloc( maxVertices * fru.vbo->vertexSize );
-			fru.iboData = Q_malloc( 6 * maxVertices * sizeof( uint16_t ) );
-		}
+	if( rb.frameUploads.vbo ) {
+		R_TouchMeshVBO( rb.frameUploads.vbo );
+	} else {
+		constexpr vattribmask_t vattribs = VATTRIB_POSITION_BIT | VATTRIB_COLOR0_BIT | VATTRIB_TEXCOORDS_BIT;
+		constexpr unsigned maxVertices   = std::numeric_limits<uint16_t>::max();
+		rb.frameUploads.vbo = R_CreateMeshVBO( &rb, maxVertices, 6 * maxVertices, 0, vattribs, VBO_TAG_STREAM, 0 );
+		rb.frameUploads.vboData = Q_malloc( maxVertices * rb.frameUploads.vbo->vertexSize );
+		rb.frameUploads.iboData = Q_malloc( 6 * maxVertices * sizeof( uint16_t ) );
 	}
 }
 
@@ -579,8 +575,8 @@ void RB_BindVBO( int id, int primitive ) {
 
 	mesh_vbo_t *vbo;
 	if( id < RB_VBO_NONE ) {
-		if( id == std::numeric_limits<int>::min() || id == std::numeric_limits<int>::min() + 1 ) {
-			vbo = rb.frameUploads[id - std::numeric_limits<int>::min()].vbo;
+		if( id == RB_VBOIdForFrameUploads() ) {
+			vbo = rb.frameUploads.vbo;
 		} else {
 			vbo = rb.dynamicStreams[-id - 1].vbo;
 		}
@@ -602,21 +598,18 @@ void RB_BindVBO( int id, int primitive ) {
 	RB_BindElementArrayBuffer( vbo->elemId );
 }
 
-int RB_VBOIdForFrameUploadGroup( unsigned group ) {
-	assert( group == 0 || group == 1 );
-	return std::numeric_limits<int>::min() + (int)group;
+int RB_VBOIdForFrameUploads() {
+	return std::numeric_limits<int>::min();
 }
 
-void R_BeginFrameUploads( unsigned group ) {
-	assert( group == 0 || group == 1 );
-	rb.frameUploads[group].vertexDataSize = 0;
-	rb.frameUploads[group].indexDataSize  = 0;
+void R_BeginFrameUploads() {
+	rb.frameUploads.vertexDataSize = 0;
+	rb.frameUploads.indexDataSize  = 0;
 }
 
-void R_SetFrameUploadMeshSubdata( unsigned group, unsigned verticesOffset, unsigned indicesOffset, const mesh_t *mesh ) {
-	assert( group == 0 || group == 1 );
+void R_SetFrameUploadMeshSubdata( unsigned verticesOffset, unsigned indicesOffset, const mesh_t *mesh ) {
 	if( mesh->numVerts && mesh->numElems ) {
-		auto &fru = rb.frameUploads[group];
+		auto &fru = rb.frameUploads;
 
 		void *const destVertexData    = (uint8_t *)fru.vboData + verticesOffset * fru.vbo->vertexSize;
 		uint16_t *const destIndexData = (uint16_t *)fru.iboData + indicesOffset;
@@ -633,10 +626,9 @@ void R_SetFrameUploadMeshSubdata( unsigned group, unsigned verticesOffset, unsig
 	}
 }
 
-void R_EndFrameUploads( unsigned group ) {
-	assert( group == 0 || group == 1 );
-	if( auto &fru = rb.frameUploads[group]; fru.vertexDataSize && fru.indexDataSize ) {
-		RB_BindVBO( RB_VBOIdForFrameUploadGroup( group ), GL_TRIANGLES );
+void R_EndFrameUploads() {
+	if( auto &fru = rb.frameUploads; fru.vertexDataSize && fru.indexDataSize ) {
+		RB_BindVBO( RB_VBOIdForFrameUploads(), GL_TRIANGLES );
 
 		qglBufferSubData( GL_ARRAY_BUFFER, 0, (GLsizeiptr)( fru.vbo->vertexSize * fru.vertexDataSize ), fru.vboData );
 		qglBufferSubData( GL_ELEMENT_ARRAY_BUFFER, 0, (GLsizeiptr)( sizeof( uint16_t ) * fru.indexDataSize ), fru.iboData );
@@ -1308,7 +1300,7 @@ void R_SubmitDynamicMeshToBackend( const FrontendToBackendShared *fsh, const ent
 									const mfog_t *fog, const portalSurface_t *portalSurface, const DynamicMeshDrawSurface *drawSurface ) {
 	// Protect against the case when fillMeshBuffers() produces zero vertices
 	if( drawSurface->actualNumVertices && drawSurface->actualNumIndices ) {
-		RB_BindVBO( RB_VBOIdForFrameUploadGroup( drawSurface->frameUploadGroup ), GL_TRIANGLES );
+		RB_BindVBO( RB_VBOIdForFrameUploads(), GL_TRIANGLES );
 
 		const VertElemSpan vertElemSpan {
 			.firstVert = drawSurface->verticesOffset,
