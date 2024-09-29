@@ -1009,10 +1009,6 @@ auto UISystem::instance() -> UISystem * {
 }
 
 void QtUISystem::renderInternally() {
-#ifndef _WIN32
-	QGuiApplication::processEvents( QEventLoop::AllEvents );
-#endif
-
 	/*
 	if( m_hudSandbox ) {
 		const auto before = Sys_Microseconds();
@@ -1825,6 +1821,10 @@ void QtUISystem::refreshProperties() {
 
 	updateCVarAwareControls();
 	updateHudOccluders();
+
+#ifndef _WIN32
+	QGuiApplication::processEvents( QEventLoop::AllEvents );
+#endif
 }
 
 bool QtUISystem::handleMouseMovement( float frameTime, int dx, int dy ) {

@@ -278,10 +278,7 @@ bool CL_GameModule_NewSnapshot( int pendingSnapshot ) {
 }
 
 std::pair<bool, bool> CL_GameModule_RenderView() {
-	if( cge && cls.cgameActive ) {
-		unsigned extrapolationTime = cl_extrapolate->integer && !cls.demoPlayer.playing ? cl_extrapolationTime->integer : 0;
-		return CG_RenderView( cls.frametime, cls.realFrameTime, cls.realtime, cl.serverTime, extrapolationTime );
-	}
+
 	return { false, false };
 }
 
@@ -1442,7 +1439,12 @@ void SCR_UpdateScreen( void ) {
 
 	// Perform UI refresh (that may include binding UI GL context and unbinding it) first
 	uiSystem->refreshProperties();
-	uiSystem->renderInternally();
+
+	bool hasRenderedUI = false;
+	if( !( canRenderView && cl.cms && cge && cls.cgameActive ) ) {
+		uiSystem->renderInternally();
+		hasRenderedUI = true;
+	}
 
 	// TODO: Pass as flags
 	const bool forcevsync = cls.state == CA_DISCONNECTED || uiSystem->suggestsUsingVSync();
@@ -1451,12 +1453,8 @@ void SCR_UpdateScreen( void ) {
 
 	RF_BeginFrame( forceclear, forcevsync, timedemo );
 
-	// TODO: This should not belong to the UI module, let client manage it!
-	uiSystem->drawBackgroundMapIfNeeded();
-
 	// CGame may render the menu on its own above the primary view but beneath miniviews
-	bool hasHandledTheMenuRendering = false;
-	bool hasHandledTheHudRendering  = false;
+	CGRenderViewResult cgRenderViewResult;
 	if( canRenderView ) {
 		if( timedemo ) {
 			if( !cl.timedemo.startTime ) {
@@ -1467,17 +1465,29 @@ void SCR_UpdateScreen( void ) {
 
 		// frame is not valid until we load the CM data
 		if( cl.cms ) {
-			std::tie( hasHandledTheMenuRendering, hasHandledTheHudRendering ) = CL_GameModule_RenderView();
+			if( cge && cls.cgameActive ) {
+				assert( !hasRenderedUI );
+				unsigned extrapolationTime = cl_extrapolate->integer && !cls.demoPlayer.playing ? cl_extrapolationTime->integer : 0;
+				cgRenderViewResult = CG_RenderView( cls.frametime, cls.realFrameTime, cls.realtime, cl.serverTime, extrapolationTime );
+				hasRenderedUI = cgRenderViewResult.hasRenderedUIInternally;
+			}
 		}
 	}
+
+	if( !hasRenderedUI ) {
+		uiSystem->renderInternally();
+	}
+
+	// TODO: This should not belong to the UI module, let client manage it!
+	uiSystem->drawBackgroundMapIfNeeded();
 
 	R_Set2DMode( true );
 	RF_Set2DScissor( 0, 0, viddef.width, viddef.height );
 
-	if( !hasHandledTheMenuRendering ) {
+	if( !cgRenderViewResult.hasBlittedTheMenu ) {
 		uiSystem->drawMenuPartInMainContext();
 	}
-	if( !hasHandledTheHudRendering ) {
+	if( !cgRenderViewResult.hasBlittedTheHud ) {
 		uiSystem->drawHudPartInMainContext();
 	}
 

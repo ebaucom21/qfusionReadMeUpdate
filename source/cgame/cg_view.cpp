@@ -1287,6 +1287,9 @@ static auto coPrepareDrawSceneRequests( CoroTask::StartInfo si, DrawSceneRequest
 
 	CG_FireEvents( false );
 
+	// Perform UI rendering in the main thread, while the actual set of views gets prepared in background
+	wsw::ui::UISystem::instance()->renderInternally();
+
 	// Make sure all possible effects in this frame are submitted prior to simulation
 	// (A simulation timestamp of an effect must match its submission timestamp).
 	cg.effectsSystem.simulateFrame( cg.time );
@@ -1386,9 +1389,12 @@ static bool blitPreparedViews( DrawSceneRequest **drawSceneRequests, bool actual
 	return hasRenderedTheMenu;
 }
 
-std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t serverTime, unsigned extrapolationTime ) {
-	bool hasRenderedTheMenu = false;
-	bool hasRenderedTheHud  = false;
+CGRenderViewResult CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t serverTime, unsigned extrapolationTime ) {
+	CGRenderViewResult result {
+		.hasBlittedTheMenu       = false,
+		.hasBlittedTheHud        = false,
+		.hasRenderedUIInternally = false,
+	};
 
 	// update time
 	cg.realTime      = realTime;
@@ -1451,11 +1457,12 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 			createDrawSceneRequests( drawSceneRequests, actuallyUseTiledMode, viewRects, viewStateIndices, numDisplayedViewStates );
 
 			prepareDrawSceneRequests( drawSceneRequests, viewStateIndices, numDisplayedViewStates );
+			result.hasRenderedUIInternally = true;
 
 			auto *const uiSystem       = wsw::ui::UISystem::instance();
 			const bool hasModalOverlay = uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard();
-			hasRenderedTheMenu = blitPreparedViews( drawSceneRequests, actuallyUseTiledMode, hasModalOverlay,
-													viewStateIndices, numDisplayedViewStates );
+			result.hasBlittedTheMenu   = blitPreparedViews( drawSceneRequests, actuallyUseTiledMode, hasModalOverlay,
+															viewStateIndices, numDisplayedViewStates );
 
 			EndDrawingScenes();
 			CG_ResetTemporaryBoneposesCache();
@@ -1464,7 +1471,7 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 			if( actuallyUseTiledMode && !hasModalOverlay ) {
 				RF_Set2DScissor( 0, 0, cgs.vidWidth, cgs.vidHeight );
 				wsw::ui::UISystem::instance()->drawHudPartInMainContext();
-				hasRenderedTheHud = true;
+				result.hasBlittedTheHud = true;
 			}
 
 			CG_AddLocalSounds();
@@ -1477,7 +1484,7 @@ std::pair<bool, bool> CG_RenderView( int frameTime, int realFrameTime, int64_t r
 		}
 	}
 
-	return std::make_pair( hasRenderedTheMenu, hasRenderedTheHud );
+	return result;
 }
 
 void CG_LoadingString( const char *str ) {
