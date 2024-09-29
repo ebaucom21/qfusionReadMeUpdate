@@ -50,7 +50,9 @@ Item {
             mainMenuLoader.item.expansionFrac : (UI.ui.isShowingScoreboard ? 1.0 : 0.0)
 
         SequentialAnimation {
-            running: true
+            // Don't run it unless the gradient is really displayed.
+            // Otherwise, the menu sandbox requests rendering itself even if the menu screen is actually blank.
+            running: gradientLoader.active
             loops: Animation.Infinite
             ParallelAnimation {
                 NumberAnimation {
@@ -108,8 +110,9 @@ Item {
         }
 
         Loader {
+            id: gradientLoader
             anchors.fill: parent
-            active: !UI.ui.isShowingDemoPlaybackMenu || UI.ui.isShowingScoreboard
+            active: mainMenuLoader.active || connectionScreenLoader.active || inGameMenuLoader.active || scoreboardLoader.active || introLoader.active
             sourceComponent: gradientComponent
         }
 
@@ -135,6 +138,7 @@ Item {
         }
 
         Loader {
+            id: scoreboardLoader
             active: UI.ui.isShowingScoreboard
             anchors.fill: parent
             sourceComponent: ScoreboardScreen {}
