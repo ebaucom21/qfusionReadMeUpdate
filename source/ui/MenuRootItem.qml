@@ -113,15 +113,6 @@ Item {
             sourceComponent: gradientComponent
         }
 
-        // Force redrawing stuff every frame
-        ProgressBar {
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            indeterminate: true
-            Material.accent: parent.Material.background
-        }
-
         Loader {
             id: mainMenuLoader
             active: UI.ui.isShowingMainMenu

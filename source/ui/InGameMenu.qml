@@ -10,15 +10,6 @@ Item {
 
     readonly property bool canShowLoadouts: UI.gametypeOptionsModel.available && UI.hudCommonDataModel.realClientTeam !== HudDataModel.TeamSpectators
 
-    // Force redrawing stuff every frame
-    ProgressBar {
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        indeterminate: true
-        Material.accent: parent.Material.background
-    }
-
     CarouselTabBar {
         id: tabBar
         visible: stackView.depth < 2
