@@ -138,7 +138,8 @@ auto Frontend::coEndProcessingDrawSceneRequests( CoroTask::StartInfo si, Fronten
 }
 
 auto Frontend::beginProcessingDrawSceneRequests( std::span<DrawSceneRequest *> requests ) -> TaskHandle {
-	CoroTask::StartInfo si { &m_taskSystem, {}, CoroTask::OnlyMainThread };
+	// Don't pin it to the main thread as the CGame coroutine is already pinned to the main thread
+	CoroTask::StartInfo si { &m_taskSystem, {}, CoroTask::AnyThread };
 	// Note: passing the span should be safe as it resides in cgame code during task system execution
 	return m_taskSystem.addCoro( [=, this]() { return coBeginProcessingDrawSceneRequests( si, this, requests ); } );
 }

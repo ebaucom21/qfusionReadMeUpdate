@@ -745,7 +745,7 @@ auto Frontend::coBeginPreparingRenderingFromTheseCameras( CoroTask::StartInfo si
 auto Frontend::beginPreparingRenderingFromTheseCameras( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
 														bool areCamerasPortalCameras ) -> TaskHandle {
 	return m_taskSystem.addCoro( [=, this]() {
-		CoroTask::StartInfo startInfo { &m_taskSystem, {}, CoroTask::OnlyMainThread };
+		CoroTask::StartInfo startInfo { &m_taskSystem, {}, CoroTask::AnyThread };
 		return coBeginPreparingRenderingFromTheseCameras( startInfo, this, scenesAndCameras, areCamerasPortalCameras );
 	});
 }
