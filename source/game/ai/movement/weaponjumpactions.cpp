@@ -649,7 +649,7 @@ void CorrectWeaponJumpAction::PlanPredictionStep( PredictionContext *context ) {
 	weaponJumpState->hasCorrectedWeaponJump = true;
 
 	// Make sure the bot will fly relaxed until landing
-	context->movementState->flyUntilLandingMovementState.Activate( weaponJumpState->JumpTarget(), 64.0f );
+	context->movementState->flyUntilLandingMovementState.ActivateWithDistanceThreshold( weaponJumpState->JumpTarget().Data(), 64.0f );
 
 	context->isCompleted = true;
 }

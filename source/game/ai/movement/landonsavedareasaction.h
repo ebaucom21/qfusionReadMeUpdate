@@ -12,17 +12,8 @@ class LandOnSavedAreasAction : public BaseAction {
 	int currAreaIndex { 0 };
 	unsigned totalTestedAreas { 0 };
 
-	int FindJumppadAreaNum( const edict_t *jumppadEntity );
-
 	// Returns a Z level when the landing is expected to be started
 	float SaveJumppadLandingAreas( const edict_t *jumppadEntity );
-	float SaveLandingAreasForJumppadTargetArea( const edict_t *jumppadEntity,
-												int navTargetAreaNum,
-												int jumppadTargetAreaNum );
-	float SaveFilteredCandidateAreas( const edict_t *jumppadEntity,
-									  int jumppadTargetAreaNum,
-									  const FilteredAreas &filteredAreas );
-
 public:
 	explicit LandOnSavedAreasAction( MovementSubsystem *subsystem )
 		: BaseAction( subsystem, "LandOnSavedAreasAction", COLOR_RGB( 255, 0, 255 ) ) {}

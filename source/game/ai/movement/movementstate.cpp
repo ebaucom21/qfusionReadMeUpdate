@@ -34,14 +34,13 @@ bool FlyUntilLandingMovementState::CheckForLanding( const PredictionContext *con
 
 	// Put the likely case first
 	if( !this->usesDistanceThreshold ) {
-		if( target[2] < botOrigin[2] ) {
+		if( threshold < botOrigin[2] + playerbox_stand_mins[2] ) {
 			isLanding = true;
 			return true;
 		}
 		return false;
 	}
 
-	const float threshold = this->landingDistanceThreshold;
 	Vec3 unpackedTarget( GetUnpacked4uVec( target ) );
 	if( unpackedTarget.SquareDistanceTo( botOrigin ) > threshold * threshold ) {
 		return false;

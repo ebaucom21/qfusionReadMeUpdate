@@ -445,17 +445,17 @@ public:
 	int RightMove() const { return rightMove; }
 };
 
-class alignas ( 2 )FlyUntilLandingMovementState : protected AerialMovementState {
+class alignas ( 4 )FlyUntilLandingMovementState : protected AerialMovementState {
+public:
+	float threshold;
 	int16_t target[3];
-	uint16_t landingDistanceThreshold;
 	bool isTriggered : 1;
 	// If not set, uses target Z level as landing threshold
 	bool usesDistanceThreshold : 1;
 	bool isLanding : 1;
 
-public:
 	FlyUntilLandingMovementState()
-		: landingDistanceThreshold( 0 ),
+		: threshold( 0 ),
 		  isTriggered( false ),
 		  usesDistanceThreshold( false ),
 		  isLanding( false ) {}
@@ -464,20 +464,17 @@ public:
 
 	bool CheckForLanding( const class PredictionContext *context );
 
-	void Activate( const vec3_t target_, float landingDistanceThreshold_ ) {
+	void ActivateWithDistanceThreshold( const vec3_t target_, float threshold_ ) {
 		SetPacked4uVec( target_, this->target );
-		landingDistanceThreshold = ( decltype( landingDistanceThreshold ) )( landingDistanceThreshold_ );
+		threshold =  threshold_;
 		isTriggered = true;
 		usesDistanceThreshold = true;
 		isLanding = false;
 	}
 
-	void Activate( const Vec3 &target_, float landingDistanceThreshold_ ) {
-		Activate( target_.Data(), landingDistanceThreshold_ );
-	}
-
-	void Activate( float startLandingAtZ ) {
-		this->target[2] = (short)startLandingAtZ;
+	void ActivateWithZLevelThreshold( const vec3_t target_, float startLandingAtZ ) {
+		SetPacked4uVec( target_, this->target );
+		threshold = startLandingAtZ;
 		isTriggered = true;
 		usesDistanceThreshold = false;
 		isLanding = false;
@@ -502,6 +499,8 @@ struct alignas ( 4 )MovementState {
 	// We want to pack members tightly to reduce copying cost of this struct during the planning process
 	static_assert( alignof( AiEntityPhysicsState ) == 4, "Members order by alignment is broken" );
 	AiEntityPhysicsState entityPhysicsState;
+	static_assert( alignof( FlyUntilLandingMovementState ) == 4, "Members order by alignment is broken" );
+	FlyUntilLandingMovementState flyUntilLandingMovementState;
 	static_assert( alignof( CampingSpotState ) == 2, "Members order by alignment is broken" );
 	CampingSpotState campingSpotState;
 	static_assert( alignof( JumppadMovementState ) == 2, "Members order by alignment is broken" );
@@ -510,8 +509,6 @@ struct alignas ( 4 )MovementState {
 	WeaponJumpMovementState weaponJumpMovementState;
 	static_assert( alignof( PendingLookAtPointState ) == 2, "Members order by alignment is broken" );
 	PendingLookAtPointState pendingLookAtPointState;
-	static_assert( alignof( FlyUntilLandingMovementState ) == 2, "Members order by alignment is broken" );
-	FlyUntilLandingMovementState flyUntilLandingMovementState;
 	static_assert( alignof( KeyMoveDirsState ) == 2, "Members order by alignment is broken" );
 	KeyMoveDirsState keyMoveDirsState;
 

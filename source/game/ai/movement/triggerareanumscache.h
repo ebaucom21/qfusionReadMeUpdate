@@ -3,12 +3,15 @@
 
 #include "../../../common/q_shared.h"
 #include "../../../common/wswbasicmath.h"
+#include "../../../common/wswpodvector.h"
+
 #include <bitset>
 #include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <unordered_map>
 #include <utility>
+#include <span>
 
 class TriggerAreaNumsCache {
 public:
@@ -48,15 +51,21 @@ public:
 private:
 	mutable int m_areaNums[MAX_EDICTS] {};
 	mutable std::unordered_map<int, ClassTriggerNums> m_triggersForArea;
+	mutable std::unordered_map<int, wsw::PodVector<int>> m_jumppadTargetAreaNums;
 	// Don't insert junk nodes to indicate tested but empty areas, use this bitset instead
 	mutable std::bitset<std::numeric_limits<uint16_t>::max()> m_testedTriggersForArea;
 	// TODO: Fuse with the set above into a 2-bit set
 	mutable std::bitset<std::numeric_limits<uint16_t>::max()> m_hasTriggersForArea;
+
+	static void findJumppadTargetAreaNums( const struct edict_s *jumppadEntity, int jumppadAreaNum, wsw::PodVector<int> *targetAreaNums );
 public:
+	void clear();
 	[[nodiscard]]
 	auto getAreaNum( int entNum ) const -> int;
 	[[nodiscard]]
 	auto getTriggersForArea( int areaNum ) const -> const ClassTriggerNums *;
+	[[nodiscard]]
+	auto getJumppadAreaNumAndTargetAreaNums( int entNum ) const -> std::pair<int, std::span<const int>>;
 };
 
 extern TriggerAreaNumsCache triggerAreaNumsCache;

@@ -5,6 +5,7 @@
 #include "teamplay/objectivebasedteam.h"
 #include "combat/tacticalspotsregistry.h"
 #include "classifiedentitiescache.h"
+#include "movement/triggerareanumscache.h"
 
 using wsw::operator""_asView;
 
@@ -176,6 +177,7 @@ void AI_InitLevel( void ) {
 
 	NavEntitiesRegistry::Init();
 	wsw::ai::ClassifiedEntitiesCache::init();
+	::triggerAreaNumsCache.clear();
 }
 
 void AI_Shutdown( void ) {

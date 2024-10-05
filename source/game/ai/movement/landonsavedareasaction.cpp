@@ -1,237 +1,61 @@
 #include "landonsavedareasaction.h"
 #include "movementlocal.h"
-#include "../../../common/wswsortbyfield.h"
-
-int LandOnSavedAreasAction::FindJumppadAreaNum( const edict_t *jumppadEntity ) {
-	// TODO: This can be precomputed at level start
-	const auto *aasWorld = AiAasWorld::instance();
-	const auto aasAreaSettings = aasWorld->getAreaSettings();
-
-	// Jumppad entity origin is not what one might think...
-	Vec3 jumppadOrigin( jumppadEntity->r.absmin );
-	jumppadOrigin += jumppadEntity->r.absmax;
-	jumppadOrigin *= 0.5f;
-
-	int entAreaNum = aasWorld->findAreaNum( jumppadOrigin );
-	if( entAreaNum ) {
-		const auto &areaSettings = aasAreaSettings[entAreaNum];
-		const int contents = areaSettings.contents;
-		const int areaflags = areaSettings.areaflags;
-		if( ( contents & AREACONTENTS_JUMPPAD ) && !( contents & AREACONTENTS_DONOTENTER ) && !( areaflags & AREA_DISABLED ) ) {
-			return entAreaNum;
-		}
-	}
-
-	int areaNumsBuffer[32];
-	Vec3 mins( -64, -64, -64 );
-	Vec3 maxs( +64, +64, +64 );
-	mins += jumppadOrigin;
-	maxs += jumppadOrigin;
-	const auto areaNums = aasWorld->findAreasInBox( mins, maxs, areaNumsBuffer, 32 );
-	for( const int areaNum: areaNums ) {
-		const auto &areaSettings = aasAreaSettings[areaNum];
-		const int contents = areaSettings.contents;
-		if( !( contents & AREACONTENTS_JUMPPAD ) ) {
-			continue;
-		}
-		if( contents & AREACONTENTS_DONOTENTER ) {
-			continue;
-		}
-		if( areaSettings.areaflags & AREA_DISABLED ) {
-			continue;
-		}
-
-		return areaNum;
-	}
-
-	// Ensure the area is always found. Do not hide the bug, a bot would keep jumping on the trigger forever.
-	constexpr const char *tag = "LandOnSavedAreasAction::FindJumppadAreaNum()";
-	constexpr const char *format = "Can't find an AAS area num for the jumppad @ %.1f %.1f %.1f\n";
-	AI_FailWith( tag, format, jumppadOrigin.X(), jumppadOrigin.Y(), jumppadOrigin.Z() );
-}
-
-static float PointToSegmentSquareDistance( const vec3_t point, const vec3_t start, const vec3_t end ) {
-	Vec3 segmentVec( end );
-	segmentVec -= start;
-	Vec3 pointToStart( start );
-	pointToStart -= point;
-
-	float pointToStartDotVec = pointToStart.Dot( segmentVec );
-	if( pointToStartDotVec >= 0.0f ) {
-		return DistanceSquared( point, start );
-	}
-
-	Vec3 pointToEnd( end );
-	pointToEnd -= point;
-
-	if( pointToEnd.Dot( segmentVec ) <= 0.0f ) {
-		return DistanceSquared( point, end );
-	}
-
-	Vec3 projection( segmentVec );
-	projection *= -pointToStartDotVec / segmentVec.SquaredLength();
-	projection += pointToStart;
-	return projection.SquaredLength();
-}
-
-static float PointToAreaSquareDistance( const vec3_t point, const aas_area_t &area ) {
-	if( area.mins[2] > point[2] ) {
-		return std::numeric_limits<float>::max();
-	}
-
-	if( area.mins[0] >= point[0] && area.maxs[0] <= point[0] && area.mins[1] >= point[1] && area.maxs[1] <= point[1] ) {
-		return 0.0f;
-	}
-
-	float minDistance = std::numeric_limits<float>::max();
-	vec3_t sideStart, sideEnd;
-	sideStart[2] = sideEnd[2] = area.mins[2];
-	const float *bounds[] = { area.mins, area.maxs };
-	// For each side
-	for( int i = 0; i < 4; ++i ) {
-		// Make side segment
-		for( int j = 0; j < 2; ++j ) {
-			sideStart[j] = bounds[( ( i + 0 ) >> j ) & 1][j];
-			sideEnd[j] = bounds[( ( i + 1 ) >> j ) & 1][j];
-		}
-
-		float distance = PointToSegmentSquareDistance( point, sideStart, sideEnd );
-		if( distance < minDistance ) {
-			minDistance = distance;
-		}
-	}
-
-	return minDistance;
-}
+#include "triggerareanumscache.h"
 
 float LandOnSavedAreasAction::SaveJumppadLandingAreas( const edict_t *jumppadEntity ) {
 	savedLandingAreas.clear();
 
-	int jumppadAreaNum = FindJumppadAreaNum( jumppadEntity );
-	if( !jumppadAreaNum ) {
-		return -999999.9f;
-	}
+	const auto [jumppadAreaNum, jumppadTargetAreaNums] = triggerAreaNumsCache.getJumppadAreaNumAndTargetAreaNums( jumppadEntity->s.number );
+	assert( jumppadAreaNum > 0 );
 
-	const auto *aasWorld = AiAasWorld::instance();
-	const auto *routeCache = bot->RouteCache();
-	if( int navTargetAreaNum = bot->NavTargetAasAreaNum() ) {
-		int reachNum = 0;
-		if( routeCache->PreferredRouteToGoalArea( jumppadAreaNum, navTargetAreaNum, &reachNum ) ) {
-			int jumppadTargetAreaNum = aasWorld->getReaches()[reachNum].areanum;
-			return SaveLandingAreasForJumppadTargetArea( jumppadEntity, navTargetAreaNum, jumppadTargetAreaNum );
+	const auto *aasWorld        = AiAasWorld::instance();
+	const auto *routeCache      = bot->RouteCache();
+	const auto *aasAreas        = aasWorld->getAreas().data();
+	const auto *aasAreaSettings = aasWorld->getAreaSettings().data();
+
+	int nextTravelTime    = 0;
+	int nextReachAreaNum  = 0;
+	int navTargetAreaNum  = bot->NavTargetAasAreaNum();
+	if( navTargetAreaNum ) {
+		int reachNum   = 0;
+		nextTravelTime = routeCache->PreferredRouteToGoalArea( jumppadAreaNum, navTargetAreaNum, &reachNum );
+		if( nextTravelTime ) {
+			if( reachNum ) {
+				nextReachAreaNum = aasWorld->getReaches()[reachNum].areanum;
+			} else {
+				// If it ends directly in the target area (wtf?)
+				savedLandingAreas.push_back( navTargetAreaNum );
+				return aasWorld->getAreas()[navTargetAreaNum].mins[2];
+			}
 		}
-	}
-
-	const auto aasAreas = aasWorld->getAreas();
-	const auto aasReach = aasWorld->getReaches();
-	const auto aasAreaSettings = aasWorld->getAreaSettings();
-	// The nav target is not reachable. Try to find any areas reachable from the jumppad area by using the jumppad
-	const auto &jumppadAreaSettings = aasAreaSettings[jumppadAreaNum];
-	const float *targetOrigin = jumppadEntity->target_ent->s.origin;
-	FilteredAreas filteredAreas;
-	// Find an area closest to the jumppad target
-	for( int i = 0; i < jumppadAreaSettings.numreachableareas; ++i ) {
-		const auto &reach = aasReach[i + jumppadAreaSettings.firstreachablearea];
-		if( reach.traveltype != TRAVEL_JUMPPAD ) {
-			continue;
-		}
-
-		const int areaNum = reach.areanum;
-		const auto &areaSettings = aasAreaSettings[areaNum];
-		if( areaSettings.areaflags & AREA_DISABLED ) {
-			continue;
-		}
-		if( areaSettings.contents & AREACONTENTS_DONOTENTER ) {
-			continue;
-		}
-		const auto &area = aasAreas[areaNum];
-		// Skip areas that are higher than the jumppad target entity
-		if( area.mins[2] + 16 > jumppadEntity->target_ent->s.origin[2] ) {
-			continue;
-		}
-		// Closer to the jumppad entity target areas get greater score
-		float score = 1.0f / ( 1.0f + PointToAreaSquareDistance( targetOrigin, area ) );
-		filteredAreas.emplace_back( AreaAndScore( areaNum, score ) );
-		if( filteredAreas.full() ) {
-			break;
-		}
-	}
-
-	// Sort areas so best areas are first
-	wsw::sortByFieldDescending( filteredAreas.begin(), filteredAreas.end(), &AreaAndScore::score );
-
-	return SaveFilteredCandidateAreas( jumppadEntity, 0, filteredAreas );
-}
-
-float LandOnSavedAreasAction::SaveLandingAreasForJumppadTargetArea( const edict_t *jumppadEntity,
-																	int navTargetAreaNum,
-																	int jumppadTargetAreaNum ) {
-	const auto *aasWorld = AiAasWorld::instance();
-	const auto *routeCache = bot->RouteCache();
-	const auto aasAreas = aasWorld->getAreas();
-	const auto aasAreaSettings = aasWorld->getAreaSettings();
-
-	// Get areas around the jumppad area
-	const auto &jumppadTargetArea = aasAreas[jumppadTargetAreaNum];
-	Vec3 mins( -320, -320, -16 );
-	Vec3 maxs( +320, +320, +16 );
-	// It's better to use the target entity and not the target area center,
-	// because the center might be biased and it leads to poor area selection e.g. on major wdm7 jumppad.
-	mins += jumppadEntity->target_ent->s.origin;
-	maxs += jumppadEntity->target_ent->s.origin;
-
-	int boxAreasBuffer[48];
-	const auto boxAreaNums = aasWorld->findAreasInBox( mins, maxs, boxAreasBuffer, 48 );
-
-	const int baseTravelTime = routeCache->PreferredRouteToGoalArea( jumppadTargetAreaNum, navTargetAreaNum );
-	// If the target is for some reasons unreachable or the jumppad target area is the nav target area too
-	if( baseTravelTime <= 1 ) {
-		// Return some default values in hope they are useful
-		savedLandingAreas.push_back( jumppadTargetAreaNum );
-		return jumppadTargetArea.mins[2];
 	}
 
 	// Filter raw nearby areas
 	FilteredAreas filteredAreas;
-	for( const int areaNum: boxAreaNums ) {
-		// Skip tests for the target area
-		if( areaNum == jumppadTargetAreaNum ) {
+	for( const int areaNum: jumppadTargetAreaNums ) {
+		// Skip tests for the next area
+		if( areaNum == nextReachAreaNum ) {
 			continue;
 		}
 
-		const auto &rawArea = aasAreas[areaNum];
-		// Skip areas that are lower than the target area more than 16 units
-		if( rawArea.mins[2] + 16 < jumppadTargetArea.mins[2] ) {
-			continue;
-		}
-		// Skip areas that are higher than the jumppad target entity
-		if( rawArea.mins[2] + 16 > jumppadEntity->target_ent->s.origin[2] ) {
-			continue;
-		}
-
-		const auto &areaSettings = aasAreaSettings[areaNum];
-		if( !( areaSettings.areaflags & AREA_GROUNDED ) ) {
-			continue;
-		}
-		if( areaSettings.contents & AREACONTENTS_DONOTENTER ) {
-			continue;
-		}
-		if( areaSettings.areaflags & ( AREA_JUNK | AREA_DISABLED ) ) {
-			continue;
+		float score = 1.0f;
+		if( navTargetAreaNum ) {
+			const int travelTime = routeCache->PreferredRouteToGoalArea( areaNum, navTargetAreaNum );
+			// If the nav target is not reachable from the box area or
+			// it leads to a greater travel time than the jumppad target area
+			if( !travelTime || travelTime >= nextTravelTime ) {
+				continue;
+			}
+			// The score is greater if it shortens travel time greater
+			score = (float)nextTravelTime / (float)travelTime;
 		}
 
-		const int travelTime = routeCache->PreferredRouteToGoalArea( areaNum, navTargetAreaNum );
-		// If the nav target is not reachable from the box area or
-		// it leads to a greater travel time than the jumppad target area
-		if( !travelTime || travelTime >= baseTravelTime ) {
-			continue;
-		}
-
-		// The score is greater if it shortens travel time greater
-		float score = (float)baseTravelTime / (float)travelTime;
 		// Apply penalty for ledge areas (prevent falling just after landing)
-		if( areaSettings.areaflags & AREA_LEDGE ) {
-			score *= 0.5f;
+		if( aasAreaSettings[areaNum].areaflags & AREA_LEDGE ) {
+			score *= 0.75f;
+		}
+		if( aasAreaSettings[areaNum].areaflags & AREA_JUNK ) {
+			score *= 0.33f;
 		}
 
 		filteredAreas.emplace_back( AreaAndScore( areaNum, score ) );
@@ -243,39 +67,35 @@ float LandOnSavedAreasAction::SaveLandingAreasForJumppadTargetArea( const edict_
 	// Sort filtered areas so best areas are first
 	wsw::sortByFieldDescending( filteredAreas.begin(), filteredAreas.end(), &AreaAndScore::score );
 
-	return SaveFilteredCandidateAreas( jumppadEntity, jumppadTargetAreaNum, filteredAreas );
-}
-
-float LandOnSavedAreasAction::SaveFilteredCandidateAreas( const edict_t *jumppadEntity,
-														  int jumppadTargetAreaNum,
-														  const FilteredAreas &filteredAreas ) {
 	savedLandingAreas.clear();
-	const auto *aasWorld = AiAasWorld::instance();
-	const auto aasAreas = aasWorld->getAreas();
 
-	for( unsigned i = 0, end = wsw::min( filteredAreas.size(), savedLandingAreas.capacity() ); i < end; ++i )
+	for( unsigned i = 0, end = wsw::min( filteredAreas.size(), savedLandingAreas.capacity() ); i < end; ++i ) {
 		savedLandingAreas.push_back( filteredAreas[i].areaNum );
+	}
 
 	// Always add the target area (with the lowest priority)
-	if( jumppadTargetAreaNum ) {
+	if( nextReachAreaNum ) {
 		if( savedLandingAreas.full() ) {
 			savedLandingAreas.pop_back();
 		}
-
-		savedLandingAreas.push_back( jumppadTargetAreaNum );
+		savedLandingAreas.push_back( nextReachAreaNum );
 	}
 
-	float maxAreaZ = std::numeric_limits<float>::lowest();
-	for( int areaNum: savedLandingAreas ) {
-		maxAreaZ = wsw::max( maxAreaZ, aasAreas[areaNum].mins[2] );
+	if( !savedLandingAreas.empty() ) {
+		float minAreaZ = std::numeric_limits<float>::max();
+		for( int areaNum: savedLandingAreas ) {
+			minAreaZ = wsw::min( minAreaZ, aasAreas[areaNum].mins[2] );
+		}
+		return minAreaZ;
 	}
 
-	return maxAreaZ;
+	// Force starting landing attempts (almost) immediately
+	return std::numeric_limits<float>::lowest();
 }
 
 void LandOnSavedAreasAction::BeforePlanning() {
 	BaseAction::BeforePlanning();
-	currAreaIndex = 0;
+	currAreaIndex = -1;
 	totalTestedAreas = 0;
 
 	this->savedLandingAreas.clear();
@@ -307,51 +127,42 @@ bool LandOnSavedAreasAction::TryLandingStepOnArea( int areaNum, PredictionContex
 	const auto &area = AiAasWorld::instance()->getAreas()[areaNum];
 	Vec3 areaPoint( area.center );
 	// Lower area point to a bottom of area. Area mins/maxs are absolute.
-	areaPoint.Z() = area.mins[2];
-	// Do not try to "land" on upper areas
-	if( areaPoint.Z() > origin[2] ) {
-		Debug( "Cannot land on an area that is above the bot origin in the given movement state\n" );
+	areaPoint.Z() = area.mins[2] + ( -playerbox_stand_mins[2] );
+
+	Vec3 intendedLookDir( Vec3( areaPoint ) - origin );
+	if( !intendedLookDir.normalizeFast() ) {
 		return false;
 	}
 
 	botInput->Clear();
 	botInput->isUcmdSet = true;
 
-	Vec3 intendedLookDir( 0, 0, -1 );
-	// Prevent flying over the area.
-	if( area.mins[0] > origin[0] || area.maxs[0] < origin[0] || area.mins[1] > origin[1] || area.maxs[1] < origin[1] ) {
-		// Most likely case (the bot is outside of the area bounds)
-		intendedLookDir.Set( areaPoint );
-		intendedLookDir -= origin;
-		if( !intendedLookDir.normalizeFast() ) {
-			return false;
-		}
-	}
-
 	botInput->SetIntendedLookDir( intendedLookDir, true );
 
-	// Apply QW-like air control if possible:
-	// 1) Air-control feature must be enabled
-	// 2) This should be really spinning around Z-axis (a bot should look horizontally)
-	// Neglecting the second condition was a long-term source of poor bot behaviour
-	if( context->currMinimalPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_AIRCONTROL ) {
-		if( entityPhysicsState.ForwardDir().Z() < 0.3f ) {
-			float dotRight = entityPhysicsState.RightDir().Dot( intendedLookDir );
-			if( dotRight > 0.7f ) {
-				botInput->SetRightMovement( +1 );
-				return true;
-			}
-			if( dotRight < -0.7f ) {
-				botInput->SetRightMovement( -1 );
-				return true;
-			}
-		}
-	}
+	// Disallow any input rotation while landing, it relies on a side aircontrol.
+	botInput->SetAllowedRotationMask( InputRotation::NONE );
 
 	// While we do not use forwardbunny, there is still a little air control
 	// from forward key, even without PMFEAT_AIRCONTROL feature
-	float dotForward = entityPhysicsState.ForwardDir().Dot( intendedLookDir );
-	botInput->SetForwardMovement( Q_sign( dotForward ) );
+	if( entityPhysicsState.ForwardDir().Dot( intendedLookDir ) > 0.7f ) {
+		botInput->SetForwardMovement( +1 );
+		if( entityPhysicsState.Speed2D() > 1.0f ) {
+			Vec3 velocity2DDir( entityPhysicsState.Velocity()[0], entityPhysicsState.Velocity()[1], 0.0f );
+			velocity2DDir *= Q_Rcp( entityPhysicsState.Speed2D() );
+			if( velocity2DDir.Dot( intendedLookDir ) > 0.3f ) {
+				context->CheatingAccelerate( 1.0f );
+			} else {
+				context->CheatingCorrectVelocity( areaPoint );
+			}
+		} else {
+			Vec3 velocity( entityPhysicsState.Velocity() );
+			velocity += 5.0f * intendedLookDir;
+			context->record->SetModifiedVelocity( velocity );
+		}
+	} else {
+		botInput->SetTurnSpeedMultiplier( 5.0f );
+	}
+
 	return true;
 }
 
@@ -458,6 +269,14 @@ void LandOnSavedAreasAction::CheckPredictionStepResults( PredictionContext *cont
 
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	if( !entityPhysicsState.GroundEntity() ) {
+		// Check whether to continue prediction still makes sense
+		if( context->topOfStackIndex + 1 == PredictionContext::MAX_PREDICTED_STATES ) {
+			// Stop wasting CPU cycles on this. Also prevent overflow of the prediction stack
+			// leading to inability of restarting the action for testing a next area (if any).
+			currAreaIndex = -1;
+			totalTestedAreas++;
+			context->SetPendingRollback();
+		}
 		return;
 	}
 
