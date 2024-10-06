@@ -395,7 +395,9 @@ public:
 protected:
 	explicit Scene( unsigned index );
 
-	wsw::StaticVector<DynamicLight, 1024> m_dynamicLights;
+	static constexpr unsigned kMaxSubmittedLights = 1024;
+
+	wsw::StaticVector<DynamicLight, kMaxSubmittedLights> m_dynamicLights;
 
 	entity_t *m_worldent;
 	entity_t *m_polyent;
@@ -416,7 +418,7 @@ protected:
 	wsw::StaticVector<QuadPoly *, MAX_QUAD_POLYS> m_quadPolys;
 
 	static constexpr unsigned kMaxParticlesInAggregate = 256;
-	static constexpr unsigned kMaxParticleAggregates = 1024;
+	static constexpr unsigned kMaxParticleAggregates = 256;
 
 	static constexpr unsigned kMaxPartsInCompoundMesh = 8;
 	static constexpr unsigned kMaxCompoundDynamicMeshes = 64;

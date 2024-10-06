@@ -48,6 +48,8 @@ struct alignas( 32 )Frustum {
 namespace wsw::ref {
 
 class alignas( 32 ) Frontend {
+	friend struct BatchedMeshBuilder;
+
 public:
 	Frontend();
 	~Frontend();
@@ -116,6 +118,32 @@ private:
 	static constexpr unsigned kMaxLightsInScene       = 1024;
 	static constexpr unsigned kMaxProgramLightsInView = 32;
 
+	struct StateForCamera;
+
+	struct PrepareBatchedSurfWorkload {
+		std::span<const sortedDrawSurf_t> batchSpan;
+		Scene *scene;
+		StateForCamera *stateForCamera;
+		unsigned vertSpanOffset;
+	};
+
+	// ST_SPRITE surfaces need special handling as they go through the legacy dynamic mesh path
+	struct PrepareSpriteSurfWorkload {
+		std::span<const sortedDrawSurf_t> batchSpan;
+		StateForCamera *stateForCamera;
+		unsigned firstMeshOffset;
+	};
+
+	// A "mesh" and the respective data storage
+	struct PreparedSpriteMesh {
+		mesh_t mesh;
+		vec4_t positions[4];
+		vec4_t normals[4];
+		vec2_t texCoords[4];
+		byte_vec4_t colors[4];
+		elem_t indices[6];
+	};
+
 	struct alignas( alignof( Frustum ) ) StateForCamera {
 		alignas( alignof( Frustum ) )Frustum frustum;
 		alignas( alignof( Frustum ) )Frustum occluderFrusta[kMaxOccluderFrusta];
@@ -163,6 +191,16 @@ private:
 		// Same here, we can't use PodBufferHolder yet for wsw::Function<>
 		// TODO: Use something less wasteful wrt storage than wsw::Function<>
 		wsw::PodVector<wsw::Function<void( FrontendToBackendShared *)>> *drawActionsList;
+
+		wsw::PodVector<PrepareBatchedSurfWorkload> *preparePolysWorkload;
+		wsw::PodVector<PrepareBatchedSurfWorkload> *prepareCoronasWorkload;
+		wsw::PodVector<PrepareBatchedSurfWorkload> *prepareParticlesWorkload;
+
+		// Results of preparation get stored in this buffer
+		wsw::PodVector<VertElemSpan> *batchedSurfVertSpans;
+
+		wsw::PodVector<PrepareSpriteSurfWorkload> *prepareSpritesWorkload;
+		wsw::PodVector<PreparedSpriteMesh> *preparedSpriteMeshes;
 
 		PodBufferHolder<unsigned> *visibleLeavesBuffer;
 		PodBufferHolder<unsigned> *visibleOccludersBuffer;
@@ -528,6 +566,24 @@ private:
 	void processSortList( StateForCamera *stateForCamera, Scene *scene );
 	void submitDrawActionsList( StateForCamera *stateForCamera, Scene *scene );
 
+	using SubmitBatchedSurfFn = void(*)( const FrontendToBackendShared *, const entity_t *, const shader_t *,
+		const mfog_t *, const portalSurface_t *, unsigned );
+
+	[[nodiscard]]
+	auto registerBuildingBatchedSurf( StateForCamera *stateForCamera, Scene *scene, unsigned surfType, std::span<const sortedDrawSurf_t> batchSpan )
+		-> std::pair<SubmitBatchedSurfFn, unsigned>;
+
+	void markBuffersOfBatchedDynamicsForUpload( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras );
+
+	struct DynamicMeshFillDataWorkload;
+	void prepareDynamicMesh( DynamicMeshFillDataWorkload *workload );
+
+	void prepareBatchedQuadPolys( PrepareBatchedSurfWorkload *workload );
+	void prepareBatchedCoronas( PrepareBatchedSurfWorkload *workload );
+	void prepareBatchedParticles( PrepareBatchedSurfWorkload *workload );
+
+	void prepareLegacySprite( PrepareSpriteSurfWorkload *workload );
+
 	auto ( Frontend::*m_collectVisibleWorldLeavesArchMethod )( StateForCamera * ) -> std::span<const unsigned>;
 	auto ( Frontend::*m_collectVisibleOccludersArchMethod )( StateForCamera * ) -> std::span<const unsigned>;
 	auto ( Frontend::*m_buildFrustaOfOccludersArchMethod )( StateForCamera *, std::span<const SortedOccluder> ) -> std::span<const Frustum>;
@@ -567,6 +623,14 @@ private:
 		wsw::PodVector<sortedDrawSurf_t> meshSortList;
 		wsw::PodVector<wsw::Function<void( FrontendToBackendShared * )>> drawActionsList;
 
+		wsw::PodVector<PrepareBatchedSurfWorkload> preparePolysWorkloadBuffer;
+		wsw::PodVector<PrepareBatchedSurfWorkload> prepareCoronasWorkloadBuffer;
+		wsw::PodVector<PrepareBatchedSurfWorkload> prepareParticlesWorkloadBuffer;
+		wsw::PodVector<VertElemSpan> batchedSurfVertSpansBuffer;
+
+		wsw::PodVector<PrepareSpriteSurfWorkload> prepareSpritesWorkloadBuffer;
+		wsw::PodVector<PreparedSpriteMesh> preparedSpriteMeshesBuffer;
+
 		PodBufferHolder<unsigned> visibleLeavesBuffer;
 		PodBufferHolder<unsigned> visibleOccludersBuffer;
 		PodBufferHolder<SortedOccluder> sortedOccludersBuffer;
@@ -603,31 +667,22 @@ private:
 
 	wsw::StaticVector<std::pair<Scene *, StateForCamera *>, MAX_REF_CAMERAS> m_tmpPortalScenesAndStates;
 
-	struct alignas( 16 ) DynamicMeshData {
-		// Maximum supported icosphere subdiv level
-		// TODO check these values, share with the icosphere code
-		// TODO we do not have to transfer icosphere indices every frame
-		static constexpr auto maxStorageVertices = 2 * 2562;
-		static constexpr auto maxStorageIndices  = 2 * 15360;
-
-		// TODO: Point to the dynamic stream memory
-		alignas( 16 ) vec4_t positions[maxStorageVertices];
-		alignas( 16 ) vec4_t normals[maxStorageVertices];
-		alignas( 16 ) vec2_t texCoords[maxStorageVertices];
-		alignas( 16 ) byte_vec4_t colors[maxStorageVertices];
-		alignas( 16 ) uint16_t indices[maxStorageIndices];
-	};
-
 	struct DynamicMeshFillDataWorkload {
 		Scene *scene;
 		StateForCamera *stateForCamera;
-		DynamicMeshData *destData;
 		DynamicMeshDrawSurface *drawSurface;
 	};
 
-	wsw::PodVector<DynamicMeshData> m_tmpDynamicMeshData;
 	wsw::PodVector<DynamicMeshFillDataWorkload> m_tmpDynamicMeshFillDataWorkload;
 	std::pair<unsigned, unsigned> m_dynamicMeshOffsetsOfVerticesAndIndices { 0, 0 };
+	std::pair<unsigned, unsigned> m_variousDynamicsOffsetsOfVerticesAndIndices { 0, 0 };
+
+	wsw::StaticVector<PrepareBatchedSurfWorkload *, MAX_REF_CAMERAS * MAX_QUAD_POLYS> m_selectedPolysWorkload;
+	wsw::StaticVector<PrepareBatchedSurfWorkload *, MAX_REF_CAMERAS * Scene::kMaxSubmittedLights> m_selectedCoronasWorkload;
+	// A single particle aggregate may produce multiple spans of draw surfaces, but reaching the limit is very unlikely
+	wsw::StaticVector<PrepareBatchedSurfWorkload *, MAX_REF_CAMERAS * Scene::kMaxParticleAggregates> m_selectedParticlesWorkload;
+
+	wsw::StaticVector<PrepareSpriteSurfWorkload *, MAX_REF_CAMERAS * MAX_ENTITIES> m_selectedSpriteWorkload;
 
 	// This is not an appropriate place to keep the client-global instance of task system.
 	// However, moving it to the client code is complicated due to lifetime issues related to client global vars.

@@ -84,8 +84,6 @@ static int R_PackDistKey( int renderFx, const shader_t *shader, float dist, unsi
 
 namespace wsw::ref {
 
-static drawSurfaceType_t spriteDrawSurf = ST_SPRITE;
-
 void Frontend::addAliasModelEntitiesToSortList( StateForCamera *stateForCamera, const entity_t *aliasModelEntities,
 												std::span<const VisTestedModel> models, std::span<const uint16_t> indices ) {
 	for( const auto modelIndex: indices ) {
@@ -244,7 +242,7 @@ void Frontend::addSpriteEntitiesToSortList( StateForCamera *stateForCamera, cons
 		VectorSubtract( entity->origin, stateForCamera->refdef.vieworg, eyeToSprite );
 		if( const float dist = DotProduct( eyeToSprite, &stateForCamera->viewAxis[0] ); dist > 0 ) [[likely]] {
 			const mfog_t *const fog = getFogForSphere( stateForCamera, entity->origin, entity->radius );
-			addEntryToSortList( stateForCamera, entity, fog, entity->customShader, dist, 0, nullptr, &spriteDrawSurf, ST_SPRITE );
+			addEntryToSortList( stateForCamera, entity, fog, entity->customShader, dist, 0, nullptr, entity, ST_SPRITE );
 		}
 	}
 }
@@ -581,8 +579,8 @@ void Frontend::addDynamicMeshToSortList( StateForCamera *stateForCamera, const e
 		const auto [numVertices, numIndices] = *maybeStorageRequirements;
 		assert( numVertices && numIndices );
 		// TODO: Allow more if we draw using base vertex
-		// TODO: Protect against indices overflow
-		if( offsetsOfVerticesAndIndices->first + numVertices <= std::numeric_limits<uint16_t>::max() ) {
+		if( offsetsOfVerticesAndIndices->first + numVertices <= MAX_UPLOAD_VBO_VERTICES &&
+			offsetsOfVerticesAndIndices->second + numIndices <= MAX_UPLOAD_VBO_INDICES ) {
 			drawSurface->requestedNumVertices = numVertices;
 			drawSurface->requestedNumIndices  = numIndices;
 			drawSurface->verticesOffset       = offsetsOfVerticesAndIndices->first;
@@ -825,56 +823,88 @@ void Frontend::updatePortalSurface( StateForCamera *stateForCamera, portalSurfac
 	portalSurface->mins[3] = 0.0f, portalSurface->maxs[3] = 1.0f;
 }
 
-static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] =
-	{
-		/* ST_NONE */
-		nullptr,
-		/* ST_BSP */
-		( drawSurf_cb ) &R_SubmitBSPSurfToBackend,
-		/* ST_ALIAS */
-		( drawSurf_cb ) &R_SubmitAliasSurfToBackend,
-		/* ST_SKELETAL */
-		( drawSurf_cb ) &R_SubmitSkeletalSurfToBackend,
-		/* ST_SPRITE */
-		nullptr,
-		/* ST_QUAD_POLY */
-		nullptr,
-		/* ST_DYNAMIC_MESH */
-		( drawSurf_cb ) &R_SubmitDynamicMeshToBackend,
-		/* ST_PARTICLE */
-		nullptr,
-		/* ST_CORONA */
-		nullptr,
-		/* ST_NULLMODEL */
-		( drawSurf_cb ) & R_SubmitNullSurfToBackend,
-	};
+using drawSurf_cb = void (*)( const FrontendToBackendShared *, const entity_t *, const struct shader_s *,
+								const struct mfog_s *, const struct portalSurface_s *, const void * );
 
-static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
-	{
-		/* ST_NONE */
-		nullptr,
-		/* ST_BSP */
-		nullptr,
-		/* ST_ALIAS */
-		nullptr,
-		/* ST_SKELETAL */
-		nullptr,
-		/* ST_SPRITE */
-		( batchDrawSurf_cb ) & R_SubmitSpriteSurfsToBackend,
-		/* ST_QUAD_POLY */
-		( batchDrawSurf_cb ) & R_SubmitQuadPolysToBackend,
-		/* ST_DYNAMIC_MESH */
-		nullptr,
-		/* ST_PARTICLE */
-		( batchDrawSurf_cb ) & R_SubmitParticleSurfsToBackend,
-		/* ST_CORONA */
-		( batchDrawSurf_cb ) & R_SubmitCoronaSurfsToBackend,
-		/* ST_NULLMODEL */
-		nullptr,
-	};
+static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] = {
+	/* ST_NONE */
+	nullptr,
+	/* ST_BSP */
+	( drawSurf_cb ) &R_SubmitBSPSurfToBackend,
+	/* ST_ALIAS */
+	( drawSurf_cb ) &R_SubmitAliasSurfToBackend,
+	/* ST_SKELETAL */
+	( drawSurf_cb ) &R_SubmitSkeletalSurfToBackend,
+	/* ST_SPRITE */
+	nullptr,
+	/* ST_QUAD_POLY */
+	nullptr,
+	/* ST_DYNAMIC_MESH */
+	( drawSurf_cb ) &R_SubmitDynamicMeshToBackend,
+	/* ST_PARTICLE */
+	nullptr,
+	/* ST_CORONA */
+	nullptr,
+	/* ST_NULLMODEL */
+	( drawSurf_cb ) & R_SubmitNullSurfToBackend,
+};
+
+auto Frontend::registerBuildingBatchedSurf( StateForCamera *stateForCamera, Scene *scene, unsigned surfType,
+											std::span<const sortedDrawSurf_t> batchSpan ) -> std::pair<SubmitBatchedSurfFn, unsigned> {
+	assert( !r_drawSurfCb[surfType] );
+
+	SubmitBatchedSurfFn resultFn;
+	unsigned resultOffset;
+	if( surfType != ST_SPRITE ) [[likely]] {
+		wsw::PodVector<PrepareBatchedSurfWorkload> *workloadList;
+		if( surfType == ST_PARTICLE ) {
+			workloadList = stateForCamera->prepareParticlesWorkload;
+		} else if( surfType == ST_CORONA ) {
+			workloadList = stateForCamera->prepareCoronasWorkload;
+		} else if( surfType == ST_QUAD_POLY ) {
+			workloadList = stateForCamera->preparePolysWorkload;
+		} else {
+			wsw::failWithRuntimeError( "Unreachable" );
+		}
+
+		resultOffset = stateForCamera->batchedSurfVertSpans->size();
+		// Reserve space at [resultOffset]
+		stateForCamera->batchedSurfVertSpans->append( {} );
+
+		workloadList->append( PrepareBatchedSurfWorkload {
+			.batchSpan      = batchSpan,
+			.scene          = scene,
+			.stateForCamera = stateForCamera,
+			.vertSpanOffset = resultOffset,
+		});
+
+		resultFn = R_SubmitBatchedSurfsToBackend;
+	} else {
+		resultOffset = stateForCamera->preparedSpriteMeshes->size();
+		// We need an element for each mesh in span
+		stateForCamera->preparedSpriteMeshes->resize( stateForCamera->preparedSpriteMeshes->size() + batchSpan.size() );
+
+		stateForCamera->prepareSpritesWorkload->append( PrepareSpriteSurfWorkload {
+			.batchSpan       = batchSpan,
+			.stateForCamera  = stateForCamera,
+			.firstMeshOffset = resultOffset,
+		});
+
+		resultFn = R_SubmitSpriteSurfsToBackend;
+	}
+
+	return { resultFn, resultOffset };
+}
 
 void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 	stateForCamera->drawActionsList->clear();
+
+	stateForCamera->preparePolysWorkload->clear();
+	stateForCamera->prepareCoronasWorkload->clear();
+	stateForCamera->prepareParticlesWorkload->clear();
+	stateForCamera->batchedSurfVertSpans->clear();
+	stateForCamera->prepareSpritesWorkload->clear();
+	stateForCamera->preparedSpriteMeshes->clear();
 
 	const auto *sortList = stateForCamera->sortList;
 	if( sortList->empty() ) [[unlikely]] {
@@ -919,7 +949,7 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 
 		assert( surfType > ST_NONE && surfType < ST_MAX_TYPES );
 
-		const bool isDrawSurfBatched = ( r_batchDrawSurfCb[surfType] ? true : false );
+		const bool isDrawSurfBatched = ( r_drawSurfCb[surfType] == nullptr );
 
 		unsigned shaderNum, entNum;
 		int fogNum, portalNum;
@@ -960,16 +990,17 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 
 		if( reset ) {
 			if( batchSpanBegin ) {
-				batchDrawSurf_cb callback            = r_batchDrawSurfCb[batchSpanBegin->surfType];
 				const shader_s *prevShader           = materialCache->getMaterialById( prevShaderNum );
 				const entity_t *prevEntity           = scene->m_entities[prevEntNum];
 				const sortedDrawSurf_t *batchSpanEnd = sds;
 
 				assert( batchSpanEnd > batchSpanBegin );
+				const auto [submitFn, offset] = registerBuildingBatchedSurf( stateForCamera, scene, prevSurfType,
+																			 { batchSpanBegin, batchSpanEnd } );
 
 				drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
 					RB_FlushDynamicMeshes();
-					callback( fsh, prevEntity, prevShader, prevFog, prevPortalSurface, { batchSpanBegin, batchSpanEnd } );
+					submitFn( fsh, prevEntity, prevShader, prevFog, prevPortalSurface, offset );
 					RB_FlushDynamicMeshes();
 				});
 			}
@@ -1084,16 +1115,17 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 	}
 
 	if( batchSpanBegin ) {
-		batchDrawSurf_cb callback            = r_batchDrawSurfCb[batchSpanBegin->surfType];
 		const shader_t *prevShader           = materialCache->getMaterialById( prevShaderNum );
 		const entity_t *prevEntity           = scene->m_entities[prevEntNum];
 		const sortedDrawSurf_t *batchSpanEnd = drawSurfs + numDrawSurfs;
 
 		assert( batchSpanEnd > batchSpanBegin );
+		const auto [submitFn, offset] = registerBuildingBatchedSurf( stateForCamera, scene, prevSurfType,
+																	 { batchSpanBegin, batchSpanEnd } );
 
 		drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
 			RB_FlushDynamicMeshes();
-			callback( fsh, prevEntity, prevShader, prevFog, prevPortalSurface, { batchSpanBegin, batchSpanEnd } );
+			submitFn( fsh, prevEntity, prevShader, prevFog, prevPortalSurface, offset );
 			RB_FlushDynamicMeshes();
 		});
 	}

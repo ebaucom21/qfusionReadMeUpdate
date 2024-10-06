@@ -4068,7 +4068,7 @@ static void CG_UpdateItemEnt( centity_t *cent ) {
 		cent->ent.renderfx = RF_NOSHADOW | RF_FULLBRIGHT;
 		cent->ent.frame = cent->ent.oldframe = 0;
 
-		cent->ent.radius = v_simpleItemsSize.get() <= 32.0f ? v_simpleItems.get() : 32.0f;
+		cent->ent.radius = v_simpleItemsSize.get() <= 32.0f ? v_simpleItemsSize.get() : 32.0f;
 		if( cent->ent.radius < 1.0f ) {
 			cent->ent.radius = 1.0f;
 		}
