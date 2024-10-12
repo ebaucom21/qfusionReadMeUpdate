@@ -21,14 +21,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 #include "frontend.h"
+#include "program.h"
 #include "materiallocal.h"
 #include "../common/wswsortbyfield.h"
-
-#include <algorithm>
-
-void R_TransformForWorld();
-void R_TranslateForEntity( const entity_t *e );
-void R_TransformForEntity( const entity_t *e );
 
 static unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, int numLightmaps, bool dlight ) {
 	unsigned order = 0;
@@ -823,323 +818,248 @@ void Frontend::updatePortalSurface( StateForCamera *stateForCamera, portalSurfac
 	portalSurface->mins[3] = 0.0f, portalSurface->maxs[3] = 1.0f;
 }
 
-using drawSurf_cb = void (*)( const FrontendToBackendShared *, const entity_t *, const struct shader_s *,
-								const struct mfog_s *, const struct portalSurface_s *, const void * );
+auto Frontend::findNearestPortalEntity( const portalSurface_t *portalSurface, Scene *scene ) -> const entity_t * {
+	vec3_t center;
+	VectorAvg( portalSurface->mins, portalSurface->maxs, center );
 
-static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] = {
-	/* ST_NONE */
-	nullptr,
-	/* ST_BSP */
-	( drawSurf_cb ) &R_SubmitBSPSurfToBackend,
-	/* ST_ALIAS */
-	( drawSurf_cb ) &R_SubmitAliasSurfToBackend,
-	/* ST_SKELETAL */
-	( drawSurf_cb ) &R_SubmitSkeletalSurfToBackend,
-	/* ST_SPRITE */
-	nullptr,
-	/* ST_QUAD_POLY */
-	nullptr,
-	/* ST_DYNAMIC_MESH */
-	( drawSurf_cb ) &R_SubmitDynamicMeshToBackend,
-	/* ST_PARTICLE */
-	nullptr,
-	/* ST_CORONA */
-	nullptr,
-	/* ST_NULLMODEL */
-	( drawSurf_cb ) & R_SubmitNullSurfToBackend,
-};
-
-auto Frontend::registerBuildingBatchedSurf( StateForCamera *stateForCamera, Scene *scene, unsigned surfType,
-											std::span<const sortedDrawSurf_t> batchSpan ) -> std::pair<SubmitBatchedSurfFn, unsigned> {
-	assert( !r_drawSurfCb[surfType] );
-
-	SubmitBatchedSurfFn resultFn;
-	unsigned resultOffset;
-	if( surfType != ST_SPRITE ) [[likely]] {
-		wsw::PodVector<PrepareBatchedSurfWorkload> *workloadList;
-		if( surfType == ST_PARTICLE ) {
-			workloadList = stateForCamera->prepareParticlesWorkload;
-		} else if( surfType == ST_CORONA ) {
-			workloadList = stateForCamera->prepareCoronasWorkload;
-		} else if( surfType == ST_QUAD_POLY ) {
-			workloadList = stateForCamera->preparePolysWorkload;
-		} else {
-			wsw::failWithRuntimeError( "Unreachable" );
+	const entity_t *bestEnt = nullptr;
+	float bestDist          = std::numeric_limits<float>::max();
+	for( const entity_t &ent: scene->m_portalSurfaceEntities ) {
+		if( std::fabs( PlaneDiff( ent.origin, &portalSurface->untransformed_plane ) ) < 64.0f ) {
+			const float centerDist = Distance( ent.origin, center );
+			if( centerDist < bestDist ) {
+				bestDist = centerDist;
+				bestEnt  = std::addressof( ent );
+			}
 		}
-
-		resultOffset = stateForCamera->batchedSurfVertSpans->size();
-		// Reserve space at [resultOffset]
-		stateForCamera->batchedSurfVertSpans->append( {} );
-
-		workloadList->append( PrepareBatchedSurfWorkload {
-			.batchSpan      = batchSpan,
-			.scene          = scene,
-			.stateForCamera = stateForCamera,
-			.vertSpanOffset = resultOffset,
-		});
-
-		resultFn = R_SubmitBatchedSurfsToBackend;
-	} else {
-		resultOffset = stateForCamera->preparedSpriteMeshes->size();
-		// We need an element for each mesh in span
-		stateForCamera->preparedSpriteMeshes->resize( stateForCamera->preparedSpriteMeshes->size() + batchSpan.size() );
-
-		stateForCamera->prepareSpritesWorkload->append( PrepareSpriteSurfWorkload {
-			.batchSpan       = batchSpan,
-			.stateForCamera  = stateForCamera,
-			.firstMeshOffset = resultOffset,
-		});
-
-		resultFn = R_SubmitSpriteSurfsToBackend;
 	}
 
-	return { resultFn, resultOffset };
+	return bestEnt;
 }
 
-void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
-	stateForCamera->drawActionsList->clear();
+void Frontend::prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamera, Scene *scene, portalSurface_t *portalSurface ) {
+	const shader_s *surfaceMaterial = portalSurface->shader;
 
-	stateForCamera->preparePolysWorkload->clear();
-	stateForCamera->prepareCoronasWorkload->clear();
-	stateForCamera->prepareParticlesWorkload->clear();
-	stateForCamera->batchedSurfVertSpans->clear();
-	stateForCamera->prepareSpritesWorkload->clear();
-	stateForCamera->preparedSpriteMeshes->clear();
+	int startFromTextureIndex = -1;
+	bool shouldDoReflection   = true;
+	bool shouldDoRefraction   = ( surfaceMaterial->flags & SHADER_PORTAL_CAPTURE2 ) != 0;
 
-	const auto *sortList = stateForCamera->sortList;
-	if( sortList->empty() ) [[unlikely]] {
-		return;
-	}
+	if( surfaceMaterial->flags & SHADER_PORTAL_CAPTURE ) {
+		startFromTextureIndex = 0;
 
-	const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {
-		// TODO: Avoid runtime composition of keys
-		const auto lhsKey = ( (uint64_t)lhs.distKey << 32 ) | (uint64_t)lhs.sortKey;
-		const auto rhsKey = ( (uint64_t)rhs.distKey << 32 ) | (uint64_t)rhs.sortKey;
-		return lhsKey < rhsKey;
-	};
-
-	std::sort( stateForCamera->sortList->begin(), stateForCamera->sortList->end(), cmp );
-	stateForCamera->drawActionsList->reserve( stateForCamera->sortList->size() );
-
-	auto *const materialCache   = MaterialCache::instance();
-	auto *const drawActionsList = stateForCamera->drawActionsList;
-
-	unsigned prevShaderNum                 = ~0;
-	unsigned prevEntNum                    = ~0;
-	int prevPortalNum                      = ~0;
-	int prevFogNum                         = ~0;
-	unsigned prevMergeabilitySeparator     = ~0;
-	unsigned prevSurfType                  = ~0;
-	bool prevIsDrawSurfBatched             = false;
-	const sortedDrawSurf_t *batchSpanBegin = nullptr;
-
-	bool depthHack = false, cullHack = false;
-	bool prevInfiniteProj = false;
-	int prevEntityFX = -1;
-
-	const mfog_t *prevFog = nullptr;
-	const portalSurface_t *prevPortalSurface = nullptr;
-
-	const size_t numDrawSurfs = sortList->size();
-	const sortedDrawSurf_t *const drawSurfs = sortList->data();
-	for( size_t i = 0; i < numDrawSurfs; i++ ) {
-		const sortedDrawSurf_t *sds = drawSurfs + i;
-		const unsigned sortKey      = sds->sortKey;
-		const unsigned surfType     = sds->surfType;
-
-		assert( surfType > ST_NONE && surfType < ST_MAX_TYPES );
-
-		const bool isDrawSurfBatched = ( r_drawSurfCb[surfType] == nullptr );
-
-		unsigned shaderNum, entNum;
-		int fogNum, portalNum;
-		// decode draw surface properties
-		R_UnpackSortKey( sortKey, &shaderNum, &fogNum, &portalNum, &entNum );
-
-		const shader_t *shader    = materialCache->getMaterialById( shaderNum );
-		const entity_t *entity    = scene->m_entities[entNum];
-		const mfog_t *fog         = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
-		const auto *portalSurface = portalNum >= 0 ? stateForCamera->portalSurfaces + portalNum : nullptr;
-		const int entityFX        = entity->renderfx;
-
-		// TODO?
-		// const bool depthWrite     = shader->flags & SHADER_DEPTHWRITE ? true : false;
-
-		// see if we need to reset mesh properties in the backend
-
-		// TODO: Use a single 64-bit compound mergeability key
-
-		bool reset = false;
-		if( !prevIsDrawSurfBatched ) {
-			reset = true;
-		} else if( surfType != prevSurfType ) {
-			reset = true;
-		} else if( shaderNum != prevShaderNum ) {
-			reset = true;
-		} else if( sds->mergeabilitySeparator != prevMergeabilitySeparator ) {
-			reset = true;
-		} else if( fogNum != prevFogNum ) {
-			reset = true;
-		} else if( portalNum != prevPortalNum ) {
-			reset = true;
-		} else if( entNum != prevEntNum ) {
-			reset = true;
-		} else if( entityFX != prevEntityFX ) {
-			reset = true;
+		for( unsigned i = 0; i < surfaceMaterial->numpasses; i++ ) {
+			const shaderpass_t *const pass = &portalSurface->shader->passes[i];
+			if( pass->program_type == GLSL_PROGRAM_TYPE_DISTORTION ) {
+				if( ( pass->alphagen.type == ALPHA_GEN_CONST && pass->alphagen.args[0] == 1 ) ) {
+					shouldDoRefraction = false;
+				} else if( ( pass->alphagen.type == ALPHA_GEN_CONST && pass->alphagen.args[0] == 0 ) ) {
+					shouldDoReflection = false;
+				}
+				break;
+			}
 		}
+	}
 
-		if( reset ) {
-			if( batchSpanBegin ) {
-				const shader_s *prevShader           = materialCache->getMaterialById( prevShaderNum );
-				const entity_t *prevEntity           = scene->m_entities[prevEntNum];
-				const sortedDrawSurf_t *batchSpanEnd = sds;
-
-				assert( batchSpanEnd > batchSpanBegin );
-				const auto [submitFn, offset] = registerBuildingBatchedSurf( stateForCamera, scene, prevSurfType,
-																			 { batchSpanBegin, batchSpanEnd } );
-
-				drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
-					RB_FlushDynamicMeshes();
-					submitFn( fsh, prevEntity, prevShader, prevFog, prevPortalSurface, offset );
-					RB_FlushDynamicMeshes();
-				});
+	cplane_t *const portalPlane   = &portalSurface->plane;
+	const float distToPortalPlane = PlaneDiff( stateForPrimaryCamera->viewOrigin, portalPlane );
+	const bool canDoReflection    = shouldDoReflection && distToPortalPlane > BACKFACE_EPSILON;
+	if( !canDoReflection ) {
+		if( shouldDoRefraction ) {
+			// Even if we're behind the portal, we still need to capture the second portal image for refraction
+			startFromTextureIndex = 1;
+			if( distToPortalPlane < 0 ) {
+				VectorInverse( portalPlane->normal );
+				portalPlane->dist = -portalPlane->dist;
 			}
-
-			if( isDrawSurfBatched ) {
-				batchSpanBegin = sds;
-			} else {
-				batchSpanBegin = nullptr;
-			}
-
-			// hack the depth range to prevent view model from poking into walls
-			if( entity->flags & RF_WEAPONMODEL ) {
-				if( !depthHack ) {
-					depthHack = true;
-					drawActionsList->append([=]( FrontendToBackendShared *fsh ) {
-						RB_FlushDynamicMeshes();
-						float depthmin = 0.0f, depthmax = 0.0f;
-						RB_GetDepthRange( &depthmin, &depthmax );
-						RB_SaveDepthRange();
-						RB_DepthRange( depthmin, depthmin + 0.3f * ( depthmax - depthmin ) );
-					});
-				}
-			} else {
-				if( depthHack ) {
-					depthHack = false;
-						drawActionsList->append([=]( FrontendToBackendShared * ) {
-						RB_FlushDynamicMeshes();
-						RB_RestoreDepthRange();
-					});
-				}
-			}
-
-			if( entNum != prevEntNum ) {
-				// backface culling for left-handed weapons
-				bool oldCullHack = cullHack;
-				cullHack = ( ( entity->flags & RF_CULLHACK ) ? true : false );
-				if( cullHack != oldCullHack ) {
-					drawActionsList->append( [=]( FrontendToBackendShared * ) {
-						RB_FlushDynamicMeshes();
-						RB_FlipFrontFace();
-					});
-				}
-			}
-
-			// sky and things that don't use depth test use infinite projection matrix
-			// to not pollute the farclip
-			const bool infiniteProj = entity->renderfx & RF_NODEPTHTEST ? true : false;
-			if( infiniteProj != prevInfiniteProj ) {
-				if( infiniteProj ) {
-					drawActionsList->append( [=]( FrontendToBackendShared * ) {
-						RB_FlushDynamicMeshes();
-						mat4_t projectionMatrix;
-						Matrix4_Copy( stateForCamera->projectionMatrix, projectionMatrix );
-						Matrix4_PerspectiveProjectionToInfinity( Z_NEAR, projectionMatrix, glConfig.depthEpsilon );
-						RB_LoadProjectionMatrix( projectionMatrix );
-					});
-				} else {
-					drawActionsList->append( [=]( FrontendToBackendShared * ) {
-						RB_FlushDynamicMeshes();
-						RB_LoadProjectionMatrix( stateForCamera->projectionMatrix );
-					});
-				}
-			}
-
-			if( isDrawSurfBatched ) {
-				// don't transform batched surfaces
-				if( !prevIsDrawSurfBatched ) {
-					drawActionsList->append( [=]( FrontendToBackendShared * ) {
-						RB_LoadObjectMatrix( mat4x4_identity );
-					});
-				}
-			} else {
-				if( ( entNum != prevEntNum ) || prevIsDrawSurfBatched ) {
-					drawActionsList->append( [=]( FrontendToBackendShared * ) {
-						if( entity->number == kWorldEntNumber ) [[likely]] {
-							R_TransformForWorld();
-						} else if( entity->rtype == RT_MODEL ) {
-							R_TransformForEntity( entity );
-						} else if( shader->flags & SHADER_AUTOSPRITE ) {
-							R_TranslateForEntity( entity );
-						} else {
-							R_TransformForWorld();
-						}
-					});
-				}
-			}
-
-			if( !isDrawSurfBatched ) {
-				drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
-					assert( r_drawSurfCb[surfType] );
-
-					RB_BindShader( entity, shader, fog );
-					RB_SetPortalSurface( portalSurface );
-
-					r_drawSurfCb[surfType]( fsh, entity, shader, fog, portalSurface, sds->drawSurf );
-				});
-			}
-
-			prevInfiniteProj = infiniteProj;
+		} else {
+			return;
 		}
-
-		prevShaderNum = shaderNum;
-		prevEntNum = entNum;
-		prevFogNum = fogNum;
-		prevIsDrawSurfBatched = isDrawSurfBatched;
-		prevSurfType = surfType;
-		prevMergeabilitySeparator = sds->mergeabilitySeparator;
-		prevPortalNum = portalNum;
-		prevEntityFX = entityFX;
-		prevFog = fog;
-		prevPortalSurface = portalSurface;
 	}
 
-	if( batchSpanBegin ) {
-		const shader_t *prevShader           = materialCache->getMaterialById( prevShaderNum );
-		const entity_t *prevEntity           = scene->m_entities[prevEntNum];
-		const sortedDrawSurf_t *batchSpanEnd = drawSurfs + numDrawSurfs;
+	// default to mirror view
+	unsigned drawPortalFlags = DrawPortalMirror;
 
-		assert( batchSpanEnd > batchSpanBegin );
-		const auto [submitFn, offset] = registerBuildingBatchedSurf( stateForCamera, scene, prevSurfType,
-																	 { batchSpanBegin, batchSpanEnd } );
+	// TODO: Shouldn't it be performed upon loading?
 
-		drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
-			RB_FlushDynamicMeshes();
-			submitFn( fsh, prevEntity, prevShader, prevFog, prevPortalSurface, offset );
-			RB_FlushDynamicMeshes();
-		});
+	const entity_t *portalEntity = findNearestPortalEntity( portalSurface, scene );
+	if( !portalEntity ) {
+		if( startFromTextureIndex < 0 ) {
+			return;
+		}
+	} else {
+		if( !VectorCompare( portalEntity->origin, portalEntity->origin2 ) ) {
+			drawPortalFlags &= ~DrawPortalMirror;
+		}
+		// TODO Prevent reusing the entity
 	}
 
-	if( depthHack ) {
-		drawActionsList->append( [=]( FrontendToBackendShared * ) {
-			RB_RestoreDepthRange();
-		});
+	if( startFromTextureIndex >= 0 ) {
+		std::optional<std::pair<StateForCamera *, Texture *>> sideResults[2];
+		unsigned numExpectedResults = 0;
+		drawPortalFlags |= DrawPortalToTexture;
+		if( startFromTextureIndex > 0 ) {
+			drawPortalFlags |= DrawPortalRefraction;
+		}
+		sideResults[startFromTextureIndex] = prepareDrawingPortalSurfaceSide( stateForPrimaryCamera, portalSurface, scene, portalEntity, drawPortalFlags );
+		numExpectedResults++;
+		if( shouldDoRefraction && startFromTextureIndex < 1 && ( surfaceMaterial->flags & SHADER_PORTAL_CAPTURE2 ) ) {
+			drawPortalFlags |= DrawPortalRefraction;
+			sideResults[1] = prepareDrawingPortalSurfaceSide( stateForPrimaryCamera, portalSurface, scene, portalEntity, drawPortalFlags );
+			numExpectedResults++;
+		}
+		const unsigned numActualResults = ( sideResults[0] != std::nullopt ) + ( sideResults[1] != std::nullopt );
+		if( numActualResults == numExpectedResults ) {
+			for( unsigned textureIndex = 0; textureIndex < 2; ++textureIndex ) {
+				if( sideResults[textureIndex] ) {
+					portalSurface->statesForCamera[textureIndex] = sideResults[textureIndex]->first;
+					portalSurface->texures[textureIndex] = sideResults[textureIndex]->second;
+					stateForPrimaryCamera->portalCameraStates.push_back( sideResults[textureIndex]->first );
+				}
+			}
+		}
+	} else {
+		// TODO: Figure out what to do with mirrors (they aren't functioning properly at the moment of rewrite)
+		//auto result = prepareDrawingPortalSurfaceSide( stateForPrimaryCamera, portalSurface, scene, portalEntity, drawPortalFlags );
 	}
-	if( cullHack ) {
-		drawActionsList->append( [=]( FrontendToBackendShared * ) {
-			RB_FlipFrontFace();
-		});
+}
+
+auto Frontend::prepareDrawingPortalSurfaceSide( StateForCamera *stateForPrimaryCamera,
+												portalSurface_t *portalSurface, Scene *scene,
+												const entity_t *portalEntity, unsigned drawPortalFlags )
+-> std::optional<std::pair<StateForCamera *, Texture *>> {
+	vec3_t origin;
+	mat3_t axis;
+
+	unsigned renderFlagsToAdd   = 0;
+	unsigned renderFlagsToClear = 0;
+
+	const float *newPvsOrigin = nullptr;
+	const float *newLodOrigin = nullptr;
+
+	cplane_s *const portalPlane = &portalSurface->plane;
+	if( drawPortalFlags & DrawPortalRefraction ) {
+		VectorInverse( portalPlane->normal );
+		portalPlane->dist = -portalPlane->dist;
+		CategorizePlane( portalPlane );
+		VectorCopy( stateForPrimaryCamera->viewOrigin, origin );
+		Matrix3_Copy( stateForPrimaryCamera->refdef.viewaxis, axis );
+
+		newPvsOrigin = stateForPrimaryCamera->viewOrigin;
+
+		renderFlagsToAdd |= RF_PORTALVIEW;
+	} else if( drawPortalFlags & DrawPortalMirror ) {
+		VectorReflect( stateForPrimaryCamera->viewOrigin, portalPlane->normal, portalPlane->dist, origin );
+
+		VectorReflect( &stateForPrimaryCamera->viewAxis[AXIS_FORWARD], portalPlane->normal, 0, &axis[AXIS_FORWARD] );
+		VectorReflect( &stateForPrimaryCamera->viewAxis[AXIS_RIGHT], portalPlane->normal, 0, &axis[AXIS_RIGHT] );
+		VectorReflect( &stateForPrimaryCamera->viewAxis[AXIS_UP], portalPlane->normal, 0, &axis[AXIS_UP] );
+
+		Matrix3_Normalize( axis );
+
+		newPvsOrigin = stateForPrimaryCamera->viewOrigin;
+
+		renderFlagsToAdd = stateForPrimaryCamera->renderFlags | RF_MIRRORVIEW;
+	} else {
+		vec3_t tvec;
+		mat3_t A, B, C, rot;
+
+		// build world-to-portal rotation matrix
+		VectorNegate( portalPlane->normal, tvec );
+		NormalVectorToAxis( tvec, A );
+
+		// build portal_dest-to-world rotation matrix
+		ByteToDir( portalEntity->frame, tvec );
+		NormalVectorToAxis( tvec, B );
+		Matrix3_Transpose( B, C );
+
+		// multiply to get world-to-world rotation matrix
+		Matrix3_Multiply( C, A, rot );
+
+		// translate view origin
+		VectorSubtract( stateForPrimaryCamera->viewOrigin, portalEntity->origin, tvec );
+		Matrix3_TransformVector( rot, tvec, origin );
+		VectorAdd( origin, portalEntity->origin2, origin );
+
+		Matrix3_Transpose( A, B );
+		// TODO: Why do we use a view-dependent axis TODO: Check Q3 code
+		Matrix3_Multiply( stateForPrimaryCamera->viewAxis, B, rot );
+		Matrix3_Multiply( portalEntity->axis, rot, B );
+		Matrix3_Transpose( C, A );
+		Matrix3_Multiply( B, A, axis );
+
+		// set up portalPlane
+		VectorCopy( &axis[AXIS_FORWARD], portalPlane->normal );
+		portalPlane->dist = DotProduct( portalEntity->origin2, portalPlane->normal );
+		CategorizePlane( portalPlane );
+
+		// for portals, vis data is taken from portal origin, not
+		// view origin, because the view point moves around and
+		// might fly into (or behind) a wall
+		newPvsOrigin = portalEntity->origin2;
+		newLodOrigin = portalEntity->origin2;
+
+		renderFlagsToAdd |= RF_PORTALVIEW;
+
+		// ignore entities, if asked politely
+		if( portalEntity->renderfx & RF_NOPORTALENTS ) {
+			renderFlagsToAdd |= RF_ENVVIEW;
+		}
 	}
+
+	refdef_t newRefdef = stateForPrimaryCamera->refdef;
+	newRefdef.rdflags &= ~( RDF_UNDERWATER | RDF_CROSSINGWATER );
+	// Note: Inheritting RDF_NOBSPOCCLUSIONCULLING
+
+	renderFlagsToAdd   |= RF_CLIPPLANE;
+	renderFlagsToClear |= RF_SOFT_PARTICLES;
+
+	if( newPvsOrigin ) {
+		// TODO: Try using a different frustum for selection of occluders in this case?
+		if( Mod_PointInLeaf( origin, rsh.worldModel )->cluster < 0 ) {
+			renderFlagsToAdd |= RF_NOOCCLUSIONCULLING;
+		}
+	}
+
+	Texture *captureTexture = nullptr;
+	if( drawPortalFlags & DrawPortalToTexture ) {
+		RenderTargetComponents *components;
+		do {
+			[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_portalTextureLock );
+			components = TextureCache::instance()->getPortalRenderTarget( m_drawSceneFrame );
+		} while( false );
+		// TODO: Should not it be limited per-viewport, not per-frame?
+		if( components ) {
+			newRefdef.renderTarget = components;
+			captureTexture         = components->texture;
+
+			newRefdef.x      = newRefdef.scissor_x      = 0;
+			newRefdef.y      = newRefdef.scissor_y      = 0;
+			newRefdef.width  = newRefdef.scissor_width  = components->texture->width;
+			newRefdef.height = newRefdef.scissor_height = components->texture->height;
+
+			renderFlagsToAdd |= RF_PORTAL_CAPTURE;
+		} else {
+			return std::nullopt;
+		}
+	} else {
+		renderFlagsToClear |= RF_PORTAL_CAPTURE;
+	}
+
+	VectorCopy( origin, newRefdef.vieworg );
+	Matrix3_Copy( axis, newRefdef.viewaxis );
+
+	auto *stateForPortalCamera = setupStateForCamera( &newRefdef, stateForPrimaryCamera->sceneIndex, CameraOverrideParams {
+		.pvsOrigin          = newPvsOrigin,
+		.lodOrigin          = newLodOrigin,
+		.renderFlagsToAdd   = renderFlagsToAdd,
+		.renderFlagsToClear = renderFlagsToClear,
+	});
+
+	if( !stateForPortalCamera ) {
+		return std::nullopt;
+	}
+
+	return std::make_pair( stateForPortalCamera, captureTexture );
 }
 
 }
