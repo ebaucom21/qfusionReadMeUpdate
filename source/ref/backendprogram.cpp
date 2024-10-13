@@ -1086,12 +1086,12 @@ static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, uint64_t pro
 	}
 
 	auto *const textureCache = TextureCache::instance();
-	auto *const blackTexture = textureCache->blackTexture();
+	auto *const blankTexture = textureCache->greyTexture();
 	auto *const blankNormalmap = textureCache->blankNormalmap();
 	for( i = 0; i < 2; i++ ) {
 		portaltexture[i] = rb.currentPortalSurface->texures[i];
 		if( !portaltexture[i] ) {
-			portaltexture[i] = blackTexture;
+			portaltexture[i] = blankTexture;
 		} else {
 			width = portaltexture[i]->width;
 			height = portaltexture[i]->height;
@@ -1103,11 +1103,17 @@ static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, uint64_t pro
 	if( dudvmap != blankNormalmap ) {
 		programFeatures |= GLSL_SHADER_DISTORTION_DUDV;
 	}
-	if( portaltexture[0] != blackTexture ) {
+
+	if( portaltexture[0] == blankTexture && portaltexture[1] == blankTexture ) {
+		// Let it be actually drawn
 		programFeatures |= GLSL_SHADER_DISTORTION_REFLECTION;
-	}
-	if( portaltexture[1] != blackTexture ) {
-		programFeatures |= GLSL_SHADER_DISTORTION_REFRACTION;
+	} else {
+		if( portaltexture[0] != blankTexture ) {
+			programFeatures |= GLSL_SHADER_DISTORTION_REFLECTION;
+		}
+		if( portaltexture[1] != blankTexture ) {
+			programFeatures |= GLSL_SHADER_DISTORTION_REFRACTION;
+		}
 	}
 
 	frontPlane = ( PlaneDiff( rb.cameraOrigin, &rb.currentPortalSurface->untransformed_plane ) > 0 ? true : false );
