@@ -154,6 +154,7 @@ public:
 		{ "SkyParams"_asView, MaterialKey::SkyParams },
 		{ "SkyParams2"_asView, MaterialKey::SkyParams2 },
 		{ "SkyParamsSides"_asView, MaterialKey::SkyParamsSides },
+		{ "FogParms"_asView, MaterialKey::FogParams },
 		{ "FogParams"_asView, MaterialKey::FogParams },
 		{ "NoMipMaps"_asView, MaterialKey::NoMipMaps },
 		{ "NoPicMip"_asView, MaterialKey::NoPicMip },
