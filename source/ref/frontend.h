@@ -289,8 +289,9 @@ private:
 
 	void performPreparedRenderingFromThisCamera( Scene *scene, StateForCamera *stateForCamera );
 
-	void updatePortalSurface( StateForCamera *stateForCamera, portalSurface_t *portalSurface, const mesh_t *mesh,
-							  const float *mins, const float *maxs, const shader_t *shader );
+	[[nodiscard]]
+	bool updatePortalSurfaceUsingMesh( StateForCamera *stateForCamera, portalSurface_t *portalSurface, const mesh_t *mesh,
+									   const float *mins, const float *maxs, const shader_t *shader );
 
 	void collectVisiblePolys( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta );
 

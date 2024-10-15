@@ -1241,7 +1241,6 @@ typedef struct portalSurface_s {
 	vec4_t mins, maxs;
 	const entity_t *entity;
 	cplane_t plane, untransformed_plane;
-	unsigned portalNumber;
 	const shader_t *shader;
 	Texture *texures[2];            // front and back portalmaps
 	void *statesForCamera[2];

@@ -690,6 +690,9 @@ void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene
 	const MergedBspSurface *const mergedSurfaces = rsh.worldBrushModel->mergedSurfaces;
 	const msurface_t *const surfaces             = rsh.worldBrushModel->surfaces;
 
+	static_assert( MAX_PORTAL_SURFACES <= 32 );
+	[[maybe_unused]] unsigned validPortalSurfacesMask = 0;
+
 	// TODO: Left-pack during calculation of surf subspans
 	for( unsigned mergedSurfNum = 0; mergedSurfNum < numWorldModelMergedSurfaces; ++mergedSurfNum ) {
 		const MergedSurfSpan &surfSpan = mergedSurfSpans[mergedSurfNum];
@@ -698,29 +701,30 @@ void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene
 			const MergedBspSurface &mergedSurf = mergedSurfaces[mergedSurfNum];
 			// TODO: Save portal surface in draw surface
 			portalSurface_t *portalSurface = nullptr;
+			unsigned portalSurfaceIndex    = 0;
 			if( mergedSurf.shader->flags & SHADER_PORTAL ) [[unlikely]] {
 				if( stateForCamera->numPortalSurfaces < MAX_PORTAL_SURFACES ) {
 					// We currently don't support depth-masked portals, only capturing ones
 					if( mergedSurf.shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) ) {
-						portalSurface = &stateForCamera->portalSurfaces[stateForCamera->numPortalSurfaces++];
+						portalSurfaceIndex = stateForCamera->numPortalSurfaces;
+						stateForCamera->numPortalSurfaces++;
+						portalSurface = &stateForCamera->portalSurfaces[portalSurfaceIndex];
 						memset( portalSurface, 0, sizeof( portalSurface_t ) );
 						portalSurface->entity          = scene->m_worldent;
 						portalSurface->shader          = mergedSurf.shader;
-						portalSurface->portalNumber    = stateForCamera->numPortalSurfaces - 1;
 						ClearBounds( portalSurface->mins, portalSurface->maxs );
 						memset( portalSurface->texures, 0, sizeof( portalSurface->texures ) );
 					}
 				}
 			}
 			if( portalSurface ) [[unlikely]] {
-				// For brush models, currently unsupported
-				constexpr const float *modelOrigin = nullptr;
-				// TODO: Save result dist
-				float resultDist = 0.0;
+				float resultDist                     = 0.0;
 				const msurface_t *const firstVisSurf = surfaces + surfSpan.firstSurface;
 				const msurface_t *const lastVisSurf  = surfaces + surfSpan.lastSurface;
 				for( const msurface_s *surf = firstVisSurf; surf <= lastVisSurf; ++surf ) {
 					vec3_t center;
+					// For brush models, currently unsupported
+					constexpr const float *modelOrigin = nullptr;
 					if( modelOrigin ) {
 						VectorCopy( modelOrigin, center );
 					} else {
@@ -733,8 +737,14 @@ void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene
 					if( dist < 1 ) {
 						dist = 1;
 					}
-					updatePortalSurface( stateForCamera, portalSurface, &surf->mesh, surf->mins, surf->maxs, mergedSurf.shader );
+					// Update result distance regardless of geometry setup, so it gets sorted correctly
 					resultDist = wsw::max( resultDist, dist );
+					// Mark the portal surface as valid once we have succeeded with update by any mesh in surf range.
+					// Note: It looks like that actual portal surfaces are backed by a single surface.
+					if( updatePortalSurfaceUsingMesh( stateForCamera, portalSurface, &surf->mesh,
+													  surf->mins, surf->maxs, mergedSurf.shader ) ) {
+						validPortalSurfacesMask |= ( 1u << portalSurfaceIndex );
+					}
 				}
 				drawSurfaces[mergedSurfNum].portalSurface  = portalSurface;
 				drawSurfaces[mergedSurfNum].portalDistance = resultDist;
@@ -749,13 +759,15 @@ void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene
 	// Check whether actual drawing is enabled upon doing that.
 	if( !isCameraAPortalCamera && stateForCamera->viewCluster >= 0 && !r_fastsky->integer ) {
 		for( unsigned i = 0; i < stateForCamera->numPortalSurfaces; ++i ) {
-			prepareDrawingPortalSurface( stateForCamera, scene, &stateForCamera->portalSurfaces[i] );
+			if( validPortalSurfacesMask & ( 1u << i ) ) {
+				prepareDrawingPortalSurface( stateForCamera, scene, &stateForCamera->portalSurfaces[i] );
+			}
 		}
 	}
 }
 
-void Frontend::updatePortalSurface( StateForCamera *stateForCamera, portalSurface_t *portalSurface, const mesh_t *mesh,
-									const float *mins, const float *maxs, const shader_t *shader ) {
+bool Frontend::updatePortalSurfaceUsingMesh( StateForCamera *stateForCamera, portalSurface_t *portalSurface, const mesh_t *mesh,
+											 const float *mins, const float *maxs, const shader_t *shader ) {
 	vec3_t v[3];
 	for( unsigned i = 0; i < 3; i++ ) {
 		VectorCopy( mesh->xyzArray[mesh->elems[i]], v[i] );
@@ -772,7 +784,7 @@ void Frontend::updatePortalSurface( StateForCamera *stateForCamera, portalSurfac
 	if( shader->flags & SHADER_AUTOSPRITE ) {
 		// autosprites are quads, facing the viewer
 		if( mesh->numVerts < 4 ) {
-			return;
+			return false;
 		}
 
 		vec3_t centre;
@@ -811,8 +823,7 @@ void Frontend::updatePortalSurface( StateForCamera *stateForCamera, portalSurfac
 	if( dist <= BACKFACE_EPSILON ) {
 		// behind the portal plane
 		if( !( shader->flags & SHADER_PORTAL_CAPTURE2 ) ) {
-			// TODO: Mark as culled
-			return;
+			return false;
 		}
 
 		// we need to render the backplane view
@@ -820,8 +831,7 @@ void Frontend::updatePortalSurface( StateForCamera *stateForCamera, portalSurfac
 
 	// check if portal view is opaque due to alphagen portal
 	if( shader->portalDistance > 0.0f && dist > shader->portalDistance ) {
-		// TODO: Mark as culled
-		return;
+		return false;
 	}
 
 	portalSurface->plane = plane;
@@ -830,6 +840,8 @@ void Frontend::updatePortalSurface( StateForCamera *stateForCamera, portalSurfac
 	AddPointToBounds( mins, portalSurface->mins, portalSurface->maxs );
 	AddPointToBounds( maxs, portalSurface->mins, portalSurface->maxs );
 	portalSurface->mins[3] = 0.0f, portalSurface->maxs[3] = 1.0f;
+
+	return true;
 }
 
 auto Frontend::findNearestPortalEntity( const portalSurface_t *portalSurface, Scene *scene ) -> const entity_t * {
