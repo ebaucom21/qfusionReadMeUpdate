@@ -239,7 +239,9 @@ private:
 		bool useOcclusionCulling { false };
 		bool useWorldBspOcclusionCulling { false };
 
+		// Includes stateForSkyPortalCamera
 		wsw::StaticVector<StateForCamera *, MAX_REF_CAMERAS> portalCameraStates;
+		StateForCamera *stateForSkyPortalCamera { nullptr };
 	};
 
 	static_assert( sizeof( StateForCamera ) % alignof( Frustum ) == 0 );
@@ -562,6 +564,8 @@ private:
 										  portalSurface_t *portalSurface, Scene *scene,
 										  const entity_t *portalEntity, unsigned drawPortalFlags )
 										  -> std::optional<std::pair<StateForCamera *, Texture *>>;
+
+	void prepareDrawingSkyPortal( StateForCamera *stateForPrimaryCamera, Scene *scene );
 
 	[[nodiscard]]
 	auto findNearestPortalEntity( const portalSurface_t *portalSurface, Scene *scene ) -> const entity_t *;

@@ -883,6 +883,12 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 }
 
 void Frontend::performPreparedRenderingFromThisCamera( Scene *scene, StateForCamera *stateForCamera ) {
+	// TODO: Is rendering depth mask first worth it
+
+	if( stateForCamera->stateForSkyPortalCamera ) {
+		performPreparedRenderingFromThisCamera( scene, stateForCamera->stateForSkyPortalCamera );
+	}
+
 	const unsigned renderFlags = stateForCamera->renderFlags;
 	for( unsigned i = 0; i < stateForCamera->numPortalSurfaces; ++i ) {
 		for( void *stateForPortalCamera : stateForCamera->portalSurfaces[i].statesForCamera ) {

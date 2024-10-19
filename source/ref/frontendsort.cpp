@@ -763,6 +763,9 @@ void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene
 				prepareDrawingPortalSurface( stateForCamera, scene, &stateForCamera->portalSurfaces[i] );
 			}
 		}
+		if( stateForCamera->refdef.rdflags & RDF_SKYPORTALINVIEW ) {
+			prepareDrawingSkyPortal( stateForCamera, scene );
+		}
 	}
 }
 
@@ -939,6 +942,7 @@ void Frontend::prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamer
 				if( sideResults[textureIndex] ) {
 					portalSurface->statesForCamera[textureIndex] = sideResults[textureIndex]->first;
 					portalSurface->texures[textureIndex] = sideResults[textureIndex]->second;
+					// Won't overflow as we won't allocate that much in the first place
 					stateForPrimaryCamera->portalCameraStates.push_back( sideResults[textureIndex]->first );
 				}
 			}
@@ -1086,6 +1090,54 @@ auto Frontend::prepareDrawingPortalSurfaceSide( StateForCamera *stateForPrimaryC
 	}
 
 	return std::make_pair( stateForPortalCamera, captureTexture );
+}
+
+void Frontend::prepareDrawingSkyPortal( StateForCamera *stateForPrimaryCamera, Scene *scene ) {
+	refdef_t newRefdef = stateForPrimaryCamera->refdef;
+	const skyportal_t *skyportal = &newRefdef.skyportal;
+
+	if( skyportal->scale ) {
+		vec3_t center, diff;
+		VectorAdd( rsh.worldModel->mins, rsh.worldModel->maxs, center );
+		VectorScale( center, 0.5f, center );
+		VectorSubtract( center, stateForPrimaryCamera->viewOrigin, diff );
+		VectorMA( skyportal->vieworg, -skyportal->scale, diff, newRefdef.vieworg );
+	} else {
+		VectorCopy( skyportal->vieworg, newRefdef.vieworg );
+	}
+
+	// FIXME
+	if( !VectorCompare( skyportal->viewanglesOffset, vec3_origin ) ) {
+		vec3_t angles;
+		mat3_t axis;
+
+		Matrix3_Copy( stateForPrimaryCamera->viewAxis, axis );
+		VectorInverse( &axis[AXIS_RIGHT] );
+		Matrix3_ToAngles( axis, angles );
+
+		VectorAdd( angles, skyportal->viewanglesOffset, angles );
+		AnglesToAxis( angles, axis );
+		Matrix3_Copy( axis, newRefdef.viewaxis );
+	}
+
+	if( skyportal->fov ) {
+		newRefdef.fov_x = skyportal->fov;
+		newRefdef.fov_y = CalcFov( skyportal->fov, newRefdef.width, newRefdef.height );
+		AdjustFov( &newRefdef.fov_x, &newRefdef.fov_y, glConfig.width, glConfig.height, false );
+	}
+
+	auto *stateForSkyPortalCamera = setupStateForCamera( &newRefdef, stateForPrimaryCamera->sceneIndex, CameraOverrideParams {
+		.pvsOrigin          = skyportal->vieworg,
+		.lodOrigin          = skyportal->vieworg,
+		.renderFlagsToAdd   = (unsigned)( RF_PORTALVIEW | RF_NOOCCLUSIONCULLING | ( skyportal->noEnts ? RF_ENVVIEW : 0 ) ),
+		.renderFlagsToClear = ( RDF_UNDERWATER | RDF_CROSSINGWATER | RDF_SKYPORTALINVIEW ),
+	});
+
+	if( stateForSkyPortalCamera ) {
+		// Won't overflow as we won't allocate that much in the first place
+		stateForPrimaryCamera->portalCameraStates.push_back( stateForSkyPortalCamera );
+		stateForPrimaryCamera->stateForSkyPortalCamera = stateForSkyPortalCamera;
+	}
 }
 
 }
