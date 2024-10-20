@@ -53,7 +53,7 @@ FocusScope {
     function applyActiveFocus() {
         if (root.activeFocus) {
             if (buttonsRepeater.numInstantiatedItems === root.numButtons) {
-                if (contentLoader.item) {
+                if (contentLoader.item && contentLoader.item.hasOwnProperty("focusable")) {
                     contentLoader.item.forceActiveFocus()
                 } else {
                     for (let i = 0; i < root.buttonFocusStatuses.length; ++i) {
@@ -97,6 +97,7 @@ FocusScope {
     Connections {
         target: contentLoader.item
         enabled: contentLoader.item && contentLoader.item.hasOwnProperty("focusable")
+        ignoreUnknownSignals: true
         onFocusableChanged: root.setupKeyNavigation()
     }
 

@@ -119,6 +119,9 @@ public:
 
 	virtual void notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour reconnectBehaviour, ConnectionDropStage dropStage ) = 0;
 
+	virtual void notifyOfUpdateAvailable( const wsw::StringView &version ) = 0;
+	virtual void notifyOfUpdateNotFound() = 0;
+
 	virtual void dispatchShuttingDown() = 0;
 
 	[[nodiscard]]

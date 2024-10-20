@@ -70,6 +70,9 @@ static cvar_t *cl_downloads_from_web;
 static cvar_t *cl_downloads_from_web_timeout;
 static cvar_t *cl_download_allow_modules;
 
+static cvar_t *cl_checkForUpdate;
+static cvar_t *cl_checkForUpdateTimeout;
+
 static char cl_nextString[MAX_STRING_CHARS];
 static char cl_connectChain[MAX_STRING_CHARS];
 
@@ -5083,6 +5086,9 @@ static void CL_InitLocal( void ) {
 	cl_downloads_from_web_timeout = Cvar_Get( "cl_downloads_from_web_timeout", "600", CVAR_ARCHIVE );
 	cl_download_allow_modules = Cvar_Get( "cl_download_allow_modules", "1", CVAR_ARCHIVE );
 
+	cl_checkForUpdate        = Cvar_Get( "cl_checkForUpdate", "1", CVAR_ARCHIVE );
+	cl_checkForUpdateTimeout = Cvar_Get( "cl_checkForUpdateTimeout", "3", CVAR_ARCHIVE );
+
 	//
 	// userinfo
 	//
@@ -5634,6 +5640,90 @@ void CL_AsyncStreamRequest( const char *url, const char **headers, int timeout, 
 	}
 }
 
+static wsw::PodVector<char> updateRemoteData;
+static volatile bool isAwaitingUpdateCheck = false;
+
+static void CL_CheckForUpdateDoneCb( int status, const char *contentType, void *privatep ) {
+	char net_version_str[16];
+	net_version_str[0] = '\0';
+
+	if( status == 200 ) {
+		updateRemoteData.append( '\0' );
+
+		// got the file
+		// this look stupid but is the safe way to do it
+		const float localVersion = atof( va( "%4.3f", APP_VERSION ) );
+		const float netVersion = atof( updateRemoteData.data() );
+
+		// we have the version
+		//Com_Printf("CheckForUpdate: local: %f net: %f\n", local_version, net_version);
+		if( netVersion > localVersion ) {
+			char cmd[1024];
+
+			Q_snprintfz( net_version_str, sizeof( net_version_str ), "%4.3f", netVersion );
+			const char *s = net_version_str + strlen( net_version_str ) - 1;
+			while( *s == '0' ) {
+				s--;
+			}
+			if( *s == '.' && *( s+1 ) == '0' ) {
+				// for whole version numbers
+				s++;
+			}
+
+			net_version_str[s-net_version_str+1] = '\0';
+			Com_Printf( APPLICATION " version %s is available.\nVisit " APP_URL " for more information\n", net_version_str );
+			//Cbuf_ExecuteText( EXEC_APPEND, cmd );
+		} else if( netVersion == localVersion ) {
+			Com_Printf( "Your %s version is up-to-date.\n", APPLICATION );
+		}
+	}
+
+	updateRemoteData.clear();
+	updateRemoteData.shrink_to_fit();
+	isAwaitingUpdateCheck = false;
+
+	if( net_version_str[0] != '\0' ) {
+		wsw::ui::UISystem::instance()->notifyOfUpdateAvailable( wsw::StringView( net_version_str ) );
+	} else {
+		wsw::ui::UISystem::instance()->notifyOfUpdateNotFound();
+	}
+}
+
+static size_t CL_CheckForUpdateReadCb( const void *buf, size_t numb, float percentage,
+									   int status, const char *contentType, void *privatep ) {
+	if( status < 0 || status >= 300 ) {
+		return 0;
+	}
+	updateRemoteData.append( (const char *)buf, numb );
+	return numb;
+}
+
+static void CL_CheckForUpdate() {
+	if( cl_checkForUpdate->integer ) {
+		Com_Printf( "Checking for " APPLICATION " update.\n" );
+
+		char url[MAX_STRING_CHARS];
+		Q_snprintfz( url, sizeof( url ), "%s%s", APP_UPDATE_URL, APP_CLIENT_UPDATE_FILE );
+
+		const char *headers[4] { nullptr, nullptr, nullptr, nullptr };
+		CL_AddSessionHttpRequestHeaders( url, &headers[0] );
+
+		isAwaitingUpdateCheck = true;
+
+		const int timeout = wsw::clamp( cl_checkForUpdateTimeout->integer, 1, 5 );
+		CL_AsyncStreamRequest( url, headers, timeout, 0, CL_CheckForUpdateReadCb, CL_CheckForUpdateDoneCb, nullptr, nullptr, false );
+
+		// It's easier to check it once at start in a blocking fashion, considering the tiny amount of data to download
+		do {
+			Sys_Sleep( 16 );
+			wswcurl_perform();
+		} while( isAwaitingUpdateCheck );
+	} else {
+		// Hide the update plaque
+		wsw::ui::UISystem::instance()->notifyOfUpdateNotFound();
+	}
+}
+
 void CL_Init( void ) {
 
 	assert( !cl_initialized );
@@ -5684,6 +5774,8 @@ void CL_Init( void ) {
 	CL_InitMedia();
 
 	ML_Init();
+
+	CL_CheckForUpdate();
 }
 
 /*

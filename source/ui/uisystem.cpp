@@ -210,6 +210,9 @@ public:
 
 	void notifyOfDroppedConnection( const wsw::StringView &message, ReconnectBehaviour rectonnectBehaviour, ConnectionDropStage dropStage );
 
+	void notifyOfUpdateAvailable( const wsw::StringView &version ) override;
+	void notifyOfUpdateNotFound() override;
+
 	Q_INVOKABLE void stopReactingToDroppedConnection() { m_pendingReconnectBehaviour = std::nullopt; }
 
 	void dispatchShuttingDown() override { Q_EMIT shuttingDown(); }
@@ -230,6 +233,7 @@ public:
 	Q_PROPERTY( bool isShowingInGameMenu READ isShowingInGameMenu NOTIFY isShowingInGameMenuChanged );
 	Q_PROPERTY( bool isShowingDemoPlaybackMenu READ isShowingDemoPlaybackMenu NOTIFY isShowingDemoPlaybackMenuChanged );
 	Q_PROPERTY( bool isShowingIntroScreen READ isShowingIntroScreen NOTIFY isShowingIntroScreenChanged );
+	Q_PROPERTY( bool isShowingUpdateScreen READ isShowingUpdateScreen NOTIFY isShowingUpdateScreenChanged );
 
 	Q_PROPERTY( bool isDebuggingNativelyDrawnItems READ isDebuggingNativelyDrawnItems NOTIFY isDebuggingNativelyDrawnItemsChanged );
 
@@ -246,6 +250,9 @@ public:
 	Q_PROPERTY( bool isShowingHud MEMBER m_isShowingHud NOTIFY isShowingHudChanged );
 
 	Q_PROPERTY( bool isShowingActionRequests READ isShowingActionRequests NOTIFY isShowingActionRequestsChanged );
+
+	Q_SIGNAL void availableUpdateVersionChanged( const QString &version );
+	Q_PROPERTY( QString availableUpdateVersion MEMBER m_availableUpdateVersion NOTIFY availableUpdateVersionChanged );
 
 	// Asks Qml
 	Q_SIGNAL void displayedHudItemsRetrievalRequested();
@@ -301,6 +308,8 @@ public:
 	Q_INVOKABLE void returnFromInGameMenu();
 	Q_INVOKABLE void returnFromMainMenu();
 	Q_INVOKABLE void finishIntro();
+	Q_INVOKABLE void hideUpdates();
+	Q_INVOKABLE void downloadUpdates();
 
 	Q_INVOKABLE void closeChatPopup();
 
@@ -446,6 +455,7 @@ signals:
 	Q_SIGNAL void isShowingConnectionScreenChanged( bool isShowingConnectionScreen );
 	Q_SIGNAL void isShowingInGameMenuChanged( bool isShowingInGameMenu );
 	Q_SIGNAL void isShowingIntroScreenChanged( bool isShowingIntroScreen );
+	Q_SIGNAL void isShowingUpdateScreenChanged( bool isShowingUpdateScreen );
 
 	Q_SIGNAL void isShowingDemoPlaybackMenuChanged( bool isShowingDemoMenu );
 	Q_SIGNAL void isDebuggingNativelyDrawnItemsChanged( bool isDebuggingNativelyDrawnItems );
@@ -481,8 +491,11 @@ private:
 
 	// &'static so the value is preserved upon restarts
 	static inline bool s_hasFinishedIntro { false };
-	bool m_hasPendingIntroFinish { false };
+	static inline bool s_hasDisplayedUpdates { false };
+
+	bool m_pendingFinishIntro { false };
 	bool m_hasCheckedFirstFrame { false };
+	bool m_pendingHideUpdates { false };
 
 	int64_t m_lastDrawMenuPartTimestamp { 0 };
 
@@ -545,6 +558,8 @@ private:
 	HudCommonDataModel m_hudCommonDataModel;
 	HudPovDataModel m_hudPovDataModel;
 
+	QString m_availableUpdateVersion;
+
 	QString m_pendingDroppedConnectionTitle;
 	QString m_droppedConnectionTitle;
 	QString m_pendingDroppedConnectionMessage;
@@ -562,6 +577,7 @@ private:
 		InGameMenu           = 1 << 2,
 		DemoPlaybackMenu     = 1 << 3,
 		IntroScreen          = 1 << 4,
+		UpdateScreen         = 1 << 5,
 	};
 
 	unsigned m_activeMenuMask { 0 };
@@ -664,6 +680,8 @@ private:
 	bool isShowingInGameMenu() const { return ( m_activeMenuMask & InGameMenu ) != 0; }
 	[[nodiscard]]
 	bool isShowingIntroScreen() const { return ( m_activeMenuMask & IntroScreen ) != 0; }
+	[[nodiscard]]
+	bool isShowingUpdateScreen() const { return ( m_activeMenuMask & UpdateScreen ) != 0; }
 
 	[[nodiscard]]
 	bool isShowingActionRequests() const { return m_isShowingActionRequests; }
@@ -1450,7 +1468,7 @@ void QtUISystem::drawBackgroundMapIfNeeded() {
 		return;
 	}
 
-	if( !( m_activeMenuMask & ( MainMenu | IntroScreen ) ) ) {
+	if( !( m_activeMenuMask & ( MainMenu | IntroScreen | UpdateScreen ) ) ) {
 		return;
 	}
 
@@ -1505,7 +1523,16 @@ void QtUISystem::returnFromMainMenu() {
 }
 
 void QtUISystem::finishIntro() {
-	m_hasPendingIntroFinish = true;
+	m_pendingFinishIntro = true;
+}
+
+void QtUISystem::hideUpdates() {
+	m_pendingHideUpdates = true;
+}
+
+void QtUISystem::downloadUpdates() {
+	Sys_OpenURLInBrowser( APP_URL );
+	quit();
 }
 
 void QtUISystem::closeChatPopup() {
@@ -1537,6 +1564,7 @@ void QtUISystem::setActiveMenuMask( unsigned activeMask ) {
 	const bool wasShowingInGameMenu = isShowingInGameMenu();
 	const bool wasShowingDemoPlaybackMenu = isShowingDemoPlaybackMenu();
 	const bool wasShowingIntroScreen = isShowingIntroScreen();
+	const bool wasShowingUpdateScreen = isShowingUpdateScreen();
 
 	m_activeMenuMask = activeMask;
 
@@ -1545,6 +1573,7 @@ void QtUISystem::setActiveMenuMask( unsigned activeMask ) {
 	const bool _isShowingInGameMenu = isShowingInGameMenu();
 	const bool _isShowingDemoPlaybackMenu = isShowingDemoPlaybackMenu();
 	const bool _isShowingIntroScreen = isShowingIntroScreen();
+	const bool _isShowingUpdateScreen = isShowingUpdateScreen();
 
 	if( wasShowingMainMenu != _isShowingMainMenu ) {
 		Q_EMIT isShowingMainMenuChanged( _isShowingMainMenu );
@@ -1561,6 +1590,9 @@ void QtUISystem::setActiveMenuMask( unsigned activeMask ) {
 	if( wasShowingIntroScreen != _isShowingIntroScreen ) {
 		Q_EMIT isShowingIntroScreenChanged( _isShowingIntroScreen );
 	}
+	if( wasShowingUpdateScreen != _isShowingUpdateScreen ) {
+		Q_EMIT isShowingUpdateScreenChanged( _isShowingUpdateScreen );
+	}
 
 	if( m_activeMenuMask && !oldActiveMask ) {
 		CL_ClearInputState();
@@ -1576,9 +1608,10 @@ void QtUISystem::refreshProperties() {
 	const bool isPlayingADemo = cls.demoPlayer.playing;
 	m_isPlayingADemo = isPlayingADemo;
 
-	if( !s_hasFinishedIntro ) {
+	if( !s_hasFinishedIntro || !s_hasDisplayedUpdates ) {
 		if( actualClientState > CA_DISCONNECTED || m_pendingReconnectBehaviour != std::nullopt ) {
-			m_hasPendingIntroFinish = true;
+			m_pendingFinishIntro = true;
+			m_pendingHideUpdates = true;
 		}
 	}
 
@@ -1591,10 +1624,16 @@ void QtUISystem::refreshProperties() {
 		checkMaskChanges = true;
 	}
 
-	if( m_hasPendingIntroFinish ) {
-		s_hasFinishedIntro = true;
-		m_hasPendingIntroFinish = false;
-		checkMaskChanges = true;
+	if( m_pendingFinishIntro ) {
+		s_hasFinishedIntro   = true;
+		m_pendingFinishIntro = false;
+		checkMaskChanges     = true;
+	}
+
+	if( m_pendingHideUpdates ) {
+		s_hasDisplayedUpdates = true;
+		m_pendingHideUpdates  = false;
+		checkMaskChanges      = true;
 	}
 
 	if( m_hasCheckedFirstFrame ) {
@@ -1606,7 +1645,9 @@ void QtUISystem::refreshProperties() {
 		const bool wasShowingScoreboard = m_isShowingScoreboard;
 		const bool wasShowingChatPopup = m_isShowingChatPopup;
 		const bool wasShowingTeamChatPopup = m_isShowingTeamChatPopup;
-		if( !s_hasFinishedIntro ) {
+		if( !s_hasDisplayedUpdates ) {
+			setActiveMenuMask( UpdateScreen );
+		} else if( !s_hasFinishedIntro ) {
 			setActiveMenuMask( IntroScreen );
 		} else if( m_pendingReconnectBehaviour ) {
 			m_reconnectBehaviour = m_pendingReconnectBehaviour;
@@ -2530,7 +2571,7 @@ void QtUISystem::setScoreboardShown( bool shown ) {
 }
 
 bool QtUISystem::suggestsUsingVSync() const {
-	return ( m_activeMenuMask & ( MainMenu | InGameMenu | ConnectionScreen | IntroScreen ) ) != 0;
+	return ( m_activeMenuMask & ( MainMenu | InGameMenu | ConnectionScreen | IntroScreen | UpdateScreen ) ) != 0;
 }
 
 void QtUISystem::toggleChatPopup() {
@@ -2633,6 +2674,18 @@ void QtUISystem::notifyOfDroppedConnection( const wsw::StringView &message, Reco
 	m_pendingReconnectBehaviour = (ReconnectBehaviour_)reconnectBehaviour;
 }
 
+void QtUISystem::notifyOfUpdateAvailable( const wsw::StringView &version ) {
+	const QLatin1String qtCompatVersion( version.data(), (int)version.size() );
+	if( m_availableUpdateVersion.compare( qtCompatVersion ) != 0 ) {
+		m_availableUpdateVersion = qtCompatVersion;
+		Q_EMIT availableUpdateVersionChanged( m_availableUpdateVersion );
+	}
+}
+
+void QtUISystem::notifyOfUpdateNotFound() {
+	m_pendingHideUpdates = true;
+}
+
 template <typename Value>
 void QtUISystem::appendSetCVarCommand( const wsw::StringView &name, const Value &value ) {
 	wsw::StaticString<256> command;
@@ -2675,7 +2728,7 @@ void QtUISystem::launchLocalServer( const QByteArray &gametype, const QByteArray
 
 bool QtUISystem::isShowingModalMenu() const {
 	if( m_menuSandbox ) {
-		return ( m_activeMenuMask & ( InGameMenu | MainMenu | IntroScreen ) ) != 0;
+		return ( m_activeMenuMask & ( InGameMenu | MainMenu | IntroScreen | UpdateScreen ) ) != 0;
 	}
 	return false;
 }

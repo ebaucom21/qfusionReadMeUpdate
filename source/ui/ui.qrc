@@ -121,6 +121,7 @@
         <file>UITextField.qml</file>
         <file>UISpinBox.qml</file>
         <file>UI.qml</file>
+        <file>UpdateScreen.qml</file>
         <file>Hud.qml</file>
         <file>qmldir</file>
         <file>qtquickcontrols2.conf</file>

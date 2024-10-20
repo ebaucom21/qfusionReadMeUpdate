@@ -23,7 +23,8 @@ Item {
     }
 
     Keys.forwardTo: [
-        introLoader.item, mainMenuLoader.item, connectionScreenLoader.item, demoPlaybackMenuLoader.item, inGameMenuLoader.item
+        updateScreenLoader.item, introScreenLoader.item, mainMenuLoader.item, connectionScreenLoader.item,
+        demoPlaybackMenuLoader.item, inGameMenuLoader.item
     ]
 
     Item {
@@ -33,8 +34,9 @@ Item {
         property real horizontalRadius: rootItem.width
         property real tintAlpha: 0.03
 
-        property color baseTintColor: (UI.ui.isShowingIntroScreen || (UI.ui.isShowingMainMenu && UI.ui.isClientDisconnected)) ?
-            Material.accent : (UI.ui.isShowingConnectionScreen ? "white" : Qt.lighter(Material.background, 1.5))
+        property color baseTintColor: (UI.ui.isShowingIntroScreen || UI.ui.isShowingUpdateScreen ||
+            (UI.ui.isShowingMainMenu && UI.ui.isClientDisconnected)) ?
+                Material.accent : (UI.ui.isShowingConnectionScreen ? "white" : Qt.lighter(Material.background, 1.5))
         Behavior on baseTintColor { ColorAnimation { duration: 100 } }
 
         readonly property color gradientCentralColor:
@@ -112,7 +114,8 @@ Item {
         Loader {
             id: gradientLoader
             anchors.fill: parent
-            active: mainMenuLoader.active || connectionScreenLoader.active || inGameMenuLoader.active || scoreboardLoader.active || introLoader.active
+            active: mainMenuLoader.active || connectionScreenLoader.active || inGameMenuLoader.active ||
+                scoreboardLoader.active || introScreenLoader.active || updateScreenLoader.active
             sourceComponent: gradientComponent
         }
 
@@ -152,10 +155,17 @@ Item {
         }
 
         Loader {
-            id: introLoader
+            id: introScreenLoader
             active: UI.ui.isShowingIntroScreen
             anchors.fill: parent
             sourceComponent: IntroScreen {}
+        }
+
+        Loader {
+            id: updateScreenLoader
+            active: UI.ui.isShowingUpdateScreen
+            anchors.fill: parent
+            sourceComponent: UpdateScreen {}
         }
     }
 
