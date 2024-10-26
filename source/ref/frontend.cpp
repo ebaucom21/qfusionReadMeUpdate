@@ -358,6 +358,10 @@ auto Frontend::allocStateForCamera() -> StateForCamera * {
 	stateForCamera->dynamicMeshDrawSurfaces = resultStorage->dynamicMeshDrawSurfacesBuffer.get();
 	assert( stateForCamera->numDynamicMeshDrawSurfaces == 0 );
 
+	resultStorage->lightSpansForParticleAggregatesBuffer.resize( Scene::kMaxParticleAggregates );
+	stateForCamera->lightSpansForParticleAggregates   = resultStorage->lightSpansForParticleAggregatesBuffer.data();
+	stateForCamera->lightIndicesForParticleAggregates = &resultStorage->lightIndicesForParticleAggregatesBuffer;
+
 	return stateForCamera;
 }
 
@@ -787,11 +791,35 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 	std::span<const uint16_t> visibleProgramLightIndices[MAX_REF_CAMERAS];
 	std::span<const uint16_t> visibleCoronaLightIndices[MAX_REF_CAMERAS];
 	if( r_dynamiclight->integer ) {
-		for( unsigned i = 0; i < scenesAndCameras.size(); ++i ) {
-			auto [scene, stateForCamera] = scenesAndCameras[i];
+		for( unsigned cameraIndex = 0; cameraIndex < scenesAndCameras.size(); ++cameraIndex ) {
+			auto [scene, stateForCamera] = scenesAndCameras[cameraIndex];
 			const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
-			std::tie( visibleProgramLightIndices[i], visibleCoronaLightIndices[i] ) =
+			std::tie( visibleProgramLightIndices[cameraIndex], visibleCoronaLightIndices[cameraIndex] ) =
 				self->collectVisibleLights( stateForCamera, scene, occluderFrusta );
+
+			// Precache light indices for particle aggregates
+			const unsigned numParticleAggregates = scene->m_particles.size();
+			if( numParticleAggregates && stateForCamera->numAllVisibleLights ) {
+				std::pair<unsigned, unsigned> *const spansTable = stateForCamera->lightSpansForParticleAggregates;
+				uint16_t *const lightIndicesBuffer              = stateForCamera->lightIndicesForParticleAggregates
+					->reserveAndGet( numParticleAggregates * stateForCamera->numAllVisibleLights );
+				const std::span<uint16_t> availableLightIndices {
+					stateForCamera->allVisibleLightIndices, stateForCamera->numAllVisibleLights
+				};
+				unsigned indicesOffset = 0;
+				for( unsigned aggregateIndex = 0; aggregateIndex < numParticleAggregates; ++aggregateIndex ) {
+					const Scene::ParticlesAggregate *aggregate = scene->m_particles.data() + aggregateIndex;
+					const unsigned numAffectingLights = findLightsThatAffectBounds( scene->m_dynamicLights.data(),
+																					availableLightIndices,
+																					aggregate->mins, aggregate->maxs,
+																					lightIndicesBuffer + indicesOffset );
+					spansTable[aggregateIndex].first  = indicesOffset;
+					spansTable[aggregateIndex].second = numAffectingLights;
+					indicesOffset += numAffectingLights;
+				}
+				// Save this flag to reduce the amount of further tests for individual batches
+				stateForCamera->canAddLightsToParticles = true;
+			}
 		}
 	}
 

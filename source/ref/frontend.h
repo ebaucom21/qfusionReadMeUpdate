@@ -229,6 +229,10 @@ private:
 		ParticleDrawSurface *particleDrawSurfaces;
 		DynamicMeshDrawSurface *dynamicMeshDrawSurfaces;
 
+		// A table of pairs (span offset, span length)
+		std::pair<unsigned, unsigned> *lightSpansForParticleAggregates;
+		PodBufferHolder<uint16_t> *lightIndicesForParticleAggregates;
+
 		unsigned numDynamicMeshDrawSurfaces { 0 };
 
 		// Saved intermediate results of the world occlusion stage in addition to respective filled buffers
@@ -238,6 +242,7 @@ private:
 		bool drawWorld { false };
 		bool useOcclusionCulling { false };
 		bool useWorldBspOcclusionCulling { false };
+		bool canAddLightsToParticles { false };
 
 		// Includes stateForSkyPortalCamera
 		wsw::StaticVector<StateForCamera *, MAX_REF_CAMERAS> portalCameraStates;
@@ -657,6 +662,10 @@ private:
 		PodBufferHolder<uint32_t> leafLightBitsOfSurfacesBuffer;
 
 		PodBufferHolder<ParticleDrawSurface> particleDrawSurfacesBuffer;
+
+		// TODO: Allow storing std::pair<PodType, PodType> in PodBufferHolder
+		wsw::PodVector<std::pair<unsigned, unsigned>> lightSpansForParticleAggregatesBuffer;
+		PodBufferHolder<uint16_t> lightIndicesForParticleAggregatesBuffer;
 
 		StateForCameraStorage *prev { nullptr }, *next { nullptr };
 	};

@@ -604,29 +604,6 @@ struct MeshBuilder {
 
 static thread_local MeshBuilder tl_meshBuilder;
 
-static auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::span<const uint16_t> lightIndicesSpan,
-										const float *mins, const float *maxs, uint16_t *affectingLightIndices ) -> unsigned {
-	assert( mins[3] == 0.0f && maxs[3] == 1.0f );
-
-	const uint16_t *lightIndices = lightIndicesSpan.data();
-	const auto numLights         = (unsigned)lightIndicesSpan.size();
-
-	unsigned lightIndexNum = 0;
-	unsigned numAffectingLights = 0;
-	do {
-		const uint16_t lightIndex = lightIndices[lightIndexNum];
-		const Scene::DynamicLight *light = lights + lightIndex;
-
-		// TODO: Use SIMD explicitly without these redundant loads/shuffles
-		const bool overlaps = BoundsIntersect( light->mins, light->maxs, mins, maxs );
-
-		affectingLightIndices[numAffectingLights] = lightIndex;
-		numAffectingLights += overlaps;
-	} while( ++lightIndexNum < numLights );
-
-	return numAffectingLights;
-}
-
 void Frontend::prepareDynamicMesh( DynamicMeshFillDataWorkload *workload ) {
 	assert( workload->drawSurface );
 	const DynamicMesh *dynamicMesh = workload->drawSurface->dynamicMesh;
@@ -981,20 +958,12 @@ void Frontend::prepareBatchedParticles( PrepareBatchedSurfWorkload *workload ) {
 
 	const Particle::AppearanceRules *const appearanceRules = &aggregate->appearanceRules;
 
-	unsigned numAffectingLights     = 0;
-	uint16_t *affectingLightIndices = nullptr;
 	std::span<const uint16_t> lightIndicesSpan;
-
-	if( appearanceRules->applyVertexDynLight && r_dynamiclight->integer ) {
-		const std::span<uint16_t> allVisibleLightIndices = workload->stateForCamera->allVisibleLightIndices;
-		if( !allVisibleLightIndices.empty() ) {
-			affectingLightIndices = (uint16_t *)alloca( sizeof( uint16_t ) * allVisibleLightIndices.size() );
-
-			numAffectingLights = findLightsThatAffectBounds( scene->m_dynamicLights.data(), allVisibleLightIndices,
-															 aggregate->mins, aggregate->maxs, affectingLightIndices );
-
-			lightIndicesSpan = { affectingLightIndices, numAffectingLights };
-		}
+	if( appearanceRules->applyVertexDynLight && stateForCamera->canAddLightsToParticles ) {
+		const std::span<const uint16_t> allVisibleLightIndices = stateForCamera->allVisibleLightIndices;
+		assert( !allVisibleLightIndices.empty() );
+		const auto [offset, numLights] = stateForCamera->lightSpansForParticleAggregates[firstDrawSurf->aggregateIndex];
+		lightIndicesSpan = { stateForCamera->lightIndicesForParticleAggregates->get() + offset, numLights };
 	}
 
 	MeshBuilder *const meshBuilder = &tl_meshBuilder;

@@ -1673,6 +1673,10 @@ wsw_forceinline bool doOverlapTestFor14Dops( const float *mins1, const float *ma
 	return _mm_movemask_ps( _mm_or_ps( _mm_or_ps( cmp1, cmp2 ), _mm_or_ps( cmp3, cmp4 ) ) ) == 0;
 }
 
+[[nodiscard]]
+auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::span<const uint16_t> lightIndicesSpan,
+								 const float *mins, const float *maxs, uint16_t *affectingLightIndices ) -> unsigned;
+
 inline unsigned R_PackSortKey( unsigned shaderNum, int fogNum,
 							   int portalNum, unsigned entNum ) {
 	return ( shaderNum & 0x7FF ) << 21 | ( entNum & 0x7FF ) << 10 |

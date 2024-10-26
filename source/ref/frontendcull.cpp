@@ -76,6 +76,29 @@ void Frustum::setupFor4Planes( const float *viewOrigin, const mat3_t viewAxis, f
 	}
 }
 
+auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::span<const uint16_t> lightIndicesSpan,
+								 const float *mins, const float *maxs, uint16_t *affectingLightIndices ) -> unsigned {
+	assert( mins[3] == 0.0f && maxs[3] == 1.0f );
+
+	const uint16_t *lightIndices = lightIndicesSpan.data();
+	const auto numLights         = (unsigned)lightIndicesSpan.size();
+
+	unsigned lightIndexNum = 0;
+	unsigned numAffectingLights = 0;
+	do {
+		const uint16_t lightIndex = lightIndices[lightIndexNum];
+		const Scene::DynamicLight *light = lights + lightIndex;
+
+		// TODO: Use SIMD explicitly without these redundant loads/shuffles
+		const bool overlaps = BoundsIntersect( light->mins, light->maxs, mins, maxs );
+
+		affectingLightIndices[numAffectingLights] = lightIndex;
+		numAffectingLights += overlaps;
+	} while( ++lightIndexNum < numLights );
+
+	return numAffectingLights;
+}
+
 namespace wsw::ref {
 
 void Frontend::collectVisiblePolys( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta ) {
