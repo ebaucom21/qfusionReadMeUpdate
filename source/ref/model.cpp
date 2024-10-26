@@ -1082,6 +1082,22 @@ void Mod_CreateVertexBufferObjects( model_t *mod ) {
 	}
 }
 
+static void Mod_CreateSkydome( model_t *mod ) {
+	mbrushmodel_t *loadbmodel = (( mbrushmodel_t * )mod->extradata);
+	for( unsigned i = 0; i < loadbmodel->numsubmodels; i++ ) {
+		mmodel_t *bm = loadbmodel->submodels + i;
+
+		msurface_t *surf;
+		unsigned j;
+		for( j = 0, surf = loadbmodel->surfaces + bm->firstModelSurface; j < bm->numModelSurfaces; j++, surf++ ) {
+			if( surf->shader->flags & SHADER_SKY ) {
+				loadbmodel->skyShader = surf->shader;
+				return;
+			}
+		}
+	}
+}
+
 static void Mod_FinalizeBrushModel( model_t *model ) {
 	Mod_FinishFaces( model );
 
@@ -1090,6 +1106,8 @@ static void Mod_FinalizeBrushModel( model_t *model ) {
 	Mod_CreateVertexBufferObjects( model );
 
 	Mod_SetupSubmodels( model );
+
+	Mod_CreateSkydome( model );
 }
 
 static void Mod_TouchBrushModel( model_t *model ) {

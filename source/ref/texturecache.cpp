@@ -196,6 +196,13 @@ auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned fla
 	return getTexture( name, ""_asView, flags, &m_materialCubemapsHead, m_materialCubemapBins, &TextureFactory::loadMaterialCubemap );
 }
 
+bool TextureCache::addTextureColorsToHistogram( const wsw::StringView &name, const wsw::StringView &suffix, TextureHistogram *histogram ) {
+	if( const auto maybeCleanName = makeCleanName( name, suffix ) ) {
+		return m_factory.addTextureColorsToHistogram( *maybeCleanName, histogram );
+	}
+	return false;
+}
+
 auto TextureCache::wrapTextureHandle( GLuint externalHandle, Texture *reuse ) -> Texture * {
 	assert( reuse );
 	reuse->texnum  = externalHandle;

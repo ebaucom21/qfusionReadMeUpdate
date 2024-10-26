@@ -47,6 +47,7 @@ typedef enum {
 // shader flags
 enum {
 	SHADER_DEPTHWRITE               = 1 << 0,
+	SHADER_SKY                      = 1 << 1,
 	SHADER_CULL_FRONT               = 1 << 2,
 	SHADER_CULL_BACK                = 1 << 3,
 	SHADER_POLYGONOFFSET            = 1 << 4,
@@ -287,6 +288,8 @@ typedef struct alignas( 8 ) shader_s {
 	uint8_t fog_color[4] { 0, 0, 0, 0 };
 	float fog_dist { 0.0f };
 	float fog_clearDist { 0.0f };
+
+	uint8_t skyColor[4] { 0, 0, 0, 0 };
 
 	float glossIntensity { 0.0f };
 	float glossExponent { 0.0f };

@@ -23,6 +23,8 @@
 #include "../../third-party/stb/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../third-party/stb/stb_image_write.h"
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "../../third-party/stb/stb_image_resize2.h"
 
 namespace wsw {
 
@@ -131,6 +133,16 @@ auto decodeImageData( const void *rawImageData, size_t rawImageDataSize, unsigne
 			*samples = (unsigned)intSamples;
 		}
 		return (uint8_t *)bytes;
+	}
+	return nullptr;
+}
+
+[[nodiscard]]
+auto scaleImageData( const void *srcImageData, unsigned srcWidth, unsigned srcHeight,
+					 unsigned desiredWidth, unsigned desiredHeight, int samples ) -> uint8_t * {
+	if( samples == 1 || samples == 3 || samples == 4 ) {
+		return stbir_resize_uint8_linear( (const uint8_t *)srcImageData, (int)srcWidth, (int)srcHeight, 0, nullptr,
+										  (int)desiredWidth, (int)desiredHeight, 0, (stbir_pixel_layout)samples );
 	}
 	return nullptr;
 }

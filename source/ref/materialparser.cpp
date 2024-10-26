@@ -4,6 +4,7 @@
 #include "shader.h"
 
 #include "../common/hash.h"
+#include "../common/wswalgorithm.h"
 
 static bool isANumber( const wsw::StringView &view ) {
 	for( char ch: view ) {
@@ -879,18 +880,116 @@ bool MaterialParser::parseCull() {
 }
 
 bool MaterialParser::parseSkyParms() {
-	// TODO: Implement...
-	return true;
+	return parseSkyParmsWithOptions( { .custom = false, .underscore = true } );
 }
 
 bool MaterialParser::parseSkyParms2() {
-	// TODO: Implement
-	return true;
+	return parseSkyParmsWithOptions( { .custom = false, .underscore = false } );
 }
 
 bool MaterialParser::parseSkyParmsSides() {
-	// TODO: Implement
+	return parseSkyParmsWithOptions( { .custom = true, .underscore = false } );
+}
+
+bool MaterialParser::parseSkyParmsWithOptions( const SkyParmOptions &options ) {
+	TextureHistogram histogram;
+	bool succeeded;
+	if( options.custom ) {
+		succeeded = parseCustomSkySides( &histogram );
+	} else {
+		succeeded = parseSkySides( &histogram, options.underscore );
+	}
+	if( succeeded ) {
+		if( const auto maybeColor = histogram.findDominantColor() ) {
+			m_skyColor[0] = COLOR_R( *maybeColor );
+			m_skyColor[1] = COLOR_G( *maybeColor );
+			m_skyColor[2] = COLOR_B( *maybeColor );
+			m_skyColor[3] = 255;
+		}
+	}
+
+	m_flags |= SHADER_SKY;
+	// Follow the original lenient behavior
 	return true;
+}
+
+bool MaterialParser::parseSkySides( TextureHistogram *histogram, bool useUnderscore ) {
+	const wsw::StringView firstToken = m_lexer->getNextTokenInLine().value_or( "-"_asView );
+	if( firstToken != "-"_asView ) {
+		const wsw::StringView names[6] {
+			"rt"_asView, "bk"_asView, "lf"_asView, "ft"_asView, "up"_asView, "dn"_asView
+		};
+		const wsw::StringView altNames[6] {
+			"px"_asView, "py"_asView, "nx"_asView, "ny"_asView, "pz"_asView, "nz"_asView
+		};
+		bool succeeed = false;
+		for( int attempt = 0; attempt < 2; ++attempt ) {
+			histogram->clear();
+			int side = 0;
+			for(; side < 6; ++side ) {
+				wsw::StaticString<3> suffix;
+				if( useUnderscore ) {
+					suffix.append( '_' );
+				}
+				suffix.append( attempt ? altNames[side] : names[side] );
+				if( !TextureCache::instance()->addTextureColorsToHistogram( firstToken, suffix.asView(),
+																			side != 5 ? histogram : nullptr ) ) {
+					break;
+				}
+			}
+			if( side == 6 ) {
+				succeeed = true;
+				break;
+			}
+		}
+		return succeeed;
+	}
+	return false;
+}
+
+bool MaterialParser::parseCustomSkySides( TextureHistogram *histogram ) {
+	const wsw::StringView refNames[] { "rt"_asView, "bk"_asView, "lf"_asView, "ft"_asView, "up"_asView, "dn"_asView };
+	std::optional<int> refIndices[6];
+	wsw::StringView tokensForSides[6];
+	bool failed = false;
+	for( int side = 0; side < 6; ++side ) {
+		if( std::optional<wsw::StringView> token = m_lexer->getNextTokenInLine() ) {
+			const auto it = wsw::find_if( std::begin( refNames ), std::end( refNames ), [=]( const wsw::StringView &rn ) {
+				return rn.equalsIgnoreCase( *token );
+			});
+			if( it != std::end( refNames ) ) {
+				const auto index  = (int)( it - std::begin( refNames ) );
+				refIndices[index] = index;
+			} else {
+				if( !TextureCache::instance()->addTextureColorsToHistogram( *token, ""_asView,
+																			side != 5 ? histogram : nullptr ) ) {
+					failed = true;
+					break;
+				}
+				tokensForSides[side] = *token;
+			}
+		} else {
+			failed = true;
+			break;
+		}
+	}
+	if( !failed ) {
+		// Note: Excluding the bottom part during iteration, as we have already validated it during the first stage,
+		// and it should not contribute anything to the histogram.
+		for( int side = 0; side < 5; ++side ) {
+			if( refIndices[side] != std::nullopt ) {
+				const wsw::StringView &actualName = tokensForSides[*refIndices[side]];
+				assert( !actualName.empty() );
+				// Add contribution of the respective side to the histogram again, so it gets counts right.
+				// This is inefficient but we're talking about a hack anyway.
+				if( !TextureCache::instance()->addTextureColorsToHistogram( actualName, ""_asView, histogram ) ) {
+					failed = true;
+					break;
+				}
+			}
+		}
+	}
+	return !failed;
 }
 
 bool MaterialParser::parseFogParams() {
@@ -1561,6 +1660,8 @@ shader_t *MaterialParser::build() {
 	std::copy( std::begin( m_fog_color ), std::end( m_fog_color ), s->fog_color );
 	s->fog_dist = m_fog_dist;
 	s->fog_clearDist = m_fog_clearDist;
+
+	std::copy( std::begin( m_skyColor ), std::end( m_skyColor ), s->skyColor );
 
 	s->glossIntensity = m_glossIntensity;
 	s->glossExponent = m_glossExponent;

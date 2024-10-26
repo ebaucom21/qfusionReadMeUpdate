@@ -745,6 +745,8 @@ class MaterialParser {
 	float m_fog_dist { 0.0f };
 	float m_fog_clearDist { 0.0f };
 
+	uint8_t m_skyColor[4] { 0, 0, 0, 0 };
+
 	float m_glossIntensity { 0.0f };
 	float m_glossExponent { 0.0f };
 	float m_offsetMappingScale { 0.0f };
@@ -907,6 +909,14 @@ class MaterialParser {
 
 	[[nodiscard]]
 	bool parseFunc( shaderfunc_s *func );
+
+	struct SkyParmOptions { bool custom { false }, underscore { false }; };
+	[[nodiscard]]
+	bool parseSkyParmsWithOptions( const SkyParmOptions &options );
+	[[nodiscard]]
+	bool parseCustomSkySides( class TextureHistogram *rn );
+	[[nodiscard]]
+	bool parseSkySides( class TextureHistogram *histogram, bool useUnderscore );
 
 	template <typename... Args>
 	[[nodiscard]]

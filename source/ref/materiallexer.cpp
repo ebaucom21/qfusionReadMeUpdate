@@ -151,9 +151,9 @@ class MaterialKeyMatcher : public wsw::EnumTokenMatcher<MaterialKey, MaterialKey
 public:
 	MaterialKeyMatcher() : EnumTokenMatcher({
 		{ "Cull"_asView, MaterialKey::Cull },
-		{ "SkyParams"_asView, MaterialKey::SkyParams },
-		{ "SkyParams2"_asView, MaterialKey::SkyParams2 },
-		{ "SkyParamsSides"_asView, MaterialKey::SkyParamsSides },
+		{ "SkyParms"_asView, MaterialKey::SkyParams },
+		{ "SkyParms2"_asView, MaterialKey::SkyParams2 },
+		{ "SkyParmsSides"_asView, MaterialKey::SkyParamsSides },
 		{ "FogParms"_asView, MaterialKey::FogParams },
 		{ "FogParams"_asView, MaterialKey::FogParams },
 		{ "NoMipMaps"_asView, MaterialKey::NoMipMaps },

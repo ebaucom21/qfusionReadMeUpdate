@@ -372,6 +372,25 @@ protected:
 	void applyAniso( Texture *texture, int aniso );
 };
 
+class TextureHistogram {
+public:
+	TextureHistogram( const TextureHistogram & ) = delete;
+	auto operator=( const TextureHistogram & ) = delete;
+	TextureHistogram( TextureHistogram && ) = delete;
+	auto operator=( TextureHistogram && ) = delete;
+
+	TextureHistogram();
+	~TextureHistogram();
+
+	void addTexelColor( unsigned color );
+	void clear();
+	[[nodiscard]]
+	auto findDominantColor() const -> std::optional<unsigned>;
+private:
+	// Hide the heavyweight STL stuff in the private part
+	void *m_priv;
+};
+
 class TextureFactory : TextureManagementShared {
 private:
 	friend class TextureCache;
@@ -476,6 +495,9 @@ public:
 	auto loadMaterialCubemap( const wsw::HashedStringView &name, unsigned flags ) -> MaterialCubemap *;
 
 	[[nodiscard]]
+	bool addTextureColorsToHistogram( const wsw::StringView &path, TextureHistogram *histogram );
+
+	[[nodiscard]]
 	auto createFontMask( unsigned w, unsigned h, const uint8_t *data ) -> Texture *;
 
 	[[nodiscard]]
@@ -575,6 +597,10 @@ public:
 
 	[[nodiscard]]
 	auto getMaterialCubemap( const wsw::StringView &name, unsigned flags ) -> MaterialCubemap *;
+
+	// Hacks for sky
+	[[nodiscard]]
+	bool addTextureColorsToHistogram( const wsw::StringView &name, const wsw::StringView &suffix, TextureHistogram *histogram );
 
 	[[nodiscard]]
 	auto noTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::No ); }
@@ -963,6 +989,8 @@ typedef struct mbrushmodel_s {
 	OccluderBoundsEntry *occluderBoundsEntries;
 	OccluderDataEntry *occluderDataEntries;
 	unsigned numOccluders;
+
+	struct shader_s *skyShader;
 } mbrushmodel_t;
 
 /*

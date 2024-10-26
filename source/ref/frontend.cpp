@@ -973,9 +973,12 @@ void Frontend::performPreparedRenderingFromThisCamera( Scene *scene, StateForCam
 		shouldClearColor = stateForCamera->refdef.renderTarget != nullptr;
 		Vector4Set( clearColor, 1, 1, 1, 0 );
 	} else {
-		shouldClearColor = /*stateForCamera->numDepthPortalSurfaces == 0 ||*/ r_fastsky->integer || stateForCamera->viewCluster < 0;
+		// /*stateForCamera->numDepthPortalSurfaces == 0 ||*/ r_fastsky->integer || stateForCamera->viewCluster < 0;
+		shouldClearColor = stateForCamera->stateForSkyPortalCamera == nullptr;
 		if( rsh.worldBrushModel && rsh.worldBrushModel->globalfog && rsh.worldBrushModel->globalfog->shader ) {
 			Vector4Scale( rsh.worldBrushModel->globalfog->shader->fog_color, 1.0 / 255.0, clearColor );
+		} else if( rsh.worldBrushModel && rsh.worldBrushModel->skyShader ) {
+			Vector4Scale( rsh.worldBrushModel->skyShader->skyColor, 1.0 / 255.0, clearColor );
 		} else {
 			Vector4Scale( mapConfig.environmentColor, 1.0 / 255.0, clearColor );
 		}

@@ -35,6 +35,7 @@ using wsw::operator""_asHView;
 #include <tuple>
 #include <memory>
 #include <utility>
+#include <unordered_map>
 
 TextureFactory::TextureFactory() {
 	// Cubemap names are put after material ones in the same chunk
@@ -1076,4 +1077,84 @@ void TextureFactory::releaseRenderTarget( RenderTarget *renderTarget ) {
 		qglDeleteFramebuffers( 1, &renderTarget->fboId );
 		m_renderTargetsAllocator.free( renderTarget );
 	}
+}
+
+bool TextureFactory::addTextureColorsToHistogram( const wsw::StringView &path, TextureHistogram *__restrict histogram ) {
+	auto maybeFileData = loadTextureDataFromFile( path, &::readFileBuffer, &::loadingBuffer,
+												  &::conversionBuffer, ImageOptions {} );
+	if( maybeFileData ) {
+		auto [fileBytes, bitmapProps] = *maybeFileData;
+		if( bitmapProps.samples == 1 || bitmapProps.samples == 3 || bitmapProps.samples == 4 ) {
+			// TODO: Account for aspect ratio?
+			constexpr unsigned scaledSide = 32;
+			// Downscale the image so it does not blow up the histogram
+			// Note that we do scaling for dry-run as well for maintaining 100% consistency with the real behavior
+			if( uint8_t *const scaledData = wsw::scaleImageData( fileBytes, bitmapProps.width, bitmapProps.height,
+																 scaledSide, scaledSide, bitmapProps.samples ) ) {
+				if( histogram ) {
+					if( bitmapProps.samples == 1 ) {
+						for( unsigned i = 0; i < scaledSide * scaledSide; ++i ) {
+							histogram->addTexelColor( COLOR_RGB( (unsigned)scaledData[i], (unsigned)scaledData[i],
+																 (unsigned)scaledData[i] ) );
+						}
+					} else if( bitmapProps.samples == 3 ) {
+						for( unsigned i = 0; i < 3 * scaledSide * scaledSide; i += 3 ) {
+							histogram->addTexelColor( COLOR_RGB( (unsigned)scaledData[i + 0], (unsigned)scaledData[i + 1],
+																 (unsigned)scaledData[i + 2] ) );
+						}
+					} else {
+						for( unsigned i = 0; i < 4 * scaledSide * scaledSide; i += 4 ) {
+							histogram->addTexelColor( COLOR_RGBA( (unsigned)scaledData[i + 0], (unsigned)scaledData[i + 1],
+																  (unsigned)scaledData[i + 2], (unsigned)scaledData[i + 3] ) );
+						}
+					}
+				}
+				::free( scaledData );
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+TextureHistogram::TextureHistogram() {
+	m_priv = new std::unordered_map<unsigned, unsigned>;
+}
+
+TextureHistogram::~TextureHistogram() {
+	delete (std::unordered_map<unsigned, unsigned> *)m_priv;
+}
+
+void TextureHistogram::clear() {
+	( (std::unordered_map<unsigned, unsigned> *)m_priv )->clear();
+}
+
+void TextureHistogram::addTexelColor( unsigned color ) {
+	( *( (std::unordered_map<unsigned, unsigned> *)m_priv ) )[color]++;
+}
+
+auto TextureHistogram::findDominantColor() const -> std::optional<unsigned> {
+	double accum[4] { 0.0f, 0.0f, 0.0f, 0.0f };
+	double totalWeights = 0.0;
+	for( auto [color, count] : *( (std::unordered_map<unsigned, unsigned> *)m_priv ) ) {
+		assert( count > 0 );
+		const int r = COLOR_R( color );
+		const int g = COLOR_G( color );
+		const int b = COLOR_B( color );
+		// CBA to roll correct saturation computations
+		const double saturationLikeFrac = (double)( wsw::min( 255, std::abs( r - g ) + std::abs( r - b ) + std::abs( g - b ) ) ) / 255.0;
+		const double weight = count * ( 0.1 + 0.9 * saturationLikeFrac );
+		accum[0] += weight * r;
+		accum[1] += weight * g;
+		accum[2] += weight * b;
+		accum[3] += weight * COLOR_A( color );
+		totalWeights += weight;
+	}
+	if( totalWeights > 0.0 ) {
+		const double scale = 1.0 / (double)totalWeights;
+		return COLOR_RGBA( (unsigned)( scale * accum[0] ), (unsigned)( scale * accum[1] ),
+						   (unsigned)( scale * accum[2] ), (unsigned)( scale * accum[3] ) );
+	}
+	return std::nullopt;
 }
