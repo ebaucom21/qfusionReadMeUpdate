@@ -390,8 +390,8 @@ void Bot::Update() {
 
 	assert( !m_selectedEnemy || !m_selectedEnemy->ShouldInvalidate() );
 
-	if( PermitsDistributedUpdateThisFrame() ) {
-		if( !G_ISGHOSTING( self ) ) {
+	if( !G_ISGHOSTING( self ) ) {
+		if( PermitsDistributedUpdateThisFrame() ) {
 			// TODO: Check whether we are camping/holding a spot
 			if( !self->groundentity ) {
 				blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
@@ -405,9 +405,6 @@ void Bot::Update() {
 					OnBlockedTimeout();
 				}
 			}
-		}
-
-		if( !G_ISGHOSTING( self ) ) {
 			// TODO: Let the weapons usage module decide?
 			if( CanChangeWeapons() ) {
 				weaponsUsageModule.Think( planningModule.CachedWorldState() );

@@ -503,6 +503,9 @@ public:
 	void Update();
 
 	bool PermitsDistributedUpdateThisFrame() const {
+		// Don't even try this kind of updates during ghosting frames
+		assert( !G_ISGHOSTING( self ) );
+		// Ensure that the controlling team has already set the affinity properly
 		assert( m_frameAffinityModulo && m_frameAffinityOffset < m_frameAffinityModulo && wsw::isPowerOf2( m_frameAffinityModulo ) );
 		return ( level.framenum & ( m_frameAffinityModulo - 1 ) ) == m_frameAffinityOffset;
 	}
