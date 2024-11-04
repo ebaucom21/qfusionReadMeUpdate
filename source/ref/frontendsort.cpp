@@ -310,7 +310,7 @@ void Frontend::calcSubspansOfMergedSurfSpans( StateForCamera *stateForCamera ) {
 			for( int surfNum = surfSpan->firstSurface; surfNum <= surfSpan->lastSurface; ++surfNum ) {
 				if( !surfVisTable[surfNum] ) {
 					const auto &surf = rsh.worldBrushModel->surfaces[surfNum];
-					addDebugLine( surf.mins, surf.maxs );
+					addDebugLine( stateForCamera, surf.mins, surf.maxs );
 				}
 			}
 #endif

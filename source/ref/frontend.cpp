@@ -362,6 +362,8 @@ auto Frontend::allocStateForCamera() -> StateForCamera * {
 	stateForCamera->lightSpansForParticleAggregates   = resultStorage->lightSpansForParticleAggregatesBuffer.data();
 	stateForCamera->lightIndicesForParticleAggregates = &resultStorage->lightIndicesForParticleAggregatesBuffer;
 
+	stateForCamera->debugLines = &resultStorage->debugLinesBuffer;
+
 	return stateForCamera;
 }
 
@@ -554,7 +556,7 @@ auto Frontend::coExecPassUponPreparingOccluders( CoroTask::StartInfo si, Fronten
 
 				auto cullSubrangeFn = [=]( unsigned, unsigned start, unsigned end ) {
 					std::span<const unsigned> workloadSpan { surfNums.data() + start, surfNums.data() + end };
-					self->cullSurfacesByOccluders( workloadSpan, bestFrusta, mergedSurfSpans, surfVisTable );
+					self->cullSurfacesByOccluders( stateForCamera, workloadSpan, bestFrusta, mergedSurfSpans, surfVisTable );
 				};
 
 				TaskHandle cullTask = si.taskSystem->addForSubrangesInRange( { 0, surfNums.size() }, 384,
@@ -1012,7 +1014,7 @@ void Frontend::performPreparedRenderingFromThisCamera( Scene *scene, StateForCam
 
 	RB_SetShaderStateMask( ~0, GLSTATE_NO_DEPTH_TEST );
 
-	submitDebugStuffToBackend( scene );
+	submitDebugStuffToBackend( stateForCamera, scene );
 
 	RB_SetShaderStateMask( ~0, 0 );
 }

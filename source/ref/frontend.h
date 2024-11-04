@@ -144,6 +144,12 @@ private:
 		elem_t indices[6];
 	};
 
+	struct DebugLine {
+		float p1[3];
+		float p2[3];
+		int color;
+	};
+
 	struct alignas( alignof( Frustum ) ) StateForCamera {
 		alignas( alignof( Frustum ) )Frustum frustum;
 		alignas( alignof( Frustum ) )Frustum occluderFrusta[kMaxOccluderFrusta];
@@ -232,6 +238,8 @@ private:
 		// A table of pairs (span offset, span length)
 		std::pair<unsigned, unsigned> *lightSpansForParticleAggregates;
 		PodBufferHolder<uint16_t> *lightIndicesForParticleAggregates;
+
+		wsw::PodVector<DebugLine> *debugLines;
 
 		unsigned numDynamicMeshDrawSurfaces { 0 };
 
@@ -400,11 +408,9 @@ private:
 	void addCoronaLightsToSortList( StateForCamera *stateForCamera, const entity_t *polyEntity, const Scene::DynamicLight *lights,
 									std::span<const uint16_t> indices );
 
-public:
-	void addDebugLine( const float *p1, const float *p2, int color = COLOR_RGB( 255, 255, 255 ) );
+	void addDebugLine( StateForCamera *stateForCamera, const float *p1, const float *p2, int color = COLOR_RGB( 255, 255, 255 ) );
 
-private:
-	void submitDebugStuffToBackend( Scene *scene );
+	void submitDebugStuffToBackend( StateForCamera *stateForCamera, Scene *scene );
 
 	// The template parameter is needed just to make instatiation of methods in different translation units correct
 
@@ -424,20 +430,23 @@ private:
 		-> std::span<const Frustum>;
 
 	template <unsigned Arch>
-	void cullSurfacesByOccludersArch( std::span<const unsigned> indicesOfSurfaces,
+	void cullSurfacesByOccludersArch( StateForCamera *stateForCamera,
+									  std::span<const unsigned> indicesOfSurfaces,
 									  std::span<const Frustum> occluderFrusta,
 									  MergedSurfSpan *mergedSurfSpans,
 									  uint8_t *surfVisTable );
 
 	template <unsigned Arch>
 	[[nodiscard]]
-	auto cullEntriesWithBoundsArch( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
-								unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
-								std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+	auto cullEntriesWithBoundsArch( StateForCamera *stateForCamera, const void *entries,
+									unsigned numEntries, unsigned boundsFieldOffset,
+									unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
+									std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	template <unsigned Arch>
 	[[nodiscard]]
-	auto cullEntryPtrsWithBoundsArch( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+	auto cullEntryPtrsWithBoundsArch( StateForCamera *stateForCamera, const void **entryPtrs,
+									  unsigned numEntries, unsigned boundsFieldOffset,
 								      const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 								      uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
@@ -449,19 +458,22 @@ private:
 	auto buildFrustaOfOccludersSse2( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 		-> std::span<const Frustum>;
 
-	void cullSurfacesByOccludersSse2( std::span<const unsigned> indicesOfSurfaces,
+	void cullSurfacesByOccludersSse2( StateForCamera *stateForCamera,
+									  std::span<const unsigned> indicesOfSurfaces,
 									  std::span<const Frustum> occluderFrusta,
 									  MergedSurfSpan *mergedSurfSpans,
 									  uint8_t *surfVisTable );
 
 	[[nodiscard]]
-	auto cullEntriesWithBoundsSse2( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
+	auto cullEntriesWithBoundsSse2( StateForCamera *stateForCamera, const void *entries,
+									unsigned numEntries, unsigned boundsFieldOffset,
 									unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
 									std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	// Allows supplying an array of pointers instead of a contignuous array
 	[[nodiscard]]
-	auto cullEntryPtrsWithBoundsSse2( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+	auto cullEntryPtrsWithBoundsSse2( StateForCamera *stateForCamera, const void **entryPtrs,
+									  unsigned numEntries, unsigned boundsFieldOffset,
 									  const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 									  uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
@@ -473,24 +485,28 @@ private:
 	auto buildFrustaOfOccludersSse41( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 		-> std::span<const Frustum>;
 
-	void cullSurfacesByOccludersSse41( std::span<const unsigned> indicesOfSurfaces,
+	void cullSurfacesByOccludersSse41( StateForCamera *stateForCamera,
+									   std::span<const unsigned> indicesOfSurfaces,
 									   std::span<const Frustum> occluderFrusta,
 									   MergedSurfSpan *mergedSurfSpans,
 									   uint8_t *surfVisTable );
 
 	[[nodiscard]]
-	auto cullEntriesWithBoundsSse41( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
+	auto cullEntriesWithBoundsSse41( StateForCamera *stateForCamera, const void *entries,
+									 unsigned numEntries, unsigned boundsFieldOffset,
 									 unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
 									 std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	// Allows supplying an array of pointers instead of a contignuous array
 	[[nodiscard]]
-	auto cullEntryPtrsWithBoundsSse41( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+	auto cullEntryPtrsWithBoundsSse41( StateForCamera *stateForCamera, const void **entryPtrs,
+									   unsigned numEntries, unsigned boundsFieldOffset,
 									   const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 									   uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 
-	void cullSurfacesByOccludersAvx( std::span<const unsigned> indicesOfSurfaces,
+	void cullSurfacesByOccludersAvx( StateForCamera *stateForCamera,
+									 std::span<const unsigned> indicesOfSurfaces,
 									 std::span<const Frustum> occluderFrusta,
 									 MergedSurfSpan *mergedSurfSpans,
 									 uint8_t *surfVisTable );
@@ -512,7 +528,8 @@ private:
 	auto buildFrustaOfOccluders( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 		-> std::span<const Frustum>;
 
-	void cullSurfacesByOccluders( std::span<const unsigned> indicesOfSurfaces, std::span<const Frustum> occluderFrusta,
+	void cullSurfacesByOccluders( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfSurfaces,
+								  std::span<const Frustum> occluderFrusta,
 								  MergedSurfSpan *mergedSurfSpans, uint8_t *surfVisTable );
 
 	[[nodiscard]]
@@ -525,13 +542,15 @@ private:
 	static auto coExecPassUponPreparingOccluders( CoroTask::StartInfo si, Frontend *self, StateForCamera *stateForCamera ) -> CoroTask;
 
 	[[nodiscard]]
-	auto cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
+	auto cullEntriesWithBounds( StateForCamera *stateForCamera, const void *entries,
+								unsigned numEntries, unsigned boundsFieldOffset,
 								unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
 								std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	// Allows supplying an array of pointers instead of a contignuous array
 	[[nodiscard]]
-	auto cullEntryPtrsWithBounds( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+	auto cullEntryPtrsWithBounds( StateForCamera *stateForCamera, const void **entryPtrs,
+								  unsigned numEntries, unsigned boundsFieldOffset,
 								  const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 								  uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
@@ -599,10 +618,11 @@ private:
 	auto ( Frontend::*m_collectVisibleWorldLeavesArchMethod )( StateForCamera * ) -> std::span<const unsigned>;
 	auto ( Frontend::*m_collectVisibleOccludersArchMethod )( StateForCamera * ) -> std::span<const unsigned>;
 	auto ( Frontend::*m_buildFrustaOfOccludersArchMethod )( StateForCamera *, std::span<const SortedOccluder> ) -> std::span<const Frustum>;
-	void ( Frontend::*m_cullSurfacesByOccludersArchMethod )( std::span<const unsigned>, std::span<const Frustum>, MergedSurfSpan *, uint8_t * );
-	auto ( Frontend::*m_cullEntriesWithBoundsArchMethod )( const void *, unsigned, unsigned, unsigned, const Frustum *,
+	void ( Frontend::*m_cullSurfacesByOccludersArchMethod )( StateForCamera *, std::span<const unsigned>,
+															 std::span<const Frustum>, MergedSurfSpan *, uint8_t * );
+	auto ( Frontend::*m_cullEntriesWithBoundsArchMethod )( StateForCamera *, const void *, unsigned, unsigned, unsigned, const Frustum *,
 														   std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
-	auto ( Frontend::*m_cullEntryPtrsWithBoundsArchMethod )( const void **, unsigned, unsigned, const Frustum *,
+	auto ( Frontend::*m_cullEntryPtrsWithBoundsArchMethod )( StateForCamera *stateForCamera, const void **, unsigned, unsigned, const Frustum *,
 															 std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
 
 	shader_t *m_coronaShader { nullptr };
@@ -614,13 +634,6 @@ private:
 
 	static constexpr unsigned kMaxDrawSceneRequests = 16;
 	wsw::StaticVector<DrawSceneRequest, kMaxDrawSceneRequests> m_drawSceneRequestsHolder;
-
-	struct DebugLine {
-		float p1[3];
-		float p2[3];
-		int color;
-	};
-	wsw::PodVector<DebugLine> m_debugLines;
 
 	struct StateForCameraStorage {
 		~StateForCameraStorage() {
@@ -662,6 +675,8 @@ private:
 		PodBufferHolder<uint32_t> leafLightBitsOfSurfacesBuffer;
 
 		PodBufferHolder<ParticleDrawSurface> particleDrawSurfacesBuffer;
+
+		wsw::PodVector<DebugLine> debugLinesBuffer;
 
 		// TODO: Allow storing std::pair<PodType, PodType> in PodBufferHolder
 		wsw::PodVector<std::pair<unsigned, unsigned>> lightSpansForParticleAggregatesBuffer;
@@ -708,7 +723,7 @@ private:
 
 }
 
-#define SHOW_OCCLUDED( v1, v2, color ) do { /* addDebugLine( v1, v2, color ); */ } while( 0 )
+#define SHOW_OCCLUDED( stateForCamera, v1, v2, color ) do { /*addDebugLine( stateForCamera, v1, v2, color );*/ } while( 0 )
 //#define SHOW_OCCLUDERS
 //#define SHOW_OCCLUDERS_FRUSTA
 //#define DEBUG_OCCLUDERS

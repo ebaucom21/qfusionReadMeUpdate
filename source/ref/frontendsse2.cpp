@@ -51,26 +51,29 @@ auto Frontend::buildFrustaOfOccludersSse2( StateForCamera *stateForCamera, std::
 	return buildFrustaOfOccludersArch<Sse2>( stateForCamera, sortedOccluders );
 }
 
-void Frontend::cullSurfacesByOccludersSse2( std::span<const unsigned> indicesOfSurfaces,
+void Frontend::cullSurfacesByOccludersSse2( StateForCamera *stateForCamera,
+											std::span<const unsigned> indicesOfSurfaces,
 											std::span<const Frustum> occluderFrusta,
 											MergedSurfSpan *mergedSurfSpans,
 											uint8_t *surfVisTable ) {
-	return cullSurfacesByOccludersArch<Sse2>( indicesOfSurfaces, occluderFrusta, mergedSurfSpans, surfVisTable );
+	return cullSurfacesByOccludersArch<Sse2>( stateForCamera, indicesOfSurfaces, occluderFrusta, mergedSurfSpans, surfVisTable );
 }
 
-auto Frontend::cullEntriesWithBoundsSse2( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
+auto Frontend::cullEntriesWithBoundsSse2( StateForCamera *stateForCamera, const void *entries,
+										  unsigned numEntries, unsigned boundsFieldOffset,
 										  unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
 										  std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices )
 	-> std::span<const uint16_t> {
-	return cullEntriesWithBoundsArch<Sse2>( entries, numEntries, boundsFieldOffset, strideInBytes,
+	return cullEntriesWithBoundsArch<Sse2>( stateForCamera, entries, numEntries, boundsFieldOffset, strideInBytes,
 											primaryFrustum, occluderFrusta, tmpIndices );
 }
 
-auto Frontend::cullEntryPtrsWithBoundsSse2( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+auto Frontend::cullEntryPtrsWithBoundsSse2( StateForCamera *stateForCamera, const void **entryPtrs,
+											unsigned numEntries, unsigned boundsFieldOffset,
 											const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 											uint16_t *tmpIndices )
 	-> std::span<const uint16_t> {
-	return cullEntryPtrsWithBoundsArch<Sse2>( entryPtrs, numEntries, boundsFieldOffset,
+	return cullEntryPtrsWithBoundsArch<Sse2>( stateForCamera, entryPtrs, numEntries, boundsFieldOffset,
 											  primaryFrustum, occluderFrusta, tmpIndices );
 }
 

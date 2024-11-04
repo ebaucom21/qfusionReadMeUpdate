@@ -300,7 +300,7 @@ auto Frontend::cullNullModelEntities( StateForCamera *stateForCamera, std::span<
 	}
 
 	// The number of bounds has an exact match with the number of entities in this case
-	return cullEntriesWithBounds( tmpModels, numEntities, offsetof( VisTestedModel, absMins ),
+	return cullEntriesWithBounds( stateForCamera, tmpModels, numEntities, offsetof( VisTestedModel, absMins ),
 								  sizeof( VisTestedModel ), &stateForCamera->frustum, occluderFrusta, tmpIndices );
 }
 
@@ -359,7 +359,7 @@ auto Frontend::cullAliasModelEntities( StateForCamera *stateForCamera, std::span
 		visTestedModel->absMins[3] = 0.0f, visTestedModel->absMaxs[3] = 1.0f;
 	}
 
-	const size_t numPassedOtherEnts = cullEntriesWithBounds( selectedModelsBuffer, numSelectedModels,
+	const size_t numPassedOtherEnts = cullEntriesWithBounds( stateForCamera, selectedModelsBuffer, numSelectedModels,
 															 offsetof( VisTestedModel, absMins ), sizeof( VisTestedModel ),
 															 &stateForCamera->frustum, occluderFrusta, tmpIndicesBuffer ).size();
 
@@ -418,7 +418,7 @@ auto Frontend::cullSkeletalModelEntities( StateForCamera *stateForCamera, std::s
 		visTestedModel->absMins[3] = 0.0f, visTestedModel->absMaxs[3] = 1.0f;
 	}
 
-	return cullEntriesWithBounds( selectedModelsBuffer, numSelectedModels, offsetof( VisTestedModel, absMins ),
+	return cullEntriesWithBounds( stateForCamera, selectedModelsBuffer, numSelectedModels, offsetof( VisTestedModel, absMins ),
 								  sizeof( VisTestedModel ), &stateForCamera->frustum, occluderFrusta, tmpIndicesBuffer );
 }
 
@@ -446,7 +446,7 @@ auto Frontend::cullBrushModelEntities( StateForCamera *stateForCamera, std::span
 		visTestedModel->absMins[3] = 0.0f, visTestedModel->absMaxs[3] = 1.0f;
 	}
 
-	return cullEntriesWithBounds( selectedModelsBuffer, numSelectedModels, offsetof( VisTestedModel, absMins ),
+	return cullEntriesWithBounds( stateForCamera, selectedModelsBuffer, numSelectedModels, offsetof( VisTestedModel, absMins ),
 								  sizeof( VisTestedModel ), &stateForCamera->frustum, occluderFrusta, tmpIndicesBuffer );
 }
 
@@ -487,7 +487,7 @@ auto Frontend::cullSpriteEntities( StateForCamera *stateForCamera, std::span<con
 		Vector4Set( visTestedModel->absMaxs, origin[0] + halfRadius, origin[1] + halfRadius, origin[2] + halfRadius, 1.0f );
 	}
 
-	const auto passedTestIndices = cullEntriesWithBounds( tmpModels, numVisTestedEntities,
+	const auto passedTestIndices = cullEntriesWithBounds( stateForCamera, tmpModels, numVisTestedEntities,
 														  offsetof( VisTestedModel, absMins ), sizeof( VisTestedModel ),
 														  &stateForCamera->frustum, occluderFrusta, tmpIndices2 );
 
@@ -510,7 +510,8 @@ auto Frontend::cullLights( StateForCamera *stateForCamera,
 	const unsigned numLights = lightsSpan.size();
 
 	static_assert( offsetof( Scene::DynamicLight, mins ) + 4 * sizeof( float ) == offsetof( Scene::DynamicLight, maxs ) );
-	const auto visibleAllLightIndices = cullEntriesWithBounds( lights, numLights, offsetof( Scene::DynamicLight, mins ),
+	const auto visibleAllLightIndices = cullEntriesWithBounds( stateForCamera, lights, numLights,
+															   offsetof( Scene::DynamicLight, mins ),
 															   sizeof( Scene::DynamicLight ), &stateForCamera->frustum,
 															   occluderFrusta, tmpAllLightIndices );
 
@@ -533,15 +534,17 @@ auto Frontend::cullLights( StateForCamera *stateForCamera,
 auto Frontend::cullParticleAggregates( StateForCamera *stateForCamera, std::span<const Scene::ParticlesAggregate> aggregatesSpan,
 									   std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t> {
 	static_assert( offsetof( Scene::ParticlesAggregate, mins ) + 16 == offsetof( Scene::ParticlesAggregate, maxs ) );
-	return cullEntriesWithBounds( aggregatesSpan.data(), aggregatesSpan.size(), offsetof( Scene::ParticlesAggregate, mins ),
-								  sizeof( Scene::ParticlesAggregate ), &stateForCamera->frustum, occluderFrusta, tmpIndices );
+	return cullEntriesWithBounds( stateForCamera, aggregatesSpan.data(), aggregatesSpan.size(),
+								  offsetof( Scene::ParticlesAggregate, mins ), sizeof( Scene::ParticlesAggregate ),
+								  &stateForCamera->frustum, occluderFrusta, tmpIndices );
 }
 
 auto Frontend::cullCompoundDynamicMeshes( StateForCamera *stateForCamera, std::span<const Scene::CompoundDynamicMesh> meshesSpan,
 										  std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t> {
 	static_assert( offsetof( Scene::CompoundDynamicMesh, cullMins ) + 16 == offsetof( Scene::CompoundDynamicMesh, cullMaxs ) );
-	return cullEntriesWithBounds( meshesSpan.data(), meshesSpan.size(), offsetof( Scene::CompoundDynamicMesh, cullMins ),
-								  sizeof( Scene::CompoundDynamicMesh ), &stateForCamera->frustum, occluderFrusta, tmpIndices );
+	return cullEntriesWithBounds( stateForCamera, meshesSpan.data(), meshesSpan.size(),
+								  offsetof( Scene::CompoundDynamicMesh, cullMins ), sizeof( Scene::CompoundDynamicMesh ),
+								  &stateForCamera->frustum, occluderFrusta, tmpIndices );
 }
 
 auto Frontend::cullQuadPolys( StateForCamera *stateForCamera, QuadPoly **polys, unsigned numPolys,
@@ -557,7 +560,7 @@ auto Frontend::cullQuadPolys( StateForCamera *stateForCamera, QuadPoly **polys, 
 		VectorAdd( model->absMaxs, poly->origin, model->absMaxs );
 	}
 
-	return cullEntriesWithBounds( tmpModels, numPolys, offsetof( VisTestedModel, absMins ),
+	return cullEntriesWithBounds( stateForCamera, tmpModels, numPolys, offsetof( VisTestedModel, absMins ),
 								  sizeof( VisTestedModel ), &stateForCamera->frustum, occluderFrusta, tmpIndices );
 }
 
@@ -575,7 +578,7 @@ auto Frontend::cullDynamicMeshes( StateForCamera *stateForCamera,
 #pragma GCC diagnostic pop
 #endif
 
-	return cullEntryPtrsWithBounds( (const void **)meshes, numMeshes, boundsFieldOffset,
+	return cullEntryPtrsWithBounds( stateForCamera, (const void **)meshes, numMeshes, boundsFieldOffset,
 									&stateForCamera->frustum, occluderFrusta, tmpIndices );
 }
 
@@ -592,24 +595,28 @@ auto Frontend::buildFrustaOfOccluders( StateForCamera *stateForCamera, std::span
 	return ( this->*m_buildFrustaOfOccludersArchMethod )( stateForCamera, sortedOccluders );
 }
 
-void Frontend::cullSurfacesByOccluders( std::span<const unsigned> indicesOfSurfaces, std::span<const Frustum> occluderFrusta,
+void Frontend::cullSurfacesByOccluders( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfSurfaces,
+										std::span<const Frustum> occluderFrusta,
 										MergedSurfSpan *mergedSurfSpans, uint8_t *surfVisTable ) {
-	return ( this->*m_cullSurfacesByOccludersArchMethod )( indicesOfSurfaces, occluderFrusta, mergedSurfSpans, surfVisTable );
+	return ( this->*m_cullSurfacesByOccludersArchMethod )( stateForCamera, indicesOfSurfaces, occluderFrusta,
+														   mergedSurfSpans, surfVisTable );
 }
 
-auto Frontend::cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
+auto Frontend::cullEntriesWithBounds( StateForCamera *stateForCamera, const void *entries,
+									  unsigned numEntries, unsigned boundsFieldOffset,
 									  unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
 									  std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices )
 	-> std::span<const uint16_t> {
-	return ( this->*m_cullEntriesWithBoundsArchMethod )( entries, numEntries, boundsFieldOffset, strideInBytes,
-														 primaryFrustum, occluderFrusta, tmpIndices );
+	return ( this->*m_cullEntriesWithBoundsArchMethod )( stateForCamera, entries, numEntries, boundsFieldOffset,
+														 strideInBytes, primaryFrustum, occluderFrusta, tmpIndices );
 }
 
-auto Frontend::cullEntryPtrsWithBounds( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+auto Frontend::cullEntryPtrsWithBounds( StateForCamera *stateForCamera, const void **entryPtrs,
+										unsigned numEntries, unsigned boundsFieldOffset,
 										const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 										uint16_t *tmpIndices )
 	-> std::span<const uint16_t> {
-	return ( this->*m_cullEntryPtrsWithBoundsArchMethod )( entryPtrs, numEntries, boundsFieldOffset,
+	return ( this->*m_cullEntryPtrsWithBoundsArchMethod )( stateForCamera, entryPtrs, numEntries, boundsFieldOffset,
 														   primaryFrustum, occluderFrusta, tmpIndices );
 }
 
@@ -668,7 +675,7 @@ auto Frontend::pruneAndSortOccludersByScores( StateForCamera *stateForCamera,
 			const float *const v1 = occluder.data[vertIndex + 0];
 			const float *const v2 = occluder.data[( vertIndex + 1 != occluder.numVertices ) ? vertIndex + 1 : 0];
 			const float frac = Q_Sqrt( (float)( i + 1 ) * Q_Rcp( (float)numSortedOccluders ) );
-			addDebugLine( v1, v2, COLOR_RGB( (int)( 255 * frac ), (int)( 255 * ( 1.0f - frac ) ), 0 ) );
+			addDebugLine( stateForCamera, v1, v2, COLOR_RGB( (int)( 255 * frac ), (int)( 255 * ( 1.0f - frac ) ), 0 ) );
 		}
 	}
 #endif

@@ -526,7 +526,7 @@ void Frontend::submitDrawActionsList( StateForCamera *stateForCamera, Scene *sce
 	}
 }
 
-void Frontend::submitDebugStuffToBackend( Scene *scene ) {
+void Frontend::submitDebugStuffToBackend( StateForCamera *stateForCamera, Scene *scene ) {
 	// TODO: Reduce this copying
 	vec4_t verts[2];
 	byte_vec4_t colors[2] { { 0, 0, 0, 1 }, { 0, 0, 0, 1 } };
@@ -539,7 +539,7 @@ void Frontend::submitDebugStuffToBackend( Scene *scene ) {
 	mesh.numElems = 2;
 	mesh.elems = elems;
 	verts[0][3] = verts[1][3] = 1.0f;
-	for( const DebugLine &line: m_debugLines ) {
+	for( const DebugLine &line: *stateForCamera->debugLines ) {
 		VectorCopy( line.p1, verts[0] );
 		VectorCopy( line.p2, verts[1] );
 		std::memcpy( colors[0], &line.color, 4 );
@@ -549,15 +549,15 @@ void Frontend::submitDebugStuffToBackend( Scene *scene ) {
 
 	RB_FlushDynamicMeshes();
 
-	m_debugLines.clear();
+	stateForCamera->debugLines->clear();
 }
 
-void Frontend::addDebugLine( const float *p1, const float *p2, int color ) {
+void Frontend::addDebugLine( StateForCamera *stateForCamera, const float *p1, const float *p2, int color ) {
 	int rgbaColor = color;
 	if( !COLOR_A( rgbaColor ) ) {
 		rgbaColor = COLOR_RGBA( COLOR_R( color ), COLOR_G( color ), COLOR_B( color ), 255 );
 	}
-	m_debugLines.emplace_back( DebugLine {
+	stateForCamera->debugLines->emplace_back( DebugLine {
 		{ p1[0], p1[1], p1[2] }, { p2[0], p2[1], p2[2] }, rgbaColor
 	});
 }

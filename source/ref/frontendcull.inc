@@ -277,14 +277,14 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 					absViewDot, distanceToPlane, viewAxisDotToOccluder, planeDotToOccluder );
 #endif
 
-		//addDebugLine( surface->occluderPolyMins, surface->occluderPolyMaxs, COLOR_RGB( 0, 128, 255 ) );
+		//addDebugLine( stateForCamera, surface->occluderPolyMins, surface->occluderPolyMaxs, COLOR_RGB( 0, 128, 255 ) );
 
 		for( unsigned vertIndex = 0; vertIndex < occluderData->numVertices; ++vertIndex ) {
 			const float *const v1 = occluderData->data[vertIndex + 0];
 			const float *const v2 = occluderData->data[( vertIndex + 1 != occluderData->numVertices ) ? vertIndex + 1 : 0];
 
-			addDebugLine( v1, pointInFrontOfView );
-			addDebugLine( v1, v2, COLOR_RGB( 255, 0, 255 ) );
+			addDebugLine( stateForCamera, v1, pointInFrontOfView );
+			addDebugLine( stateForCamera, v1, v2, COLOR_RGB( 255, 0, 255 ) );
 
 			cplane_t plane;
 			// TODO: Inline?
@@ -299,7 +299,7 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 			vec3_t midpointOfEdge, normalPoint;
 			VectorAvg( v1, v2, midpointOfEdge );
 			VectorMA( midpointOfEdge, 8.0f, plane.normal, normalPoint );
-			addDebugLine( midpointOfEdge, normalPoint );
+			addDebugLine( stateForCamera, midpointOfEdge, normalPoint );
 		}
 
 		vec4_t cappingPlane;
@@ -314,7 +314,7 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 
 		vec3_t cappingPlanePoint;
 		VectorMA( occluderData->innerPolyPoint, 32.0f, cappingPlane, cappingPlanePoint );
-		addDebugLine( occluderData->innerPolyPoint, cappingPlanePoint );
+		addDebugLine( stateForCamera, occluderData->innerPolyPoint, cappingPlanePoint );
 	}
 #endif
 
@@ -326,7 +326,8 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 #ifdef IMPLEMENT_cullSurfacesByOccluders
 
 template <unsigned Arch>
-void Frontend::cullSurfacesByOccludersArch( std::span<const unsigned> surfNums, std::span<const Frustum> occluderFrusta,
+void Frontend::cullSurfacesByOccludersArch( StateForCamera *stateForCamera, std::span<const unsigned> surfNums,
+											std::span<const Frustum> occluderFrusta,
 											MergedSurfSpan *mergedSurfSpans, uint8_t *surfVisTable ) {
 	assert( !occluderFrusta.empty() );
 	assert( !surfNums.empty() );
@@ -382,7 +383,7 @@ void Frontend::cullSurfacesByOccludersArch( std::span<const unsigned> surfNums, 
 
 			if( zeroIfFullyInside == 0 ) [[unlikely]] {
 				surfVisible = false;
-				SHOW_OCCLUDED( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
+				SHOW_OCCLUDED( stateForCamera, surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
 				break;
 			}
 		} while( ++frustumNum != numOccluders );
@@ -403,7 +404,8 @@ void Frontend::cullSurfacesByOccludersArch( std::span<const unsigned> surfNums, 
 #ifdef IMPLEMENT_cullEntriesWithBounds
 
 template <unsigned Arch>
-auto Frontend::cullEntriesWithBoundsArch( const void *entries, unsigned numEntries, unsigned boundsFieldOffset, unsigned strideInBytes,
+auto Frontend::cullEntriesWithBoundsArch( StateForCamera *stateForCamera, const void *entries, unsigned numEntries,
+										  unsigned boundsFieldOffset, unsigned strideInBytes,
 										  const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 										  uint16_t *tmpIndices ) -> std::span<const uint16_t> {
 	if( !numEntries ) [[unlikely]] {
@@ -427,7 +429,7 @@ auto Frontend::cullEntriesWithBoundsArch( const void *entries, unsigned numEntri
 				do {
 					COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( frustaPtr + frustumNum, const int zeroIfFullyInside );
 					if( zeroIfFullyInside == 0 ) {
-						SHOW_OCCLUDED( bounds[0], bounds[1], COLOR_RGB( 255, 192, 255 ) );
+						SHOW_OCCLUDED( stateForCamera, bounds[0], bounds[1], COLOR_RGB( 255, 192, 255 ) );
 						occluded = true;
 						break;
 					}
@@ -462,7 +464,8 @@ auto Frontend::cullEntriesWithBoundsArch( const void *entries, unsigned numEntri
 #ifdef IMPLEMENT_cullEntryPtrsWithBounds
 
 template <unsigned Arch>
-auto Frontend::cullEntryPtrsWithBoundsArch( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+auto Frontend::cullEntryPtrsWithBoundsArch( StateForCamera *stateForCamera, const void **entryPtrs,
+											unsigned numEntries, unsigned boundsFieldOffset,
 											const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 											uint16_t *tmpIndices ) -> std::span<const uint16_t> {
 	if( !numEntries ) [[unlikely]] {
@@ -484,7 +487,7 @@ auto Frontend::cullEntryPtrsWithBoundsArch( const void **entryPtrs, unsigned num
 				do {
 					COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( frustaPtr + frustumNum, const int zeroIfFullyInside );
 					if( zeroIfFullyInside == 0 ) {
-						SHOW_OCCLUDED( bounds[0], bounds[1], COLOR_RGB( 255, 192, 255 ) );
+						SHOW_OCCLUDED( stateForCamera, bounds[0], bounds[1], COLOR_RGB( 255, 192, 255 ) );
 						occluded = true;
 						break;
 					}
