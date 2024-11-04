@@ -225,10 +225,10 @@ void CG_DemocamShutdown() {
 
 [[nodiscard]]
 static bool doChaseStep( int step ) {
-	if( cg.frame.multipov ) {
-		// It's always PM_CHASECAM for demos
-		const auto ourActualMoveType = getOurClientViewState()->predictedPlayerState.pmove.pm_type;
-		if( ( ourActualMoveType == PM_SPECTATOR || ourActualMoveType == PM_CHASECAM ) ) {
+	// It's always PM_CHASECAM for demos (so far, checked for multipov frames)
+	const auto ourActualMoveType = getOurClientViewState()->predictedPlayerState.pmove.pm_type;
+	if( ourActualMoveType == PM_SPECTATOR || ourActualMoveType == PM_CHASECAM ) {
+		if( cg.frame.multipov ) {
 			if( ( !cgs.demoPlaying || !cg.isDemoCamFree ) && cg.chaseMode != CAM_TILED ) {
 				const std::optional<unsigned> existingIndex = CG_FindChaseableViewportForPlayernum( cg.chasedPlayerNum );
 
@@ -271,13 +271,12 @@ static bool doChaseStep( int step ) {
 				cg.pendingChasedPlayerNum = chosenPlayerNum;
 				return true;
 			}
+		} else {
+			if( !cgs.demoPlaying ) {
+				CL_Cmd_ExecuteNow( step > 0 ? "chasenext" : "chaseprev" );
+				return true;
+			}
 		}
-		return false;
-	}
-
-	if( !cgs.demoPlaying ) {
-		CL_Cmd_ExecuteNow( step > 0 ? "chasenext" : "chaseprev" );
-		return true;
 	}
 
 	return false;
