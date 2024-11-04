@@ -223,12 +223,8 @@ void CG_DemocamShutdown() {
 	}
 }
 
-/*
-* CG_ChaseStep
-*
-* Returns whether the POV was actually requested to be changed.
-*/
-bool CG_ChaseStep( int step ) {
+[[nodiscard]]
+static bool doChaseStep( int step ) {
 	if( cg.frame.multipov ) {
 		// It's always PM_CHASECAM for demos
 		const auto ourActualMoveType = getOurClientViewState()->predictedPlayerState.pmove.pm_type;
@@ -284,6 +280,24 @@ bool CG_ChaseStep( int step ) {
 		return true;
 	}
 
+	return false;
+}
+
+static constexpr int64_t kChaseSwitchCooldown = 250;
+
+/*
+* CG_ChaseStep
+*
+* Returns whether the POV was actually requested to be changed.
+*/
+bool CG_ChaseStep( int step ) {
+	if( cg.chaseSwitchTimestamp + kChaseSwitchCooldown < cg.time ) {
+		if( doChaseStep( step ) ) {
+			cg.chaseSwitchTimestamp = cg.time;
+			wsw::ui::UISystem::instance()->playForwardSound();
+			return true;
+		}
+	}
 	return false;
 }
 
@@ -881,7 +895,8 @@ float CG_ViewSmoothFallKick( ViewState *viewState ) {
 	return 0.0f;
 }
 
-bool CG_SwitchChaseCamMode() {
+[[nodiscard]]
+static bool doSwitchChaseCamMode() {
 	const ViewState *ourClientViewState = getOurClientViewState();
 	const auto actualMoveType = ourClientViewState->predictedPlayerState.pmove.pm_type;
 	if( ( actualMoveType == PM_SPECTATOR || actualMoveType == PM_CHASECAM ) && ( !cgs.demoPlaying || !cg.isDemoCamFree ) ) {
@@ -920,6 +935,17 @@ bool CG_SwitchChaseCamMode() {
 	return false;
 }
 
+bool CG_SwitchChaseCamMode() {
+	if( cg.chaseSwitchTimestamp + kChaseSwitchCooldown < cg.time ) {
+		if( doSwitchChaseCamMode() ) {
+			cg.chaseSwitchTimestamp = cg.time;
+			wsw::ui::UISystem::instance()->playForwardSound();
+			return true;
+		}
+	}
+	return false;
+}
+
 void CG_ClearChaseCam() {
 	cg.chaseMode            = 0;
 	cg.chaseSwitchTimestamp = 0;
@@ -927,34 +953,27 @@ void CG_ClearChaseCam() {
 
 static void CG_UpdateChaseCam() {
 	const ViewState *const viewState = getOurClientViewState();
-
-	const bool chasecam = ( viewState->snapPlayerState.pmove.pm_type == PM_CHASECAM ) && ( viewState->snapPlayerState.POVnum != (unsigned)( cgs.playerNum + 1 ) );
+	const bool chasecam              = viewState->isUsingChasecam();
 
 	if( !( cg.frame.multipov || chasecam ) || cg.isDemoCamFree ) {
 		cg.chaseMode = CAM_INEYES;
 	}
 
-	if( cg.time > cg.chaseSwitchTimestamp + 250 ) {
+	// If it's worth making switch attempt (its handled invidually by respective subroutines but still...)
+	if( cg.chaseSwitchTimestamp + kChaseSwitchCooldown < cg.time ) {
 		usercmd_t cmd;
 		NET_GetUserCmd( NET_GetCurrentUserCmdNum() - 1, &cmd );
 
+		bool switched = false;
 		if( cmd.buttons & BUTTON_ATTACK ) {
-			if( CG_SwitchChaseCamMode() ) {
-				cg.chaseSwitchTimestamp = cg.time;
-				wsw::ui::UISystem::instance()->playForwardSound();
-			}
+			switched = CG_SwitchChaseCamMode();
 		}
-
-		int chaseStep = 0;
-		if( cmd.upmove > 0 || cmd.buttons & BUTTON_SPECIAL ) {
-			chaseStep = 1;
-		} else if( cmd.upmove < 0 ) {
-			chaseStep = -1;
-		}
-		if( chaseStep ) {
-			if( CG_ChaseStep( chaseStep ) ) {
-				cg.chaseSwitchTimestamp = cg.time;
-				wsw::ui::UISystem::instance()->playForwardSound();
+		// Disallow switching mode and pov simultaneously
+		if( !switched ) {
+			if( cmd.upmove > 0 || cmd.buttons & BUTTON_SPECIAL ) {
+				CG_ChaseStep( +1 );
+			} else if( cmd.upmove < 0 ) {
+				CG_ChaseStep( -1 );
 			}
 		}
 	}
