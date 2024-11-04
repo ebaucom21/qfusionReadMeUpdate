@@ -144,8 +144,8 @@ public:
 		// Prepare height field
 
 		constexpr float xzCellSize  = 8.0f;
-		constexpr float yCellSize   = 8.0f;
-		constexpr float climbHeight = 8.0f;
+		constexpr float yCellSize   = 0.001f;
+		constexpr float climbHeight = 0.0f;
 
 		int gridWidth = 0, gridHeight = 0;
 		const int numTris = m_indicesBuffer->size() / 3;

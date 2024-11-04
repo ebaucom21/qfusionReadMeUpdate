@@ -27,6 +27,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <algorithm>
 
+#ifdef DEBUG_OCCLUDERS
+// See frontendcull.inc
+bool g_isLockingOccluders = false;
+vec3_t g_lockedViewOrigin;
+vec3_t g_lockedViewAxis;
+#endif
+
 void Frustum::setPlaneComponentsAtIndex( unsigned index, const float *n, float d ) {
 	const uint32_t blendsForSign[2] { 0, ~( (uint32_t)0 ) };
 
@@ -640,8 +647,6 @@ auto Frontend::calcOccluderScores( StateForCamera *stateForCamera, std::span<con
 
 auto Frontend::pruneAndSortOccludersByScores( StateForCamera *stateForCamera,
 											  std::span<const unsigned> visibleOccluders ) -> std::span<const SortedOccluder> {
-	const auto *const occluderEntries = rsh.worldBrushModel->occluderDataEntries;
-
 	// Note: The area units are in NDC, also we don't divide cross products by 2 to get triangle areas,
 	// hence the area of the entire screen appears to be equal to len([-1,+1]) * len([-1,+1]) * 2 = 8
 #if 1
@@ -668,6 +673,7 @@ auto Frontend::pruneAndSortOccludersByScores( StateForCamera *stateForCamera,
 	wsw::sortByFieldDescending( sortedOccluders, sortedOccluders + numSortedOccluders, &SortedOccluder::score );
 
 #ifdef SHOW_OCCLUDERS
+	const auto *const occluderEntries = rsh.worldBrushModel->occluderDataEntries;
 	for( unsigned i = 0; i < numSortedOccluders; ++i ) {
 		const OccluderDataEntry &occluder = occluderEntries[sortedOccluders[i].occluderNum];
 

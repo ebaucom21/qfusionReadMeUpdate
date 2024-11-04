@@ -726,6 +726,10 @@ private:
 #define SHOW_OCCLUDED( stateForCamera, v1, v2, color ) do { /*addDebugLine( stateForCamera, v1, v2, color );*/ } while( 0 )
 //#define SHOW_OCCLUDERS
 //#define SHOW_OCCLUDERS_FRUSTA
+
+// Note: Locking occluders has very limited applicability
+// as we don't modify the sorting pass due to maintenance burden reasons,
+// therefore locked occluders are likely to be rejected by the sorting pass if the camera position changes.
 //#define DEBUG_OCCLUDERS
 
 #endif
