@@ -168,7 +168,7 @@ public:
 		CurvedBeamUVMode uvMode;
 
 		[[nodiscard]]
-		auto getStorageRequirements( const float *, const float *, float, float, unsigned, void * ) const
+		auto getStorageRequirements( const float *, const float *, float, float, unsigned, void *, unsigned ) const
 			-> std::optional<std::pair<unsigned, unsigned>> override;
 
 		[[nodiscard]]
@@ -256,7 +256,7 @@ private:
 		ImpactRosetteEffect *parentEffect;
 
 		[[nodiscard]]
-		auto getStorageRequirements( const float *, const float *, float, float, unsigned, void * ) const
+		auto getStorageRequirements( const float *, const float *, float, float, unsigned, void *, unsigned ) const
 			-> std::optional<std::pair<unsigned, unsigned>> override;
 
 		[[nodiscard]]
@@ -276,8 +276,8 @@ private:
 		ImpactRosetteEffect *parentEffect;
 
 		[[nodiscard]]
-		auto getStorageRequirements( const float *, const float *, float, float, unsigned, void * ) const
-		-> std::optional<std::pair<unsigned, unsigned>> override;
+		auto getStorageRequirements( const float *, const float *, float, float, unsigned, void *, unsigned ) const
+			-> std::optional<std::pair<unsigned, unsigned>> override;
 
 		[[nodiscard]]
 		auto fillMeshBuffers( const float *__restrict viewOrigin,
@@ -321,7 +321,7 @@ private:
 		float lifetimeFrac { 0.0f };
 
 		[[nodiscard]]
-		auto getStorageRequirements( const float *, const float *, float, float, unsigned, void * ) const
+		auto getStorageRequirements( const float *, const float *, float, float, unsigned, void *, unsigned ) const
 			-> std::optional<std::pair<unsigned, unsigned>> override;
 
 		[[nodiscard]]

@@ -99,7 +99,8 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 	}
 }
 
-auto PolyEffectsSystem::CurvedBeamPoly::getStorageRequirements( const float *, const float *, float, float, unsigned, void * ) const
+auto PolyEffectsSystem::CurvedBeamPoly::getStorageRequirements( const float *, const float *, float, float,
+																unsigned, void *, unsigned ) const
 	-> std::optional<std::pair<unsigned, unsigned>> {
 	assert( points.size() > 1 );
 	return std::make_pair( (unsigned)( 4 * points.size() ), (unsigned)( 6 * points.size() ) );
@@ -657,7 +658,8 @@ void PolyEffectsSystem::spawnImpactRosette( ImpactRosetteParams &&params ) {
 	wsw::link( effect, &m_impactRosetteEffectsHead );
 }
 
-auto PolyEffectsSystem::ImpactRosetteSpikesPoly::getStorageRequirements( const float *, const float *, float, float, unsigned, void * ) const
+auto PolyEffectsSystem::ImpactRosetteSpikesPoly::getStorageRequirements( const float *, const float *, float, float,
+																		 unsigned, void *, unsigned ) const
 	-> std::optional<std::pair<unsigned, unsigned>> {
     return std::make_pair( 4 * parentEffect->numElements, 6 * parentEffect->numElements );
 }
@@ -742,7 +744,8 @@ auto PolyEffectsSystem::ImpactRosetteSpikesPoly::fillMeshBuffers( const float *_
 	return { numAddedVertices, numAddedIndices };
 }
 
-auto PolyEffectsSystem::ImpactRosetteFlarePoly::getStorageRequirements( const float *, const float *, float, float, unsigned, void * ) const
+auto PolyEffectsSystem::ImpactRosetteFlarePoly::getStorageRequirements( const float *, const float *, float, float,
+																		unsigned, void *, unsigned ) const
 	-> std::optional<std::pair<unsigned, unsigned>> {
 	return std::make_pair( 4 * parentEffect->numElements, 6 * parentEffect->numElements );
 }
@@ -911,7 +914,8 @@ void PolyEffectsSystem::spawnSimulatedRing( SimulatedRingParams &&params ) {
 	wsw::link( effect, &m_ribbonEffectsHead );
 }
 
-auto PolyEffectsSystem::RibbonPoly::getStorageRequirements( const float *, const float *, float, float, unsigned, void * ) const
+auto PolyEffectsSystem::RibbonPoly::getStorageRequirements( const float *, const float *, float, float,
+															unsigned, void *, unsigned ) const
 	-> std::optional<std::pair<unsigned, unsigned>> {
 	assert( parentEffect->numEdges > 1 );
 	// TODO: Use strips

@@ -581,9 +581,11 @@ void Frontend::addDynamicMeshToSortList( StateForCamera *stateForCamera, const e
 	// Dynamic mesh lod code is special
 	const float cameraViewTangent = stateForCamera->fovLodScale;
 	std::optional<std::pair<unsigned, unsigned>> maybeStorageRequirements;
+	const unsigned drawFlags = ( stateForCamera->refdef.rdflags & RDF_LOWDETAIL ) ? DynamicMesh::ForceLowDetail : 0;
 	maybeStorageRequirements = mesh->getStorageRequirements( stateForCamera->viewOrigin, stateForCamera->viewAxis,
 															 cameraViewTangent, stateForCamera->viewLodScale,
-															 stateForCamera->cameraId, drawSurface->scratchpad );
+															 stateForCamera->cameraId, drawSurface->scratchpad,
+															 drawFlags );
 	if( maybeStorageRequirements ) [[likely]] {
 		const auto [numVertices, numIndices] = *maybeStorageRequirements;
 		assert( numVertices && numIndices );
@@ -1040,6 +1042,7 @@ auto Frontend::prepareDrawingPortalSurfaceSide( StateForCamera *stateForPrimaryC
 
 	refdef_t newRefdef = stateForPrimaryCamera->refdef;
 	newRefdef.rdflags &= ~( RDF_UNDERWATER | RDF_CROSSINGWATER );
+	newRefdef.rdflags |= RDF_LOWDETAIL;
 	// Note: Inheritting RDF_NOBSPOCCLUSIONCULLING
 
 	renderFlagsToAdd   |= RF_CLIPPLANE;

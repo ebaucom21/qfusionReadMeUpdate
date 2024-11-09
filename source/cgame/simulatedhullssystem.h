@@ -203,7 +203,8 @@ private:
 		mutable SharedMeshData *m_shared { nullptr };
 
 		[[nodiscard]]
-		auto calcSolidSubdivLodLevel( const float *viewOrigin, float cameraViewTangent, float viewLodScale ) const -> std::optional<unsigned>;
+		auto calcSolidSubdivLodLevel( const float *viewOrigin, float cameraViewTangent,
+									  float viewLodScale, unsigned drawFlags ) const -> std::optional<unsigned>;
 
 		[[nodiscard]]
 		auto getCacheEntryByCameraId( unsigned cameraId ) const -> SharedMeshData::CacheEntry *;
@@ -230,7 +231,7 @@ private:
 
 		[[nodiscard]]
 		auto getStorageRequirements( const float *viewOrigin, const float *viewAxis, float cameraViewTangent,
-									 float viewLodScale, unsigned cameraId, void *scratchpad ) const
+									 float viewLodScale, unsigned cameraId, void *scratchpad, unsigned drawFlags ) const
 									 -> std::optional<std::pair<unsigned, unsigned>> override;
 
 		[[nodiscard]]
@@ -264,7 +265,7 @@ private:
 
 		[[nodiscard]]
 		auto getStorageRequirements( const float *viewOrigin, const float *viewAxis, float cameraViewTangent,
-									 float viewLodScale, unsigned cameraId, void *scratchpad ) const
+									 float viewLodScale, unsigned cameraId, void *scratchpad, unsigned drawFlags ) const
 									 -> std::optional<std::pair<unsigned, unsigned>> override;
 
 		[[nodiscard]]

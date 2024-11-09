@@ -506,6 +506,10 @@ struct DynamicMesh {
 
 	bool applyVertexDynLight { false };
 
+	enum DrawFlags : unsigned {
+		ForceLowDetail = 0x1,
+	};
+
 	virtual ~DynamicMesh() = default;
 
 	// The scratchpad could be used for storing important temporaries for reusing during fillMeshBuffers call
@@ -521,10 +525,12 @@ struct DynamicMesh {
 										 float cameraViewTangent,
 										 float viewLodScale,
 										 unsigned cameraId,
-										 void *__restrict scratchpad ) const
+										 void *__restrict scratchpad,
+										 unsigned drawFlags ) const
 		-> std::optional<std::pair<unsigned, unsigned>> = 0;
 
 	// The scratchpad points to the same chunk of memory as during getStorageRequirements() call.
+	// TODO: Provide drawFlags argument as well (not really needed as of now)
 	[[nodiscard]]
 	virtual auto fillMeshBuffers( const float *__restrict viewOrigin,
 								  const float *__restrict viewAxis,

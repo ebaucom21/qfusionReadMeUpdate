@@ -2425,7 +2425,8 @@ static void applyLightsToVertices( const vec4_t *__restrict givenPositions,
 
 auto SimulatedHullsSystem::HullDynamicMesh::calcSolidSubdivLodLevel( const float *viewOrigin,
 																	 float cameraViewTangent,
-																	 float viewLodScale ) const
+																	 float viewLodScale,
+																	 unsigned drawFlags ) const
 	-> std::optional<unsigned> {
 	assert( cameraViewTangent > 0.0f );
 	assert( viewLodScale >= 0.0f && viewLodScale <= 1.0f );
@@ -2442,7 +2443,7 @@ auto SimulatedHullsSystem::HullDynamicMesh::calcSolidSubdivLodLevel( const float
 
 	// Get a suitable subdiv level and store it for further use during this frame
 	unsigned chosenSubdivLevel = m_shared->simulatedSubdivLevel;
-	if( m_shared->tesselateClosestLod ) {
+	if( m_shared->tesselateClosestLod && !( drawFlags & DynamicMesh::ForceLowDetail ) ) {
 		chosenSubdivLevel += 1;
 	}
 
@@ -2658,7 +2659,8 @@ auto SimulatedHullsSystem::HullSolidDynamicMesh::getStorageRequirements( const f
 																		 float cameraViewTangent,
 																		 float viewLodScale,
 																		 unsigned cameraId,
-																		 void *scratchpadStorage ) const
+																		 void *scratchpadStorage,
+																		 unsigned drawFlags ) const
 	-> std::optional<std::pair<unsigned, unsigned>> {
 	auto *const scratchpad = (SolidMeshScratchpad *)scratchpadStorage;
 	auto *const cacheEntry = getCacheEntryByCameraId( cameraId );
@@ -2673,7 +2675,8 @@ auto SimulatedHullsSystem::HullSolidDynamicMesh::getStorageRequirements( const f
 		} else {
 			return std::nullopt;
 		}
-	} else if( const std::optional<unsigned> drawLevel = calcSolidSubdivLodLevel( viewOrigin, cameraViewTangent, viewLodScale ) ) {
+	} else if( const std::optional<unsigned> drawLevel = calcSolidSubdivLodLevel( viewOrigin, cameraViewTangent,
+																				  viewLodScale, drawFlags ) ) {
 		scratchpad->chosenSubdivLevel = *drawLevel;
 		cacheEntry->chosenSubdivLevel = *drawLevel;
 	} else {
@@ -2697,7 +2700,8 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::getStorageRequirements( const f
 																		 float cameraViewTangent,
 																		 float viewLodScale,
 																		 unsigned cameraId,
-																		 void *scratchpadStorage ) const
+																		 void *scratchpadStorage,
+																		 unsigned drawFlags ) const
 	-> std::optional<std::pair<unsigned, unsigned>> {
 	auto *const scratchpad = (CloudMeshScratchpad *)scratchpadStorage;
 	auto *const cacheEntry = getCacheEntryByCameraId( cameraId );
@@ -2710,7 +2714,8 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::getStorageRequirements( const f
 		} else {
 			return std::nullopt;
 		}
-	} else if( const std::optional<unsigned> drawLevel = calcSolidSubdivLodLevel( viewOrigin, cameraViewTangent, viewLodScale ) ) {
+	} else if( const std::optional<unsigned> drawLevel = calcSolidSubdivLodLevel( viewOrigin, cameraViewTangent,
+																				  viewLodScale, drawFlags ) ) {
 		scratchpad->chosenSubdivLevel = *drawLevel;
 		cacheEntry->chosenSubdivLevel = *drawLevel;
 	} else {
