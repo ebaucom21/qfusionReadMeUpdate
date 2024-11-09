@@ -698,6 +698,8 @@ void Console::drawPane( unsigned width, unsigned height ) {
 		Q_strncatz( version, APP_VERSION_STAGE, sizeof( version ) );
 	}
 
+	R_Set2DMode( true );
+
 	// draw the background
 	R_DrawStretchPic( 0, 0, width, height, 0, 0, 1, 1, colorWhite, cls.consoleShader );
 
@@ -1391,6 +1393,8 @@ void Console::drawNotifications( unsigned width, unsigned height ) {
 	if( matchingLines.empty() ) {
 		return;
 	}
+
+	R_Set2DMode( true );
 
 	const int pixelRatio  = VID_GetPixelRatio();
 	const size_t fontHeight = SCR_FontHeight( cls.consoleFont );

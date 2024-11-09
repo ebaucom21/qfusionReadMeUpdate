@@ -1271,6 +1271,7 @@ void QtUISystem::drawMenuPartInMainContext() {
 
 		while( !m_nativelyDrawnUnderlayHeap.empty() ) {
 			std::pop_heap( m_nativelyDrawnUnderlayHeap.begin(), m_nativelyDrawnUnderlayHeap.end(), cmp );
+			// Note: each drawSelfNatively() call manages 2D/scene mode on its own
 			m_nativelyDrawnUnderlayHeap.back()->drawSelfNatively( timestamp, delta, m_pixelsPerLogicalUnit );
 			m_nativelyDrawnUnderlayHeap.pop_back();
 		}
@@ -1287,6 +1288,7 @@ void QtUISystem::drawMenuPartInMainContext() {
 
 		while( !m_nativelyDrawnOverlayHeap.empty() ) {
 			std::pop_heap( m_nativelyDrawnOverlayHeap.begin(), m_nativelyDrawnOverlayHeap.end(), cmp );
+			// Note: each drawSelfNatively() call manages 2D/scene mode on its own
 			m_nativelyDrawnOverlayHeap.back()->drawSelfNatively( timestamp, delta, m_pixelsPerLogicalUnit );
 			m_nativelyDrawnOverlayHeap.pop_back();
 		}
