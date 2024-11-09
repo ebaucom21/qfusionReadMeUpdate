@@ -757,14 +757,16 @@ void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene
 
 	// Note: Looks like we have to properly update portal surfaces even if portals are disabled (for sorting reasons).
 	// Check whether actual drawing is enabled upon doing that.
-	if( !isCameraAPortalCamera && stateForCamera->viewCluster >= 0 && !r_fastsky->integer ) {
-		for( unsigned i = 0; i < stateForCamera->numPortalSurfaces; ++i ) {
-			if( validPortalSurfacesMask & ( 1u << i ) ) {
-				prepareDrawingPortalSurface( stateForCamera, scene, &stateForCamera->portalSurfaces[i] );
+	if( !isCameraAPortalCamera && !( stateForCamera->refdef.rdflags & RDF_LOWDETAIL ) ) {
+		if( stateForCamera->viewCluster >= 0 && !r_fastsky->integer ) {
+			for( unsigned i = 0; i < stateForCamera->numPortalSurfaces; ++i ) {
+				if( validPortalSurfacesMask & ( 1u << i ) ) {
+					prepareDrawingPortalSurface( stateForCamera, scene, &stateForCamera->portalSurfaces[i] );
+				}
 			}
-		}
-		if( stateForCamera->refdef.rdflags & RDF_SKYPORTALINVIEW ) {
-			prepareDrawingSkyPortal( stateForCamera, scene );
+			if( stateForCamera->refdef.rdflags & RDF_SKYPORTALINVIEW ) {
+				prepareDrawingSkyPortal( stateForCamera, scene );
+			}
 		}
 	}
 }

@@ -65,6 +65,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define RDF_NOBSPOCCLUSIONCULLING   0x200
 #define RDF_DRAWBRIGHT              0x400
 #define RDF_USEAUTOLODSCALE         0x800   // calculate additional lod scale based on dimensions of the (mini) view
+#define RDF_LOWDETAIL               0x1000  // skip some details/effects in miniviews
 
 // skm flags
 #define SKM_ATTACHMENT_BONE     1

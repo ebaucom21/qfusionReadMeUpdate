@@ -758,50 +758,6 @@ int CG_SkyPortal( ViewState *viewState ) {
 	return 0;
 }
 
-static int CG_RenderFlags( ViewState *viewState, bool isMiniview ) {
-	int rdflags = 0;
-
-	// set the RDF_UNDERWATER and RDF_CROSSINGWATER bitflags
-	int contents = CG_PointContents( viewState->view.origin );
-	if( contents & MASK_WATER ) {
-		rdflags |= RDF_UNDERWATER;
-
-		// undewater, check above
-		contents = CG_PointContents( tv( viewState->view.origin[0], viewState->view.origin[1], viewState->view.origin[2] + 9 ) );
-		if( !( contents & MASK_WATER ) ) {
-			rdflags |= RDF_CROSSINGWATER;
-		}
-	} else {
-		// look down a bit
-		contents = CG_PointContents( tv( viewState->view.origin[0], viewState->view.origin[1], viewState->view.origin[2] - 9 ) );
-		if( contents & MASK_WATER ) {
-			rdflags |= RDF_CROSSINGWATER;
-		}
-	}
-
-	if( cg.oldAreabits ) {
-		rdflags |= RDF_OLDAREABITS;
-	}
-
-	if( v_outlineWorld.get() ) {
-		rdflags |= RDF_WORLDOUTLINES;
-	}
-
-	rdflags |= CG_SkyPortal( viewState );
-
-	if( isMiniview ) {
-		rdflags |= RDF_USEAUTOLODSCALE;
-		rdflags |= RDF_NOBSPOCCLUSIONCULLING;
-	} else {
-		const auto *const uiSystem = wsw::ui::UISystem::instance();
-		if( uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard() ) {
-			rdflags |= RDF_DRAWBRIGHT;
-		}
-	}
-
-	return rdflags;
-}
-
 static void CG_InterpolatePlayerState( player_state_t *playerState, ViewState *viewState ) {
 	const player_state_t *const ps = &viewState->snapPlayerState;
 	const player_state_t *const ops = &viewState->oldSnapPlayerState;
@@ -1220,6 +1176,27 @@ static auto prepareViewRectsAndStateIndices( Rect *viewRects, unsigned *viewStat
 
 static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool actuallyUseTiledMode,
 									 const Rect *viewRects, const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) {
+	const auto *const uiSystem = wsw::ui::UISystem::instance();
+
+	// Set to zero by default so subtraction tests in the main loop don't lead to UB
+	int bestMiniviewWidth     = std::numeric_limits<int>::lowest();
+	int bestMiniviewHeight    = std::numeric_limits<int>::lowest();
+	bool hasDetailedMiniviews = false;
+	if( actuallyUseTiledMode ) {
+		int worstMiniviewWidth  = std::numeric_limits<int>::max();
+		int worstMiniviewHeight = std::numeric_limits<int>::max();
+		// TODO: Think of saving flags that the miniview uses "exclusive" mode? This could be useful for HUD as well.
+		for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
+			const Rect &viewport = viewRects[viewNum];
+			bestMiniviewWidth    = wsw::max( bestMiniviewWidth, viewport.width );
+			bestMiniviewHeight   = wsw::max( bestMiniviewHeight, viewport.height );
+			worstMiniviewWidth   = wsw::min( worstMiniviewWidth, viewport.width );
+			worstMiniviewHeight  = wsw::min( worstMiniviewHeight, viewport.height );
+		}
+		hasDetailedMiniviews = std::abs( bestMiniviewWidth - worstMiniviewWidth ) > 1 ||
+							   std::abs( bestMiniviewHeight - worstMiniviewHeight ) > 1;
+	}
+
 	for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
 		ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
 		const Rect viewport        = viewRects[viewNum];
@@ -1247,10 +1224,48 @@ static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool 
 
 		CG_SetupViewDef( &viewState->view, viewDefType, thirdperson, viewState, viewport );
 
-		refdef_t *rd = &viewState->view.refdef;
+		refdef_t *const rd = &viewState->view.refdef;
 		AnglesToAxis( viewState->view.angles, rd->viewaxis );
 
-		rd->rdflags = CG_RenderFlags( viewState, isMiniview );
+		rd->rdflags = 0;
+
+		// set the RDF_UNDERWATER and RDF_CROSSINGWATER bitflags
+		int contents = CG_PointContents( viewState->view.origin );
+		if( contents & MASK_WATER ) {
+			rd->rdflags |= RDF_UNDERWATER;
+			// undewater, check above
+			contents = CG_PointContents( tv( viewState->view.origin[0], viewState->view.origin[1], viewState->view.origin[2] + 9 ) );
+			if( !( contents & MASK_WATER ) ) {
+				rd->rdflags |= RDF_CROSSINGWATER;
+			}
+		} else {
+			// look down a bit
+			contents = CG_PointContents( tv( viewState->view.origin[0], viewState->view.origin[1], viewState->view.origin[2] - 9 ) );
+			if( contents & MASK_WATER ) {
+				rd->rdflags |= RDF_CROSSINGWATER;
+			}
+		}
+
+		if( cg.oldAreabits ) {
+			rd->rdflags |= RDF_OLDAREABITS;
+		}
+		if( v_outlineWorld.get() ) {
+			rd->rdflags |= RDF_WORLDOUTLINES;
+		}
+
+		rd->rdflags |= CG_SkyPortal( viewState );
+		if( isMiniview ) {
+			rd->rdflags |= RDF_USEAUTOLODSCALE;
+			rd->rdflags |= RDF_NOBSPOCCLUSIONCULLING;
+			if( !hasDetailedMiniviews || std::abs( viewport.width - bestMiniviewWidth ) > 1 ||
+										 std::abs( viewport.height - bestMiniviewHeight ) > 1 ) {
+				rd->rdflags = RDF_LOWDETAIL;
+			}
+		} else {
+			if( uiSystem->isShowingModalMenu() || uiSystem->isShowingScoreboard() ) {
+				rd->rdflags |= RDF_DRAWBRIGHT;
+			}
+		}
 
 		// warp if underwater
 		if( rd->rdflags & RDF_UNDERWATER ) {
