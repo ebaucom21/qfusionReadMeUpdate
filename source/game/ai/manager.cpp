@@ -5,8 +5,13 @@
 #include "bot.h"
 #include "combat/tacticalspotsregistry.h"
 #include "../../common/links.h"
+#include "../../common/wswstringview.h"
+#include "../../common/wswalgorithm.h"
 
 #include <algorithm>
+
+using wsw::operator""_asView;
+using wsw::operator""_asHView;
 
 // Class static variable declaration
 AiManager *AiManager::instance = nullptr;
@@ -103,48 +108,80 @@ void AiManager::RegisterEvent( const edict_t *ent, int event, int parm ) {
 	}
 }
 
-static struct { const char *name; const char *model; } botCharacters[] = {
-	{ "Viciious",   "bigvic" },
-	{ "Sid",        "bigvic" },
-	{ "Pervert",    "bigvic" },
-	{ "Sick",       "bigvic" },
-	{ "Punk",       "bigvic" },
+static constexpr unsigned kNumBotBreeds    = 5;
+static constexpr unsigned kNumBotsPerBreed = 5;
 
-	{ "Black Sis",  "monada" },
-	{ "Monada",     "monada" },
-	{ "Afrodita",   "monada" },
-	{ "Goddess",    "monada" },
-	{ "Athena",     "monada" },
-
-	{ "Silver",     "silverclas" },
-	{ "Cathy",      "silverclaw" },
-	{ "MishiMishi", "silverclaw" },
-	{ "Lobita",     "silverclaw" },
-	{ "SisterClaw", "silverclaw" },
-
-	{ "Padpork",    "padpork" },
-	{ "Jason",      "padpork" },
-	{ "Lord Hog",   "padpork" },
-	{ "Porkalator", "padpork" },
-	{ "Babe",       "padpork" },
-
-	{ "YYZ2112",    "bobot" },
-	{ "01011001",   "bobot" },
-	{ "Sector",     "bobot" },
-	{ "%APPDATA%",  "bobot" },
-	{ "P.E.#1",     "bobot" },
+static const struct { wsw::StringView model; wsw::StringView names[kNumBotsPerBreed]; } kBotBreedSpecs[kNumBotBreeds] {
+	{ "bigvic"_asView, { "Viciious"_asView, "Sid"_asView, "Pervert"_asView, "Sick"_asView, "Punk"_asView } },
+	{ "monada"_asView, { "Black Sis"_asView, "Monada"_asView, "Afrodita"_asView, "Goddess"_asView, "Athena"_asView } },
+	{ "silverclaw"_asView, { "Silver"_asView, "Cathy"_asView, "MishiMishi"_asView, "Lobita"_asView, "SisterClaw"_asView } },
+	{ "padpork"_asView, { "Padpork"_asView, "Jason"_asView, "Lord Hog"_asView, "Porkalator"_asView, "Babe"_asView } },
+	{ "bobot"_asView, { "YYZ2112"_asView, "01011001"_asView, "Sector"_asView, "%APPDATA%"_asView, "P.E.#1"_asView } },
 };
 
-static constexpr int BOT_CHARACTERS_COUNT = sizeof( botCharacters ) / sizeof( botCharacters[0] );
-
 void AiManager::CreateUserInfo( char *buffer, size_t bufferSize ) {
-	// Try to avoid bad distribution, otherwise some bots are selected too often. Weights are prime numbers
-	int characterIndex = ( (int)( 3 * random() + 11 * random() +  97 * random() + 997 * random() ) ) % BOT_CHARACTERS_COUNT;
+	unsigned nameCounters[kNumBotBreeds][kNumBotsPerBreed];
+	std::memset( nameCounters, 0, sizeof( nameCounters ) );
+	wsw::StaticVector<std::pair<unsigned, unsigned>, kNumBotBreeds> breedCounters;
+	for( unsigned i = 0; i < kNumBotBreeds; ++i ) {
+		breedCounters.emplace_back( { i, 0 } );
+	}
+
+	for( int i = 1; PLAYERNUM( ( game.edicts + i ) ) < ggs->maxclients; i++ ) {
+		const edict_t *ent = game.edicts + i;
+		// Consider regular clients in disguise as well
+		if( ent->r.inuse && G_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
+			const wsw::StringView model = ent->r.client->m_userInfo.getOrThrow( "model"_asHView );
+			const auto breedIt = wsw::find_if( std::begin( kBotBreedSpecs ), std::end( kBotBreedSpecs ), [=]( const auto &b ) {
+				return model.equalsIgnoreCase( b.model );
+			});
+			assert( breedIt != std::end( kBotBreedSpecs ) );
+			const auto breedIndex = breedIt - std::begin( kBotBreedSpecs );
+			breedCounters[breedIndex].second++;
+			for( auto nameIt = std::begin( breedIt->names ); nameIt != std::end( breedIt->names ); ++nameIt ) {
+				if( ent->r.client->colorlessNetname.asView().startsWith( *nameIt, wsw::IgnoreCase ) ) {
+					nameCounters[breedIndex][nameIt - std::begin( breedIt->names )]++;
+				}
+			}
+		}
+	}
+
+	// Sort breeds so breeds with the lowest number of bots come first
+	// TODO: Just use a heap?
+	wsw::sortByField( breedCounters.begin(), breedCounters.end(), &std::pair<unsigned, unsigned>::second );
+	// Take breeds with the lowest number of bots.
+	// This should have an absolute priority so we quickly get a variety of creatures in-game.
+	unsigned numBreedsForChoosing = 1;
+	while( numBreedsForChoosing < breedCounters.size() && breedCounters[0].second == breedCounters[numBreedsForChoosing].second ) {
+		numBreedsForChoosing++;
+	}
+
+	wsw::StaticVector<std::pair<std::pair<uint16_t, uint16_t>, unsigned>, kNumBotBreeds * kNumBotsPerBreed> namesWithCounters;
+	for( unsigned breedNum = 0; breedNum < numBreedsForChoosing; ++breedNum ) {
+		// The original breed index (not the index of the sorted entry)
+		const unsigned breedIndex = breedCounters[breedNum].first;
+		for( unsigned nameIndex = 0; nameIndex < kNumBotsPerBreed; ++nameIndex ) {
+			namesWithCounters.push_back( { { breedIndex, nameIndex }, nameCounters[breedIndex][nameIndex] } );
+		}
+	}
+
+	// Sort names so names with the lowest number of bots come first
+	wsw::sortByField( namesWithCounters.begin(), namesWithCounters.end(), &std::pair<std::pair<uint16_t, uint16_t>, unsigned>::second );
+	unsigned numNamesForChoosing = 1;
+	while( numNamesForChoosing < namesWithCounters.size() && namesWithCounters[0].second == namesWithCounters[numNamesForChoosing].second ) {
+		numNamesForChoosing++;
+	}
+
+	// TODO: Use game-global generator
+	static wsw::RandomGenerator rg( time( nullptr ) );
+	const auto [chosenBreedIndex, chosenNameIndex] = namesWithCounters[rg.nextBounded( numNamesForChoosing )].first;
+	assert( chosenBreedIndex < kNumBotBreeds );
+	assert( chosenNameIndex < kNumBotsPerBreed );
 
 	memset( buffer, 0, bufferSize );
 
-	Info_SetValueForKey( buffer, "name", botCharacters[characterIndex].name );
-	Info_SetValueForKey( buffer, "model", botCharacters[characterIndex].model );
+	Info_SetValueForKey( buffer, "name", kBotBreedSpecs[chosenBreedIndex].names[chosenNameIndex].data() );
+	Info_SetValueForKey( buffer, "model", kBotBreedSpecs[chosenBreedIndex].model.data() );
 	Info_SetValueForKey( buffer, "skin", "default" );
 	Info_SetValueForKey( buffer, "hand", va( "%i", (int)( random() * 2.5 ) ) );
 	const char *color = va( "%i %i %i", (uint8_t)( random() * 255 ), (uint8_t)( random() * 255 ), (uint8_t)( random() * 255 ) );
