@@ -79,7 +79,8 @@ public:
 		std::optional<std::pair<unsigned, LightLifespan>> lightProps;
 		float width { 0.0f };
 		float tileLength { 0.0f };
-		unsigned timeout;
+		unsigned timeout { 500 };
+		unsigned numPlanes { 1 };
 	};
 
 	void spawnTransientBeamEffect( const float *from, const float *to, TransientBeamParams &&params );

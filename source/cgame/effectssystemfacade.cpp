@@ -2914,9 +2914,10 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 				},
 			}
 		},
-		.width      = wsw::clamp( v_ebBeamWidth.get(), 0.0f, 128.0f ),
+		.width      = wsw::clamp( v_ebBeamWidth.get(), 0.0f, 48.0f ),
 		.tileLength = 128.0f,
-		.timeout    = (unsigned) ( timeoutMillis ),
+		.timeout    = (unsigned)( timeoutMillis ),
+		.numPlanes  = 3,
 	});
 
 }
@@ -2966,9 +2967,10 @@ void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t en
 				},
 			}
 		},
-		.width      = wsw::clamp( v_instaBeamWidth.get(), 0.0f, 128.0f ),
+		.width      = wsw::clamp( v_instaBeamWidth.get(), 0.0f, 48.0f ),
 		.tileLength = 128.0f,
 		.timeout    = timeoutMillis,
+		.numPlanes  = 3,
 	});
 }
 

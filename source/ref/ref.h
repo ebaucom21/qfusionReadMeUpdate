@@ -483,6 +483,7 @@ struct QuadPoly {
 		float tileLength { 0.0f };
 		float fromColor[4] { 1.0f, 1.0f, 1.0f, 1.0f };
 		float toColor[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+		unsigned numPlanes { 1 };
 	};
 
 	struct OrientedSpriteRules {

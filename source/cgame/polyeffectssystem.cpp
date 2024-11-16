@@ -376,7 +376,7 @@ void PolyEffectsSystem::destroyRibbonEffect( RibbonEffect *effect ) {
 }
 
 void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float *to, TransientBeamParams &&params ) {
-	if( params.width < 1.0f || !params.material ) [[unlikely]] {
+	if( params.width < 1.0f || !params.material || !params.numPlanes ) [[unlikely]] {
 		return;
 	}
 
@@ -426,6 +426,7 @@ void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float
 		.dir        = { dir[0], dir[1], dir[2] },
 		.width      = params.width,
 		.tileLength = params.tileLength,
+		.numPlanes  = params.numPlanes,
 	};
 
 	wsw::link( effect, &m_transientBeamsHead );

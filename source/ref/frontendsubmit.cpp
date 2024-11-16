@@ -416,9 +416,38 @@ auto getCoronaSpanStorageRequirements( std::span<const sortedDrawSurf_t> batchSp
 	return std::make_optional<std::pair<unsigned, unsigned>>( 4 * batchSpan.size(), 6 * batchSpan.size() );
 }
 
+static constexpr unsigned kMaxNumDrawnPlanesForBeam = 7;
+
+[[nodiscard]]
+static inline auto getNumDrawnPlanesForBeam( const QuadPoly::ViewAlignedBeamRules *beamRules ) -> unsigned {
+	assert( beamRules->numPlanes > 1 );
+	unsigned limit;
+	static_assert( kMaxNumDrawnPlanesForBeam > 1 && kMaxNumDrawnPlanesForBeam % 2 );
+	// Preserve the original appearance (it differs for odd or even number of planes)
+	if( beamRules->numPlanes % 2 ) {
+		limit = kMaxNumDrawnPlanesForBeam;
+	} else {
+		limit = kMaxNumDrawnPlanesForBeam - 1;
+	}
+	return wsw::min( beamRules->numPlanes, limit );
+}
+
 [[nodiscard]]
 auto getQuadPolySpanStorageRequirements( std::span<const sortedDrawSurf_t> batchSpan ) -> std::optional<std::pair<unsigned, unsigned>> {
-	return std::make_optional<std::pair<unsigned, unsigned>>( 4 * batchSpan.size(), 6 * batchSpan.size() );
+	unsigned numVertices = 0;
+	unsigned numIndices  = 0;
+	for( const sortedDrawSurf_t &surf: batchSpan ) {
+		const auto *const poly = (const QuadPoly *)surf.drawSurf;
+		if( const auto *const beamRules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &poly->appearanceRules ) ) {
+			const unsigned numDrawnPlanes = getNumDrawnPlanesForBeam( beamRules );
+			numVertices += 4 * numDrawnPlanes;
+			numIndices += 6 * numDrawnPlanes;
+		} else {
+			numVertices += 4;
+			numIndices += 6;
+		}
+	}
+	return std::make_optional( std::make_pair( numVertices, numIndices ) );
 }
 
 void Frontend::markBuffersOfBatchedDynamicsForUpload( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {
@@ -1040,7 +1069,7 @@ void Frontend::prepareBatchedCoronas( PrepareBatchedSurfWorkload *workload ) {
 
 void Frontend::prepareBatchedQuadPolys( PrepareBatchedSurfWorkload *workload ) {
 	MeshBuilder *const meshBuilder = &tl_meshBuilder;
-	meshBuilder->reserveForNumQuads( workload->batchSpan.size() );
+	meshBuilder->reserveForNumQuads( kMaxNumDrawnPlanesForBeam * workload->batchSpan.size() );
 
 	[[maybe_unused]] const float *const viewOrigin = workload->stateForCamera->viewOrigin;
 	[[maybe_unused]] const float *const viewAxis   = workload->stateForCamera->viewAxis;
@@ -1059,56 +1088,84 @@ void Frontend::prepareBatchedQuadPolys( PrepareBatchedSurfWorkload *workload ) {
 
 		if( const auto *__restrict beamRules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &poly->appearanceRules ) ) {
 			assert( std::fabs( VectorLengthFast( beamRules->dir ) - 1.0f ) < 1.01f );
-			vec3_t viewToOrigin, right;
-			VectorSubtract( poly->origin, viewOrigin, viewToOrigin );
-			CrossProduct( viewToOrigin, beamRules->dir, right );
+			assert( beamRules->numPlanes >= 1 );
 
-			const float squareLength = VectorLengthSquared( right );
+			vec3_t viewToOrigin, originalRight;
+			VectorSubtract( poly->origin, viewOrigin, viewToOrigin );
+			CrossProduct( viewToOrigin, beamRules->dir, originalRight );
+
+			const float squareLength = VectorLengthSquared( originalRight );
 			if( squareLength > wsw::square( 0.001f ) ) [[likely]] {
 				const float rcpLength = Q_RSqrt( squareLength );
-				VectorScale( right, rcpLength, right );
+				VectorScale( originalRight, rcpLength, originalRight );
 
-				const float halfWidth = 0.5f * beamRules->width;
+				const unsigned numDrawnPlanes = getNumDrawnPlanesForBeam( beamRules );
+				const float degreesPerStep    = numDrawnPlanes > 1 ? 180.0f / (float)numDrawnPlanes : 0.0f;
+				unsigned planeNum             = 0;
+				do {
+					float rotationDegrees = 0.0f;
+					if( numDrawnPlanes % 2 ) {
+						if( planeNum > 0 ) {
+							const unsigned extraPlaneNum = planeNum - 1;
+							const float stepSign         = ( extraPlaneNum % 2 ) ? -1.0f : +1.0f;
+							rotationDegrees              = stepSign * degreesPerStep * (float)( 1 + extraPlaneNum / 2 );
+						}
+					} else {
+						// Add rotation to the first (zero) plane as well
+						rotationDegrees = degreesPerStep * ( (float)planeNum + 0.5f );
+					}
 
-				vec3_t from, to;
-				VectorMA( poly->origin, -poly->halfExtent, beamRules->dir, from );
-				VectorMA( poly->origin, +poly->halfExtent, beamRules->dir, to );
+					const float halfWidth = 0.5f * beamRules->width;
 
-				VectorMA( from, +halfWidth, right, positions[0] );
-				VectorMA( from, -halfWidth, right, positions[1] );
-				VectorMA( to, -halfWidth, right, positions[2] );
-				VectorMA( to, +halfWidth, right, positions[3] );
+					vec3_t from, to;
+					VectorMA( poly->origin, -poly->halfExtent, beamRules->dir, from );
+					VectorMA( poly->origin, +poly->halfExtent, beamRules->dir, to );
 
-				float stx = 1.0f;
-				if( beamRules->tileLength > 0 ) {
-					const float fullExtent = 2.0f * poly->halfExtent;
-					stx = fullExtent * Q_Rcp( beamRules->tileLength );
-				}
+					vec3_t tmpRight;
+					const float *right;
+					if( rotationDegrees == 0.0f ) {
+						right = originalRight;
+					} else {
+						RotatePointAroundVector( tmpRight, beamRules->dir, originalRight, rotationDegrees );
+						right = tmpRight;
+					}
 
-				Vector2Set( texCoords[0], 0.0f, 0.0f );
-				Vector2Set( texCoords[1], 0.0f, 1.0f );
-				Vector2Set( texCoords[2], stx, 1.0f );
-				Vector2Set( texCoords[3], stx, 0.0f );
+					VectorMA( from, +halfWidth, right, positions[0] );
+					VectorMA( from, -halfWidth, right, positions[1] );
+					VectorMA( to, -halfWidth, right, positions[2] );
+					VectorMA( to, +halfWidth, right, positions[3] );
 
-				const byte_vec4_t fromColorAsBytes {
-					(uint8_t)( beamRules->fromColor[0] * 255 ),
-					(uint8_t)( beamRules->fromColor[1] * 255 ),
-					(uint8_t)( beamRules->fromColor[2] * 255 ),
-					(uint8_t)( beamRules->fromColor[3] * 255 ),
-				};
-				const byte_vec4_t toColorAsBytes {
-					(uint8_t)( beamRules->toColor[0] * 255 ),
-					(uint8_t)( beamRules->toColor[1] * 255 ),
-					(uint8_t)( beamRules->toColor[2] * 255 ),
-					(uint8_t)( beamRules->toColor[3] * 255 ),
-				};
+					float stx = 1.0f;
+					if( beamRules->tileLength > 0 ) {
+						const float fullExtent = 2.0f * poly->halfExtent;
+						stx = fullExtent * Q_Rcp( beamRules->tileLength );
+					}
 
-				Vector4Copy( fromColorAsBytes, colors[0] );
-				Vector4Copy( fromColorAsBytes, colors[1] );
-				Vector4Copy( toColorAsBytes, colors[2] );
-				Vector4Copy( toColorAsBytes, colors[3] );
+					Vector2Set( texCoords[0], 0.0f, 0.0f );
+					Vector2Set( texCoords[1], 0.0f, 1.0f );
+					Vector2Set( texCoords[2], stx, 1.0f );
+					Vector2Set( texCoords[3], stx, 0.0f );
 
-				meshBuilder->appendQuad( positions, texCoords, colors, indices );
+					const byte_vec4_t fromColorAsBytes {
+						(uint8_t)( beamRules->fromColor[0] * 255 ),
+						(uint8_t)( beamRules->fromColor[1] * 255 ),
+						(uint8_t)( beamRules->fromColor[2] * 255 ),
+						(uint8_t)( beamRules->fromColor[3] * 255 ),
+					};
+					const byte_vec4_t toColorAsBytes {
+						(uint8_t)( beamRules->toColor[0] * 255 ),
+						(uint8_t)( beamRules->toColor[1] * 255 ),
+						(uint8_t)( beamRules->toColor[2] * 255 ),
+						(uint8_t)( beamRules->toColor[3] * 255 ),
+					};
+
+					Vector4Copy( fromColorAsBytes, colors[0] );
+					Vector4Copy( fromColorAsBytes, colors[1] );
+					Vector4Copy( toColorAsBytes, colors[2] );
+					Vector4Copy( toColorAsBytes, colors[3] );
+
+					meshBuilder->appendQuad( positions, texCoords, colors, indices );
+				} while( ++planeNum < numDrawnPlanes );
 			}
 		} else {
 			vec3_t left, up;
@@ -1119,7 +1176,7 @@ void Frontend::prepareBatchedQuadPolys( PrepareBatchedSurfWorkload *workload ) {
 				VectorCopy( &orientedRules->axis[AXIS_RIGHT], left );
 				VectorCopy( &orientedRules->axis[AXIS_UP], up );
 			} else {
-				color = std::get_if<QuadPoly::OrientedSpriteRules>( &poly->appearanceRules )->color;
+				color = std::get_if<QuadPoly::ViewAlignedSpriteRules>( &poly->appearanceRules )->color;
 				VectorCopy( &viewAxis[AXIS_RIGHT], left );
 				VectorCopy( &viewAxis[AXIS_UP], up );
 			}
