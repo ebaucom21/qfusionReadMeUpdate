@@ -135,12 +135,14 @@ void AiManager::CreateUserInfo( char *buffer, size_t bufferSize ) {
 			const auto breedIt = wsw::find_if( std::begin( kBotBreedSpecs ), std::end( kBotBreedSpecs ), [=]( const auto &b ) {
 				return model.equalsIgnoreCase( b.model );
 			});
-			assert( breedIt != std::end( kBotBreedSpecs ) );
-			const auto breedIndex = breedIt - std::begin( kBotBreedSpecs );
-			breedCounters[breedIndex].second++;
-			for( auto nameIt = std::begin( breedIt->names ); nameIt != std::end( breedIt->names ); ++nameIt ) {
-				if( ent->r.client->colorlessNetname.asView().startsWith( *nameIt, wsw::IgnoreCase ) ) {
-					nameCounters[breedIndex][nameIt - std::begin( breedIt->names )]++;
+			// Some models are unavailable for bots
+			if( breedIt != std::end( kBotBreedSpecs ) ) {
+				const auto breedIndex = breedIt - std::begin( kBotBreedSpecs );
+				breedCounters[breedIndex].second++;
+				for( auto nameIt = std::begin( breedIt->names ); nameIt != std::end( breedIt->names ); ++nameIt ) {
+					if( ent->r.client->colorlessNetname.asView().startsWith( *nameIt, wsw::IgnoreCase ) ) {
+						nameCounters[breedIndex][nameIt - std::begin( breedIt->names )]++;
+					}
 				}
 			}
 		}
