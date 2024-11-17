@@ -412,6 +412,14 @@ void CG_ShutdownInput() {
 	}
 
 	CL_Cmd_Unregister( "centerview"_asView );
+
+	cg_inputTimestamp = 0;
+	cg_inputKeyboardDelta = 0;
+	cg_inputMouseDelta = 0;
+	cg_inputCenterView = false;
+
+	mouse_x = 0, mouse_y = 0;
+	old_mouse_x = 0, old_mouse_y = 0;
 }
 
 void CG_AddViewAngles( vec3_t viewAngles ) {

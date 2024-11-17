@@ -33,13 +33,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 using wsw::operator""_asView;
 
-static bool postmatchsilence_set = false, demostream = false, background = false;
-static unsigned lastSecond = 0;
-
-static int oldState = -1;
-static int oldAlphaScore, oldBetaScore;
-static bool scoresSet = false;
-
 // TODO: ??? what to do with default names (they cannot be known without the FS access)?
 // TODO: Let modify declared parameters on the fly?
 static StringConfigVar v_crosshairName( "cg_crosshairName"_asView, { .byDefault = "default"_asView, .flags = CVAR_ARCHIVE } );
@@ -298,6 +291,24 @@ bool CG_ChaseStep( int step ) {
 		}
 	}
 	return false;
+}
+
+static bool postmatchsilence_set = false, demostream = false, background = false;
+static unsigned lastSecond = 0;
+
+static int oldState = -1;
+static int oldAlphaScore, oldBetaScore;
+static bool scoresSet = false;
+
+// We have to reset this stuff manually, as it's no longer reset upon reloading the DLL
+void CG_ShutdownSoundAndMiscState() {
+	postmatchsilence_set = false;
+	demostream = false;
+	background = false;
+	oldState = -1;
+	oldAlphaScore = 0;
+	oldBetaScore = 0;
+	scoresSet = false;
 }
 
 static void CG_AddLocalSounds() {

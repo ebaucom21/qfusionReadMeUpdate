@@ -807,6 +807,7 @@ void CG_UnregisterCGameCommands( void );
 void CG_OverrideWeapondef( int index, const char *cstring );
 
 void CG_StartBackgroundTrack( void );
+void CG_ShutdownSoundAndMiscState();
 
 //
 // cg_svcmds.c

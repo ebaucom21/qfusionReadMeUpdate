@@ -6285,4 +6285,5 @@ void CG_Shutdown( void ) {
 	CG_PModelsShutdown();
 	CG_FreeTemporaryBoneposesCache();
 	CG_ShutdownInput();
+	CG_ShutdownSoundAndMiscState();
 }
