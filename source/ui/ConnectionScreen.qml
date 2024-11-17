@@ -63,7 +63,7 @@ Item {
                 if (numButtons > 1) {
                     // Don't rely on bindings that could get broken
                     buttonEnabledStatuses = [true, dialogItem.enableRetryButton]
-                    buttonFocusStatuses   = [false, dialogItem.enableRetryButton]
+                    buttonFocusStatuses   = [false, false]
                 }
             }
             onButtonActiveFocusChanged: {
