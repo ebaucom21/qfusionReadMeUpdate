@@ -1638,9 +1638,22 @@ void QtUISystem::refreshProperties() {
 		checkMaskChanges      = true;
 	}
 
+	bool shouldStartMenuPlaylist = false;
 	if( m_hasCheckedFirstFrame ) {
 		m_hasCheckedFirstFrame = false;
 		checkMaskChanges = true;
+		shouldStartMenuPlaylist = true;
+	}
+
+	if( !shouldStartMenuPlaylist ) {
+		if( actualClientState != lastClientState && actualClientState == CA_DISCONNECTED && !m_pendingReconnectBehaviour ) {
+			shouldStartMenuPlaylist = true;
+		}
+	}
+	if( m_pendingReconnectBehaviour == std::nullopt && m_reconnectBehaviour != std::nullopt ) {
+		if( actualClientState == CA_DISCONNECTED ) {
+			shouldStartMenuPlaylist = true;
+		}
 	}
 
 	if( checkMaskChanges ) {
@@ -1868,6 +1881,11 @@ void QtUISystem::refreshProperties() {
 #ifndef _WIN32
 	QGuiApplication::processEvents( QEventLoop::AllEvents );
 #endif
+
+	if( shouldStartMenuPlaylist ) {
+		const char *const playlist = "sounds/music/menu.m3u";
+		SoundSystem::instance()->startBackgroundTrack( playlist, playlist, 3 );
+	}
 }
 
 bool QtUISystem::handleMouseMovement( float frameTime, int dx, int dy ) {
