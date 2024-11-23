@@ -1558,6 +1558,8 @@ bool    R_SurfPotentiallyFragmented( const msurface_t *surf );
 void        R_BeginRegistration_();
 void        R_EndRegistration_();
 
+unsigned R_SuggestNumExtraWorkerThreads();
+
 void        R_Shutdown_( bool verbose );
 
 bool    R_SurfPotentiallyVisible( const msurface_t *surf );

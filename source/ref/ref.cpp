@@ -137,6 +137,8 @@ cvar_t *r_multithreading;
 
 cvar_t *r_showShaderCache;
 
+extern cvar_t *cl_multithreading;
+
 static bool r_verbose;
 static bool r_postinit;
 
@@ -740,15 +742,75 @@ void BeginDrawingScenes() {
 	wsw::ref::Frontend::instance()->beginDrawingScenes();
 }
 
+unsigned R_SuggestNumExtraWorkerThreads() {
+	if( cl_multithreading->integer ) {
+		unsigned numPhysicalProcessors = 0, numLogicalProcessors = 0;
+		Sys_GetNumberOfProcessors( &numPhysicalProcessors, &numLogicalProcessors );
+		if( numPhysicalProcessors > 2 ) {
+			// Reserve not more than 3 extra threads.
+			// In case of a 4-core machine we use 3 threads for rendering (the main thread and 2 workers)
+			// and reserve the remaining core for the sound thread.
+			// Note that we park (keep it awaiting condition) a worker thread
+			// in case when the builtin server is launched and there's insufficient amount of cores.
+			// In the latter case, we use 2 active threads for rendering, 1 thread for the server, 1 thread for sound.
+			// We get
+			// 1 extra thread for 3 cores
+			// 2 extra threads for 4 cores
+			// 3 extra threads for 5+ cores
+			return wsw::min<unsigned>( 3, numPhysicalProcessors - 2 );
+		}
+	}
+	return 0;
+}
+
+static std::optional<TaskSystem::ExecutionHandle> g_taskSystemExecutionHandle;
+
 TaskSystem *BeginProcessingOfTasks() {
 	auto *result = wsw::ref::Frontend::instance()->getTaskSystem();
-	result->startExecution();
+	assert( !g_taskSystemExecutionHandle );
+
+	unsigned numAllowedExtraThreads = 0;
+	// The number of workers includes the main thread, so its always non-zero.
+	// Values greather than 1 indicate that we actually reserved extra worker threads.
+	// We don't return zero-based values as doing that is going to complicate the code
+	// which reserves thread-local stuff for workers.
+	if( const unsigned numWorkers = result->getNumberOfWorkers(); numWorkers > 1 ) {
+		// Keep the same by default (numWorkers == number of allocated extra threads + 1)
+		numAllowedExtraThreads = numWorkers - 1;
+		// TODO: Use named constants here
+		// TODO: Use all available threads if there's no active bots on the server.
+		if( Com_ServerState() > 0 ) {
+			unsigned numPhysicalProcessors = 0, numLogicalProcessors = 0;
+			// This should be cheap to query as it's cached.
+			if( Sys_GetNumberOfProcessors( &numPhysicalProcessors, &numLogicalProcessors ) ) {
+				// Assume that we have allocated 2 worker threads on a 4-core machine.
+				// This gives us the total number of workers to be 3.
+				// We need to reserve an extra core for the sound backend and an extra core for the builtin server.
+				// In this case, specify the number of extra threads to be lesser than the number of allocated threads.
+				const unsigned numActiveThreadsForFullSetOfWorkers = numWorkers + 1 + 1;
+				if( numActiveThreadsForFullSetOfWorkers > numPhysicalProcessors ) {
+					// We get
+					// 0 allowed extra threads for 3 cores
+					// 1 allowed extra thread for 4 cores
+					// 2 allowed extra threads for 5 cores
+					// 3 allowed extra threads for 6+ cores
+					numAllowedExtraThreads = numWorkers - 2;
+					// Check values for wrapping
+					assert( numAllowedExtraThreads <= numWorkers - 1 );
+				}
+			}
+		}
+	}
+
+	g_taskSystemExecutionHandle = result->startExecution( numAllowedExtraThreads );
 	return result;
 }
 
 void EndProcessingOfTasks() {
-	if( !wsw::ref::Frontend::instance()->getTaskSystem()->awaitCompletion() ) {
-		wsw::failWithLogicError( "" );
+	const bool awaitResult = wsw::ref::Frontend::instance()->getTaskSystem()->awaitCompletion( g_taskSystemExecutionHandle.value() );
+	g_taskSystemExecutionHandle = std::nullopt;
+	if( !awaitResult ) {
+		wsw::failWithLogicError( "Failed to execute rendering tasks" );
 	}
 }
 
