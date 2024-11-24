@@ -1898,7 +1898,7 @@ void Console::handleKeyDownEvent( int key ) {
 		return isCtrlKeyDown() ? handlePositionPageAtStartAction() : handlePositionCursorAtStartAction();
 	}
 	if( key == K_END || key == KP_END ) {
-		return isCtrlKeyDown() ? handlePositionPageAtEndAction() : handlePositionPageAtEndAction();
+		return isCtrlKeyDown() ? handlePositionPageAtEndAction() : handlePositionCursorAtEndAction();
 	}
 
 	// key is a normal printable key normal which wil be HANDLE later in response to WM_CHAR event
@@ -2032,6 +2032,7 @@ void Con_Close( void ) {
 
 void Con_ToggleConsole_f( const CmdArgs & ) {
 	if( canManipulateConsoleInThisState() ) {
+		CL_ClearInputState();
 		g_console.instance()->clearInput();
 		g_console.instance()->clearNotifications();
 		con_hasKeyboardFocus = !con_hasKeyboardFocus;
