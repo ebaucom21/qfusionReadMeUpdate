@@ -967,6 +967,8 @@ class MaterialParser {
 	void fixFlagsAndSortingOrder();
 
 	[[nodiscard]]
+	bool parse();
+	[[nodiscard]]
 	auto build() -> shader_t *;
 
 	[[nodiscard]]

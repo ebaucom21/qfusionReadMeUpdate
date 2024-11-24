@@ -60,6 +60,13 @@ MaterialParser::MaterialParser( MaterialFactory *materialFactory,
 	, m_type( type ) {}
 
 auto MaterialParser::exec() -> shader_t * {
+	if( parse() ) {
+		return build();
+	}
+	return nullptr;
+}
+
+bool MaterialParser::parse() {
 	for(;;) {
 		auto maybeToken = m_lexer->getNextToken();
 		if( !maybeToken ) {
@@ -73,19 +80,19 @@ auto MaterialParser::exec() -> shader_t * {
 			m_lexer->unGetToken();
 			if( !parseKey() ) {
 				rWarning() << "Failed to parse a key" << token << "in" << m_name;
-				return nullptr;
+				return false;
 			}
 
 			// Skip any trailing stuff at the end of the parsed key
 			if( !m_lexer->skipToEndOfLine() ) {
-				return nullptr;
+				return false;
 			}
 			continue;
 		}
 
 		if( m_passes.full() ) {
 			rWarning() << "Too many passes in" << m_name;
-			return nullptr;
+			return false;
 		}
 
 		auto *const newPass = m_passes.unsafe_grow_back();
@@ -93,19 +100,19 @@ auto MaterialParser::exec() -> shader_t * {
 
 		if( !parsePass() ) {
 			rWarning() << "Failed to parse a pass in" << m_name;
-			return nullptr;
+			return false;
 		}
 
 		auto maybeNextToken = m_lexer->getNextToken();
 		if( !maybeNextToken ) {
 			rWarning() << "Missing a closing brace of a pass";
-			return nullptr;
+			return false;
 		}
 
 		auto nextToken = *maybeNextToken;
 		if( !nextToken.equals( wsw::StringView( "}" ) ) ) {
 			rWarning() << "Missing a closing brace of a pass";
-			return nullptr;
+			return false;
 		}
 
 		const auto blendMask = ( newPass->flags & GLSTATE_BLEND_MASK );
@@ -130,10 +137,10 @@ auto MaterialParser::exec() -> shader_t * {
 
 	if( m_conditionalBlockDepth ) {
 		rWarning() << "Syntax error. Is an `endif` missing?";
-		return nullptr;
+		return false;
 	}
 
-	return build();
+	return true;
 }
 
 bool MaterialParser::parsePass() {
@@ -1216,8 +1223,7 @@ bool MaterialParser::parseTemplate() {
 	m_lexer = m_materialFactory->expandTemplate( *maybeNameToken, args.begin(), args.size() );
 	bool result = false;
 	if( m_lexer ) {
-		// TODO... really?
-		result = exec();
+		result = parse();
 	}
 	m_lexer = &m_defaultLexer;
 	return result;
