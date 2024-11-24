@@ -742,22 +742,15 @@ void BeginDrawingScenes() {
 	wsw::ref::Frontend::instance()->beginDrawingScenes();
 }
 
-unsigned R_SuggestNumExtraWorkerThreads() {
+auto suggestNumExtraWorkerThreads( const SuggestNumWorkerThreadsArgs &args ) -> unsigned {
 	if( cl_multithreading->integer ) {
+		// This should be cheap to query as it's cached.
 		unsigned numPhysicalProcessors = 0, numLogicalProcessors = 0;
 		Sys_GetNumberOfProcessors( &numPhysicalProcessors, &numLogicalProcessors );
-		if( numPhysicalProcessors > 2 ) {
-			// Reserve not more than 3 extra threads.
-			// In case of a 4-core machine we use 3 threads for rendering (the main thread and 2 workers)
-			// and reserve the remaining core for the sound thread.
-			// Note that we park (keep it awaiting condition) a worker thread
-			// in case when the builtin server is launched and there's insufficient amount of cores.
-			// In the latter case, we use 2 active threads for rendering, 1 thread for the server, 1 thread for sound.
-			// We get
-			// 1 extra thread for 3 cores
-			// 2 extra threads for 4 cores
-			// 3 extra threads for 5+ cores
-			return wsw::min<unsigned>( 3, numPhysicalProcessors - 2 );
+		// Take the main thread into account as well (hence the +1)
+		if( numPhysicalProcessors > ( args.numExcludedCores + 1 ) ) {
+			// Disallow more than 3 worker threads.
+			return wsw::min<unsigned>( 3, numPhysicalProcessors - ( args.numExcludedCores + 1 ) );
 		}
 	}
 	return 0;
@@ -775,30 +768,21 @@ TaskSystem *BeginProcessingOfTasks() {
 	// We don't return zero-based values as doing that is going to complicate the code
 	// which reserves thread-local stuff for workers.
 	if( const unsigned numWorkers = result->getNumberOfWorkers(); numWorkers > 1 ) {
+		// By default we reserve a single core for the sound backend,
+		// and also a core is always implicitly reserved for the main thread.
+		assert( ( SuggestNumWorkerThreadsArgs {} ).numExcludedCores == 1 );
+		assert( numWorkers == suggestNumExtraWorkerThreads( {} ) + 1 );
 		// Keep the same by default (numWorkers == number of allocated extra threads + 1)
 		numAllowedExtraThreads = numWorkers - 1;
 		// TODO: Use named constants here
 		// TODO: Use all available threads if there's no active bots on the server.
 		if( Com_ServerState() > 0 ) {
-			unsigned numPhysicalProcessors = 0, numLogicalProcessors = 0;
-			// This should be cheap to query as it's cached.
-			if( Sys_GetNumberOfProcessors( &numPhysicalProcessors, &numLogicalProcessors ) ) {
-				// Assume that we have allocated 2 worker threads on a 4-core machine.
-				// This gives us the total number of workers to be 3.
-				// We need to reserve an extra core for the sound backend and an extra core for the builtin server.
-				// In this case, specify the number of extra threads to be lesser than the number of allocated threads.
-				const unsigned numActiveThreadsForFullSetOfWorkers = numWorkers + 1 + 1;
-				if( numActiveThreadsForFullSetOfWorkers > numPhysicalProcessors ) {
-					// We get
-					// 0 allowed extra threads for 3 cores
-					// 1 allowed extra thread for 4 cores
-					// 2 allowed extra threads for 5 cores
-					// 3 allowed extra threads for 6+ cores
-					numAllowedExtraThreads = numWorkers - 2;
-					// Check values for wrapping
-					assert( numAllowedExtraThreads <= numWorkers - 1 );
-				}
-			}
+			// If the builtin server is actually running, we have to reserve another core for it,
+			// so we activate fewer threads from the initially allocated pool
+			// for execution of frame tasks if the amount of available cores is insufficient.
+			// Note that another core is still implicitly reserved for the main thread as well.
+			numAllowedExtraThreads = suggestNumExtraWorkerThreads( { .numExcludedCores = 2 } );
+			assert( numAllowedExtraThreads <= numWorkers - 1 );
 		}
 	}
 

@@ -1558,7 +1558,11 @@ bool    R_SurfPotentiallyFragmented( const msurface_t *surf );
 void        R_BeginRegistration_();
 void        R_EndRegistration_();
 
-unsigned R_SuggestNumExtraWorkerThreads();
+// By default, we reserve a core for the sound backend.
+// Also, a core is always implicitly reserved for the main thread.
+struct SuggestNumWorkerThreadsArgs { unsigned numExcludedCores { 1 }; };
+[[nodiscard]]
+auto suggestNumExtraWorkerThreads( const SuggestNumWorkerThreadsArgs &args ) -> unsigned;
 
 void        R_Shutdown_( bool verbose );
 

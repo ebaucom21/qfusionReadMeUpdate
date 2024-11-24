@@ -236,7 +236,7 @@ void Frontend::endDrawingScenes() {
 	m_drawSceneRequestsHolder.clear();
 }
 
-Frontend::Frontend() : m_taskSystem( { .numExtraThreads = R_SuggestNumExtraWorkerThreads() } ) {
+Frontend::Frontend() : m_taskSystem( { .numExtraThreads = suggestNumExtraWorkerThreads( {} ) } ) {
 	const auto features = Sys_GetProcessorFeatures();
 	if( Q_CPU_FEATURE_SSE41 & features ) {
 		m_collectVisibleWorldLeavesArchMethod = &Frontend::collectVisibleWorldLeavesSse41;
