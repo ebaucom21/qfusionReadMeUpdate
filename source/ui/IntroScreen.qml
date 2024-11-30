@@ -4,7 +4,8 @@ import QtQuick.Controls.Material 2.12
 import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
-Item {
+FocusScope {
+    id: introScreen
     ColumnLayout {
         id: columnLayout
         anchors.centerIn: parent
@@ -94,37 +95,47 @@ Item {
             opacity: 0.7
         }
 
-        Row {
+        RowLayout {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 48
             spacing: UI.minAcceptRejectSpacing
             SlantedButton {
-                width: UI.neutralCentralButtonWidth
+                id: disagreeButton
+                Layout.preferredWidth: UI.neutralCentralButtonWidth
                 text: "Disagree"
-                highlightOnActiveFocus: false
+                highlightOnActiveFocus: true
+                KeyNavigation.right: agreeButton
                 leftBodyPartSlantDegrees: -1.0 * UI.buttonBodySlantDegrees
                 rightBodyPartSlantDegrees: -0.3 * UI.buttonBodySlantDegrees
                 textSlantDegrees: -0.3 * UI.buttonTextSlantDegrees
                 labelHorizontalCenterOffset: 0
-                onClicked: {
-                    UI.ui.playBackSound()
-                    UI.ui.quit()
-                }
+                onClicked: introScreen.handleDisagreeAction()
+                Keys.onEnterPressed: introScreen.handleDisagreeAction()
             }
             SlantedButton {
-                width: UI.neutralCentralButtonWidth
+                id: agreeButton
+                Layout.preferredWidth: UI.neutralCentralButtonWidth
                 text: "Agree"
-                highlightOnActiveFocus: false
-                highlighted: true
+                focus: true
+                highlightOnActiveFocus: true
+                KeyNavigation.left: disagreeButton
                 leftBodyPartSlantDegrees: +0.3 * UI.buttonBodySlantDegrees
                 rightBodyPartSlantDegrees: +1.0 * UI.buttonBodySlantDegrees
                 textSlantDegrees: +0.3 * UI.buttonTextSlantDegrees
                 labelHorizontalCenterOffset: 0
-                onClicked: {
-                    UI.ui.playForwardSound()
-                    UI.ui.finishIntro()
-                }
+                // TODO: Get rid of this, set up focus scopes properly
+                Component.onCompleted: forceActiveFocus()
+                onClicked: introScreen.handleAgreeAction()
+                Keys.onEnterPressed: introScreen.handleAgreeAction()
             }
         }
+    }
+    function handleAgreeAction() {
+        UI.ui.playForwardSound()
+        UI.ui.finishIntro()
+    }
+    function handleDisagreeAction() {
+        UI.ui.playBackSound()
+        UI.ui.quit()
     }
 }
