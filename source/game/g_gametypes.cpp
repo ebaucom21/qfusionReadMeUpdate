@@ -1562,7 +1562,7 @@ void G_Gametype_Init( void ) {
 
 	//get the match cvars too
 	g_warmup_timelimit = Cvar_Get( "g_warmup_timelimit", "5", CVAR_ARCHIVE );
-	g_postmatch_timelimit = Cvar_Get( "g_postmatch_timelimit", "15", CVAR_ARCHIVE );
+	g_postmatch_timelimit = Cvar_Get( "g_postmatch_timelimit", "4", CVAR_ARCHIVE );
 	g_countdown_time = Cvar_Get( "g_countdown_time", "5", CVAR_ARCHIVE );
 	g_match_extendedtime = Cvar_Get( "g_match_extendedtime", "2", CVAR_ARCHIVE );
 

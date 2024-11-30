@@ -776,14 +776,6 @@ static void CG_SC_ActionRequest( ViewState *viewState, const CmdArgs &cmdArgs ) 
 	}
 }
 
-static void CG_SC_PlaySound( ViewState *viewState, const CmdArgs &cmdArgs ) {
-	if( viewState == getOurClientViewState() ) {
-		if( Cmd_Argc() >= 2 ) {
-			SoundSystem::instance()->startLocalSound( Cmd_Argv( 1 ), 1.0f );
-		}
-	}
-}
-
 static void CG_SC_FragEvent( ViewState *viewState, const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() == 4 ) {
 		unsigned args[3];
@@ -858,7 +850,6 @@ static const svcmd_t cg_svcmds[] = {
 	{ "motd", CG_SC_MOTD },
 	{ "aw", CG_SC_AddAward },
 	{ "arq", CG_SC_ActionRequest },
-	{ "ply", CG_SC_PlaySound },
 
 	{ NULL }
 };

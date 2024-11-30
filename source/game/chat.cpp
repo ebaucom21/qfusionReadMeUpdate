@@ -677,10 +677,6 @@ void RespectHandler::ClientEntry::checkBehaviour( const int64_t matchStartTime )
 					G_PlayerAward( m_ent, S_COLOR_CYAN "Fair play!" );
 					G_PrintMsg( m_ent, "Your stats and awards have been confirmed!\n" );
 
-					char cmd[MAX_STRING_CHARS];
-					Q_snprintfz( cmd, sizeof( cmd ), "ply \"%s\"", S_RESPECT_REWARD );
-					SV_DispatchGameCmd( m_ent, cmd );
-
 					m_hasCompletedMatchEndAction = true;
 				} else {
 					if( !m_hasTakenFinalHint ) {

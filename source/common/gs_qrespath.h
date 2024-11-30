@@ -454,8 +454,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define S_PLAYLIST_MATCH                        "sounds/music/match.m3u"
 #define S_PLAYLIST_POSTMATCH                    "sounds/music/postmatch.m3u"
 
-#define S_RESPECT_REWARD                        "sounds/misc/reward"
-
 //===============================
 // UI
 //===============================
