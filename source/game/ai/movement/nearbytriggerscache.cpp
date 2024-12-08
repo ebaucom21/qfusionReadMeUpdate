@@ -20,22 +20,16 @@ NearbyTriggersCache::NearbyTriggersCache() {
 }
 
 auto NearbyTriggersCache::clipToRegion( std::span<const uint16_t> entNums, uint16_t *dest, size_t destSize ) -> unsigned {
-	const auto *__restrict regionMins = lastComputedForMins;
-	const auto *__restrict regionMaxs = lastComputedForMaxs;
-	const auto *__restrict gameEnts = game.edicts;
-
 	size_t numDestEnts = 0;
 	if( entNums.size() <= destSize ) {
 		for( auto num: entNums ) {
-			const auto *__restrict ent = gameEnts + num;
-			if( BoundsIntersect( regionMins, regionMaxs, ent->r.absmin, ent->r.absmax ) ) {
+			if( GClip_EntityContact( lastComputedForMins, lastComputedForMaxs, game.edicts + num ) ) {
 				dest[numDestEnts++] = num;
 			}
 		}
 	} else {
 		for( auto num: entNums ) {
-			const auto *__restrict ent = gameEnts + num;
-			if( BoundsIntersect( regionMins, regionMaxs, ent->r.absmin, ent->r.absmax ) ) {
+			if( GClip_EntityContact( lastComputedForMins, lastComputedForMaxs, game.edicts + num ) ) {
 				dest[numDestEnts++] = num;
 				if( numDestEnts == destSize ) {
 					break;
@@ -81,14 +75,14 @@ void NearbyTriggersCache::ensureValidForBounds( const float *__restrict absMins,
 	for( const uint16_t triggerEntNum: context->m_platformTriggerEntNumsToUseDuringPrediction ) {
 		const auto *__restrict trigger = game.edicts + triggerEntNum;
 		if( numPlatformTriggerEnts < std::size( platformTriggerEntNums ) ) [[likely]] {
-			if( BoundsIntersect( lastComputedForMins, lastComputedForMaxs, trigger->r.absmin, trigger->r.absmax ) ) {
+			if( GClip_EntityContact( lastComputedForMins, lastComputedForMaxs, trigger ) ) {
 				platformTriggerEntNums[numPlatformTriggerEnts++] = triggerEntNum;
 			}
 		}
 		if( numPlatformSolidEnts < std::size( platformSolidEntNums ) ) [[likely]] {
 			const auto *__restrict platform = trigger->enemy;
 			assert( platform && platform->use == Use_Plat );
-			if( BoundsIntersect( lastComputedForMins, lastComputedForMaxs, platform->r.absmin, platform->r.absmax ) ) {
+			if( GClip_EntityContact( lastComputedForMins, lastComputedForMaxs, platform ) ) {
 				platformSolidEntNums[numPlatformSolidEnts++] = platform->s.number;
 			}
 		}

@@ -59,7 +59,7 @@ typedef struct {
 
 	unsigned int svflags;                // SVF_NOCLIENT, SVF_MONSTER, etc
 	vec3_t mins, maxs;
-	vec3_t absmin, absmax, size;
+	vec3_t absmin, absmax, size;  // Caution: These bounds are for broadphase collision. They are overly large for rotated stuff.
 	solid_t solid;
 	int clipmask;
 	edict_t *owner;

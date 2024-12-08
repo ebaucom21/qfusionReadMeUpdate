@@ -5,6 +5,7 @@
 #include "../combat/tacticalspotsregistry.h"
 #include "../navigation/aasstaticroutetable.h"
 #include "../manager.h"
+#include "../ailocal.h"
 #include "../trajectorypredictor.h"
 #include "../classifiedentitiescache.h"
 
@@ -391,7 +392,7 @@ MovementScript *FallbackAction::TryFindAasBasedFallback( PredictionContext *cont
 					}
 				}
 				if( didPlatformSpecificHandling ) {
-					Vec3 targetOrigin( 0.5f * ( Vec3( foundPlatform->r.absmin ) + Vec3( foundPlatform->r.absmax ) ) );
+					Vec3 targetOrigin( getTriggerOrigin( foundPlatform ) );
 					targetOrigin.Z() = nextReach.start[2] - playerbox_stand_mins[2];
 					fallback->Activate( targetOrigin.Data(), 16.0f );
 				}

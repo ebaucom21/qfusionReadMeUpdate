@@ -45,7 +45,8 @@ auto TriggerAreaNumsCache::getAreaNum( int entNum ) const -> int {
 		maxs += Vec3( +64, +64, +64 );
 	}
 
-	int boxAreaNumsBuffer[64];
+	// TODO: Allow passing a growable container, or allow retrieval of the exact number of areas in box
+	int boxAreaNumsBuffer[2048];
 	const auto boxAreaNums = aasWorld->findAreasInBox( mins.Data(), maxs.Data(), boxAreaNumsBuffer, std::size( boxAreaNumsBuffer ) );
 	for( const int areaNum: boxAreaNums ) {
 		const auto contents = aasAreaSettings[areaNum].contents;
@@ -106,28 +107,23 @@ auto TriggerAreaNumsCache::getTriggersForArea( int areaNum ) const -> const Clas
 	uint16_t teleporterNums[MAX_EDICTS], jumppadNums[MAX_EDICTS], platformNums[MAX_EDICTS];
 
 	const auto &area = aasWorld->getAreas()[areaNum];
-	const float *__restrict areaMins = area.mins;
-	const float *__restrict areaMaxs = area.maxs;
 
 	const auto *const __restrict gameEnts = game.edicts;
 	const auto *const __restrict entitiesCache = wsw::ai::ClassifiedEntitiesCache::instance();
 	for( const uint16_t num : entitiesCache->getAllPersistentMapJumppads() ) {
-		const auto *const __restrict ent = gameEnts + num;
-		if( BoundsIntersect( ent->r.absmin, ent->r.absmax, areaMins, areaMaxs ) ) {
+		if( GClip_EntityContact( area.mins, area.maxs, gameEnts + num ) ) {
 			jumppadNums[numJumppads++] = num;
 		}
 	}
 
 	for( const uint16_t num : entitiesCache->getAllPersistentMapTeleporters() ) {
-		const auto *const __restrict ent = gameEnts + num;
-		if( BoundsIntersect( ent->r.absmin, ent->r.absmax, areaMins, areaMaxs ) ) {
+		if( GClip_EntityContact( area.mins, area.maxs, gameEnts + num ) ) {
 			teleporterNums[numTeleporters++] = num;
 		}
 	}
 
 	for( const uint16_t num : entitiesCache->getAllPersistentMapPlatformTriggers() ) {
-		const auto *const __restrict ent = gameEnts + num;
-		if( BoundsIntersect( ent->r.absmin, ent->r.absmax, areaMins, areaMaxs ) ) {
+		if( GClip_EntityContact( area.mins, area.maxs, gameEnts + num ) ) {
 			platformNums[numPlatforms++] = num;
 		}
 	}

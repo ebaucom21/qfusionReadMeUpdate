@@ -4,12 +4,7 @@
 #include "../combat/tacticalspotsregistry.h"
 
 void UseWalkableTriggerScript::GetSteeringTarget( vec3_t target ) {
-	// Triggers do not have s.origin set.
-	// Get the bounds center
-	VectorSubtract( trigger->r.absmax, trigger->r.absmin, target );
-	VectorScale( target, 0.5f, target );
-	// Add bounds center to abs mins
-	VectorAdd( trigger->r.absmin, target, target );
+	getTriggerOrigin( trigger ).CopyTo( target );
 }
 
 bool UseWalkableTriggerScript::TryDeactivate( PredictionContext *context ) {
@@ -132,11 +127,7 @@ const edict_t *FallbackAction::FindClosestToTargetTrigger( const ClosestTriggerP
 			continue;
 		}
 
-		// All trigger seem to have absent s.origin, but the precomputed area is valid.
-		// AiAasWorld::findAreaNum() hides this issue by testing entity bounds too and producing a feasible result
-		Vec3 entOrigin( ent->r.absmin );
-		entOrigin += ent->r.absmax;
-		entOrigin *= 0.5f;
+		const Vec3 entOrigin( getTriggerOrigin( ent ) );
 
 		// We have to test against entities and not only solid world
 		// since this is a fallback action and any failure is critical

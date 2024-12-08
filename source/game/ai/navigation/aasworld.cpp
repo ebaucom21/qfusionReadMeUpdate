@@ -149,9 +149,7 @@ auto AiAasWorld::findAreaNum( const vec3_t origin ) const -> int {
 
 auto AiAasWorld::findAreaNum( const edict_t *ent ) const -> int {
 	// Reject degenerate case
-	if( ent->r.absmin[0] == ent->r.absmax[0] &&
-		ent->r.absmin[1] == ent->r.absmax[1] &&
-		ent->r.absmin[2] == ent->r.absmax[2] ) {
+	if( VectorCompare( ent->r.absmin, ent->r.absmax ) ) {
 		return findAreaNum( ent->s.origin );
 	}
 

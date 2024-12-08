@@ -555,8 +555,9 @@ void GClip_LinkEntity( edict_t *ent ) {
 	}
 
 	// set the abs box
-	if( ISBRUSHMODEL( ent->s.modelindex ) &&
-		( ent->s.angles[0] || ent->s.angles[1] || ent->s.angles[2] ) ) {
+	if( ISBRUSHMODEL( ent->s.modelindex ) && ( anglemod( ent->s.angles[0] ) != 0.0f ||
+											   anglemod( ent->s.angles[1] ) != 0.0f ||
+											   anglemod( ent->s.angles[2] ) != 0.0f ) ) {
 		// expand for rotation
 		float radius;
 

@@ -194,6 +194,12 @@ inline const char *WeapName( int weapon ) {
 
 //----------------------------------------------------------
 
+[[nodiscard]]
+inline auto getTriggerOrigin( const edict_t *trigger ) -> Vec3 {
+	// Triggers are usually based on brush models, hence their origins are usually all-zero
+	return 0.5f * ( Vec3( trigger->r.absmin ) + Vec3( trigger->r.absmax ) );
+}
+
 //game
 //----------------------------------------------------------
 void Use_Plat( edict_t *ent, edict_t *other, edict_t *activator );

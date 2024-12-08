@@ -1,5 +1,6 @@
 #include "rideplatformaction.h"
 #include "movementlocal.h"
+#include "../ailocal.h"
 #include "../../../common/wswalgorithm.h"
 
 void RidePlatformAction::BeforePlanning() {
@@ -123,7 +124,7 @@ void RidePlatformAction::SetupEnterPlatformMovement( PredictionContext *context 
 	botInput->canOverrideLookVec = true;
 
 	// Look at the trigger in 2D world projection
-	Vec3 intendedLookDir( 0.5f * ( Vec3( m_foundPlatform->r.absmin ) + Vec3( m_foundPlatform->r.absmax ) ) );
+	Vec3 intendedLookDir( getTriggerOrigin( m_foundPlatform ) );
 	intendedLookDir -= entityPhysicsState.Origin();
 	intendedLookDir.Z() = 0;
 	if( intendedLookDir.normalizeFast() ) {
@@ -167,7 +168,7 @@ void RidePlatformAction::SetupRidePlatformMovement( PredictionContext *context )
 
 	// Try staying in the middle of platform
 	if( const auto *groundEntity = entityPhysicsState.GroundEntity(); groundEntity && groundEntity->use == Use_Plat ) {
-		Vec3 toTarget( 0.5f * ( Vec3( groundEntity->r.absmin ) + Vec3( groundEntity->r.absmax ) ) );
+		Vec3 toTarget( getTriggerOrigin( groundEntity ) );
 		toTarget.Z() = entityPhysicsState.Origin()[2];
 		toTarget -= entityPhysicsState.Origin();
 		// Don't do that staying sufficiently close to the middle

@@ -116,6 +116,7 @@ private:
 
 	// AiAasWorld::findAreaNum() fails so often for teleports/elevators, etc, so we have to use this method.
 	// AiAasWorld is provided as an argument to avoid an implicit retrieval of global instance in a loop.
+	// TODO: Reuse trigger area nums cache!
 	int findMostFeasibleEntityAasArea( const edict_t *ent, const AiAasWorld *aasWorld ) const;
 
 	struct NearbyEntitiesCache {
