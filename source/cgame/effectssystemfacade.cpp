@@ -398,7 +398,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 			.timeout       = { .min = 500, .max = 820 },
 		};
 
-		static ParamsOfPolyTrailOfParticles explosionPolyParamsOfTrails {
+		ParamsOfPolyTrailOfParticles paramsOfPolyTrails {
 			.props = {
 				.width     = 20.0f,
 				.fromColor = { 1.0f, 1.0f, 1.0f, 0.0f },
@@ -407,7 +407,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 			.material = cgs.media.shaderSmokePolytrail
 		};
 
-		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams, nullptr, &explosionPolyParamsOfTrails );
+		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams, nullptr, &paramsOfPolyTrails );
 
 		// explosion spikes effect
 
@@ -748,7 +748,7 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 			.timeout         = { .min = 175, .max = 210 },
 		};
 
-		Particle::AppearanceRules LightningTrailAppearanceRules {
+		Particle::AppearanceRules trailAppearanceRules {
 			.materials     = cgs.media.shaderElectroImpactParticle.getAddressOfHandle(),
 			.colors        = { singleColorAddress, 1 },
 			.geometryRules = Particle::SparkRules {
@@ -758,7 +758,7 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 			},
 		};
 
-		ConicalFlockParams LightningTrailFlockParams {
+		ConicalFlockParams trailFlockParams {
 			.gravity    = 0.0f,
 			.drag       = 0.01f,
 			.angle      = 25.0f,
@@ -770,14 +770,14 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 
 		constexpr float dropDistance = ( length - lengthSpread ) * 0.8f;
 
-		ParamsOfParticleTrailOfParticles LightningParamsOfTrails {
-			.appearanceRules = LightningTrailAppearanceRules,
-			.flockParamsTemplate = LightningTrailFlockParams,
+		ParamsOfParticleTrailOfParticles paramsOfParticleTrails {
+			.appearanceRules = trailAppearanceRules,
+			.flockParamsTemplate = trailFlockParams,
 			.updateParams = { .maxParticlesPerDrop = 1, .dropDistance = dropDistance },
 			.modulateByParentSize = false
 		};
 
-		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams, &LightningParamsOfTrails );
+		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams, &paramsOfParticleTrails );
 	}
 
 	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
@@ -854,7 +854,7 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 			.timeout         = { .min = 175, .max = 210 },
 		};
 
-		Particle::AppearanceRules LightningTrailAppearanceRules {
+		Particle::AppearanceRules trailAppearanceRules {
 			.materials     = cgs.media.shaderElectroImpactParticle.getAddressOfHandle(),
 			.colors        = { singleColorAddress, 1 },
 			.geometryRules = Particle::SparkRules {
@@ -864,7 +864,7 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 			},
 		};
 
-		ConicalFlockParams LightningTrailFlockParams {
+		ConicalFlockParams trailFlockParams {
 			.gravity    = 0.0f,
 			.drag       = 0.01f,
 			.angle      = 25.0f,
@@ -876,14 +876,14 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 
 		constexpr float dropDistance = ( length - lengthSpread ) * 0.8f;
 
-		ParamsOfParticleTrailOfParticles LightningParamsOfTrails {
-			.appearanceRules = LightningTrailAppearanceRules,
-			.flockParamsTemplate = LightningTrailFlockParams,
+		ParamsOfParticleTrailOfParticles paramsOfParticleTrails {
+			.appearanceRules = trailAppearanceRules,
+			.flockParamsTemplate = trailFlockParams,
 			.updateParams = { .maxParticlesPerDrop = 1, .dropDistance = dropDistance },
 			.modulateByParentSize = false
 		};
 
-		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams, &LightningParamsOfTrails );
+		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams, &paramsOfParticleTrails );
 	}
 
 	// TODO: Don't we need an IG-specific sound
@@ -1441,7 +1441,7 @@ void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOr
 
 	orientation.copyToFlockParams( &flockParams );
 
-	Particle::AppearanceRules SmokeTrailAppearanceRules {
+	Particle::AppearanceRules smokeTrailAppearanceRules {
 		.materials           = cgs.media.shaderStoneDustHard.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
 		.geometryRules       = Particle::SpriteRules {
@@ -1451,7 +1451,7 @@ void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOr
 		.applyVertexDynLight = true
 	};
 
-	ConicalFlockParams SmokeTrailFlockParams {
+	ConicalFlockParams smokeTrailFlockParams {
 		.gravity    = -0.025f * GRAVITY,
 		.drag       = 0.0f,
 		.speed      = { .min = 0.f, .max = 1.f },
@@ -1459,17 +1459,17 @@ void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOr
 		.timeout    = { .min = 600, .max = 800 },
 	};
 
-	ParamsOfParticleTrailOfParticles SmokeParamsOfTrails {
-		.appearanceRules = SmokeTrailAppearanceRules,
-		.flockParamsTemplate = SmokeTrailFlockParams,
+	orientation.copyToFlockParams( &smokeTrailFlockParams );
+
+	ParamsOfParticleTrailOfParticles paramsOfSmokeTrails {
+		.appearanceRules = smokeTrailAppearanceRules,
+		.flockParamsTemplate = smokeTrailFlockParams,
 		.updateParams = { .maxParticlesPerDrop = 1, .dropDistance = 10.0f },
 		.modulateByParentSize = true
 	};
 
-	orientation.copyToFlockParams( &SmokeTrailFlockParams );
-
 	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 900.0f, 950.0f );
-	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules, TransientEffectsSystem::ParticleFlockBin::Small, &SmokeParamsOfTrails );
+	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules, TransientEffectsSystem::ParticleFlockBin::Small, &paramsOfSmokeTrails );
 }
 
 void EffectsSystemFacade::spawnStoneSmokeParticles( unsigned delay, const FlockOrientation &orientation,
@@ -1538,7 +1538,7 @@ void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockO
 
 	orientation.copyToFlockParams( &flockParams );
 
-	Particle::AppearanceRules SmokeTrailAppearanceRules {
+	Particle::AppearanceRules smokeTrailAppearanceRules {
 		.materials           = cgs.media.shaderStoneDustHard.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
 		.geometryRules       = Particle::SpriteRules {
@@ -1548,7 +1548,7 @@ void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockO
 		.applyVertexDynLight = true
 	};
 
-	ConicalFlockParams SmokeTrailFlockParams {
+	ConicalFlockParams smokeTrailFlockParams {
 		.gravity    = -0.025f * GRAVITY,
 		.drag       = 0.0f,
 		.speed      = { .min = 0.f, .max = 1.f },
@@ -1556,17 +1556,17 @@ void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockO
 		.timeout    = { .min = 600, .max = 800 },
 	};
 
-	ParamsOfParticleTrailOfParticles SmokeParamsOfTrails {
-		.appearanceRules = SmokeTrailAppearanceRules,
-		.flockParamsTemplate = SmokeTrailFlockParams,
+	orientation.copyToFlockParams( &smokeTrailFlockParams );
+
+	ParamsOfParticleTrailOfParticles paramsOfSmokeTrails {
+		.appearanceRules = smokeTrailAppearanceRules,
+		.flockParamsTemplate = smokeTrailFlockParams,
 		.updateParams = { .maxParticlesPerDrop = 1, .dropDistance = 10.0f },
 		.modulateByParentSize = true
 	};
 
-	orientation.copyToFlockParams( &SmokeTrailFlockParams );
-
 	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 900.0f, 950.0f );
-	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules, TransientEffectsSystem::ParticleFlockBin::Small, &SmokeParamsOfTrails );
+	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules, TransientEffectsSystem::ParticleFlockBin::Small, &paramsOfSmokeTrails );
 }
 
 void EffectsSystemFacade::spawnStuccoSmokeParticles( unsigned delay, const FlockOrientation &orientation,

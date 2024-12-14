@@ -809,7 +809,7 @@ static const RgbaLifespan kPlasmaLingeringTrailColors[] {
 	},
 };
 
-static ConicalFlockParams g_LingeringPlasmaTrailParticlesFlockParams {
+static ConicalFlockParams g_lingeringPlasmaTrailParticlesFlockParams {
 	.gravity         = 0.0f,
 	.turbulenceSpeed = 30.0f,
 	.turbulenceScale = 80.0f,
@@ -819,7 +819,7 @@ static ConicalFlockParams g_LingeringPlasmaTrailParticlesFlockParams {
 	.timeout         = { .min = 630, .max = 820 },
 };
 
-static ConicalFlockParams g_StrongPlasmaTrailParticlesFlockParams {
+static ConicalFlockParams g_strongPlasmaTrailParticlesFlockParams {
 	.gravity      = 0.0f,
 	.outflowSpeed = 5.0f,
 	.angle        = 0.01f,
@@ -849,7 +849,7 @@ void TrackedEffectsSystem::touchStrongPlasmaTrail( int entNum, const float *orig
 
 	if( !effects->particleTrails[0] ) [[unlikely]] {
 		effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kNonClippedTrailsBin,
-														 &::g_StrongPlasmaTrailParticlesFlockParams, {
+														 &::g_strongPlasmaTrailParticlesFlockParams, {
 			 .materials     = g_plasmaTrailMaterialsStorage,
 			 .colors        = kPlasmaTrailColors,
 			 .numMaterials  = std::size( g_plasmaTrailMaterialsStorage ),
@@ -893,7 +893,7 @@ void TrackedEffectsSystem::touchStrongPlasmaTrail( int entNum, const float *orig
 	if( v_projectileLingeringTrails.get() ){
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kNonClippedTrailsBin,
-															 &::g_LingeringPlasmaTrailParticlesFlockParams, {
+															 &::g_lingeringPlasmaTrailParticlesFlockParams, {
 				.materials     = cgs.media.shaderPlasmaLingeringTrailParticle.getAddressOfHandle(),
 				.colors        = kPlasmaLingeringTrailColors,
 				.geometryRules = Particle::SpriteRules {
@@ -940,7 +940,7 @@ void TrackedEffectsSystem::touchWeakPlasmaTrail( int entNum, const float *origin
 	if( v_projectileLingeringTrails.get() ){
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kNonClippedTrailsBin,
-															 &::g_LingeringPlasmaTrailParticlesFlockParams, {
+															 &::g_lingeringPlasmaTrailParticlesFlockParams, {
 				.materials     = cgs.media.shaderPlasmaLingeringTrailParticle.getAddressOfHandle(),
 				.colors        = kPlasmaLingeringTrailColors,
 				.geometryRules = Particle::SpriteRules {

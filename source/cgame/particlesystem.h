@@ -122,7 +122,7 @@ struct ParamsOfParticleTrailOfParticles {
 	const Particle::AppearanceRules appearanceRules;
 	ConicalFlockParams flockParamsTemplate;
 	const ParticleTrailUpdateParams updateParams;
-	const bool modulateByParentSize;
+	const bool modulateByParentSize {false};
 };
 
 struct ParamsOfPolyTrailOfParticles {
