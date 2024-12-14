@@ -210,13 +210,13 @@ private:
 								  unsigned materialParam, float dustPercentageScale = 1.0f );
 
 	void spawnStoneSmokeParticles( unsigned delay, const FlockOrientation &orientation, float upShiftScale,
-								   unsigned materialParam, float dustPercentageScale = 1.0f );
+								   unsigned materialParam );
 
 	void spawnStuccoDustParticles( unsigned delay, const FlockOrientation &orientation,
-								   float upShiftScale, unsigned materialParam );
+								   float upShiftScale, unsigned materialParam, float dustPercentageScale = 1.0f );
 
 	void spawnStuccoSmokeParticles( unsigned delay, const FlockOrientation &orientation, float upShiftScale,
-									unsigned materialParam, float dustPercentageScale = 1.0f );
+									unsigned materialParam );
 
 	void spawnWoodBulletImpactParticles( unsigned delay, const FlockOrientation &orientation,
 										 float upShiftScale, unsigned materialParam,

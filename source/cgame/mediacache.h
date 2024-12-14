@@ -221,10 +221,6 @@ public:
 	CachedMaterial shaderStoneDustSoft { this, wsw::StringView( "gfx/effects/stone_dust_soft" ) };
 	CachedMaterial shaderStoneDustHard { this, wsw::StringView( "gfx/effects/stone_dust_hard" ) };
 
-	CachedMaterial shaderStuccoDustSoft { this, wsw::StringView( "gfx/effects/stucco_dust_soft" ) };
-	CachedMaterial shaderStuccoDustMedium { this, wsw::StringView( "gfx/effects/stucco_dust_medium" ) };
-	CachedMaterial shaderStuccoDustHard { this, wsw::StringView( "gfx/effects/stucco_dust_hard" ) };
-
 	CachedMaterial shaderParticleFlare { this, wsw::StringView( "gfx/effects/particle_flare" ) };
 
 	CachedMaterial shaderExplosionSpikeParticle { this, wsw::StringView( "gfx/effects/explosion_spike_particle" ) };

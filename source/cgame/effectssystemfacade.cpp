@@ -1395,20 +1395,79 @@ void EffectsSystemFacade::spawnBulletMetalDebrisParticles( unsigned delay, const
 	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
-static const RgbaLifespan kGreyDustColors[1] {
+static const RgbaLifespan kStoneSmokeColors[1] {
 	{
 		.initial  = { 0.75f, 0.75f, 0.75f, 1.0f },
-		.fadedIn  = { 0.75f, 0.75f, 0.75f, 0.9f },
-		.fadedOut = { 0.75f, 0.75f, 0.75f, 0.8f },
+		.fadedIn  = { 0.75f, 0.75f, 0.75f, 0.5f },
+		.fadedOut = { 0.75f, 0.75f, 0.75f, 0.3f },
 	}
 };
 
-static const RgbaLifespan kSoftDustColors[1] {
+void EffectsSystemFacade::spawnStoneSmokeParticles( unsigned delay, const FlockOrientation &orientation,
+													float upShiftScale, unsigned materialParam ) {
+	constexpr float radius       = 25.0f;
+	constexpr float radiusSpread = 5.0f;
+
+	const Particle::AppearanceRules appearanceRules {
+		.materials           = cgs.media.shaderStoneDustHard.getAddressOfHandle(),
+		.colors              = kStoneSmokeColors,
+		.geometryRules       = Particle::SpriteRules {
+			.radius = { .mean = radius, .spread = radiusSpread },
+			.sizeBehaviour = Particle::Shrinking
+		},
+		.applyVertexDynLight = true,
+	};
+
+	ConicalFlockParams flockParams {
+		.gravity         = 0.8f * GRAVITY,
+		.drag            = 0.04f,
+		.restitution     = 0.8f,
+		.angle           = 90.0f,
+		.speed           = { .min = 800.0f, .max = 990.0f },
+		.percentage      = { .min = 0.15f, .max = 0.2f },
+		.timeout         = { .min = 400, .max = 500 },
+	};
+
+	orientation.copyToFlockParams( &flockParams );
+
+	const Particle::AppearanceRules smokeTrailAppearanceRules {
+		.materials           = cgs.media.shaderStoneDustHard.getAddressOfHandle(),
+		.colors              = kStoneSmokeColors,
+		.geometryRules       = Particle::SpriteRules {
+			.radius = { .mean = radius - radiusSpread, .spread = 5.0f },
+			.sizeBehaviour = Particle::Shrinking
+		},
+		.applyVertexDynLight = true,
+	};
+
+	ConicalFlockParams smokeTrailFlockParams {
+		.gravity    = -0.025f * GRAVITY,
+		.drag       = 0.0f,
+		.speed      = { .min = 0.f, .max = 1.f },
+		.percentage = { .min = 0.5f, .max = 0.8f },
+		.timeout    = { .min = 600, .max = 800 },
+	};
+
+	orientation.copyToFlockParams( &smokeTrailFlockParams );
+
+	const ParamsOfParticleTrailOfParticles paramsOfSmokeTrails {
+		.appearanceRules      = smokeTrailAppearanceRules,
+		.flockParamsTemplate  = smokeTrailFlockParams,
+		.updateParams         = { .maxParticlesPerDrop = 1, .dropDistance = 10.0f },
+		.modulateByParentSize = true,
+	};
+
+	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 900.0f, 950.0f );
+	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules,
+										 TransientEffectsSystem::ParticleFlockBin::Small, &paramsOfSmokeTrails );
+}
+
+static const RgbaLifespan kStoneDustColors[1] {
 	{
-		.initial  = { 0.5f, 0.5f, 0.5f, 0.1f },
-		.fadedIn  = { 0.5f, 0.5f, 0.5f, 0.1f },
-		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.startFadingOutAtLifetimeFrac = 0.67f
+		.initial  = { 0.5f, 0.5f, 0.5f, 0.25f },
+		.fadedIn  = { 0.5f, 0.5f, 0.5f, 0.15f },
+		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.00f },
+		.startFadingOutAtLifetimeFrac = 0.67f,
 	}
 };
 
@@ -1416,84 +1475,24 @@ void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOr
 												   float upShiftScale, unsigned materialParam,
 												   float dustPercentageScale ) {
 
-	const float radius = 25.0f;
-	const float radiusSpread = 5.0f;
-
-	Particle::AppearanceRules appearanceRules {
-		.materials           = cgs.media.shaderStoneDustHard.getAddressOfHandle(),
-		.colors              = kGreyDustColors,
-		.geometryRules       = Particle::SpriteRules {
-			.radius = { .mean = radius, .spread = radiusSpread },
-			.sizeBehaviour = Particle::Shrinking
-		},
-		.applyVertexDynLight = true
-	};
-
-	ConicalFlockParams flockParams {
-		.gravity         = 0.8f * GRAVITY,
-		.drag            = 0.04f,
-		.restitution     = 0.8f,
-		.angle           = 90.0f,
-		.speed           = { .min = 800.0f, .max = 990.0f },
-		.percentage      = { .min = 0.15f, .max = 0.2f },
-		.timeout         = { .min = 400, .max = 500},
-	};
-
-	orientation.copyToFlockParams( &flockParams );
-
-	Particle::AppearanceRules smokeTrailAppearanceRules {
-		.materials           = cgs.media.shaderStoneDustHard.getAddressOfHandle(),
-		.colors              = kGreyDustColors,
-		.geometryRules       = Particle::SpriteRules {
-			.radius = { .mean = radius - radiusSpread, .spread = 5.0f },
-			.sizeBehaviour = Particle::Shrinking
-		},
-		.applyVertexDynLight = true
-	};
-
-	ConicalFlockParams smokeTrailFlockParams {
-		.gravity    = -0.025f * GRAVITY,
-		.drag       = 0.0f,
-		.speed      = { .min = 0.f, .max = 1.f },
-		.percentage = { .min = 0.5f, .max = 0.8f },
-		.timeout    = { .min = 600, .max = 800 },
-	};
-
-	orientation.copyToFlockParams( &smokeTrailFlockParams );
-
-	ParamsOfParticleTrailOfParticles paramsOfSmokeTrails {
-		.appearanceRules = smokeTrailAppearanceRules,
-		.flockParamsTemplate = smokeTrailFlockParams,
-		.updateParams = { .maxParticlesPerDrop = 1, .dropDistance = 10.0f },
-		.modulateByParentSize = true
-	};
-
-	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 900.0f, 950.0f );
-	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules, TransientEffectsSystem::ParticleFlockBin::Small, &paramsOfSmokeTrails );
-}
-
-void EffectsSystemFacade::spawnStoneSmokeParticles( unsigned delay, const FlockOrientation &orientation,
-												   float upShiftScale, unsigned materialParam,
-												   float dustPercentageScale ) {
-
-	Particle::AppearanceRules appearanceRules {
+	const Particle::AppearanceRules appearanceRules {
 		.materials           = cgs.media.shaderStoneDustSoft.getAddressOfHandle(),
-		.colors              = kSoftDustColors,
+		.colors              = kStoneDustColors,
 		.geometryRules       = Particle::SpriteRules {
-			.radius = {.mean = 25.0f, .spread = 7.5f},
+			.radius = { .mean = 25.0f, .spread = 7.5f },
 			.sizeBehaviour = Particle::Expanding
 		},
 		.applyVertexDynLight = true,
 	};
 
-	ConicalFlockParams flockParams{
-		.gravity = 0.059f * GRAVITY,
-		.drag            = 0.03f,
-		.restitution     = 1.0f,
-		.angle           = 30.0f,
-		.speed           = { .min = 100.0f, .max = 500.0f },
-		.percentage      = { .min = 0.7f * dustPercentageScale, .max = 1.0f * dustPercentageScale },
-		.timeout         = { .min = 750, .max = 1000 },
+	ConicalFlockParams flockParams {
+		.gravity     = 0.059f * GRAVITY,
+		.drag        = 0.03f,
+		.restitution = 1.0f,
+		.angle       = 30.0f,
+		.speed       = { .min = 100.0f, .max = 250.0f },
+		.percentage  = { .min = 0.8f * dustPercentageScale, .max = 1.0f * dustPercentageScale },
+		.timeout     = { .min = 700, .max = 900 },
 	};
 
 	orientation.copyToFlockParams( &flockParams );
@@ -1501,83 +1500,60 @@ void EffectsSystemFacade::spawnStoneSmokeParticles( unsigned delay, const FlockO
 	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
-static shader_s *g_stuccoDustMaterialsStorage[3];
-
-static const RgbaLifespan kStuccoDustColors[1] {
-		{
-			.initial  = { 0.92f, 0.92f, 0.92f, 1.0f },
-			.fadedIn  = { 0.92f, 0.92f, 0.92f, 0.9f },
-			.fadedOut = { 0.92f, 0.92f, 0.92f, 0.8f },
-		}
+static const RgbaLifespan kStuccoSmokeColors[1] {
+	{
+		.initial  = { 0.8f, 0.8f, 0.8f, 0.4f },
+		.fadedIn  = { 0.8f, 0.8f, 0.8f, 0.3f },
+		.fadedOut = { 0.8f, 0.8f, 0.8f, 0.0f },
+		.startFadingOutAtLifetimeFrac = 0.67f,
+	}
 };
 
-void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockOrientation &orientation,
-													float upShiftScale, unsigned materialParam ) {
-	const float radius = 25.0f;
-	const float radiusSpread = 5.0f;
-
-	Particle::AppearanceRules appearanceRules {
-		.materials           = cgs.media.shaderStoneDustHard.getAddressOfHandle(),
-		.colors              = kStuccoDustColors,
+void EffectsSystemFacade::spawnStuccoSmokeParticles( unsigned delay, const FlockOrientation &orientation,
+													 float upShiftScale, unsigned materialParam ) {
+	const Particle::AppearanceRules appearanceRules {
+		.materials           = cgs.media.shaderStoneDustSoft.getAddressOfHandle(),
+		.colors              = kStuccoSmokeColors,
 		.geometryRules       = Particle::SpriteRules {
-			.radius = { .mean = radius, .spread = radiusSpread },
-			.sizeBehaviour = Particle::Shrinking
+			.radius = { .mean = 7.5f, .spread = 2.5f },
+			.sizeBehaviour = Particle::Expanding
 		},
-		.applyVertexDynLight = true
+		.applyVertexDynLight = true,
 	};
 
 	ConicalFlockParams flockParams {
-		.gravity         = 0.8f * GRAVITY,
-		.drag            = 0.04f,
-		.restitution     = 0.8f,
-		.angle           = 90.0f,
-		.speed           = { .min = 800.0f, .max = 990.0f },
-		.percentage      = { .min = 0.15f, .max = 0.2f },
-		.timeout         = { .min = 400, .max = 500},
+		.gravity     = 0.059f * GRAVITY,
+		.drag        = 0.03f,
+		.restitution = 1.0f,
+		.angle       = 30.0f,
+		.speed       = { .min = 100.0f, .max = 250.0f },
+		.percentage  = { .min = 0.2f, .max = 0.5f },
+		.timeout     = { .min = 500, .max = 1000 },
 	};
 
 	orientation.copyToFlockParams( &flockParams );
-
-	Particle::AppearanceRules smokeTrailAppearanceRules {
-		.materials           = cgs.media.shaderStoneDustHard.getAddressOfHandle(),
-		.colors              = kGreyDustColors,
-		.geometryRules       = Particle::SpriteRules {
-			.radius = { .mean = radius - radiusSpread, .spread = 5.0f },
-			.sizeBehaviour = Particle::Shrinking
-		},
-		.applyVertexDynLight = true
-	};
-
-	ConicalFlockParams smokeTrailFlockParams {
-		.gravity    = -0.025f * GRAVITY,
-		.drag       = 0.0f,
-		.speed      = { .min = 0.f, .max = 1.f },
-		.percentage = { .min = 0.5f, .max = 0.8f },
-		.timeout    = { .min = 600, .max = 800 },
-	};
-
-	orientation.copyToFlockParams( &smokeTrailFlockParams );
-
-	ParamsOfParticleTrailOfParticles paramsOfSmokeTrails {
-		.appearanceRules = smokeTrailAppearanceRules,
-		.flockParamsTemplate = smokeTrailFlockParams,
-		.updateParams = { .maxParticlesPerDrop = 1, .dropDistance = 10.0f },
-		.modulateByParentSize = true
-	};
-
-	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 900.0f, 950.0f );
-	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules, TransientEffectsSystem::ParticleFlockBin::Small, &paramsOfSmokeTrails );
+	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 10.0f, 20.0f );
+	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
-void EffectsSystemFacade::spawnStuccoSmokeParticles( unsigned delay, const FlockOrientation &orientation,
+static const RgbaLifespan kStuccoDustColors[1] {
+	{
+		.initial  = { 0.7f, 0.7f, 0.7f, 0.1f },
+		.fadedIn  = { 0.7f, 0.7f, 0.7f, 0.1f },
+		.fadedOut = { 0.7f, 0.7f, 0.7f, 0.0f },
+		.startFadingOutAtLifetimeFrac = 0.67f,
+	}
+};
+
+void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockOrientation &orientation,
 													float upShiftScale, unsigned materialParam,
 													float dustPercentageScale ) {
 
-	Particle::AppearanceRules appearanceRules {
+	const Particle::AppearanceRules appearanceRules {
 		.materials = cgs.media.shaderStoneDustSoft.getAddressOfHandle(),
-		.colors              = kSoftDustColors,
+		.colors              = kStuccoDustColors,
 		.geometryRules       = Particle::SpriteRules {
-			.radius = {.mean = 25.0f, .spread = 7.5f},
+			.radius = { .mean = 35.0f, .spread = 7.5f },
 			.sizeBehaviour = Particle::Expanding
 		},
 		.applyVertexDynLight = true,
@@ -1588,9 +1564,9 @@ void EffectsSystemFacade::spawnStuccoSmokeParticles( unsigned delay, const Flock
 		.drag            = 0.03f,
 		.restitution     = 1.0f,
 		.angle           = 30.0f,
-		.speed           = { .min = 100.0f, .max = 500.0f },
-		.percentage      = { .min = 0.8f * dustPercentageScale, .max = 1.0f * dustPercentageScale },
-		.timeout         = { .min = 750, .max = 1000 },
+		.speed           = { .min = 50.0f, .max = 150.0f },
+		.percentage      = { .min = 0.7f * dustPercentageScale, .max = 1.0f * dustPercentageScale },
+		.timeout         = { .min = 1000, .max = 1750 },
 	};
 
 	orientation.copyToFlockParams( &flockParams );
@@ -1648,7 +1624,7 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 	ConicalFlockParams dustFlockParams {
 		.gravity    = 25.0f,
 		.angle      = 24.0f,
-		.speed      = { .min = 50.0f, .max = 150.0f },
+		.speed      = { .min = 75.0f, .max = 175.0f },
 		.percentage = { .min = 1.0f, .max = 1.0f },
 		.timeout    = { .min = 300, .max = 500 },
 	};
@@ -2082,7 +2058,7 @@ void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( unsigned d
 			spawnStoneSmokeParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Stucco:
-			spawnStuccoDustParticles( delay, flockOrientation, upShiftScale, materialParam );
+			spawnStuccoDustParticles( delay, flockOrientation, upShiftScale, materialParam, 0.75f );
 			spawnStuccoSmokeParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Wood:
