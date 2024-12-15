@@ -450,7 +450,13 @@ auto getQuadPolySpanStorageRequirements( std::span<const sortedDrawSurf_t> batch
 	return std::make_optional( std::make_pair( numVertices, numIndices ) );
 }
 
-void Frontend::markBuffersOfBatchedDynamicsForUpload( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras ) {
+void Frontend::markBuffersOfBatchedDynamicsForUpload( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+													  DynamicStuffWorkloadStorage *workloadStorage ) {
+	workloadStorage->selectedPolysWorkload.clear();
+	workloadStorage->selectedCoronasWorkload.clear();
+	workloadStorage->selectedParticlesWorkload.clear();
+	workloadStorage->selectedSpriteWorkload.clear();
+
 	const auto markAndAdvanceBatchedOffsets = [this]( const std::pair<unsigned, unsigned> &storageRequirements,
 													  StateForCamera *stateForCamera,
 													  const PrepareBatchedSurfWorkload &workload ) -> bool {
@@ -475,12 +481,10 @@ void Frontend::markBuffersOfBatchedDynamicsForUpload( std::span<std::pair<Scene 
 	for( auto [scene, stateForCamera] : scenesAndCameras ) {
 		for( PrepareBatchedSurfWorkload &workload: *stateForCamera->preparePolysWorkload ) {
 			bool succeeded = false;
-			if( !m_selectedPolysWorkload.full() ) [[likely]] {
-				if( const auto maybeRequirements = getQuadPolySpanStorageRequirements( workload.batchSpan ) ) [[likely]] {
-					if( markAndAdvanceBatchedOffsets( *maybeRequirements, stateForCamera, workload ) ) [[likely]] {
-						m_selectedPolysWorkload.push_back( std::addressof( workload ) );
-						succeeded = true;
-					}
+			if( const auto maybeRequirements = getQuadPolySpanStorageRequirements( workload.batchSpan ) ) [[likely]] {
+				if( markAndAdvanceBatchedOffsets( *maybeRequirements, stateForCamera, workload ) ) [[likely]] {
+					workloadStorage->selectedPolysWorkload.push_back( std::addressof( workload ) );
+					succeeded = true;
 				}
 			}
 			if( !succeeded ) [[unlikely]] {
@@ -490,12 +494,10 @@ void Frontend::markBuffersOfBatchedDynamicsForUpload( std::span<std::pair<Scene 
 		}
 		for( PrepareBatchedSurfWorkload &workload: *stateForCamera->prepareCoronasWorkload ) {
 			bool succeeded = false;
-			if( !m_selectedCoronasWorkload.full() ) [[likely]] {
-				if( const auto maybeRequirements = getCoronaSpanStorageRequirements( workload.batchSpan ) ) [[likely]] {
-					if( markAndAdvanceBatchedOffsets( *maybeRequirements, stateForCamera, workload ) ) [[likely]] {
-						this->m_selectedCoronasWorkload.push_back( std::addressof( workload ) );
-						succeeded = true;
-					}
+			if( const auto maybeRequirements = getCoronaSpanStorageRequirements( workload.batchSpan ) ) [[likely]] {
+				if( markAndAdvanceBatchedOffsets( *maybeRequirements, stateForCamera, workload ) ) [[likely]] {
+					workloadStorage->selectedCoronasWorkload.push_back( std::addressof( workload ) );
+					succeeded = true;
 				}
 			}
 			if( !succeeded ) [[unlikely]] {
@@ -505,12 +507,10 @@ void Frontend::markBuffersOfBatchedDynamicsForUpload( std::span<std::pair<Scene 
 		}
 		for( PrepareBatchedSurfWorkload &workload: *stateForCamera->prepareParticlesWorkload ) {
 			bool succeeded = false;
-			if( !m_selectedParticlesWorkload.full() ) [[likely]] {
-				if( const auto maybeRequirements = getParticleSpanStorageRequirements( workload.batchSpan ) ) [[likely]] {
-					if( markAndAdvanceBatchedOffsets( *maybeRequirements, stateForCamera, workload ) ) [[likely]] {
-						m_selectedParticlesWorkload.push_back( std::addressof( workload ) );
-						succeeded = true;
-					}
+			if( const auto maybeRequirements = getParticleSpanStorageRequirements( workload.batchSpan ) ) [[likely]] {
+				if( markAndAdvanceBatchedOffsets( *maybeRequirements, stateForCamera, workload ) ) [[likely]] {
+					workloadStorage->selectedParticlesWorkload.push_back( std::addressof( workload ) );
+					succeeded = true;
 				}
 			}
 			if( !succeeded ) [[unlikely]] {
@@ -519,18 +519,9 @@ void Frontend::markBuffersOfBatchedDynamicsForUpload( std::span<std::pair<Scene 
 		}
 	}
 
-	// Process legacy sprites regardless of upload overflow
 	for( auto [scene, stateForCamera] : scenesAndCameras ) {
 		for( PrepareSpriteSurfWorkload &workload: *stateForCamera->prepareSpritesWorkload ) {
-			if( !m_selectedSpriteWorkload.full() ) [[likely]] {
-				m_selectedSpriteWorkload.push_back( std::addressof( workload ) );
-			} else {
-				// Ensure that we won't try to draw these sprites
-				for( unsigned spriteInSpan = 0; spriteInSpan < workload.batchSpan.size(); ++spriteInSpan ) {
-					auto *preparedMesh = stateForCamera->preparedSpriteMeshes->data() + workload.firstMeshOffset + spriteInSpan;
-					preparedMesh->mesh.numVerts = preparedMesh->mesh.numElems = 0;
-				}
-			}
+			workloadStorage->selectedSpriteWorkload.push_back( std::addressof( workload ) );
 		}
 	}
 }

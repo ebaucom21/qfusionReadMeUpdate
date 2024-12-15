@@ -736,26 +736,24 @@ auto Frontend::endPreparingRenderingFromTheseCameras( std::span<std::pair<Scene 
 auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, Frontend *self,
 														std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
 														bool areCamerasPortalCameras ) -> CoroTask {
-	// Caution! There is an implication that preparing uploads is executed in a serial fashion
-	// by primary and portal camera groups. The primary call starts uploads.
-	// Make sure the following portal call does not reset values.
-	if( !areCamerasPortalCameras ) {
-		self->m_tmpDynamicMeshFillDataWorkload.clear();
-
-		self->m_selectedPolysWorkload.clear();
-		self->m_selectedCoronasWorkload.clear();
-		self->m_selectedParticlesWorkload.clear();
-
-		self->m_selectedSpriteWorkload.clear();
+	DynamicStuffWorkloadStorage *workloadStorage;
+	if( areCamerasPortalCameras ) [[unlikely]] {
+		workloadStorage = &self->m_dynamicStuffWorkloadStorage[1];
+	} else {
+		// Caution! There is an implication that preparing uploads is executed in a serial fashion
+		// by primary and portal camera groups. The primary call starts uploads.
+		// Make sure the following portal stage does not reset values.
 
 		self->m_dynamicMeshOffsetsOfVerticesAndIndices     = { 0, 0 };
 		self->m_variousDynamicsOffsetsOfVerticesAndIndices = { 0, 0 };
 
 		R_BeginFrameUploads( UPLOAD_GROUP_DYNAMIC_MESH );
 		R_BeginFrameUploads( UPLOAD_GROUP_BATCHED_MESH );
+
+		workloadStorage = &self->m_dynamicStuffWorkloadStorage[0];
 	}
 
-	const unsigned oldNumCollectedDynamicMeshes = self->m_tmpDynamicMeshFillDataWorkload.size();
+	workloadStorage->dynamicMeshFillDataWorkload.clear();
 	if( r_drawentities->integer ) {
 		for( auto [scene, stateForCamera] : scenesAndCameras ) {
 			const std::span<const Frustum> occluderFrusta { stateForCamera->occluderFrusta, stateForCamera->numOccluderFrusta };
@@ -763,7 +761,7 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 
 			for( unsigned i = 0; i < stateForCamera->numDynamicMeshDrawSurfaces; ++i ) {
 				DynamicMeshDrawSurface *drawSurface = &stateForCamera->dynamicMeshDrawSurfaces[i];
-				self->m_tmpDynamicMeshFillDataWorkload.append( DynamicMeshFillDataWorkload {
+				workloadStorage->dynamicMeshFillDataWorkload.append( DynamicMeshFillDataWorkload {
 					.scene          = scene,
 					.stateForCamera = stateForCamera,
 					.drawSurface    = drawSurface,
@@ -810,11 +808,11 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 	}
 
 	TaskHandle fillMeshBuffersTask;
-	if( oldNumCollectedDynamicMeshes < self->m_tmpDynamicMeshFillDataWorkload.size() ) {
+	if( !workloadStorage->dynamicMeshFillDataWorkload.empty() ) {
 		auto fn = [=]( unsigned, unsigned elemIndex ) {
-			self->prepareDynamicMesh( self->m_tmpDynamicMeshFillDataWorkload.data() + elemIndex );
+			self->prepareDynamicMesh( workloadStorage->dynamicMeshFillDataWorkload.data() + elemIndex );
 		};
-		std::pair<unsigned, unsigned> rangeOfIndices { oldNumCollectedDynamicMeshes, self->m_tmpDynamicMeshFillDataWorkload.size() };
+		std::pair<unsigned, unsigned> rangeOfIndices { 0, workloadStorage->dynamicMeshFillDataWorkload.size() };
 		fillMeshBuffersTask = si.taskSystem->addForIndicesInRange( rangeOfIndices, std::span<const TaskHandle> {}, std::move( fn ) );
 	}
 
@@ -860,24 +858,19 @@ auto Frontend::coEndPreparingRenderingFromTheseCameras( CoroTask::StartInfo si, 
 		self->processSortList( stateForCamera, scene );
 	}
 
-	const unsigned oldPolysWorkloadSize     = self->m_selectedPolysWorkload.size();
-	const unsigned oldCoronasWorkloadSize   = self->m_selectedCoronasWorkload.size();
-	const unsigned oldParticlesWorkloadSize = self->m_selectedParticlesWorkload.size();
-	const unsigned oldSpriteWorkloadSize    = self->m_selectedSpriteWorkload.size();
+	self->markBuffersOfBatchedDynamicsForUpload( scenesAndCameras, workloadStorage );
 
-	self->markBuffersOfBatchedDynamicsForUpload( scenesAndCameras );
-
-	for( unsigned i = oldPolysWorkloadSize; i < self->m_selectedPolysWorkload.size(); ++i ) {
-		self->prepareBatchedQuadPolys( self->m_selectedPolysWorkload[i] );
+	for( PrepareBatchedSurfWorkload *workload: workloadStorage->selectedPolysWorkload ) {
+		self->prepareBatchedQuadPolys( workload );
 	}
-	for( unsigned i = oldCoronasWorkloadSize; i < self->m_selectedCoronasWorkload.size(); ++i ) {
-		self->prepareBatchedCoronas( self->m_selectedCoronasWorkload[i] );
+	for( PrepareBatchedSurfWorkload *workload: workloadStorage->selectedCoronasWorkload ) {
+		self->prepareBatchedCoronas( workload );
 	}
-	for( unsigned i = oldParticlesWorkloadSize; i < self->m_selectedParticlesWorkload.size(); ++i ) {
-		self->prepareBatchedParticles( self->m_selectedParticlesWorkload[i] );
+	for( PrepareBatchedSurfWorkload *workload: workloadStorage->selectedParticlesWorkload ) {
+		self->prepareBatchedParticles( workload );
 	}
-	for( unsigned i = oldSpriteWorkloadSize; i < self->m_selectedSpriteWorkload.size(); ++i ) {
-		self->prepareLegacySprite( self->m_selectedSpriteWorkload[i] );
+	for( PrepareSpriteSurfWorkload *workload: workloadStorage->selectedSpriteWorkload ) {
+		self->prepareLegacySprite( workload );
 	}
 
 	// If there's processing of portals, finish it prior to awaiting uploads

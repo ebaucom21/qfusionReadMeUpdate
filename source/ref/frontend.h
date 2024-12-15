@@ -604,7 +604,9 @@ private:
 	auto registerBuildingBatchedSurf( StateForCamera *stateForCamera, Scene *scene, unsigned surfType, std::span<const sortedDrawSurf_t> batchSpan )
 		-> std::pair<SubmitBatchedSurfFn, unsigned>;
 
-	void markBuffersOfBatchedDynamicsForUpload( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras );
+	struct DynamicStuffWorkloadStorage;
+	void markBuffersOfBatchedDynamicsForUpload( std::span<std::pair<Scene *, StateForCamera *>> scenesAndCameras,
+												DynamicStuffWorkloadStorage *workloadStorage );
 
 	struct DynamicMeshFillDataWorkload;
 	void prepareDynamicMesh( DynamicMeshFillDataWorkload *workload );
@@ -705,16 +707,22 @@ private:
 		DynamicMeshDrawSurface *drawSurface;
 	};
 
-	wsw::PodVector<DynamicMeshFillDataWorkload> m_tmpDynamicMeshFillDataWorkload;
+	// Note: Both regular and portal stages access these values from the single thread.
 	std::pair<unsigned, unsigned> m_dynamicMeshOffsetsOfVerticesAndIndices { 0, 0 };
 	std::pair<unsigned, unsigned> m_variousDynamicsOffsetsOfVerticesAndIndices { 0, 0 };
 
-	wsw::StaticVector<PrepareBatchedSurfWorkload *, MAX_REF_CAMERAS * MAX_QUAD_POLYS> m_selectedPolysWorkload;
-	wsw::StaticVector<PrepareBatchedSurfWorkload *, MAX_REF_CAMERAS * Scene::kMaxSubmittedLights> m_selectedCoronasWorkload;
-	// A single particle aggregate may produce multiple spans of draw surfaces, but reaching the limit is very unlikely
-	wsw::StaticVector<PrepareBatchedSurfWorkload *, MAX_REF_CAMERAS * Scene::kMaxParticleAggregates> m_selectedParticlesWorkload;
+	struct DynamicStuffWorkloadStorage {
+		wsw::PodVector<DynamicMeshFillDataWorkload> dynamicMeshFillDataWorkload;
+		wsw::PodVector<PrepareBatchedSurfWorkload *> selectedPolysWorkload;
+		wsw::PodVector<PrepareBatchedSurfWorkload *> selectedCoronasWorkload;
+		wsw::PodVector<PrepareBatchedSurfWorkload *> selectedParticlesWorkload;
+		wsw::PodVector<PrepareSpriteSurfWorkload *> selectedSpriteWorkload;
+	};
 
-	wsw::StaticVector<PrepareSpriteSurfWorkload *, MAX_REF_CAMERAS * MAX_ENTITIES> m_selectedSpriteWorkload;
+	// For regular and portal stages.
+	// (Note that we may start executing tasks of the regular stage while the portal stuff still gets added,
+	// hence we split these workload temporaries by stage).
+	DynamicStuffWorkloadStorage m_dynamicStuffWorkloadStorage[2];
 
 	// This is not an appropriate place to keep the client-global instance of task system.
 	// However, moving it to the client code is complicated due to lifetime issues related to client global vars.
