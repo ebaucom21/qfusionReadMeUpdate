@@ -168,6 +168,8 @@ public:
 
 	void handleConfigString( unsigned configStringNum, const wsw::StringView &configString ) override;
 
+	void handleClientInfoChanges( unsigned clientNum ) override;
+
 	void updateScoreboard( const ReplicatedScoreboardData &scoreboardData, const AccuracyRows &accuracyRows ) override;
 
 	[[nodiscard]]
@@ -2563,16 +2565,15 @@ void QtUISystem::handleMessageFault( const MessageFault &messageFault ) {
 }
 
 void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
-	// TODO: Let aggregated entities decide whether they can handle?
-	if( (unsigned)( configStringIndex - CS_PLAYERINFOS ) < (unsigned)MAX_CLIENTS ) {
-		auto *const tracker = wsw::ui::NameChangesTracker::instance();
-		const auto playerNum = (unsigned)( configStringIndex - CS_PLAYERINFOS );
-		// Consider this a full update for now
-		tracker->registerNicknameUpdate( playerNum );
-		tracker->registerClanUpdate( playerNum );
-	} else if( (unsigned)( configStringIndex - CS_CALLVOTEINFOS ) < (unsigned)MAX_CALLVOTEINFOS ) {
+	if( (unsigned)( configStringIndex - CS_CALLVOTEINFOS ) < (unsigned)MAX_CALLVOTEINFOS ) {
 		m_callvotesModel.handleConfigString( configStringIndex, string );
 	}
+}
+
+void QtUISystem::handleClientInfoChanges( unsigned clientNum ) {
+	auto *const nameChangesTracker = NameChangesTracker::instance();
+	nameChangesTracker->registerNicknameUpdate( clientNum );
+	nameChangesTracker->registerClanUpdate( clientNum );
 }
 
 void QtUISystem::updateScoreboard( const ReplicatedScoreboardData &scoreboardData, const AccuracyRows &accuracyRows ) {

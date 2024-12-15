@@ -66,6 +66,8 @@ public:
 
 	virtual void handleConfigString( unsigned configStringNum, const wsw::StringView &string ) = 0;
 
+	virtual void handleClientInfoChanges( unsigned clientNum ) = 0;
+
 	virtual void updateScoreboard( const ReplicatedScoreboardData &scoreboardData, const AccuracyRows &accuracyRows ) = 0;
 
 	virtual void setScoreboardShown( bool shown ) = 0;

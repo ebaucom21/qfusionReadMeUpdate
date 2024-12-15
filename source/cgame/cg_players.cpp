@@ -19,8 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "cg_local.h"
-#include "../common/common.h"
-#include "../client/snd_public.h"
+#include "../ui/uisystem.h"
 
 static const char *cg_defaultSexedSounds[] =
 {
@@ -171,21 +170,14 @@ void playSexedSoundInPrimaryView( int entnum, int attachmentTag, int entchannel,
 	}
 }
 
-/*
-* CG_ParseClientInfo
-*/
-static void CG_ParseClientInfo( cg_clientInfo_t *ci, const char *info ) {
-	char *s;
-	int rgbcolor;
-
-	assert( ci );
-	assert( info );
+static void CG_LoadClientInfo( unsigned clientNum, const char *info ) {
+	cg_clientInfo_t *const ci = &cgs.clientInfo[clientNum];
 
 	if( !Info_Validate( info ) ) {
 		CG_Error( "Invalid client info" );
 	}
 
-	s = Info_ValueForKey( info, "name" );
+	const char *s = Info_ValueForKey( info, "name" );
 	Q_strncpyz( ci->name, s && s[0] ? s : "badname", sizeof( ci->name ) );
 
 	s = Info_ValueForKey( info, "clan" );
@@ -200,32 +192,32 @@ static void CG_ParseClientInfo( cg_clientInfo_t *ci, const char *info ) {
 
 	// color
 	s = Info_ValueForKey( info, "color" );
-	rgbcolor = s && s[0] ? COM_ReadColorRGBString( s ) : -1;
+	const int rgbcolor = s && s[0] ? COM_ReadColorRGBString( s ) : -1;
 	if( rgbcolor != -1 ) {
 		Vector4Set( ci->color, COLOR_R( rgbcolor ), COLOR_G( rgbcolor ), COLOR_B( rgbcolor ), 255 );
 	} else {
 		Vector4Set( ci->color, 255, 255, 255, 255 );
 	}
+
+	wsw::ui::UISystem::instance()->handleClientInfoChanges( clientNum );
 }
 
-/*
-* CG_LoadClientInfo
-* Updates cached client info from the current CS_PLAYERINFOS configstring value
-*/
-void CG_LoadClientInfo( unsigned client, const wsw::StringView &s ) {
-	assert( client < (unsigned)cggs->maxclients );
-	CG_ParseClientInfo( &cgs.clientInfo[client], s.data() );
+void CG_LoadClientInfo( unsigned clientNum, const wsw::StringView &info ) {
+	assert( info.isZeroTerminated() );
+	CG_LoadClientInfo( clientNum, info.data() );
 }
 
 /*
 * CG_ResetClientInfos
 */
 void CG_ResetClientInfos( void ) {
+	// TODO: Should we care of resetting the respective data in UI?
+	// Note: If yes, we have to reset it upon destruction as well.
 	memset( cgs.clientInfo, 0, sizeof( cgs.clientInfo ) );
 
-	for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
-		if( auto cs = cgs.configStrings.getPlayerInfo( i ) ) {
-			CG_LoadClientInfo( i, *cs );
+	for( unsigned clientNum = 0; clientNum < MAX_CLIENTS; ++clientNum ) {
+		if( const std::optional<wsw::StringView> maybeInfoString = cgs.configStrings.getPlayerInfo( clientNum ) ) {
+			CG_LoadClientInfo( clientNum, *maybeInfoString );
 		}
 	}
 }
