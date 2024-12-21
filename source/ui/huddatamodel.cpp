@@ -305,7 +305,15 @@ auto TeamListModel::data( const QModelIndex &index, int role ) const -> QVariant
 void TeamListModel::resetWithScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {
 	beginResetModel();
 	fillEntries( scoreboardData, m_entries );
+	saveNicknameUpdateCounters( m_entries );
 	endResetModel();
+}
+
+void TeamListModel::saveNicknameUpdateCounters( const EntriesVector &entries ) {
+	const auto *const tracker = wsw::ui::NameChangesTracker::instance();
+	for( const Entry &entry: entries ) {
+		m_nicknameUpdateCounters[entry.playerNum] = tracker->getLastNicknameUpdateCounter( entry.playerNum );
+	}
 }
 
 void TeamListModel::fillEntries( const ReplicatedScoreboardData &scoreboardData, EntriesVector &entries ) {
@@ -371,58 +379,63 @@ void TeamListModel::update( const ReplicatedScoreboardData &scoreboardData, unsi
 	// TODO: This can be optimized in case of having a single-row difference
 	if( m_entries.size() != m_oldEntries.size() ) {
 		beginResetModel();
+		saveNicknameUpdateCounters( m_entries );
 		endResetModel();
-		return;
-	}
-
-	const auto *const tracker = wsw::ui::NameChangesTracker::instance();
-
-	// Just dispatch updates
-	for( unsigned i = 0; i < m_entries.size(); ++i ) {
-		const auto &oldEntry = m_oldEntries[i];
-		const auto &entry = m_entries[i];
-		int numUpdates = 0;
-		if( entry.playerNum != oldEntry.playerNum ) {
-			// Do a full reset
-			numUpdates = 999;
-		} else {
-			const unsigned counter = tracker->getLastNicknameUpdateCounter( entry.playerNum );
-			if( counter != m_nicknameUpdateCounters[entry.playerNum] ) {
-				m_nicknameUpdateCounters[entry.playerNum] = counter;
-				numUpdates = 999;
-			}
-		}
-
-		const bool hasHealthUpdates = entry.health != oldEntry.health;
-		numUpdates += hasHealthUpdates;
-		const bool hasArmorUpdates = entry.armor != oldEntry.armor;
-		numUpdates += hasArmorUpdates;
-		const bool hasWeaponUpdates = entry.weapon != oldEntry.weapon;
-		numUpdates += hasWeaponUpdates;
-
-		if( numUpdates ) {
-			// Specify a full row update by default
-			const QVector<int> *changedRoles = nullptr;
-			// Optimize for most frequent updates
-			if( numUpdates == 1 ) {
-				if( hasHealthUpdates ) {
-					changedRoles = &kHealthAsRole;
-				} else if( hasArmorUpdates ) {
-					changedRoles = &kArmorAsRole;
-				} else if( hasWeaponUpdates ) {
-					changedRoles = &kWeaponIconPathAsRole;
-				}
-			} else if( numUpdates == 2 ) {
-				if( hasHealthUpdates && hasArmorUpdates ) {
-					changedRoles = &kHealthAndArmorAsRole;
-				}
-			}
-
-			const QModelIndex modelIndex( createIndex( (int)i, 0 ) );
-			if( changedRoles ) {
-				Q_EMIT dataChanged( modelIndex, modelIndex, *changedRoles );
+	} else {
+		const auto *const tracker = wsw::ui::NameChangesTracker::instance();
+		constexpr int kFullUpdate = 1000;
+		// Just dispatch updates
+		for( unsigned i = 0; i < m_entries.size(); ++i ) {
+			const auto &oldEntry = m_oldEntries[i];
+			const auto &entry = m_entries[i];
+			int numUpdates = 0;
+			if( entry.playerNum != oldEntry.playerNum ) {
+				// Do a full reset
+				numUpdates = kFullUpdate;
 			} else {
-				Q_EMIT dataChanged( modelIndex, modelIndex );
+				const unsigned counter = tracker->getLastNicknameUpdateCounter( entry.playerNum );
+				if( counter != m_nicknameUpdateCounters[entry.playerNum] ) {
+					m_nicknameUpdateCounters[entry.playerNum] = counter;
+					numUpdates = kFullUpdate;
+				}
+			}
+
+			bool hasHealthUpdates = false;
+			bool hasArmorUpdates  = false;
+			bool hasWeaponUpdates = false;
+			if( numUpdates != kFullUpdate ) {
+				hasHealthUpdates = entry.health != oldEntry.health;
+				numUpdates += hasHealthUpdates;
+				hasArmorUpdates = entry.armor != oldEntry.armor;
+				numUpdates += hasArmorUpdates;
+				hasWeaponUpdates = entry.weapon != oldEntry.weapon;
+				numUpdates += hasWeaponUpdates;
+			}
+
+			if( numUpdates > 0 ) {
+				// Specify a full row update by default
+				const QVector<int> *changedRoles = nullptr;
+				// Optimize for most frequent updates
+				if( numUpdates == 1 ) {
+					if( hasHealthUpdates ) {
+						changedRoles = &kHealthAsRole;
+					} else if( hasArmorUpdates ) {
+						changedRoles = &kArmorAsRole;
+					} else if( hasWeaponUpdates ) {
+						changedRoles = &kWeaponIconPathAsRole;
+					}
+				} else if( numUpdates == 2 ) {
+					if( hasHealthUpdates && hasArmorUpdates ) {
+						changedRoles = &kHealthAndArmorAsRole;
+					}
+				}
+
+				const QModelIndex modelIndex( createIndex( (int)i, 0 ) );
+				if( changedRoles ) {
+					Q_EMIT dataChanged( modelIndex, modelIndex, *changedRoles );
+				} else {
+					Q_EMIT dataChanged( modelIndex, modelIndex );
+				}
 			}
 		}
 	}

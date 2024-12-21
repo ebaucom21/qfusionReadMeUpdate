@@ -104,6 +104,7 @@ class TeamListModel : public QAbstractListModel {
 
 	void fillEntries( const ReplicatedScoreboardData &scoreboardData, EntriesVector &entries );
 	void resetWithScoreboardData( const ReplicatedScoreboardData &scoreboardData );
+	void saveNicknameUpdateCounters( const EntriesVector &entries );
 
 	void update( const ReplicatedScoreboardData &scoreboardData, unsigned povPlayerNum );
 };
