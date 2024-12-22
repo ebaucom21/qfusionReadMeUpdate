@@ -1322,15 +1322,25 @@ static auto coPrepareDrawSceneRequests( CoroTask::StartInfo si, DrawSceneRequest
 	for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
 		ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
 
-		CG_LerpEntities( viewState );  // interpolate packet entities positions
+		CG_LerpEntities( viewState );
 
 		CG_CalcViewWeapon( &viewState->weapon, viewState );
+	}
+
+	CG_FireEvents( false );
+
+	for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
+		ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
+
+		// This has to be run.
+		// As a safety measure, the condition preserves the old well-known behavior for the single-POV mode.
+		if( numDisplayedViewStates > 1 ) {
+			CG_LerpEntities( viewState );
+		}
 
 		CG_AddEntities( drawSceneRequests[viewNum], viewState );
 		CG_AddViewWeapon( &viewState->weapon, drawSceneRequests[viewNum], viewState );
 	}
-
-	CG_FireEvents( false );
 
 	// Perform UI rendering in the main thread, while the actual set of views gets prepared in background
 	wsw::ui::UISystem::instance()->renderInternally();
