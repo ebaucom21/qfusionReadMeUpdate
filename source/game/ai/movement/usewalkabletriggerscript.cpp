@@ -60,7 +60,7 @@ typedef wsw::ai::movement::NearbyTriggersCache NearbyTriggersCache;
 
 const edict_t *FallbackAction::FindClosestToTargetTrigger( const ClosestTriggerProblemParams &problemParams,
 																   const NearbyTriggersCache &triggersCache ) {
-	const int allowedTravelFlags = bot->AllowedTravelFlags();
+	const int allowedTravelFlags = bot->RouteCache()->TravelFlags();
 
 	const auto triggerTravelFlags = &triggersCache.triggerTravelFlags[0];
 	const auto triggerEntNums = &triggersCache.triggerEntNums[0];
@@ -122,7 +122,7 @@ const edict_t *FallbackAction::FindClosestToTargetTrigger( const ClosestTriggerP
 
 		// Find a travel time from trigger for regular bot movement
 
-		const int travelTimeFromTrigger = routeCache->FastestRouteToGoalArea( entAreaNum, toAreaNum );
+		const int travelTimeFromTrigger = routeCache->PreferredRouteToGoalArea( entAreaNum, toAreaNum );
 		if( !travelTimeFromTrigger || travelTimeFromTrigger >= bestTravelTimeFromTrigger ) {
 			continue;
 		}

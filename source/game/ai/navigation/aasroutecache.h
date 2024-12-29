@@ -54,18 +54,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define TFL_NOTTEAM1            0x08000000  //not team 1
 #define TFL_NOTTEAM2            0x10000000  //not team 2
 
-//default travel flags
-#define TFL_DEFAULT TFL_WALK | TFL_CROUCH | TFL_BARRIERJUMP | \
-	TFL_JUMP | TFL_LADDER | \
-	TFL_WALKOFFLEDGE | TFL_SWIM | TFL_WATERJUMP | \
-	TFL_TELEPORT | TFL_ELEVATOR | \
-	TFL_AIR | TFL_WATER | TFL_JUMPPAD | TFL_FUNCBOB
-
 class AiAasRouteCache {
-	/**
-	 * An array of two elements: preferred and allowed travel flags that are used by default
-	 */
-	const int *const travelFlags;
+	const int travelFlags;
 	/**
 	 * Used to provide a dummy writable address for several routing calls
 	 * where we do not want to add extra branching for every call if an out parameter is unused.
@@ -414,7 +404,7 @@ class AiAasRouteCache {
 	// Should be used only for shared route cache initialization
 	explicit AiAasRouteCache( const AiAasWorld &aasWorld_ );
 	// Should be used for creation of new instances based on shared one
-	AiAasRouteCache( AiAasRouteCache *parent, const int *newTravelFlags );
+	AiAasRouteCache( AiAasRouteCache *parent, int newTravelFlags );
 
 	static AiAasRouteCache *shared;
 	static AiAasRouteCache *instancesHead;
@@ -428,8 +418,10 @@ public:
 	static void Shutdown();
 
 	static AiAasRouteCache *Shared() { return shared; }
-	static AiAasRouteCache *NewInstance( const int *travelFlags_ );
+	static AiAasRouteCache *NewInstance( int travelFlags_ );
 	static void ReleaseInstance( AiAasRouteCache *instance );
+
+	int TravelFlags() const { return travelFlags; }
 
 	// A helper for emplace_back() calls on instances of this class
 	//AiAasRouteCache( AiAasRouteCache &&that );
@@ -451,43 +443,22 @@ public:
 		return 0;
 	}
 
-	/**
-	 * Finds a reachability/travel time to goal area testing preferred and allowed travel flags for the owner
-	 * starting from preferred travel flags for the owner and stopping at first feasible result.
-	 * Returns non-zero travel time on success and a reachability via the out parameter.
-	 */
-	int PreferredRouteToGoalArea( int fromAreaNum, int toAreaNum, int *reachNum ) const;
-	/**
-	 * Tests all specified area nums for each flag before moving to the next one.
-	 */
-	int PreferredRouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int *reachNum ) const;
-	/**
-	 * Finds a reachability/travel time to goal area testing preferred and allowed travel flags for the owner
-	 * starting from preferred travel flags for the owner and choosing a best result.
-	 * Returns non-zero travel time on success and a reachability via the out parameter.
-	 */
-	int FastestRouteToGoalArea( int fromAreaNum, int toAreaNum, int *reachNum ) const;
-	/**
-	 * Returns best results for every combination of "from area" / travel flags.
-	 */
-	int FastestRouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int *reachNum ) const;
+	inline int PreferredRouteToGoalArea( int fromAreaNum, int toAreaNum, int *reachNum ) const {
+		RoutingResult result;
+		if( RoutingResultToGoalArea( fromAreaNum, toAreaNum, travelFlags, &result ) ) {
+			*reachNum = result.reachNum;
+			return result.travelTime;
+		}
+		return 0;
+	}
 
-	// It's better to add separate prototypes than set out pointers to null by default and use branching on every call.
-	// We could also set these parameters to an address of some static variable, but it could lead to extra cache misses
-	// since all these variables are likely to be scattered in memory.
-	// The underlying calls read flags pointer that is very likely on the same cache line the dummyIntPtr is.
+	int PreferredRouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int *reachNum ) const;
 
 	inline int PreferredRouteToGoalArea( int fromAreaNum, int toAreaNum ) const {
 		return PreferredRouteToGoalArea( fromAreaNum, toAreaNum, dummyIntPtr );
 	}
 	inline int PreferredRouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum ) const {
 		return PreferredRouteToGoalArea( fromAreaNums, numFromAreas, toAreaNum, dummyIntPtr );
-	}
-	inline int FastestRouteToGoalArea( int fromAreaNum, int toAreaNum ) const {
-		return FastestRouteToGoalArea( fromAreaNum, toAreaNum, dummyIntPtr );
-	}
-	inline int FastestRouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum ) const {
-		return FastestRouteToGoalArea( fromAreaNums, numFromAreas, toAreaNum, dummyIntPtr );
 	}
 
 	inline bool AreaDisabled( int areaNum ) const {

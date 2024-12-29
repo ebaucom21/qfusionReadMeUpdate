@@ -15,7 +15,7 @@
 Bot::Bot( edict_t *self_, float skillLevel_ )
 	: self( self_ )
 	, planner( &planningModule.planner )
-	, routeCache( AiAasRouteCache::NewInstance( &travelFlags[0] ) )
+	, routeCache( AiAasRouteCache::NewInstance( ALLOWED_TRAVEL_FLAGS ) )
 	, aasWorld( AiAasWorld::instance() )
 	, entityPhysicsState( &m_movementSubsystem.movementState.entityPhysicsState )
 	, blockedTimeoutAt( level.time + BLOCKED_TIMEOUT )

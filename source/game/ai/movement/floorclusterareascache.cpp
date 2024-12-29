@@ -237,7 +237,7 @@ void FloorClusterAreasCache::PrepareAreasForSmallCluster( PredictionContext *__r
 			}
 		}
 
-		const int areaTime = routeCache->FastestRouteToGoalArea( areaNum, toAreaNum );
+		const int areaTime = routeCache->PreferredRouteToGoalArea( areaNum, toAreaNum );
 		if( !areaTime || areaTime >= maxTravelTimeThreshold ) {
 			continue;
 		}
@@ -302,7 +302,7 @@ void FloorClusterAreasCache::PrepareAreasForLargeCluster( PredictionContext *__r
 	const int toAreaNum = context->NavTargetAasAreaNum();
 	for( const auto &areaAndScore: distanceHeap ) {
 		const auto areaNum = areaAndScore.areaNum;
-		const int areaTime = routeCache->FastestRouteToGoalArea( areaNum, toAreaNum );
+		const int areaTime = routeCache->PreferredRouteToGoalArea( areaNum, toAreaNum );
 		if( !areaTime || areaTime >= maxTravelTimeThreshold ) {
 			continue;
 		}

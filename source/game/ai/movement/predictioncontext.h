@@ -281,7 +281,7 @@ public:
 	}
 
 	const AiAasRouteCache *RouteCache() const;
-	const ArrayRange<int> TravelFlags() const;
+	int TravelFlags() const;
 
 	explicit PredictionContext( MovementSubsystem *m_subsystem );
 

@@ -61,9 +61,6 @@ AasStaticRouteTable::AasStaticRouteTable( const char *mapName ) {
 }
 
 AasStaticRouteTable::~AasStaticRouteTable() {
-	Q_free( m_dataForPreferredFlags.entries );
-	Q_free( m_dataForPreferredFlags.areaNums );
-
 	Q_free( m_dataForAllowedFlags.entries );
 	Q_free( m_dataForAllowedFlags.areaNums );
 
@@ -71,7 +68,7 @@ AasStaticRouteTable::~AasStaticRouteTable() {
 }
 
 static constexpr const char *kFileTag   = "RouteTable";
-static constexpr const int kFileVersion = 1340;
+static constexpr const int kFileVersion = 1341;
 
 bool AasStaticRouteTable::loadFromFile( const char *filePath ) {
 	AiPrecomputedFileReader reader( kFileTag, kFileVersion );
@@ -79,26 +76,18 @@ bool AasStaticRouteTable::loadFromFile( const char *filePath ) {
 		return false;
 	}
 
-	uint16_t *preferredNums = nullptr, *allowedNums = nullptr;
-	AreaEntry *preferredEntries = nullptr, *allowedEntries = nullptr;
+	uint16_t *allowedNums = nullptr;
+	AreaEntry *allowedEntries = nullptr;
 	uint16_t *walkingNums = nullptr, *walkingTimes = nullptr;
 	BufferSpansForFlags *spans = nullptr;
 
-	uint32_t numPreferredNums = 0, numAllowedNums = 0;
-	uint32_t numPreferredEntries = 0, numAllowedEntries = 0;
+	uint32_t numAllowedNums = 0, numAllowedEntries = 0;
 	uint32_t numWalkingNums = 0, numWalkingTimes = 0;
 	uint32_t numSpans = 0;
 
-	wsw::StaticVector<void *, 7> allocatedData;
+	wsw::StaticVector<void *, 5> allocatedData;
 
 	// TODO: The reader is defined in "rewriteme.h" for a reason...
-
-	if( reader.ReadAsTypedBuffer( &preferredNums, &numPreferredNums ) ) {
-		allocatedData.push_back( preferredNums );
-	}
-	if( reader.ReadAsTypedBuffer( &preferredEntries, &numPreferredEntries ) ) {
-		allocatedData.push_back( preferredEntries );
-	}
 	if( reader.ReadAsTypedBuffer( &allowedNums, &numAllowedNums ) ) {
 		allocatedData.push_back( allowedNums );
 	}
@@ -126,11 +115,6 @@ bool AasStaticRouteTable::loadFromFile( const char *filePath ) {
 		return false;
 	}
 
-	m_dataForPreferredFlags.areaNums = preferredNums;
-	m_dataForPreferredFlags.areaNumsDataSizeInElems = numPreferredNums;
-	m_dataForPreferredFlags.entries  = preferredEntries;
-	m_dataForPreferredFlags.entriesDataSizeInElems = numPreferredEntries;
-
 	m_dataForAllowedFlags.areaNums = allowedNums;
 	m_dataForAllowedFlags.areaNumsDataSizeInElems = numAllowedNums;
 	m_dataForAllowedFlags.entries  = allowedEntries;
@@ -150,12 +134,6 @@ bool AasStaticRouteTable::loadFromFile( const char *filePath ) {
 bool AasStaticRouteTable::saveToFile( const char *filePath ) {
 	AiPrecomputedFileWriter writer( kFileTag, kFileVersion );
 	if( !writer.BeginWriting( filePath ) ) {
-		return false;
-	}
-	if( !writer.WriteTypedBuffer( m_dataForPreferredFlags.areaNums, m_dataForPreferredFlags.areaNumsDataSizeInElems ) ) {
-		return false;
-	}
-	if( !writer.WriteTypedBuffer( m_dataForPreferredFlags.entries, m_dataForPreferredFlags.entriesDataSizeInElems ) ) {
 		return false;
 	}
 	if( !writer.WriteTypedBuffer( m_dataForAllowedFlags.areaNums, m_dataForAllowedFlags.areaNumsDataSizeInElems ) ) {
@@ -296,7 +274,6 @@ bool AasStaticRouteTable::compute() {
 	auto *const routeCache = AiAasRouteCache::Shared();
 	const auto numAreas    = (uint16_t)aasWorld->getAreas().size();
 
-	NumsAndEntriesBuilder<AreaEntry> preferredBuilder;
 	NumsAndEntriesBuilder<AreaEntry> allowedBuilder;
 	NumsAndEntriesBuilder<uint16_t> walkingBuilder;
 	wsw::PodVector<BufferSpansForFlags> spans;
@@ -304,9 +281,6 @@ bool AasStaticRouteTable::compute() {
 	spans.reserve( numAreas );
 	// Put dummy values for area 0, so we don't have to apply offsets to fromAreaNum during retrieval
 	spans.emplace_back( BufferSpansForFlags() );
-
-	constexpr auto preferredFlags = Bot::PREFERRED_TRAVEL_FLAGS;
-	constexpr auto allowedFlags   = Bot::ALLOWED_TRAVEL_FLAGS;
 
 	unsigned lastDisplayedProgress = 0;
 	const unsigned totalWorkSize   = wsw::square( numAreas - 1 );
@@ -320,7 +294,6 @@ bool AasStaticRouteTable::compute() {
 		}
 
 		allowedBuilder.beginSpan();
-		preferredBuilder.beginSpan();
 		walkingBuilder.beginSpan();
 
 		for( uint16_t toAreaNum = 1; toAreaNum < numAreas; ++toAreaNum ) {
@@ -329,14 +302,8 @@ bool AasStaticRouteTable::compute() {
 				// a simultaneous retrieval (existing private ones are very poor)
 				// TODO: We actually can read the entire Dijkstra's algorithm result for the given from area
 				// (Area-by-area retrieval still works fast due to internal caching in the route cache)
-				if( const int time = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, preferredFlags ) ) {
-					const int reach = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, preferredFlags );
-					preferredBuilder.addNumAndEntry( toAreaNum, AreaEntry {
-						.reachNum = (uint16_t)reach, .travelTime = (uint16_t)time,
-					});
-				}
-				if( const int time = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, allowedFlags ) ) {
-					const int reach = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, allowedFlags );
+				if( const int time = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, Bot::ALLOWED_TRAVEL_FLAGS ) ) {
+					const int reach = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, Bot::ALLOWED_TRAVEL_FLAGS );
 					allowedBuilder.addNumAndEntry( toAreaNum, AreaEntry {
 						.reachNum = (uint16_t)reach, .travelTime = (uint16_t)time,
 					});
@@ -350,25 +317,17 @@ bool AasStaticRouteTable::compute() {
 		}
 
 		spans.emplace_back( BufferSpansForFlags {
-			.preferred             = preferredBuilder.endSpan(),
 			.allowed               = allowedBuilder.endSpan(),
 			.walkingOrFallingShort = walkingBuilder.endSpan(),
 		});
 	}
 
-	Com_Printf( "Num entries in spans (for preferred flags): avg=%" PRIu64 ", max: %" PRIu64 "\n",
-				preferredBuilder.totalNumEntriesInSpans / ( numAreas -  1 ), preferredBuilder.maxNumEntriesInSpans );
 	Com_Printf( "Num entries in spans   (for allowed flags): avg=%" PRIu64 ", max: %" PRIu64 "\n",
 				allowedBuilder.totalNumEntriesInSpans / ( numAreas - 1 ), allowedBuilder.maxNumEntriesInSpans );
 	Com_Printf( "Num entries in spans   (for walking flags): avg=%" PRIu64 ", max: %" PRIu64 "\n",
 				walkingBuilder.totalNumEntriesInSpans / ( numAreas - 1 ), walkingBuilder.maxNumEntriesInSpans );
 
 	// TODO: This is not exception-safe, use sane RAII buffers
-
-	m_dataForPreferredFlags.areaNums = makeHeapAllocCopy( preferredBuilder.nums );
-	m_dataForPreferredFlags.areaNumsDataSizeInElems = preferredBuilder.nums.size();
-	m_dataForPreferredFlags.entries = makeHeapAllocCopy( preferredBuilder.entries );
-	m_dataForPreferredFlags.entriesDataSizeInElems = preferredBuilder.entries.size();
 
 	m_dataForAllowedFlags.areaNums = makeHeapAllocCopy( allowedBuilder.nums );
 	m_dataForAllowedFlags.areaNumsDataSizeInElems = allowedBuilder.nums.size();
@@ -389,7 +348,6 @@ bool AasStaticRouteTable::compute() {
 		for( uint16_t toAreaNum = 1; toAreaNum < numAreas; ++toAreaNum ) {
 			if( fromAreaNum != toAreaNum ) {
 				// Just call these methods which have themselves internal checks
-				(void)getPreferredRouteFromTo( fromAreaNum, toAreaNum );
 				(void)getAllowedRouteFromTo( fromAreaNum, toAreaNum );
 				(void) getTravelTimeWalkingOrFallingShort( fromAreaNum, toAreaNum );
 			}
@@ -421,27 +379,6 @@ static void checkMatchWithRouteCache( std::optional<std::pair<int, uint16_t>> ta
 	}
 }
 #endif
-
-[[nodiscard]]
-auto AasStaticRouteTable::getPreferredRouteFromTo( int fromAreaNum, int toAreaNum ) const
-	-> std::optional<std::pair<int, uint16_t>> {
-	assert( fromAreaNum != toAreaNum );
-	assert( (unsigned)( fromAreaNum - 1 ) < (unsigned)( m_numAreas - 1 ) );
-	assert( (unsigned)( toAreaNum - 1 ) < (unsigned)( m_numAreas - 1 ) );
-
-	auto result = getRouteFromTo( fromAreaNum, toAreaNum, m_bufferSpans[fromAreaNum].preferred, &m_dataForPreferredFlags );
-
-#ifdef CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
-	const bool wasAccessible        = s_isAccessibleForRouteCache;
-	s_isAccessibleForRouteCache     = false;
-	s_isCheckingMatchWithRouteCache = true;
-	checkMatchWithRouteCache( result, fromAreaNum, toAreaNum, Bot::PREFERRED_TRAVEL_FLAGS );
-	s_isCheckingMatchWithRouteCache = false;
-	s_isAccessibleForRouteCache     = wasAccessible;
-#endif
-
-	return result;
-}
 
 [[nodiscard]]
 auto AasStaticRouteTable::getAllowedRouteFromTo( int fromAreaNum, int toAreaNum ) const

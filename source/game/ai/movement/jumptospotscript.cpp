@@ -474,7 +474,7 @@ MovementScript *FallbackAction::TryFindJumpLikeReachFallback( PredictionContext 
 	const auto *routeCache = bot->RouteCache();
 	int navTargetAreaNum = context->NavTargetAasAreaNum();
 	// Note: we don't stop on the first feasible travel time here and below
-	int travelTimeFromReachArea = routeCache->FastestRouteToGoalArea( nextReach.areanum, navTargetAreaNum );
+	int travelTimeFromReachArea = routeCache->PreferredRouteToGoalArea( nextReach.areanum, navTargetAreaNum );
 	if( !travelTimeFromReachArea ) {
 		return nullptr;
 	}
@@ -517,7 +517,7 @@ MovementScript *FallbackAction::TryFindJumpLikeReachFallback( PredictionContext 
 		}
 
 		const int landingArea = predictionResults.lastAreaNum;
-		int travelTimeFromLandingArea = routeCache->FastestRouteToGoalArea( landingArea, navTargetAreaNum );
+		int travelTimeFromLandingArea = routeCache->PreferredRouteToGoalArea( landingArea, navTargetAreaNum );
 
 		// Note: thats why we are using best travel time among allowed and preferred travel flags
 		// (there is a suspicion that many feasible areas might be cut off by the following test otherwise).

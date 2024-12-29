@@ -105,10 +105,9 @@ class Bot: public AiComponent {
 	template <typename T> friend auto wsw::link( T *, T **, int ) -> T *;
 	template <typename T> friend auto wsw::unlink( T *, T **, int ) -> T *;
 public:
-	static constexpr auto PREFERRED_TRAVEL_FLAGS =
-		TFL_WALK | TFL_WALKOFFLEDGE | TFL_JUMP | TFL_STRAFEJUMP | TFL_AIR | TFL_TELEPORT | TFL_JUMPPAD;
 	static constexpr auto ALLOWED_TRAVEL_FLAGS =
-		PREFERRED_TRAVEL_FLAGS | TFL_WATER | TFL_WATERJUMP | TFL_SWIM | TFL_LADDER | TFL_ELEVATOR | TFL_BARRIERJUMP;
+		TFL_WALK | TFL_WALKOFFLEDGE | TFL_JUMP | TFL_STRAFEJUMP | TFL_AIR | TFL_TELEPORT | TFL_JUMPPAD |
+		TFL_WATER | TFL_WATERJUMP | TFL_SWIM | TFL_LADDER | TFL_ELEVATOR | TFL_BARRIERJUMP;
 
 	Bot( edict_t *self_, float skillLevel_ );
 
@@ -341,9 +340,6 @@ public:
 		return diff >= 0 ? (unsigned)diff : 0;
 	}
 
-	int AllowedTravelFlags() const { return travelFlags[1]; }
-	ArrayRange<int> TravelFlags() const { return travelFlagsRange; }
-
 	// Exposed for native and script actions
 	int CheckTravelTimeMillis( const Vec3 &from, const Vec3 &to, bool allowUnreachable = true );
 
@@ -560,10 +556,6 @@ private:
 	// Must be set in a subclass constructor. Can be arbitrary changed later.
 	// Can point to external (predicted) entity physics state during movement planning.
 	AiEntityPhysicsState *entityPhysicsState { nullptr };
-
-	// Preferred and allowed travel flags
-	int travelFlags[2] { ALLOWED_TRAVEL_FLAGS, PREFERRED_TRAVEL_FLAGS };
-	ArrayRange<int> travelFlagsRange { travelFlags, travelFlags + 2 };
 
 	int64_t blockedTimeoutAt;
 

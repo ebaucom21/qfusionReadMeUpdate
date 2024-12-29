@@ -243,24 +243,6 @@ struct AreaAndScore {
 	bool operator<( const AreaAndScore &that ) const { return score > that.score; }
 };
 
-template<typename T>
-class ArrayRange {
-	const T *begin_;
-	const T *end_;
-public:
-	ArrayRange( const T *basePtr, size_t size ) {
-		begin_ = basePtr;
-		end_ = basePtr + size;
-	}
-	ArrayRange( const T *begin__, const T *end__ ) {
-		this->begin_ = begin__;
-		this->end_ = end__;
-	}
-	const T *begin() const { return begin_; }
-	const T *end() const { return end_; }
-	const size_t size() const { return (size_t)( end_ - begin_ ); }
-};
-
 // This is a compact storage for 64-bit values.
 // If an int64_t field is used in an array of tiny structs,
 // a substantial amount of space can be lost for alignment.

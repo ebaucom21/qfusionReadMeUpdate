@@ -47,7 +47,6 @@ const uint16_t *TryFindBestStairsExitArea( PredictionContext *context, int stair
 
 	const auto *aasWorld = AiAasWorld::instance();
 	const auto *routeCache = context->RouteCache();
-	const auto &travelFlags = context->TravelFlags();
 
 	const std::span<const uint16_t> stairsClusterAreaNums = aasWorld->stairsClusterData( stairsClusterNum );
 
@@ -61,12 +60,11 @@ const uint16_t *TryFindBestStairsExitArea( PredictionContext *context, int stair
 	int bestStairsAreaIndex = -1;
 	int bestTravelTimeOfStairsAreas = std::numeric_limits<int>::max();
 	for( int i = 0; i < 2; ++i ) {
+		// TODO: Eliminate the intermediate bestAreaTravelTime variable (this is a result of unrelated refactoring)
 		int bestAreaTravelTime = std::numeric_limits<int>::max();
-		for( int flags: travelFlags ) {
-			int travelTime = routeCache->TravelTimeToGoalArea( *stairsBoundaryAreas[i], toAreaNum, flags );
-			if( travelTime && travelTime < bestAreaTravelTime ) {
-				bestAreaTravelTime = travelTime;
-			}
+		int travelTime = routeCache->TravelTimeToGoalArea( *stairsBoundaryAreas[i], toAreaNum, context->TravelFlags() );
+		if( travelTime && travelTime < bestAreaTravelTime ) {
+			bestAreaTravelTime = travelTime;
 		}
 		// The stairs boundary area is not reachable
 		if( bestAreaTravelTime == std::numeric_limits<int>::max() ) {

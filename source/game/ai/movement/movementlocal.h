@@ -148,8 +148,8 @@ inline const AiAasRouteCache *PredictionContext::RouteCache() const {
 	return bot->RouteCache();
 }
 
-inline const ArrayRange<int> PredictionContext::TravelFlags() const {
-	return bot->TravelFlags();
+inline int PredictionContext::TravelFlags() const {
+	return bot->RouteCache()->TravelFlags();
 }
 
 inline EnvironmentTraceCache &PredictionContext::TraceCache() {

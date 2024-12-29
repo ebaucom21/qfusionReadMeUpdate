@@ -22,8 +22,6 @@ public:
 	static void shutdown();
 
 	[[nodiscard]]
-	auto getPreferredRouteFromTo( int fromAreaNum, int toAreaNum ) const -> std::optional<std::pair<int, uint16_t>>;
-	[[nodiscard]]
 	auto getAllowedRouteFromTo( int fromAreaNum, int toAreaNum ) const -> std::optional<std::pair<int, uint16_t>>;
 	[[nodiscard]]
 	auto getTravelTimeWalkingOrFallingShort( int fromAreaNum, int toAreaNum ) const -> std::optional<uint16_t>;
@@ -66,7 +64,6 @@ private:
 
 	// Store side-by-side in memory as we often query both
 	struct BufferSpansForFlags {
-		BufferSpan preferred;
 		BufferSpan allowed;
 		// Note: entries are just short unsigned integers in this case
 		BufferSpan walkingOrFallingShort;
@@ -80,7 +77,7 @@ private:
 		unsigned areaNumsDataSizeInElems { 0 };
 	};
 
-	DataForTravelFlags m_dataForPreferredFlags;
+	// We do not longer split flags to allowed/preferred, only allowed flags are left
 	DataForTravelFlags m_dataForAllowedFlags;
 
 	uint16_t *m_walkingAreaNums { nullptr };
