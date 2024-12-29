@@ -379,76 +379,6 @@ struct ToonSmokeOffsetKeyframeHolder {
 
 static const ToonSmokeOffsetKeyframeHolder toonSmokeKeyframes;
 
-static const byte_vec4_t kSmokeSoftLayerFadeInPalette[] {
-	asByteColor( 0.65f, 0.65f, 0.65f, 0.25f ),
-	asByteColor( 0.70f, 0.70f, 0.70f, 0.25f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.25f ),
-	asByteColor( 0.55f, 0.55f, 0.55f, 0.25f ),
-	asByteColor( 0.60f, 0.60f, 0.60f, 0.25f ),
-};
-
-static const byte_vec4_t kSmokeHardLayerFadeInPalette[] {
-	asByteColor( 0.65f, 0.65f, 0.65f, 0.50f ),
-	asByteColor( 0.70f, 0.70f, 0.70f, 0.50f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.50f ),
-	asByteColor( 0.55f, 0.55f, 0.55f, 0.50f ),
-	asByteColor( 0.60f, 0.60f, 0.60f, 0.50f ),
-};
-
-static const SimulatedHullsSystem::ColorChangeTimelineNode kSmokeHullSoftLayerColorChangeTimeline[4] {
-	{
-	},
-	{
-		.activateAtLifetimeFraction = 0.20f, .replacementPalette = kSmokeSoftLayerFadeInPalette,
-		.sumOfReplacementChanceForThisSegment = 3.5f,
-		.allowIncreasingOpacity = true,
-	},
-	{
-		.activateAtLifetimeFraction = 0.35f,
-	},
-	{
-		.activateAtLifetimeFraction = 0.85f,
-		.sumOfDropChanceForThisSegment = 3.0f
-	}
-};
-
-static const SimulatedHullsSystem::ColorChangeTimelineNode kSmokeHullHardLayerColorChangeTimeline[4] {
-	{
-	},
-	{
-		.activateAtLifetimeFraction = 0.20f, .replacementPalette = kSmokeHardLayerFadeInPalette,
-		.sumOfReplacementChanceForThisSegment = 3.5f,
-		.allowIncreasingOpacity = true,
-	},
-	{
-		.activateAtLifetimeFraction = 0.35f,
-	},
-	{
-		.activateAtLifetimeFraction = 0.85f,
-		.sumOfDropChanceForThisSegment = 3.0f
-	}
-};
-
-static const uint8_t kSmokeHullNoColorChangeVertexColor[4] { 127, 127, 127, 0 };
-static const uint16_t kSmokeHullNoColorChangeIndices[] { 28, 100, 101, 103, 104, 106, 157, 158 };
-
-static SimulatedHullsSystem::CloudMeshProps g_smokeOuterLayerCloudMeshProps[2] {
-	{
-		.alphaScaleLifespan              = { .initial = 0.0f, .fadedIn = 1.25f, .fadedOut = 1.0f },
-		.radiusLifespan                  = { .initial = 0.0f, .fadedIn = 16.0f, .fadedOut = 0.0f },
-		.tessLevelShiftForMinVertexIndex = -3,
-		.tessLevelShiftForMaxVertexIndex = -2,
-		.applyRotation                   = true,
-	},
-	{
-		.alphaScaleLifespan              = { .initial = 0.0f, .fadedIn = 1.0f, .fadedOut = 1.0f },
-		.radiusLifespan                  = { .initial = 0.0f, .fadedIn = 24.0f, .fadedOut = 0.0f },
-		.tessLevelShiftForMinVertexIndex = -1,
-		.tessLevelShiftForMaxVertexIndex = -1,
-		.shiftFromDefaultLevelToHide     = -2,
-	},
-};
-
 // Caution: Specifying the full range of vertices would not allow the cloud to be rendered due to reaching the limit
 
 static SimulatedHullsSystem::CloudMeshProps g_fireInnerCloudMeshProps {
@@ -470,11 +400,11 @@ static SimulatedHullsSystem::CloudMeshProps g_fireOuterCloudMeshProps {
 static SimulatedHullsSystem::AppearanceRules g_fireInnerCloudAppearanceRules = SimulatedHullsSystem::SolidAppearanceRules {};
 static SimulatedHullsSystem::AppearanceRules g_fireOuterCloudAppearanceRules = SimulatedHullsSystem::SolidAppearanceRules {};
 
-void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const float *smokeOrigin, float radius ) {
+void TransientEffectsSystem::spawnExplosionHulls( const float *origin, float radius ) {
 	// 250 for radius of 64
 	// TODO: Make radius affect hulls
 	constexpr float lightRadiusScale = 1.0f / 64.0f;
-	allocLightEffect( m_lastTime, fireOrigin, vec3_origin, 0.0f, 400u, LightLifespan {
+	allocLightEffect( m_lastTime, origin, vec3_origin, 0.0f, 400u, LightLifespan {
 		.colorLifespan = {
 			.initial  = { 1.0f, 0.9f, 0.7f },
 			.fadedIn  = { 1.0f, 0.8f, 0.5f },
@@ -509,7 +439,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 	const unsigned compoundMeshKey = m_explosionCompoundMeshCounter;
 
 	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, fireHullTimeout ) ) {
-		hullsSystem->setupHullVertices( hull, fireOrigin, fireHullScale, fireHullLayerParams );
+		hullsSystem->setupHullVertices( hull, origin, fireHullScale, fireHullLayerParams );
 		hull->compoundMeshKey = compoundMeshKey;
 
 		hull->vertexViewDotFade          = SimulatedHullsSystem::ViewDotFade::FadeOutContour;
@@ -539,11 +469,11 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 	if( v_explosionWave.get() ) {
 		const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.05f };
 		if( auto *const hull = hullsSystem->allocWaveHull( m_lastTime, 250 ) ) {
-			hullsSystem->setupHullVertices( hull, fireOrigin, waveColor, 500.0f, 50.0f );
+			hullsSystem->setupHullVertices( hull, origin, waveColor, 500.0f, 50.0f );
 		}
 	}
 
-	if( smokeOrigin ) {
+	if( v_explosionSmoke.get() ) {
 		const std::span<const SimulatedHullsSystem::OffsetKeyframe> toonSmokeKeyframeSet = toonSmokeKeyframes.setOfKeyframes;
 
 		const float randomFactor  = 0.4f;
@@ -552,77 +482,10 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		const float toonSmokeScale   = 38.0f * randomScaling;
 		const auto toonSmokeLifetime = (unsigned)( (float)toonSmokeKeyframes.kMinLifetime * randomScaling );
 		if( auto *const hull = hullsSystem->allocToonSmokeHull( m_lastTime, toonSmokeLifetime ) ) {
-			hullsSystem->setupHullVertices( hull, smokeOrigin, toonSmokeScale,
+			hullsSystem->setupHullVertices( hull, origin, toonSmokeScale,
 											&toonSmokeKeyframeSet, toonSmokeKeyframes.maxOffset );
 			hull->compoundMeshKey = compoundMeshKey;
 		}
-
-#if 0
-		g_smokeOuterLayerCloudMeshProps[0].material = cgs.media.shaderSmokeHullHardParticle;
-		g_smokeOuterLayerCloudMeshProps[1].material = cgs.media.shaderSmokeHullSoftParticle;
-
-		SimulatedHullsSystem::CloudAppearanceRules cloudRulesMsvcWorkaround {
-			.spanOfMeshProps = g_smokeOuterLayerCloudMeshProps,
-		};
-
-		// Cannot be declared with a static lifetime due to material dependency
-		const TransientEffectsSystem::SmokeHullParams spawnSmokeHullParams[] {
-			{
-				.speed               = { .mean = 60.0f, .spread = 15.0f, .maxSpike = 40.0f },
-				.archimedesAccel     = {
-					.top    = { .initial = +125.0f, .fadedIn = +100.0f, .fadedOut = 0.0f, .startFadingOutAtLifetimeFrac = 0.5f, },
-					.bottom = { .initial = 0.0f, .fadedIn = +75.0f, .fadedOut = +75.0f, .startFadingOutAtLifetimeFrac = 0.5f, },
-				},
-				.xyExpansionAccel    = {
-					.top    = { .initial = 0.0f, .fadedIn = +95.0f, .fadedOut = 0.0f },
-					.bottom = { .initial = 0.0f, .fadedIn = -45.0f, .fadedOut = -55.0f },
-				},
-				.viewDotFade         = SimulatedHullsSystem::ViewDotFade::FadeOutCenterCubic,
-				.zFade               = SimulatedHullsSystem::ZFade::FadeOutBottom,
-				.colorChangeTimeline = kSmokeHullHardLayerColorChangeTimeline,
-			},
-			{
-				.speed               = { .mean = 60.0f, .spread = 7.5f, .maxSpike = 37.5f },
-				.archimedesAccel     = {
-					.top    = { .initial = +130.0f, .fadedIn = +110.0f, .fadedOut = 0.0f, .startFadingOutAtLifetimeFrac = 0.5f },
-					.bottom = { .initial = 0.0f, .fadedIn = +75.0f, .fadedOut = 75.0f, .startFadingOutAtLifetimeFrac = 0.5f },
-				},
-				.xyExpansionAccel    = {
-					.top    = { .initial = 0.0f, .fadedIn = +105.0f, .fadedOut = 0.0f },
-					.bottom = { .initial = 0.0f, .fadedIn = -40.0f, .fadedOut = -50.0f },
-				},
-				.viewDotFade         = SimulatedHullsSystem::ViewDotFade::FadeOutContour,
-				.zFade               = SimulatedHullsSystem::ZFade::FadeOutBottom,
-				.colorChangeTimeline = kSmokeHullSoftLayerColorChangeTimeline,
-				.appearanceRules     = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
-					.cloudRules      = cloudRulesMsvcWorkaround,
-				},
-			},
-		};
-
-		// TODO: Avoid hardcoding the size
-		constexpr unsigned kSubdivLevel            = 3;
-		constexpr unsigned kSubdivLevelVertices    = 642;
-
-		static_assert( kSubdivLevel == kCachedSmokeBulgeSubdivLevel );
-		static_assert( kSubdivLevelVertices == kCachedSmokeBulgeMaskSize );
-
-		alignas( 16 ) float spikeSpeedMask[kSubdivLevelVertices];
-		cg.simulatedHullsSystem.calcSmokeSpikeSpeedMask( spikeSpeedMask, kSubdivLevel, 9 );
-
-		assert( !m_cachedSmokeBulgeMasksBuffer.empty() );
-		const uint8_t *const __restrict bulgeMask = m_cachedSmokeBulgeMasksBuffer.data() +
-			kCachedSmokeBulgeMaskSize * m_rng.nextBounded( kNumCachedSmokeBulgeMasks );
-
-		unsigned vertexNum = 0;
-		do {
-			spikeSpeedMask[vertexNum] = 0.5f * ( spikeSpeedMask[vertexNum] + ( 1.0f / 255.0f ) * (float)bulgeMask[vertexNum] );
-		} while( ++vertexNum < kSubdivLevelVertices );
-
-		for( const SmokeHullParams &hullSpawnParams: spawnSmokeHullParams ) {
-			spawnSmokeHull( m_lastTime, smokeOrigin, spikeSpeedMask, hullSpawnParams );
-		}
-#endif
 	}
 
 	// Disallow clusters if smoke is enabled (they are barely noticeable and make the combined effect worse)
@@ -641,7 +504,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 			numSpawnedClusters++;
 
 			const auto spawnDelay = ( fireHullTimeout / 4 ) + m_rng.nextBoundedFast( fireHullTimeout / 4 );
-			auto *const effect = allocDelayedEffect( m_lastTime, fireOrigin, spawnDelay, ConcentricHullSpawnRecord {
+			auto *const effect = allocDelayedEffect( m_lastTime, origin, spawnDelay, ConcentricHullSpawnRecord {
 				.layerParams = ::kFireHullParams.darkClusterHullLayerParams,
 				.scale       = m_rng.nextFloat( 0.25f, 0.37f ) * fireHullScale,
 				.timeout     = fireHullTimeout / 3,
@@ -654,32 +517,6 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 			VectorScale( randomDir, randomSpeed, effect->velocity );
 			effect->simulation = DelayedEffect::SimulateMovement;
 		}
-	}
-}
-
-void TransientEffectsSystem::spawnSmokeHull( int64_t currTime, const float *origin, const float *spikeSpeedMask,
-											 const SmokeHullParams &params ) {
-	if( auto *const hull = cg.simulatedHullsSystem.allocSmokeHull( currTime, 2000 ) ) {
-		hull->archimedesTopAccel      = params.archimedesAccel.top;
-		hull->archimedesBottomAccel   = params.archimedesAccel.bottom;
-		hull->xyExpansionTopAccel     = params.xyExpansionAccel.top;
-		hull->xyExpansionBottomAccel  = params.xyExpansionAccel.bottom;
-
-		hull->colorChangeTimeline      = params.colorChangeTimeline;
-		hull->noColorChangeIndices     = kSmokeHullNoColorChangeIndices;
-		hull->noColorChangeVertexColor = kSmokeHullNoColorChangeVertexColor;
-
-		hull->expansionStartAt = m_lastTime + 125;
-
-		hull->tesselateClosestLod = true;
-		hull->leprNextLevelColors = true;
-		hull->applyVertexDynLight = true;
-		hull->vertexViewDotFade   = params.viewDotFade;
-		hull->vertexZFade         = params.zFade;
-
-		const vec4_t initialSmokeColor { 0.0f, 0.0f, 0.0f, 0.03f };
-		cg.simulatedHullsSystem.setupHullVertices( hull, origin, initialSmokeColor, params.speed.mean, params.speed.spread,
-												   params.appearanceRules, spikeSpeedMask, params.speed.maxSpike );
 	}
 }
 

@@ -43,7 +43,7 @@ class TransientEffectsSystem {
 public:
 	~TransientEffectsSystem();
 
-	void spawnExplosionHulls( const float *fireOrigin, const float *smokeOrigin, float radius = 72.0f );
+	void spawnExplosionHulls( const float *origin, float radius = 72.0f );
 	void spawnCartoonHitEffect( const float *origin, const float *dir, int damage, unsigned povPlayerMask );
 	void spawnBleedingVolumeEffect( const float *origin, const float *dir, unsigned damageLevel,
 									const float *bloodColor, unsigned duration, float scale, unsigned povPlayerMask );
@@ -236,9 +236,6 @@ private:
 		std::span<const SimulatedHullsSystem::ColorChangeTimelineNode> colorChangeTimeline;
 		SimulatedHullsSystem::AppearanceRules appearanceRules = SimulatedHullsSystem::SolidAppearanceRules {};
 	};
-
-	void spawnSmokeHull( int64_t currTime, const float *origin, const float *spikeSpeedMask,
-						 const SmokeHullParams &smokeHullParams );
 
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );

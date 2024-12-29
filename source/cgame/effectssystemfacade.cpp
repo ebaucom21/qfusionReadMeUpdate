@@ -297,60 +297,40 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		}
 	}
 
-	std::optional<int> liquidContentsAtFireOrigin;
-	if( v_explosionSmoke.get() || v_particles.get() ) {
-		if( const int contents = CG_PointContents( fireOrigin ); contents & MASK_WATER ) {
-			liquidContentsAtFireOrigin = contents;
-		}
-	}
+	int liquidContentsAtFireOrigin = 0;
+	if( v_particles.get() ) {
+		if( const int contentsAtFireOrigin = CG_PointContents( fireOrigin ); contentsAtFireOrigin & MASK_WATER ) {
+			liquidContentsAtFireOrigin = contentsAtFireOrigin;
 
-	vec3_t tmpSmokeOrigin;
-	const float *smokeOrigin = nullptr;
-	if( v_explosionSmoke.get() || v_particles.get() ) {
-		if( liquidContentsAtFireOrigin ) {
-			VectorCopy( fireOrigin, tmpSmokeOrigin );
-			tmpSmokeOrigin[2] += radius;
+			vec3_t tmpOrigin;
+			VectorCopy( fireOrigin, tmpOrigin );
+			tmpOrigin[2] += radius;
 
-			if( !( CG_PointContents( tmpSmokeOrigin ) & MASK_WATER ) ) {
+			if( !( CG_PointContents( tmpOrigin ) & MASK_WATER ) ) {
 				vec3_t waterHitPoint;
-				if( findWaterHitPointBetweenTwoPoints( tmpSmokeOrigin, fireOrigin, waterHitPoint ) ) {
+				if( findWaterHitPointBetweenTwoPoints( tmpOrigin, fireOrigin, waterHitPoint ) ) {
 					if( waterHitPoint[2] - fireOrigin[2] > 1.0f ) {
-						if( v_explosionSmoke.get() ) {
-							VectorCopy( waterHitPoint, tmpSmokeOrigin );
-							tmpSmokeOrigin[2] += 1.0f;
-							smokeOrigin = tmpSmokeOrigin;
-						}
-
 						waterImpacts.emplace_back( LiquidImpact {
 							.origin   = { waterHitPoint[0], waterHitPoint[1], waterHitPoint[2] },
 							.burstDir = { 0.0f, 0.0f, +1.0f },
-							.contents = *liquidContentsAtFireOrigin,
+							.contents = contentsAtFireOrigin,
 						});
 
 						const float waterZ = waterHitPoint[2];
 						addUnderwaterSplashImpactsForKnownWaterZ( fireOrigin, radius, waterZ, &m_rng,
-																  *liquidContentsAtFireOrigin, &waterImpacts );
+																  contentsAtFireOrigin, &waterImpacts );
 					} else if( radius > 2.0f ) {
 						// Generate impacts from a point above the fire origin but within the fire radius
 						const vec3_t shiftedFireOrigin { fireOrigin[0], fireOrigin[1], fireOrigin[2] + 0.75f * radius };
 						makeRegularExplosionImpacts( shiftedFireOrigin, radius, &m_rng, &solidImpacts, &waterImpacts );
-
-						if( v_explosionSmoke.get() ) {
-							VectorCopy( shiftedFireOrigin, tmpSmokeOrigin );
-							smokeOrigin = tmpSmokeOrigin;
-						}
 					}
 				} else {
-					const float maxZ = tmpSmokeOrigin[2];
+					const float maxZ = tmpOrigin[2];
 					addUnderwaterSplashImpactsForUnknownWaterZ( fireOrigin, radius, maxZ, &m_rng,
-																*liquidContentsAtFireOrigin, &waterImpacts );
+																contentsAtFireOrigin, &waterImpacts );
 				}
 			}
 		} else {
-			if( v_explosionSmoke.get() ) {
-				smokeOrigin = fireOrigin;
-			}
-
 			makeRegularExplosionImpacts( fireOrigin, radius, &m_rng, &solidImpacts, &waterImpacts );
 		}
 	}
@@ -451,7 +431,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
 
-	m_transientEffectsSystem.spawnExplosionHulls( fireOrigin, smokeOrigin );
+	m_transientEffectsSystem.spawnExplosionHulls( fireOrigin );
 
 	spawnMultipleExplosionImpactEffects( solidImpacts );
 	spawnMultipleLiquidImpactEffects( waterImpacts, 1.0f, { 0.7f, 0.9f }, std::make_pair( 0u, 100u ) );
