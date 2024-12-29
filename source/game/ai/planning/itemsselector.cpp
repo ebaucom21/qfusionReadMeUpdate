@@ -285,7 +285,7 @@ std::optional<SelectedNavEntity> BotItemsSelector::SuggestGoalNavEntity( const N
 	int rawBestAreaNum = rawBestNavEnt->AasAreaNum();
 	unsigned botToBestRawEntMoveDuration = 0;
 	for(;; ) {
-		botToBestRawEntMoveDuration = 10U * routeCache->PreferredRouteToGoalArea( fromAreaNums, numFromAreas, rawBestAreaNum );
+		botToBestRawEntMoveDuration = 10U * routeCache->RouteToGoalArea( fromAreaNums, numFromAreas, rawBestAreaNum, bot->TravelFlags() );
 		if( botToBestRawEntMoveDuration ) {
 			break;
 		}
@@ -323,7 +323,7 @@ std::optional<SelectedNavEntity> BotItemsSelector::SuggestGoalNavEntity( const N
 		float weight = ( *rawCandidatesIter ).weight;
 
 		const unsigned botToCandidateMoveDuration =
-			routeCache->PreferredRouteToGoalArea( fromAreaNums, numFromAreas, navEnt->AasAreaNum() ) * 10U;
+			routeCache->RouteToGoalArea( fromAreaNums, numFromAreas, navEnt->AasAreaNum(), bot->TravelFlags() ) * 10U;
 
 		// AAS functions return 0 as a "none" value, 1 as a lowest feasible value
 		if( !botToCandidateMoveDuration ) {
@@ -370,7 +370,7 @@ std::optional<SelectedNavEntity> BotItemsSelector::SuggestGoalNavEntity( const N
 
 		// Check the travel time from the nav entity to the best raw weight nav entity
 		const unsigned candidateToRawBestEntMoveDuration =
-			routeCache->PreferredRouteToGoalArea( navEnt->AasAreaNum(), rawBestNavEnt->AasAreaNum() ) * 10U;
+			routeCache->RouteToGoalArea( navEnt->AasAreaNum(), rawBestNavEnt->AasAreaNum(), bot->TravelFlags() ) * 10U;
 
 		// If the best raw weight nav entity is not reachable from the entity
 		if( !candidateToRawBestEntMoveDuration ) {

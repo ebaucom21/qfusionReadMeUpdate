@@ -18,7 +18,7 @@ float LandOnSavedAreasAction::SaveJumppadLandingAreas( const edict_t *jumppadEnt
 	int navTargetAreaNum  = bot->NavTargetAasAreaNum();
 	if( navTargetAreaNum ) {
 		int reachNum   = 0;
-		nextTravelTime = routeCache->PreferredRouteToGoalArea( jumppadAreaNum, navTargetAreaNum, &reachNum );
+		nextTravelTime = routeCache->RouteToGoalArea( jumppadAreaNum, navTargetAreaNum, bot->TravelFlags(), &reachNum );
 		if( nextTravelTime ) {
 			if( reachNum ) {
 				nextReachAreaNum = aasWorld->getReaches()[reachNum].areanum;
@@ -40,7 +40,7 @@ float LandOnSavedAreasAction::SaveJumppadLandingAreas( const edict_t *jumppadEnt
 
 		float score = 1.0f;
 		if( navTargetAreaNum ) {
-			const int travelTime = routeCache->PreferredRouteToGoalArea( areaNum, navTargetAreaNum );
+			const int travelTime = routeCache->RouteToGoalArea( areaNum, navTargetAreaNum, bot->TravelFlags() );
 			// If the nav target is not reachable from the box area or
 			// it leads to a greater travel time than the jumppad target area
 			if( !travelTime || travelTime >= nextTravelTime ) {

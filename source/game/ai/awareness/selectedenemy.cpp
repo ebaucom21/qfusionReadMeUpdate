@@ -438,12 +438,12 @@ bool SelectedEnemy::TestAboutToHitLGorPG( int64_t levelTime ) const {
 			// Check whether we're not going to have worse travel time to target
 			const int targetAreaNum = m_bot->NavTargetAasAreaNum();
 			const int testedAreaNum = aasWorld->findAreaNum( testedPoint );
-			int currTravelTime = m_bot->RouteCache()->PreferredRouteToGoalArea( botAreaNums, numBotAreas, targetAreaNum );
+			int currTravelTime = m_bot->RouteCache()->RouteToGoalArea( botAreaNums, numBotAreas, targetAreaNum, m_bot->TravelFlags() );
 			// Can't say much in this case
 			if( !currTravelTime ) {
 				break;
 			}
-			int testedTravelTime = m_bot->RouteCache()->PreferredRouteToGoalArea( testedAreaNum, targetAreaNum );
+			int testedTravelTime = m_bot->RouteCache()->RouteToGoalArea( testedAreaNum, targetAreaNum, m_bot->TravelFlags() );
 			// If the nav target is going to become unreachable or the travel time is worse
 			if( !testedTravelTime || testedTravelTime > currTravelTime ) {
 				break;

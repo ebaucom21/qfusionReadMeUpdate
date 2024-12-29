@@ -59,7 +59,7 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 			}
 			const int targetAreaNum = context->NavTargetAasAreaNum();
 			if( const int nextAreaNum = reach.areanum; nextAreaNum != targetAreaNum ) {
-				if( !bot->RouteCache()->PreferredRouteToGoalArea( nextAreaNum, targetAreaNum, &m_cachedNextReachNum ) ) {
+				if( !bot->RouteCache()->RouteToGoalArea( nextAreaNum, targetAreaNum, bot->TravelFlags(), &m_cachedNextReachNum ) ) {
 					context->SetPendingRollback();
 					return;
 				}

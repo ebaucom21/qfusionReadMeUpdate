@@ -331,14 +331,7 @@ public:
 		return MillisInBlockedState() > 64 + 16;
 	}
 
-	unsigned MillisUntilBlockedTimeout() const {
-		// Returning a positive BLOCKED_TIMEOUT might be confusing in this case
-		if( !IsBlocked() ) {
-			return 0;
-		}
-		int64_t diff = level.time - blockedTimeoutAt;
-		return diff >= 0 ? (unsigned)diff : 0;
-	}
+	int TravelFlags() const { return travelFlags; }
 
 	// Exposed for native and script actions
 	int CheckTravelTimeMillis( const Vec3 &from, const Vec3 &to, bool allowUnreachable = true );
@@ -556,6 +549,9 @@ private:
 	// Must be set in a subclass constructor. Can be arbitrary changed later.
 	// Can point to external (predicted) entity physics state during movement planning.
 	AiEntityPhysicsState *entityPhysicsState { nullptr };
+
+	// Currently, we don't support modifying flags in runtime
+	const int travelFlags { ALLOWED_TRAVEL_FLAGS };
 
 	int64_t blockedTimeoutAt;
 

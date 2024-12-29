@@ -87,8 +87,8 @@ void AiAasRouteCache::Shutdown() {
 	instancesHead = nullptr;
 }
 
-AiAasRouteCache *AiAasRouteCache::NewInstance( int travelFlags_ ) {
-	auto *instance = new( Q_malloc( sizeof( AiAasRouteCache ) ) )AiAasRouteCache( Shared(), travelFlags_ );
+AiAasRouteCache *AiAasRouteCache::NewInstance() {
+	auto *instance = new( Q_malloc( sizeof( AiAasRouteCache ) ) )AiAasRouteCache( Shared() );
 	wsw::link( instance, &AiAasRouteCache::instancesHead );
 	return instance;
 }
@@ -104,7 +104,7 @@ void AiAasRouteCache::ReleaseInstance( AiAasRouteCache *instance ) {
 }
 
 AiAasRouteCache::AiAasRouteCache( const AiAasWorld &aasWorld_ )
-	: travelFlags( Bot::ALLOWED_TRAVEL_FLAGS ), aasWorld( aasWorld_ ) {
+	: aasWorld( aasWorld_ ) {
 	InitCompactReachDataAreaDataAndHelpers();
 
 	InitPathFindingNodes();
@@ -123,8 +123,8 @@ AiAasRouteCache::AiAasRouteCache( const AiAasWorld &aasWorld_ )
 	loaded = true;
 }
 
-AiAasRouteCache::AiAasRouteCache( AiAasRouteCache *parent, int newTravelFlags )
-	: travelFlags( newTravelFlags ), aasWorld( parent->aasWorld ), loaded( true ) {
+AiAasRouteCache::AiAasRouteCache( AiAasRouteCache *parent )
+	: aasWorld( parent->aasWorld ), loaded( true ) {
 	InitPathFindingNodes();
 
 	// A ref counter is shared for aasRevReach and aasRevLinks
@@ -1345,11 +1345,6 @@ AiAasRouteCache::FindSiblingCache( int clusterNum, int clusterAreaNum, int trave
 	}
 
 	for( const auto *that = AiAasRouteCache::instancesHead; that; that = that->next ) {
-		// Make sure travel flags of instances match
-		// TODO: Either ensure we do not modify travel flags after initial setting or reset caches on flags change
-		if( that->travelFlags != this->travelFlags ) {
-			continue;
-		}
 		// Make sure we're using the same digest
 		// (it's very likely we have the same blocked areas vector in this case)
 		if( !BlockedAreasDigestsMatch( that->blockedAreasDigest, this->blockedAreasDigest ) ) {
@@ -1492,7 +1487,7 @@ AiAasRouteCache::GetPortalRoutingCache( std::span<const aas_areasettings_t> aasA
 	return cache;
 }
 
-int AiAasRouteCache::PreferredRouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int *reachNum ) const {
+int AiAasRouteCache::RouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int travelFlags, int *reachNum ) const {
 	int bestTravelTime = std::numeric_limits<int>::max();
 	int bestReachNum = 0;
 

@@ -658,7 +658,7 @@ Bot *AiObjectiveBasedTeam::ObjectiveSpotImpl::FindBestByTravelTimeBot() {
 	for( Bot *bot = botsListHead; bot; bot = bot->NextInObjective() ) {
 		int fromAreaNums[2] = { 0, 0 };
 		const int numFromAreas = bot->EntityPhysicsState()->PrepareRoutingStartAreas( fromAreaNums );
-		const int travelTime = bot->RouteCache()->PreferredRouteToGoalArea( fromAreaNums, numFromAreas, spotAreaNum );
+		const int travelTime = bot->RouteCache()->RouteToGoalArea( fromAreaNums, numFromAreas, spotAreaNum, bot->TravelFlags() );
 		if( travelTime && travelTime < bestTravelTime ) {
 			bestTravelTime = travelTime;
 			bestBot = bot;

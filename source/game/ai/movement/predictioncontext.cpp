@@ -16,10 +16,11 @@ void PredictionContext::NextReachNumAndTravelTimeToNavTarget( int *reachNum, int
 	}
 
 	const auto *routeCache = bot->RouteCache();
+	const int travelFlags  = bot->TravelFlags();
 
 	int fromAreaNums[2];
 	int numFromAreas = movementState->entityPhysicsState.PrepareRoutingStartAreas( fromAreaNums );
-	if( int travelTime = routeCache->PreferredRouteToGoalArea( fromAreaNums, numFromAreas, navTargetAreaNum, reachNum ) ) {
+	if( int travelTime = routeCache->RouteToGoalArea( fromAreaNums, numFromAreas, navTargetAreaNum, travelFlags, reachNum ) ) {
 		*travelTimeToNavTarget = travelTime;
 	}
 }
@@ -862,6 +863,7 @@ void PredictionContext::SavePathTriggerNums() {
 	const auto aasReaches = AiAasWorld::instance()->getReaches();
 	const auto *const __restrict routeCache = bot->RouteCache();
 	const auto *const __restrict botOrigin = bot->Origin();
+	const int travelFlags = bot->TravelFlags();
 
 	int reachAreaNum = 0;
 	enum MetTriggerFlags : unsigned { Teleporter = 0x1, Jumppad = 0x2, Platform = 0x4 };
@@ -870,9 +872,9 @@ void PredictionContext::SavePathTriggerNums() {
 	for( int i = 0; i < 32; ++i ) {
 		int travelTime, reachNum = 0;
 		if( !reachAreaNum ) {
-			travelTime = routeCache->PreferredRouteToGoalArea( startAreaNums, numStartAreas, targetAreaNum, &reachNum );
+			travelTime = routeCache->RouteToGoalArea( startAreaNums, numStartAreas, targetAreaNum, travelFlags, &reachNum );
 		} else {
-			travelTime = routeCache->PreferredRouteToGoalArea( reachAreaNum, targetAreaNum, &reachNum );
+			travelTime = routeCache->RouteToGoalArea( reachAreaNum, targetAreaNum, travelFlags, &reachNum );
 		}
 		if( !travelTime || !reachNum ) {
 			break;

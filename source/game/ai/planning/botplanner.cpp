@@ -46,7 +46,7 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 			int areaNums[2] = { 0, 0 };
 			int numAreas = bot->EntityPhysicsState()->PrepareRoutingStartAreas( areaNums );
 			const auto *routeCache = bot->RouteCache();
-			int travelTime = 10 * routeCache->PreferredRouteToGoalArea( areaNums, numAreas, navEntity->AasAreaNum() );
+			int travelTime = 10 * routeCache->RouteToGoalArea( areaNums, numAreas, navEntity->AasAreaNum(), bot->TravelFlags() );
 			// AAS returns 1 seconds^-2 as a lowest feasible value
 			if( travelTime <= 10 ) {
 				travelTime = 0;

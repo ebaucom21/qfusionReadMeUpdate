@@ -79,6 +79,7 @@ protected:
 	const AiAasWorld *aasWorld;
 	// If set, a travel time to a nav target is used as a criterion instead of distance proximity
 	const AiAasRouteCache *routeCache;
+	int travelFlags;
 	int navTargetAreaNum;
 	int startTravelTimeToTarget;
 public:
@@ -92,11 +93,13 @@ public:
 		, jumpZSpeed( 0.0f )
 		, aasWorld( nullptr )
 		, routeCache( nullptr )
+		, travelFlags( 0 )
 		, navTargetAreaNum( 0 )
 		, startTravelTimeToTarget( 0 ) {}
 
-	void AddRoutingParams( const AiAasRouteCache *routeCache_, int navTargetAreaNum_, int startTravelTimeToTarget_ ) {
+	void AddRoutingParams( const AiAasRouteCache *routeCache_, int travelFlags_, int navTargetAreaNum_, int startTravelTimeToTarget_ ) {
 		this->routeCache = routeCache_;
+		this->travelFlags = travelFlags_;
 		this->navTargetAreaNum = navTargetAreaNum_;
 		this->startTravelTimeToTarget = startTravelTimeToTarget_;
 	}

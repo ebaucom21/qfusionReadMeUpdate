@@ -8,7 +8,7 @@ struct Walker : public ReachChainWalker {
 	Vec3 result { 0, 0, 0 };
 
 	explicit Walker( PredictionContext *context )
-		: ReachChainWalker( context->RouteCache() )
+		: ReachChainWalker( context->RouteCache(), context->TravelFlags() )
 		, botOrigin( context->movementState->entityPhysicsState.Origin() )
 		, aasWorld( AiAasWorld::instance() ) {}
 

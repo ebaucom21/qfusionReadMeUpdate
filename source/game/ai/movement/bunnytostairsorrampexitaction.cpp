@@ -96,7 +96,7 @@ void BunnyToStairsOrRampExitAction::TrySaveExitFloorCluster( PredictionContext *
 	int areaNum = exitAreaNum;
 	while( areaNum != targetAreaNum ) {
 		int reachNum;
-		if( !routeCache->PreferredRouteToGoalArea( areaNum, targetAreaNum, &reachNum ) ) {
+		if( !routeCache->RouteToGoalArea( areaNum, targetAreaNum, bot->TravelFlags(), &reachNum ) ) {
 			break;
 		}
 		const auto &reach = aasReach[reachNum];

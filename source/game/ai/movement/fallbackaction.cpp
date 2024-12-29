@@ -96,10 +96,11 @@ bool FallbackAction::CanWaitForLanding( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	const auto *const routeCache = bot->RouteCache();
 	const auto *const routeTable = AasStaticRouteTable::instance();
+	const int travelFlags = bot->TravelFlags();
 
 	int fromAreaNums[2] { 0, 0 };
 	const int numFromAreas = entityPhysicsState.PrepareRoutingStartAreas( fromAreaNums );
-	const int startTravelTime = routeCache->PreferredRouteToGoalArea( fromAreaNums, numFromAreas, navTargetAreaNum );
+	const int startTravelTime = routeCache->RouteToGoalArea( fromAreaNums, numFromAreas, navTargetAreaNum, travelFlags );
 	if( !startTravelTime ) {
 		return false;
 	}
@@ -150,7 +151,7 @@ bool FallbackAction::CanWaitForLanding( PredictionContext *context ) {
 		}
 	}
 
-	const int endTravelTime = routeCache->PreferredRouteToGoalArea( resultAreaNum, navTargetAreaNum );
+	const int endTravelTime = routeCache->RouteToGoalArea( resultAreaNum, navTargetAreaNum, travelFlags );
 	if( !endTravelTime ) {
 		return false;
 	}

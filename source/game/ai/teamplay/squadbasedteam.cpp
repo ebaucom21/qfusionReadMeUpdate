@@ -82,6 +82,7 @@ int ClientToClientTable::GetTravelTime( int fromEntNum, int toEntNum ) const {
 
 int ClientToClientTable::FindTravelTime( int fromEntNum, int toEntNum ) const {
 	const AiAasRouteCache *routeCache;
+	int travelFlags;
 
 	int fromAreaNums[2] = { 0, 0 };
 	int numFromAreas;
@@ -93,9 +94,11 @@ int ClientToClientTable::FindTravelTime( int fromEntNum, int toEntNum ) const {
 	if( Bot *const bot = fromEnt->bot ) {
 		routeCache = bot->RouteCache();
 		numFromAreas = bot->EntityPhysicsState()->PrepareRoutingStartAreas( fromAreaNums );
+		travelFlags = bot->TravelFlags();
 	} else {
 		routeCache = AiAasRouteCache::Shared();
 		numFromAreas = FindEntityAreas( fromEnt, fromAreaNums );
+		travelFlags = Bot::ALLOWED_TRAVEL_FLAGS;
 	}
 
 	const edict_t *const toEnt = game.edicts + toEntNum;
@@ -108,7 +111,7 @@ int ClientToClientTable::FindTravelTime( int fromEntNum, int toEntNum ) const {
 	// AAS routines return 0 on failure (1 is the minimal feasible travel time)
 	int bestTravelTime = 0;
 	for( int i = 0; i < numToAreas; ++i ) {
-		if( const int travelTime = routeCache->PreferredRouteToGoalArea( fromAreaNums, numFromAreas, toAreaNums[i] ) ) {
+		if( const int travelTime = routeCache->RouteToGoalArea( fromAreaNums, numFromAreas, toAreaNums[i], travelFlags ) ) {
 			if( bestTravelTime && travelTime > bestTravelTime ) {
 				continue;
 			}

@@ -72,7 +72,7 @@ class NextReachDirsCollector final : public ReachChainWalker {
 	inline bool CheckForStairsCluster( int areaNum );
 public:
 	NextReachDirsCollector( const Bot *bot_, PredictionContext *context_, AreaAndScore *candidates_, unsigned maxCandidates_ )
-		: ReachChainWalker( context_->RouteCache() )
+		: ReachChainWalker( context_->RouteCache(), context_->TravelFlags() )
 		, context( context_ )
 		, aasWorld( AiAasWorld::instance() )
 		, aasAreas( aasWorld->getAreas() )

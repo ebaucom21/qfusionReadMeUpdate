@@ -15,7 +15,7 @@
 Bot::Bot( edict_t *self_, float skillLevel_ )
 	: self( self_ )
 	, planner( &planningModule.planner )
-	, routeCache( AiAasRouteCache::NewInstance( ALLOWED_TRAVEL_FLAGS ) )
+	, routeCache( AiAasRouteCache::NewInstance() )
 	, aasWorld( AiAasWorld::instance() )
 	, entityPhysicsState( &m_movementSubsystem.movementState.entityPhysicsState )
 	, blockedTimeoutAt( level.time + BLOCKED_TIMEOUT )
@@ -723,7 +723,7 @@ int Bot::CheckTravelTimeMillis( const Vec3& from, const Vec3 &to, bool allowUnre
 		FailWith( "CheckTravelTimeMillis(): Can't find `to` AAS area" );
 	}
 
-	if( int aasTravelTime = routeCache->PreferredRouteToGoalArea( fromAreaNum, toAreaNum ) ) {
+	if( int aasTravelTime = routeCache->RouteToGoalArea( fromAreaNum, toAreaNum, TravelFlags() ) ) {
 		return 10 * aasTravelTime;
 	}
 

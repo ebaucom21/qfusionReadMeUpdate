@@ -383,7 +383,7 @@ int RidePlatformAction::FindNavTargetReachableAreas( std::span<const int> givenA
 
 	int bestTravelTime = 0;
 	for( const int areaNum: givenAreas ) {
-		if( const int travelTime = bot->RouteCache()->PreferredRouteToGoalArea( areaNum, navTargetAreaNum ) ) {
+		if( const int travelTime = bot->RouteCache()->RouteToGoalArea( areaNum, navTargetAreaNum, bot->TravelFlags() ) ) {
 			if( !bestTravelTime || travelTime < bestTravelTime ) {
 				bestTravelTime = travelTime;
 			}

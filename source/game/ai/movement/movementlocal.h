@@ -149,7 +149,7 @@ inline const AiAasRouteCache *PredictionContext::RouteCache() const {
 }
 
 inline int PredictionContext::TravelFlags() const {
-	return bot->RouteCache()->TravelFlags();
+	return bot->TravelFlags();
 }
 
 inline EnvironmentTraceCache &PredictionContext::TraceCache() {
@@ -516,6 +516,8 @@ extern CollisionShapesListCache shapesListCache;
 class ReachChainWalker {
 protected:
 	const AiAasRouteCache *const routeCache;
+	const int travelFlags;
+
 	int targetAreaNum { -1 };
 	int startAreaNums[2] { 0, 0 };
 	int numStartAreas { -1 };
@@ -538,8 +540,8 @@ public:
 		this->targetAreaNum = targetAreaNum_;
 	}
 
-	explicit ReachChainWalker( const AiAasRouteCache *routeCache_ )
-		: routeCache( routeCache_ ) {}
+	ReachChainWalker( const AiAasRouteCache *routeCache_, int travelFlags )
+		: routeCache( routeCache_ ), travelFlags( travelFlags ) {}
 
 	virtual bool Exec();
 };

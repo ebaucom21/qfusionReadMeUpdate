@@ -55,7 +55,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define TFL_NOTTEAM2            0x10000000  //not team 2
 
 class AiAasRouteCache {
-	const int travelFlags;
 	/**
 	 * Used to provide a dummy writable address for several routing calls
 	 * where we do not want to add extra branching for every call if an out parameter is unused.
@@ -404,7 +403,7 @@ class AiAasRouteCache {
 	// Should be used only for shared route cache initialization
 	explicit AiAasRouteCache( const AiAasWorld &aasWorld_ );
 	// Should be used for creation of new instances based on shared one
-	AiAasRouteCache( AiAasRouteCache *parent, int newTravelFlags );
+	AiAasRouteCache( AiAasRouteCache *parent );
 
 	static AiAasRouteCache *shared;
 	static AiAasRouteCache *instancesHead;
@@ -418,10 +417,8 @@ public:
 	static void Shutdown();
 
 	static AiAasRouteCache *Shared() { return shared; }
-	static AiAasRouteCache *NewInstance( int travelFlags_ );
+	static AiAasRouteCache *NewInstance();
 	static void ReleaseInstance( AiAasRouteCache *instance );
-
-	int TravelFlags() const { return travelFlags; }
 
 	// A helper for emplace_back() calls on instances of this class
 	//AiAasRouteCache( AiAasRouteCache &&that );
@@ -443,7 +440,7 @@ public:
 		return 0;
 	}
 
-	inline int PreferredRouteToGoalArea( int fromAreaNum, int toAreaNum, int *reachNum ) const {
+	inline int RouteToGoalArea( int fromAreaNum, int toAreaNum, int travelFlags, int *reachNum ) const {
 		RoutingResult result;
 		if( RoutingResultToGoalArea( fromAreaNum, toAreaNum, travelFlags, &result ) ) {
 			*reachNum = result.reachNum;
@@ -452,13 +449,13 @@ public:
 		return 0;
 	}
 
-	int PreferredRouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int *reachNum ) const;
+	int RouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int travelFlags, int *reachNum ) const;
 
-	inline int PreferredRouteToGoalArea( int fromAreaNum, int toAreaNum ) const {
-		return PreferredRouteToGoalArea( fromAreaNum, toAreaNum, dummyIntPtr );
+	inline int RouteToGoalArea( int fromAreaNum, int toAreaNum, int travelFlags ) const {
+		return RouteToGoalArea( fromAreaNum, toAreaNum, travelFlags, dummyIntPtr );
 	}
-	inline int PreferredRouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum ) const {
-		return PreferredRouteToGoalArea( fromAreaNums, numFromAreas, toAreaNum, dummyIntPtr );
+	inline int RouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int travelFlags ) const {
+		return RouteToGoalArea( fromAreaNums, numFromAreas, toAreaNum, travelFlags, dummyIntPtr );
 	}
 
 	inline bool AreaDisabled( int areaNum ) const {
