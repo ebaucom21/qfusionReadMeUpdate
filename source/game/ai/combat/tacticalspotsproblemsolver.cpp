@@ -74,7 +74,7 @@ void TacticalSpotsProblemSolver::checkSpotsReachFromOrigin( SpotsAndScoreVector 
 	// The outer index of the table corresponds to an area to aid cache-friendly iteration in these checks
 	for( const SpotAndScore &spotAndScore: candidates ) {
 		const TacticalSpot &spot = spots[spotAndScore.spotNum];
-		const int travelTime = routeCache->TravelTimeToGoalArea( originAreaNum, spot.aasAreaNum, travelFlags );
+		const int travelTime = routeCache->FindRoute( originAreaNum, spot.aasAreaNum, travelFlags );
 		if( !travelTime || travelTime > maxFeasibleTravelTimeCentis ) {
 			continue;
 		}
@@ -137,13 +137,13 @@ void TacticalSpotsProblemSolver::checkSpotsReachFromOriginAndBack( SpotsAndScore
 	for( const SpotAndScore &spotAndScore: candidates ) {
 		const auto spotNum = spotAndScore.spotNum;
 		const TacticalSpot &spot = spots[spotNum];
-		const int toTravelTime = routeCache->TravelTimeToGoalArea( originAreaNum, spot.aasAreaNum, travelFlags );
+		const int toTravelTime = routeCache->FindRoute( originAreaNum, spot.aasAreaNum, travelFlags );
 		// If `to` travel time is apriori greater than maximum allowed one (and thus the sum would be), reject early.
 		if( !toTravelTime || toTravelTime > maxFeasibleTravelTimeCentis ) {
 			continue;
 		}
 
-		const int backTravelTime = routeCache->TravelTimeToGoalArea( spot.aasAreaNum, originAreaNum, travelFlags );
+		const int backTravelTime = routeCache->FindRoute( spot.aasAreaNum, originAreaNum, travelFlags );
 		if( !backTravelTime || toTravelTime + backTravelTime > 2 * maxFeasibleTravelTimeCentis ) {
 			continue;
 		}

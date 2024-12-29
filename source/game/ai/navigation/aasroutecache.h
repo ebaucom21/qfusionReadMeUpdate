@@ -55,12 +55,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define TFL_NOTTEAM2            0x10000000  //not team 2
 
 class AiAasRouteCache {
-	/**
-	 * Used to provide a dummy writable address for several routing calls
-	 * where we do not want to add extra branching for every call if an out parameter is unused.
-	 */
-	mutable int dummyIntPtr[1];
-
 	template<typename T> friend auto wsw::link( T *, T ** ) -> T *;
 	template<typename T> friend auto wsw::unlink( T *, T ** ) -> T *;
 
@@ -381,7 +375,7 @@ class AiAasRouteCache {
 
 	bool RoutingResultToGoalArea( int fromAreaNum, int toAreaNum, int travelFlags, RoutingResult *result ) const;
 
-	bool RouteToGoalArea( const RoutingRequest &request, RoutingResult *result );
+	bool FindRoute( const RoutingRequest &request, RoutingResult *result );
 	bool RouteToGoalPortal( const RoutingRequest &request, AreaOrPortalCacheTable *portalCache, RoutingResult *result );
 
 	void InitCompactReachDataAreaDataAndHelpers();
@@ -424,23 +418,7 @@ public:
 	//AiAasRouteCache( AiAasRouteCache &&that );
 	~AiAasRouteCache();
 
-	inline int ReachabilityToGoalArea( int fromAreaNum, int toAreaNum, int travelFlags ) const {
-		RoutingResult result;
-		if( RoutingResultToGoalArea( fromAreaNum, toAreaNum, travelFlags, &result ) ) {
-			return result.reachNum;
-		}
-		return 0;
-	}
-
-	inline int TravelTimeToGoalArea( int fromAreaNum,int toAreaNum, int travelFlags ) const {
-		RoutingResult result;
-		if( RoutingResultToGoalArea( fromAreaNum, toAreaNum, travelFlags, &result ) ) {
-			return result.travelTime;
-		}
-		return 0;
-	}
-
-	inline int RouteToGoalArea( int fromAreaNum, int toAreaNum, int travelFlags, int *reachNum ) const {
+	inline int FindRoute( int fromAreaNum, int toAreaNum, int travelFlags, int *reachNum ) const {
 		RoutingResult result;
 		if( RoutingResultToGoalArea( fromAreaNum, toAreaNum, travelFlags, &result ) ) {
 			*reachNum = result.reachNum;
@@ -449,13 +427,16 @@ public:
 		return 0;
 	}
 
-	int RouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int travelFlags, int *reachNum ) const;
+	int FindRoute( const int *fromAreaNums, int numFromAreas, int toAreaNum, int travelFlags, int *reachNum ) const;
 
-	inline int RouteToGoalArea( int fromAreaNum, int toAreaNum, int travelFlags ) const {
-		return RouteToGoalArea( fromAreaNum, toAreaNum, travelFlags, dummyIntPtr );
+	// Note: We use overloading, not default arguments to reduce unnecessary branching
+	inline int FindRoute( int fromAreaNum, int toAreaNum, int travelFlags ) const {
+		[[maybe_unused]] int reachNum = 0;
+		return FindRoute( fromAreaNum, toAreaNum, travelFlags, &reachNum );
 	}
-	inline int RouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int travelFlags ) const {
-		return RouteToGoalArea( fromAreaNums, numFromAreas, toAreaNum, travelFlags, dummyIntPtr );
+	inline int FindRoute( const int *fromAreaNums, int numFromAreas, int toAreaNum, int travelFlags ) const {
+		[[maybe_unused]] int reachNum = 0;
+		return FindRoute( fromAreaNums, numFromAreas, toAreaNum, travelFlags, &reachNum );
 	}
 
 	inline bool AreaDisabled( int areaNum ) const {

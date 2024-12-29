@@ -436,7 +436,10 @@ bool AiManager::IsAreaReachableFromHubAreas( int targetArea, float *score ) cons
 	int numReach = 0;
 	float scoreSum = 0.0f;
 	for( int i = 0; i < numHubAreas; ++i ) {
-		if( routeCache->ReachabilityToGoalArea( hubAreas[i], targetArea, Bot::ALLOWED_TRAVEL_FLAGS ) ) {
+		// Note: We used to check reachability numbers which are not defined for route from area to the same area,
+		// therefore the code used to produce wrong results for hub areas themselves.
+		// Now we check the travel time.
+		if( routeCache->FindRoute( hubAreas[i], targetArea, Bot::ALLOWED_TRAVEL_FLAGS ) ) {
 			numReach++;
 			// Give first (and best) areas greater score
 			scoreSum += ( numHubAreas - i ) / (float)numHubAreas;

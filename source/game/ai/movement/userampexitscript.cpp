@@ -102,7 +102,7 @@ const int *TryFindBestInclinedFloorExitArea( PredictionContext *context, int ram
 	const auto *routeCache = context->RouteCache();
 	const int travelFlags = context->TravelFlags();
 	for( int i = 0; i < 2; ++i ) {
-		int travelTime = routeCache->TravelTimeToGoalArea( fromAreaNums[i], toAreaNum, travelFlags );
+		int travelTime = routeCache->FindRoute( fromAreaNums[i], toAreaNum, travelFlags );
 		if( travelTime && travelTime < travelTimeToTarget && travelTime < bestTravelTime ) {
 			bestIndex = i;
 			bestTravelTime = travelTime;

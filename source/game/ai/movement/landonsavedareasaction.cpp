@@ -18,7 +18,7 @@ float LandOnSavedAreasAction::SaveJumppadLandingAreas( const edict_t *jumppadEnt
 	int navTargetAreaNum  = bot->NavTargetAasAreaNum();
 	if( navTargetAreaNum ) {
 		int reachNum   = 0;
-		nextTravelTime = routeCache->RouteToGoalArea( jumppadAreaNum, navTargetAreaNum, bot->TravelFlags(), &reachNum );
+		nextTravelTime = routeCache->FindRoute( jumppadAreaNum, navTargetAreaNum, bot->TravelFlags(), &reachNum );
 		if( nextTravelTime ) {
 			if( reachNum ) {
 				nextReachAreaNum = aasWorld->getReaches()[reachNum].areanum;
@@ -40,7 +40,7 @@ float LandOnSavedAreasAction::SaveJumppadLandingAreas( const edict_t *jumppadEnt
 
 		float score = 1.0f;
 		if( navTargetAreaNum ) {
-			const int travelTime = routeCache->RouteToGoalArea( areaNum, navTargetAreaNum, bot->TravelFlags() );
+			const int travelTime = routeCache->FindRoute( areaNum, navTargetAreaNum, bot->TravelFlags() );
 			// If the nav target is not reachable from the box area or
 			// it leads to a greater travel time than the jumppad target area
 			if( !travelTime || travelTime >= nextTravelTime ) {
@@ -315,7 +315,7 @@ void LandOnSavedAreasAction::CheckPredictionStepResults( PredictionContext *cont
 		const auto *routeCache = bot->RouteCache();
 		for( int i = 0; i < numCurrAreas; ++i ) {
 			int travelFlags = TFL_WALK | TFL_WALKOFFLEDGE | TFL_AIR;
-			if( int travelTime = routeCache->TravelTimeToGoalArea( currAreaNums[i], targetAreaNum, travelFlags ) ) {
+			if( int travelTime = routeCache->FindRoute( currAreaNums[i], targetAreaNum, travelFlags ) ) {
 				bestTravelTime = wsw::min( travelTime, bestTravelTime );
 			}
 		}

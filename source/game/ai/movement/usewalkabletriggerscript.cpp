@@ -109,7 +109,7 @@ const edict_t *FallbackAction::FindClosestToTargetTrigger( const ClosestTriggerP
 		int travelTimeToTrigger = 0;
 		for( int j = 0; j < numFromAreas; ++j ) {
 			const auto travelFlags = GenericGroundMovementScript::TRAVEL_FLAGS;
-			travelTimeToTrigger = routeCache->TravelTimeToGoalArea( fromAreaNums[j], entAreaNum, travelFlags );
+			travelTimeToTrigger = routeCache->FindRoute( fromAreaNums[j], entAreaNum, travelFlags );
 			if( travelTimeToTrigger && travelTimeToTrigger < 200 ) {
 				break;
 			}
@@ -122,7 +122,7 @@ const edict_t *FallbackAction::FindClosestToTargetTrigger( const ClosestTriggerP
 
 		// Find a travel time from trigger for regular bot movement
 
-		const int travelTimeFromTrigger = routeCache->RouteToGoalArea( entAreaNum, toAreaNum, bot->TravelFlags() );
+		const int travelTimeFromTrigger = routeCache->FindRoute( entAreaNum, toAreaNum, bot->TravelFlags() );
 		if( !travelTimeFromTrigger || travelTimeFromTrigger >= bestTravelTimeFromTrigger ) {
 			continue;
 		}

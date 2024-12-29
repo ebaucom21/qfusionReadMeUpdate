@@ -222,7 +222,7 @@ int ScheduleWeaponJumpAction::GetCandidatesForReachChainShortcut( PredictionCont
 	int numAreas = 0;
 	int numHops = 0;
 	int reachNum;
-	while( routeCache->RouteToGoalArea( currAreaNum, targetAreaNum, bot->TravelFlags(), &reachNum ) ) {
+	while( routeCache->FindRoute( currAreaNum, targetAreaNum, bot->TravelFlags(), &reachNum ) ) {
 		if( !reachNum ) {
 			break;
 		}
@@ -473,7 +473,7 @@ int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( PredictionContext *con
 			goto testPassed;
 		}
 
-		travelTimeFromAreaToTarget = routeCache->RouteToGoalArea( testedAreaNum, targetAreaNum, bot->TravelFlags() );
+		travelTimeFromAreaToTarget = routeCache->FindRoute( testedAreaNum, targetAreaNum, bot->TravelFlags() );
 		if( !travelTimeFromAreaToTarget || travelTimeFromAreaToTarget >= currTravelTimeToTarget ) {
 			continue;
 		}
@@ -486,7 +486,7 @@ int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( PredictionContext *con
 			}
 		}
 
-		directTravelTime = routeCache->RouteToGoalArea( botAreaNums, numBotAreas, targetAreaNum, bot->TravelFlags(), &reachNum );
+		directTravelTime = routeCache->FindRoute( botAreaNums, numBotAreas, targetAreaNum, bot->TravelFlags(), &reachNum );
 		// If the area is not reachable from the bot origin, add it without other tests (it seems to be a royal shortcut!)
 		if( !directTravelTime ) {
 			goto testPassed;

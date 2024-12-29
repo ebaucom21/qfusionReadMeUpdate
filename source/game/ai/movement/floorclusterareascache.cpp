@@ -237,7 +237,7 @@ void FloorClusterAreasCache::PrepareAreasForSmallCluster( PredictionContext *__r
 			}
 		}
 
-		const int areaTime = routeCache->RouteToGoalArea( areaNum, toAreaNum, bot->TravelFlags() );
+		const int areaTime = routeCache->FindRoute( areaNum, toAreaNum, bot->TravelFlags() );
 		if( !areaTime || areaTime >= maxTravelTimeThreshold ) {
 			continue;
 		}
@@ -302,7 +302,7 @@ void FloorClusterAreasCache::PrepareAreasForLargeCluster( PredictionContext *__r
 	const int toAreaNum = context->NavTargetAasAreaNum();
 	for( const auto &areaAndScore: distanceHeap ) {
 		const auto areaNum = areaAndScore.areaNum;
-		const int areaTime = routeCache->RouteToGoalArea( areaNum, toAreaNum, bot->TravelFlags() );
+		const int areaTime = routeCache->FindRoute( areaNum, toAreaNum, bot->TravelFlags() );
 		if( !areaTime || areaTime >= maxTravelTimeThreshold ) {
 			continue;
 		}
@@ -369,7 +369,7 @@ int NextFloorClusterAreasCache::FindClosestToTargetPoint( PredictionContext *con
 	const int targetAreaNum = context->NavTargetAasAreaNum();
 	while( pathAreaNum != targetAreaNum ) {
 		int reachNum;
-		if( !routeCache->RouteToGoalArea( pathAreaNum, targetAreaNum, bot->TravelFlags(), &reachNum ) ) {
+		if( !routeCache->FindRoute( pathAreaNum, targetAreaNum, bot->TravelFlags(), &reachNum ) ) {
 			return false;
 		}
 		const auto &reach = aasReaches[reachNum];

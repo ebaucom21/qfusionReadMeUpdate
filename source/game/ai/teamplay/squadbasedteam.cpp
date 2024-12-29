@@ -111,7 +111,7 @@ int ClientToClientTable::FindTravelTime( int fromEntNum, int toEntNum ) const {
 	// AAS routines return 0 on failure (1 is the minimal feasible travel time)
 	int bestTravelTime = 0;
 	for( int i = 0; i < numToAreas; ++i ) {
-		if( const int travelTime = routeCache->RouteToGoalArea( fromAreaNums, numFromAreas, toAreaNums[i], travelFlags ) ) {
+		if( const int travelTime = routeCache->FindRoute( fromAreaNums, numFromAreas, toAreaNums[i], travelFlags ) ) {
 			if( bestTravelTime && travelTime > bestTravelTime ) {
 				continue;
 			}

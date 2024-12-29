@@ -107,9 +107,9 @@ bool ReachChainWalker::Exec() {
 	lastAreaNum = 0;
 
 	// We have to handle the first reach. separately as we start from up to 2 alternative areas.
-	// Also we have to inline RouteToGoalArea() here to save the actual lastAreaNum for the initial step
+	// Also we have to inline FindRoute() here to save the actual lastAreaNum for the initial step
 	for( int i = 0; i < numStartAreas; ++i ) {
-		lastTravelTime = routeCache->RouteToGoalArea( startAreaNums[i], targetAreaNum, travelFlags, &lastReachNum );
+		lastTravelTime = routeCache->FindRoute( startAreaNums[i], targetAreaNum, travelFlags, &lastReachNum );
 		if( lastTravelTime ) {
 			lastAreaNum = startAreaNum = startAreaNums[i];
 			break;
@@ -130,7 +130,7 @@ bool ReachChainWalker::Exec() {
 
 	int areaNum = aasReach[lastReachNum].areanum;
 	while( areaNum != targetAreaNum ) {
-		lastTravelTime = routeCache->RouteToGoalArea( areaNum, targetAreaNum, travelFlags, &lastReachNum );
+		lastTravelTime = routeCache->FindRoute( areaNum, targetAreaNum, travelFlags, &lastReachNum );
 		if( !lastTravelTime ) {
 			return false;
 		}

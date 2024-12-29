@@ -287,7 +287,7 @@ void BestAreaCenterJumpableSpotDetector::FillCandidateSpotsUsingRoutingTest( std
 		if( areaPoint.SquareDistanceTo( startOrigin ) < wsw::square( 64.0f ) ) {
 			continue;
 		}
-		int travelTime = routeCache->RouteToGoalArea( areaNum, navTargetAreaNum, travelFlags );
+		int travelTime = routeCache->FindRoute( areaNum, navTargetAreaNum, travelFlags );
 		if( !travelTime || travelTime > startTravelTimeToTarget ) {
 			continue;
 		}
@@ -474,7 +474,7 @@ MovementScript *FallbackAction::TryFindJumpLikeReachFallback( PredictionContext 
 	const auto *routeCache = bot->RouteCache();
 	int navTargetAreaNum = context->NavTargetAasAreaNum();
 	// Note: we don't stop on the first feasible travel time here and below
-	int travelTimeFromReachArea = routeCache->RouteToGoalArea( nextReach.areanum, navTargetAreaNum, bot->TravelFlags() );
+	int travelTimeFromReachArea = routeCache->FindRoute( nextReach.areanum, navTargetAreaNum, bot->TravelFlags() );
 	if( !travelTimeFromReachArea ) {
 		return nullptr;
 	}
@@ -517,7 +517,7 @@ MovementScript *FallbackAction::TryFindJumpLikeReachFallback( PredictionContext 
 		}
 
 		const int landingArea = predictionResults.lastAreaNum;
-		int travelTimeFromLandingArea = routeCache->RouteToGoalArea( landingArea, navTargetAreaNum, bot->TravelFlags() );
+		int travelTimeFromLandingArea = routeCache->FindRoute( landingArea, navTargetAreaNum, bot->TravelFlags() );
 
 		// Note: thats why we are using best travel time among allowed and preferred travel flags
 		// (there is a suspicion that many feasible areas might be cut off by the following test otherwise).

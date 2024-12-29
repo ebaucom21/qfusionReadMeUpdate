@@ -1487,7 +1487,7 @@ AiAasRouteCache::GetPortalRoutingCache( std::span<const aas_areasettings_t> aasA
 	return cache;
 }
 
-int AiAasRouteCache::RouteToGoalArea( const int *fromAreaNums, int numFromAreas, int toAreaNum, int travelFlags, int *reachNum ) const {
+int AiAasRouteCache::FindRoute( const int *fromAreaNums, int numFromAreas, int toAreaNum, int travelFlags, int *reachNum ) const {
 	int bestTravelTime = std::numeric_limits<int>::max();
 	int bestReachNum = 0;
 
@@ -1535,7 +1535,7 @@ bool AiAasRouteCache::RoutingResultToGoalArea( int fromAreaNum, int toAreaNum,
 	// Bypass the results cache due to reentrancy problems during these checks
 	if( AasStaticRouteTable::s_isCheckingMatchWithRouteCache ) [[unlikely]] {
 		RoutingRequest request( fromAreaNum, toAreaNum, travelFlags );
-		return nonConstThis->RouteToGoalArea( request, result );
+		return nonConstThis->FindRoute( request, result );
 	}
 #endif
 
@@ -1569,8 +1569,8 @@ bool AiAasRouteCache::RoutingResultToGoalArea( int fromAreaNum, int toAreaNum,
 	}
 
 	RoutingRequest request( fromAreaNum, toAreaNum, travelFlags );
-	// TODO: It's non-obvious that RouteToGoalArea() modifies `result`
-	if( nonConstThis->RouteToGoalArea( request, result ) ) {
+	// TODO: It's non-obvious that FindRoute() modifies `result`
+	if( nonConstThis->FindRoute( request, result ) ) {
 		cacheNode->reachability = ToUint16CheckingRange( result->reachNum );
 		cacheNode->travelTime = ToUint16CheckingRange( result->travelTime );
 		return true;
@@ -1581,7 +1581,7 @@ bool AiAasRouteCache::RoutingResultToGoalArea( int fromAreaNum, int toAreaNum,
 	return false;
 }
 
-bool AiAasRouteCache::RouteToGoalArea( const RoutingRequest &request, RoutingResult *result ) {
+bool AiAasRouteCache::FindRoute( const RoutingRequest &request, RoutingResult *result ) {
 	const auto aasAreaSettings = aasWorld.getAreaSettings();
 	const auto aasPortals = aasWorld.getPortals();
 

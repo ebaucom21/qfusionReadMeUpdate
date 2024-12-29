@@ -161,26 +161,28 @@ static auto calcTravelTimeWalkingOrFallingShort( AiAasRouteCache *routeCache, co
 												 int fromAreaNum, int toAreaNum ) -> int {
 	const auto *aasReaches = aasWorld->getReaches().data();
 
-	int travelTime = 0;
+	int resultTravelTime = 0;
 	// Prevent infinite looping (still happens for some maps)
 	// TODO Check whether the bug is still there?
 	int numHops = 0;
 	for(;; ) {
 		if( fromAreaNum == toAreaNum ) {
-			return wsw::max( 1, travelTime );
+			return wsw::max( 1, resultTravelTime );
 		}
 		if( numHops++ == 1024 ) {
 			assert( 0 );
 			return 0;
 		}
-		const int reachNum = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, kTravelFlagsWalking );
-		if( !reachNum ) {
+		int reachNum = 0;
+		const int travelTime = routeCache->FindRoute( fromAreaNum, toAreaNum, kTravelFlagsWalking, &reachNum );
+		if( !travelTime ) {
+			assert( reachNum == 0 );
 			return 0;
 		}
+		assert( reachNum > 0 );
 		// Save the returned travel time once at start.
-		// It is not so inefficient as results of the previous call including travel time are cached and the cache is fast.
-		if( !travelTime ) {
-			travelTime = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, kTravelFlagsWalking );
+		if( !resultTravelTime ) {
+			resultTravelTime = travelTime;
 		}
 		const auto &reach = aasReaches[reachNum];
 		// Move to this area for the next iteration
@@ -302,8 +304,8 @@ bool AasStaticRouteTable::compute() {
 				// a simultaneous retrieval (existing private ones are very poor)
 				// TODO: We actually can read the entire Dijkstra's algorithm result for the given from area
 				// (Area-by-area retrieval still works fast due to internal caching in the route cache)
-				if( const int time = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, Bot::ALLOWED_TRAVEL_FLAGS ) ) {
-					const int reach = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, Bot::ALLOWED_TRAVEL_FLAGS );
+				int reach = 0;
+				if( const int time = routeCache->FindRoute( fromAreaNum, toAreaNum, Bot::ALLOWED_TRAVEL_FLAGS, &reach ) ) {
 					allowedBuilder.addNumAndEntry( toAreaNum, AreaEntry {
 						.reachNum = (uint16_t)reach, .travelTime = (uint16_t)time,
 					});
@@ -367,8 +369,8 @@ static void checkMatchWithRouteCache( std::optional<std::pair<int, uint16_t>> ta
 	const int tableNum     = tableResult ? tableResult->first : 0;
 	const int tableTime    = tableResult ? tableResult->second : 0;
 	if( tableNum >= aasWorld->getReaches().size() ) abort();
-	const int dynamicNum   = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, travelFlags );
-	const int dynamicTime  = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, travelFlags );
+	int dynamicNum = 0;
+	const int dynamicTime  = routeCache->FindRoute( fromAreaNum, toAreaNum, travelFlags, &dynamicNum );
 	if( tableNum != dynamicNum || tableTime != dynamicTime ) {
 		Com_Printf( "From=%d to=%d travel flags=0x%x\n", fromAreaNum, toAreaNum, travelFlags );
 		Com_Printf( "Table reach num=%d dynamic reach num=%d\n", tableNum, dynamicNum );

@@ -20,7 +20,7 @@ void PredictionContext::NextReachNumAndTravelTimeToNavTarget( int *reachNum, int
 
 	int fromAreaNums[2];
 	int numFromAreas = movementState->entityPhysicsState.PrepareRoutingStartAreas( fromAreaNums );
-	if( int travelTime = routeCache->RouteToGoalArea( fromAreaNums, numFromAreas, navTargetAreaNum, travelFlags, reachNum ) ) {
+	if( int travelTime = routeCache->FindRoute( fromAreaNums, numFromAreas, navTargetAreaNum, travelFlags, reachNum ) ) {
 		*travelTimeToNavTarget = travelTime;
 	}
 }
@@ -872,9 +872,9 @@ void PredictionContext::SavePathTriggerNums() {
 	for( int i = 0; i < 32; ++i ) {
 		int travelTime, reachNum = 0;
 		if( !reachAreaNum ) {
-			travelTime = routeCache->RouteToGoalArea( startAreaNums, numStartAreas, targetAreaNum, travelFlags, &reachNum );
+			travelTime = routeCache->FindRoute( startAreaNums, numStartAreas, targetAreaNum, travelFlags, &reachNum );
 		} else {
-			travelTime = routeCache->RouteToGoalArea( reachAreaNum, targetAreaNum, travelFlags, &reachNum );
+			travelTime = routeCache->FindRoute( reachAreaNum, targetAreaNum, travelFlags, &reachNum );
 		}
 		if( !travelTime || !reachNum ) {
 			break;

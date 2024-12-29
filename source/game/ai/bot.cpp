@@ -723,7 +723,7 @@ int Bot::CheckTravelTimeMillis( const Vec3& from, const Vec3 &to, bool allowUnre
 		FailWith( "CheckTravelTimeMillis(): Can't find `to` AAS area" );
 	}
 
-	if( int aasTravelTime = routeCache->RouteToGoalArea( fromAreaNum, toAreaNum, TravelFlags() ) ) {
+	if( int aasTravelTime = routeCache->FindRoute( fromAreaNum, toAreaNum, TravelFlags() ) ) {
 		return 10 * aasTravelTime;
 	}
 

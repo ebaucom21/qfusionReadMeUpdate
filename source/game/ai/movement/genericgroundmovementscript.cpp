@@ -304,7 +304,7 @@ bool GenericGroundMovementScript::TestActualWalkability( int targetAreaNum, cons
 	const int numFromAreas = entityPhysicsState->PrepareRoutingStartAreas( fromAreaNums );
 	int travelTimeToTarget = 0;
 	for( int j = 0; j < numFromAreas; ++j ) {
-		travelTimeToTarget = routeCache->TravelTimeToGoalArea( fromAreaNums[j], targetAreaNum, TRAVEL_FLAGS );
+		travelTimeToTarget = routeCache->FindRoute( fromAreaNums[j], targetAreaNum, TRAVEL_FLAGS );
 		if( travelTimeToTarget && travelTimeToTarget <= 300 ) {
 			break;
 		}

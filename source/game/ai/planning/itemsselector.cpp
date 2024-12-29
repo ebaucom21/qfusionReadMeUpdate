@@ -285,7 +285,7 @@ std::optional<SelectedNavEntity> BotItemsSelector::SuggestGoalNavEntity( const N
 	int rawBestAreaNum = rawBestNavEnt->AasAreaNum();
 	unsigned botToBestRawEntMoveDuration = 0;
 	for(;; ) {
-		botToBestRawEntMoveDuration = 10U * routeCache->RouteToGoalArea( fromAreaNums, numFromAreas, rawBestAreaNum, bot->TravelFlags() );
+		botToBestRawEntMoveDuration = 10U * routeCache->FindRoute( fromAreaNums, numFromAreas, rawBestAreaNum, bot->TravelFlags() );
 		if( botToBestRawEntMoveDuration ) {
 			break;
 		}
@@ -323,7 +323,7 @@ std::optional<SelectedNavEntity> BotItemsSelector::SuggestGoalNavEntity( const N
 		float weight = ( *rawCandidatesIter ).weight;
 
 		const unsigned botToCandidateMoveDuration =
-			routeCache->RouteToGoalArea( fromAreaNums, numFromAreas, navEnt->AasAreaNum(), bot->TravelFlags() ) * 10U;
+			routeCache->FindRoute( fromAreaNums, numFromAreas, navEnt->AasAreaNum(), bot->TravelFlags() ) * 10U;
 
 		// AAS functions return 0 as a "none" value, 1 as a lowest feasible value
 		if( !botToCandidateMoveDuration ) {
@@ -370,7 +370,7 @@ std::optional<SelectedNavEntity> BotItemsSelector::SuggestGoalNavEntity( const N
 
 		// Check the travel time from the nav entity to the best raw weight nav entity
 		const unsigned candidateToRawBestEntMoveDuration =
-			routeCache->RouteToGoalArea( navEnt->AasAreaNum(), rawBestNavEnt->AasAreaNum(), bot->TravelFlags() ) * 10U;
+			routeCache->FindRoute( navEnt->AasAreaNum(), rawBestNavEnt->AasAreaNum(), bot->TravelFlags() ) * 10U;
 
 		// If the best raw weight nav entity is not reachable from the entity
 		if( !candidateToRawBestEntMoveDuration ) {
@@ -479,7 +479,7 @@ bool BotItemsSelector::IsShortRangeReachable( const NavEntity *navEnt, const int
 	const int travelFlags = TFL_WALK | TFL_AIR;
 	const auto *routeCache = self->bot->routeCache;
 	for( int i = 0; i < numFromAreas; ++i ) {
-		if( routeCache->TravelTimeToGoalArea( fromAreaNums[i], navEnt->AasAreaNum(), travelFlags ) ) {
+		if( routeCache->FindRoute( fromAreaNums[i], navEnt->AasAreaNum(), travelFlags ) ) {
 			return true;
 		}
 	}

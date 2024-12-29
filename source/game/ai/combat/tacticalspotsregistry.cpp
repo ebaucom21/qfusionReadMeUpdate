@@ -485,8 +485,8 @@ void TacticalSpotsBuilder::ComputeTravelTimeTable() {
 		}
 		for( int spotNum = 0; spotNum < numSpots; ++spotNum ) {
 			const int spotAreaNum = spots[spotNum].aasAreaNum;
-			int spotToAreaTime = routeCache->TravelTimeToGoalArea( spotAreaNum, areaNum, travelFlags );
-			int areaToSpotTime = routeCache->TravelTimeToGoalArea( areaNum, spotAreaNum, travelFlags );
+			int spotToAreaTime = routeCache->FindRoute( spotAreaNum, areaNum, travelFlags );
+			int areaToSpotTime = routeCache->FindRoute( areaNum, spotAreaNum, travelFlags );
 			spotsAndAreasTravelTimeTable[rowOffset++] = (uint16_t)wsw::min( spotToAreaTime, maxVal );
 			spotsAndAreasTravelTimeTable[rowOffset++] = (uint16_t)wsw::min( areaToSpotTime, maxVal );
 		}

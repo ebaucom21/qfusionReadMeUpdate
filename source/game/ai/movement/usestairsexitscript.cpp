@@ -62,7 +62,7 @@ const uint16_t *TryFindBestStairsExitArea( PredictionContext *context, int stair
 	for( int i = 0; i < 2; ++i ) {
 		// TODO: Eliminate the intermediate bestAreaTravelTime variable (this is a result of unrelated refactoring)
 		int bestAreaTravelTime = std::numeric_limits<int>::max();
-		int travelTime = routeCache->TravelTimeToGoalArea( *stairsBoundaryAreas[i], toAreaNum, context->TravelFlags() );
+		int travelTime = routeCache->FindRoute( *stairsBoundaryAreas[i], toAreaNum, context->TravelFlags() );
 		if( travelTime && travelTime < bestAreaTravelTime ) {
 			bestAreaTravelTime = travelTime;
 		}

@@ -195,11 +195,11 @@ void TriggerAreaNumsCache::findJumppadTargetAreaNums( const edict_t *jumppadEnti
 			if( stepNum + 1 < maxSteps ) {
 				// Check reachability from jumppad to area and back
 				const int fromJumppadTravelFlags = TFL_WALK | TFL_AIR | TFL_JUMPPAD;
-				if( !routeCache->TravelTimeToGoalArea( jumppadAreaNum, areaNum, fromJumppadTravelFlags ) ) {
+				if( !routeCache->FindRoute( jumppadAreaNum, areaNum, fromJumppadTravelFlags ) ) {
 					continue;
 				}
 				const int toJumppadTravelFlags = TFL_WALK | TFL_AIR | TFL_WALKOFFLEDGE;
-				if( !routeCache->TravelTimeToGoalArea( areaNum, jumppadAreaNum, toJumppadTravelFlags ) ) {
+				if( !routeCache->FindRoute( areaNum, jumppadAreaNum, toJumppadTravelFlags ) ) {
 					continue;
 				}
 			} else {

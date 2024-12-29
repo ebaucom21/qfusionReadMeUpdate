@@ -215,7 +215,7 @@ void BotTacticalSpotsCache::findReachableClassEntities( const Vec3 &origin, floa
 			continue;
 		}
 
-		const int travelTime = routeCache->RouteToGoalArea( fromAreaNums, numFromAreas, toAreaNum, m_bot->TravelFlags() );
+		const int travelTime = routeCache->FindRoute( fromAreaNums, numFromAreas, toAreaNum, m_bot->TravelFlags() );
 		if( !travelTime ) {
 			continue;
 		}
