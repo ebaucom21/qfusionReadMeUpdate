@@ -80,6 +80,7 @@ file(GLOB EXECOMMON_SOURCES
      "wswexceptions.cpp"
      "wswfs.cpp"
      "wswpodvector.cpp"
+     "wswprofiler.cpp"
      "wswsortbyfield.cpp"
      "wswstringview.cpp"
      "../server/sv_web.cpp"

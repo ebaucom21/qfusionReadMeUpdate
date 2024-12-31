@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/links.h"
 #include "../cgame/cg_local.h"
 #include "../common/configvars.h"
+#include "../common/wswprofiler.h"
 
 static BoolConfigVar v_projectileLingeringTrails( wsw::StringView( "cg_projectileLingeringTrails"), { .byDefault = true, .flags = CVAR_ARCHIVE } );
 
@@ -1236,6 +1237,8 @@ static inline void copyWithAlphaScale( const float *from, float *to, float alpha
 }
 
 void TrackedEffectsSystem::simulateFrame( int64_t currTime ) {
+	[[maybe_unused]] volatile wsw::ProfilerScope scope( wsw::HashedStringView( "TrackedEffectsSystem::simulateFrame" ) );
+
 	if( currTime != m_lastTime ) {
 		assert( currTime > m_lastTime );
 		// Collect orphans.

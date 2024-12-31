@@ -20,8 +20,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 #include "frontend.h"
-#include "program.h"
 #include "materiallocal.h"
+#include "../common/wswprofiler.h"
 #include "../common/singletonholder.h"
 #include "../common/links.h"
 
@@ -267,9 +267,11 @@ alignas( 32 ) static SingletonHolder<Frontend> sceneInstanceHolder;
 
 void Frontend::init() {
 	sceneInstanceHolder.init();
+	wsw::ProfilingSystem::attachToThisThread();
 }
 
 void Frontend::shutdown() {
+	wsw::ProfilingSystem::detachFromThisThread();
 	sceneInstanceHolder.shutdown();
 }
 

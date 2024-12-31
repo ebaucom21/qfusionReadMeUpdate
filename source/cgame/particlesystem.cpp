@@ -4,6 +4,7 @@
 #include "../common/noise.h"
 #include "cg_local.h"
 #include "../common/configvars.h"
+#include "../common/wswprofiler.h"
 
 using wsw::operator""_asView;
 
@@ -925,6 +926,8 @@ static inline bool canShowForCurrentCgFrame( unsigned affinityIndex, unsigned af
 }
 
 void ParticleSystem::simulateFrame( int64_t currTime ) {
+	[[maybe_unused]] volatile wsw::ProfilerScope scope( wsw::HashedStringView( "ParticleSystem::simulateFrame" ) );
+
 	if( currTime != m_lastTime ) {
 		assert( currTime > m_lastTime );
 

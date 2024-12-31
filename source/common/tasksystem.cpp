@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "tasksystem.h"
 #include "wswpodvector.h"
+#include "wswprofiler.h"
 #include "wswalgorithm.h"
 #include "qthreads.h"
 
@@ -635,6 +636,8 @@ bool TaskSystem::awaitCompletion( const ExecutionHandle &executionHandle ) {
 }
 
 void TaskSystem::threadLoopFunc( TaskSystemImpl *__restrict impl, unsigned threadNumber ) {
+	[[maybe_unused]] volatile wsw::ThreadProfilingAttachment threadProfilingAttachment;
+
 	for(;; ) {
 		impl->signalingFlags[threadNumber].wait( false );
 		impl->signalingFlags[threadNumber].clear();

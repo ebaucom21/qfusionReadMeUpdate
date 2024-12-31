@@ -29,9 +29,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/cmdcompat.h"
 #include "../common/wswalgorithm.h"
 #include "../common/wswfs.h"
+#include "../common/wswprofiler.h"
 #include "../common/configvars.h"
 
 using wsw::operator""_asView;
+using wsw::operator""_asHView;
 
 // TODO: ??? what to do with default names (they cannot be known without the FS access)?
 // TODO: Let modify declared parameters on the fly?
@@ -1187,6 +1189,8 @@ static auto prepareViewRectsAndStateIndices( Rect *viewRects, unsigned *viewStat
 
 static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool actuallyUseTiledMode,
 									 const Rect *viewRects, const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) {
+	[[maybe_unused]] volatile wsw::ProfilerScope profilerScope( "createDrawSceneRequests"_asHView );
+
 	const auto *const uiSystem = wsw::ui::UISystem::instance();
 
 	// Set to zero by default so subtraction tests in the main loop don't lead to UB
@@ -1317,6 +1321,8 @@ static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool 
 [[nodiscard]]
 static auto coPrepareDrawSceneRequests( CoroTask::StartInfo si, DrawSceneRequest **drawSceneRequests,
 										const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) -> CoroTask {
+	[[maybe_unused]] volatile wsw::ProfilerScope profilerScope( "coPrepareDrawSceneRequests"_asHView );
+
 	const TaskHandle beginTask = BeginProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } );
 
 	for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {

@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../client/client.h"
 #include "../common/links.h"
+#include "../common/wswprofiler.h"
 
 PolyEffectsSystem::PolyEffectsSystem() {
 	m_tmpShapeList = CM_AllocShapeList( cl.cms );
@@ -1026,6 +1027,8 @@ auto PolyEffectsSystem::RibbonPoly::fillMeshBuffers( const float *__restrict vie
 }
 
 void PolyEffectsSystem::simulateFrame( int64_t currTime ) {
+	[[maybe_unused]] volatile wsw::ProfilerScope scope( wsw::HashedStringView( "PolyEffectsSystem::simulateFrame" ) );
+
 	if( currTime != m_lastTime ) {
 		assert( currTime > m_lastTime );
 
