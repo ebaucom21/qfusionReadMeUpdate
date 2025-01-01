@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define WSW_462961de_963c_4da6_b80b_b0ff67392202_H
 
 #include "wswstringview.h"
+#include <variant>
 
 namespace wsw {
 
@@ -50,7 +51,10 @@ public:
 	static void attachToThisThread( FrameGroup group );
 	static void detachFromThisThread( FrameGroup group );
 
-	static void beginFrame( FrameGroup group, const wsw::StringView &targetName );
+	struct DiscoverRootScopes {};
+	using FrameArgs = std::variant<wsw::StringView, DiscoverRootScopes, std::monostate>;
+
+	static void beginFrame( FrameGroup group, const FrameArgs &frameArgs );
 	static void endFrame( FrameGroup group );
 private:
 	// Per-group

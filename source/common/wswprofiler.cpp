@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qthreads.h"
 
 #include <unordered_map>
+#include <unordered_set>
 
 template <>
 struct std::hash<wsw::HashedStringView> {
@@ -59,25 +60,42 @@ public:
 	// Reset each frame
 	wsw::PodVector<char> m_targetName;
 
+	std::unordered_set<wsw::HashedStringView> m_frameRoots;
+
 	uint64_t m_enterTimestamp { 0 };
 	uint64_t m_accumTime { 0 };
 	int m_enterCount { 0 };
 
+	int m_globalScopeDepth { 0 };
 	int m_targetScopeReentrancyCounter { 0 };
 	int m_scopeDepthFromTheTargetScope { 0 };
+
+	bool m_discoverRootScopes { false };
 
 	std::unordered_map<wsw::HashedStringView, DescendantEntry> m_statsOfDescendantScopes;
 };
 
 void ProfilerThreadInstance::resetFrameStats() {
-	if( m_enterCount > 0 ) {
+	if( m_discoverRootScopes ) {
+		assert( m_globalScopeDepth == 0 );
+		comNotice() << "Discovered profiling root scopes:";
+		for( const auto &name: m_frameRoots ) {
+			comNotice() << name;
+		}
+	} else {
 		comNotice() << "(*)" << m_targetName << ": enter count" << m_enterCount << "accum time" << m_accumTime;
-		for( const auto &[k, v] : m_statsOfDescendantScopes ) {
-			comNotice() << " |-" << k << ": enter count" << v.enterCount << "accum time" << v.accumTime;
+		if( m_enterCount > 0 ) {
+			for( const auto &[k, v] : m_statsOfDescendantScopes ) {
+				comNotice() << " |-" << k << ": enter count" << v.enterCount << "accum time" << v.accumTime;
+			}
 		}
 	}
 
 	m_targetName.clear();
+	m_frameRoots.clear();
+
+	m_discoverRootScopes = false;
+	m_globalScopeDepth   = 0;
 
 	m_enterTimestamp = 0;
 	m_accumTime      = 0;
@@ -144,23 +162,32 @@ void ProfilingSystem::detachFromThisThread( FrameGroup group ) {
 	}
 }
 
-void ProfilingSystem::beginFrame( FrameGroup group, const wsw::StringView &targetName ) {
+void ProfilingSystem::beginFrame( FrameGroup group, const FrameArgs &frameArgs ) {
 	assert( group == 0 || group == 1 );
-	if( !targetName.empty() ) {
+	s_isProfilingEnabled[group] = false;
+	if( const auto *targetName = std::get_if<wsw::StringView>( &frameArgs ) ) {
+		if( !targetName->empty() ) {
+			[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
+			for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
+				instance->m_targetName.assign( *targetName );
+			}
+			s_isProfilingEnabled[group] = true;
+		}
+	} else if( std::holds_alternative<DiscoverRootScopes>( frameArgs ) ) {
 		[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
 		for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
-			instance->m_targetName.assign( targetName );
+			instance->m_discoverRootScopes = true;
 		}
 		s_isProfilingEnabled[group] = true;
-	} else {
-		s_isProfilingEnabled[group] = false;
 	}
 }
 
 void ProfilingSystem::endFrame( FrameGroup group ) {
-	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
-	for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
-		instance->resetFrameStats();
+	if( s_isProfilingEnabled[group] ) {
+		[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
+		for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
+			instance->resetFrameStats();
+		}
 	}
 }
 
@@ -170,42 +197,55 @@ static inline bool matchesName( const wsw::PodVector<char> &expected, const wsw:
 }
 
 void ProfilerThreadInstance::enterScope( ProfilerScope *, const wsw::HashedStringView &name ) {
-	// If we are in the target scope
-	if( m_targetScopeReentrancyCounter > 0 ) {
-		m_scopeDepthFromTheTargetScope++;
-	}
-	if( matchesName( m_targetName, name ) ) {
-		m_targetScopeReentrancyCounter++;
-		if( m_targetScopeReentrancyCounter == 1 ) {
-			m_enterTimestamp = Sys_Microseconds();
-			m_enterCount++;
+	if( m_discoverRootScopes ) {
+		m_globalScopeDepth++;
+		if( m_globalScopeDepth == 1 ) {
+			m_frameRoots.insert( name );
 		}
 	} else {
-		// If it's a direct call from the target scope
-		if( m_scopeDepthFromTheTargetScope == 1 ) {
-			DescendantEntry &entry = m_statsOfDescendantScopes[name];
-			entry.enterTimestamp = Sys_Microseconds();
-			entry.enterCount++;
+		assert( !m_targetName.empty() );
+		// If we are in the target scope
+		if( m_targetScopeReentrancyCounter > 0 ) {
+			m_scopeDepthFromTheTargetScope++;
+		}
+		if( matchesName( m_targetName, name ) ) {
+			m_targetScopeReentrancyCounter++;
+			if( m_targetScopeReentrancyCounter == 1 ) {
+				m_enterTimestamp = Sys_Microseconds();
+				m_enterCount++;
+			}
+		} else {
+			// If it's a direct call from the target scope
+			if( m_scopeDepthFromTheTargetScope == 1 ) {
+				DescendantEntry &entry = m_statsOfDescendantScopes[name];
+				entry.enterTimestamp = Sys_Microseconds();
+				entry.enterCount++;
+			}
 		}
 	}
 }
 
 void ProfilerThreadInstance::leaveScope( ProfilerScope *, const wsw::HashedStringView &name ) {
-	// If we are in the target scope
-	const bool isInTargetScope = m_targetScopeReentrancyCounter > 0;
-	if( isInTargetScope ) {
-		m_scopeDepthFromTheTargetScope--;
-	}
-	if( matchesName( m_targetName, name ) ) {
-		m_targetScopeReentrancyCounter--;
-		if( m_targetScopeReentrancyCounter == 0 ) {
-			m_accumTime += ( Sys_Microseconds() - m_enterTimestamp );
-		}
+	if( m_discoverRootScopes ) {
+		m_globalScopeDepth--;
 	} else {
-		// If it's a direct call from the target scope
-		if( isInTargetScope && m_scopeDepthFromTheTargetScope == 0 ) {
-			DescendantEntry &entry = m_statsOfDescendantScopes[name];
-			entry.accumTime += ( Sys_Microseconds() - entry.enterTimestamp );
+		assert( !m_targetName.empty() );
+		// If we are in the target scope
+		const bool isInTargetScope = m_targetScopeReentrancyCounter > 0;
+		if( isInTargetScope ) {
+			m_scopeDepthFromTheTargetScope--;
+		}
+		if( matchesName( m_targetName, name ) ) {
+			m_targetScopeReentrancyCounter--;
+			if( m_targetScopeReentrancyCounter == 0 ) {
+				m_accumTime += ( Sys_Microseconds() - m_enterTimestamp );
+			}
+		} else {
+			// If it's a direct call from the target scope
+			if( isInTargetScope && m_scopeDepthFromTheTargetScope == 0 ) {
+				DescendantEntry &entry = m_statsOfDescendantScopes[name];
+				entry.accumTime += ( Sys_Microseconds() - entry.enterTimestamp );
+			}
 		}
 	}
 }
