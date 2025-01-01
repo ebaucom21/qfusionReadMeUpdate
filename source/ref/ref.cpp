@@ -140,8 +140,6 @@ cvar_t *r_showShaderCache;
 
 extern cvar_t *cl_multithreading;
 
-static cvar_t *cl_profilingTarget;
-
 static bool r_verbose;
 static bool r_postinit;
 
@@ -789,7 +787,6 @@ TaskSystem *BeginProcessingOfTasks() {
 		}
 	}
 
-	wsw::ProfilingSystem::beginFrame( wsw::StringView( cl_profilingTarget->string ) );
 	g_taskSystemExecutionHandle = result->startExecution( numAllowedExtraThreads );
 	return result;
 }
@@ -800,7 +797,6 @@ void EndProcessingOfTasks() {
 	if( !awaitResult ) {
 		wsw::failWithLogicError( "Failed to execute rendering tasks" );
 	}
-	wsw::ProfilingSystem::endFrame();
 }
 
 DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef ) {
@@ -2062,8 +2058,6 @@ static void R_Register( const char *screenshotsPrefix ) {
 	r_showShaderCache = Cvar_Get( "r_showShaderCache", "1", CVAR_ARCHIVE );
 
 	gl_cull = Cvar_Get( "gl_cull", "1", 0 );
-
-	cl_profilingTarget = Cvar_Get( "cl_profilingTarget", "0", 0 );
 
 	const qgl_driverinfo_t *driver = QGL_GetDriverInfo();
 	if( driver && driver->dllcvarname ) {

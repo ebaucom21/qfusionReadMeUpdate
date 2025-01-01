@@ -236,7 +236,8 @@ void Frontend::endDrawingScenes() {
 	m_drawSceneRequestsHolder.clear();
 }
 
-Frontend::Frontend() : m_taskSystem( { .numExtraThreads = suggestNumExtraWorkerThreads( {} ) } ) {
+Frontend::Frontend() : m_taskSystem( { .profilingGroup  = wsw::ProfilingSystem::ClientGroup,
+									   .numExtraThreads = suggestNumExtraWorkerThreads( {} ) } ) {
 	const auto features = Sys_GetProcessorFeatures();
 	if( Q_CPU_FEATURE_SSE41 & features ) {
 		m_collectVisibleWorldLeavesArchMethod = &Frontend::collectVisibleWorldLeavesSse41;
@@ -267,11 +268,9 @@ alignas( 32 ) static SingletonHolder<Frontend> sceneInstanceHolder;
 
 void Frontend::init() {
 	sceneInstanceHolder.init();
-	wsw::ProfilingSystem::attachToThisThread();
 }
 
 void Frontend::shutdown() {
-	wsw::ProfilingSystem::detachFromThisThread();
 	sceneInstanceHolder.shutdown();
 }
 

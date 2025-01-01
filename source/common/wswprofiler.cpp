@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2024 Chasseur de bots
+Copyright (C) 2024-2025 Chasseur de bots
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "links.h"
 #include "local.h"
 #include "common.h"
+#include "qthreads.h"
 
 #include <unordered_map>
 
@@ -91,7 +92,8 @@ void ProfilerThreadInstance::resetFrameStats() {
 static thread_local ProfilerThreadInstance *tl_profilerThreadInstance;
 
 ProfilerScope::ProfilerScope( const wsw::HashedStringView &name ) : m_name( name ) {
-	if( ProfilingSystem::s_isProfilingEnabled ) {
+	// That's why these fields are of non-boolean type
+	if( ProfilingSystem::s_isProfilingEnabled[0] | ProfilingSystem::s_isProfilingEnabled[1] ) {
 		if( ProfilerThreadInstance *instance = tl_profilerThreadInstance ) {
 			instance->enterScope( this, name );
 		}
@@ -99,46 +101,65 @@ ProfilerScope::ProfilerScope( const wsw::HashedStringView &name ) : m_name( name
 }
 
 ProfilerScope::~ProfilerScope() {
-	if( ProfilingSystem::s_isProfilingEnabled ) {
+	if( ProfilingSystem::s_isProfilingEnabled[0] | ProfilingSystem::s_isProfilingEnabled[1] ) {
 		if( ProfilerThreadInstance *instance = tl_profilerThreadInstance ) {
 			instance->leaveScope( this, m_name );
 		}
 	}
 }
 
-ProfilerThreadInstance *ProfilingSystem::s_instances { nullptr };
-volatile bool ProfilingSystem::s_isProfilingEnabled { false };
+ProfilerThreadInstance *ProfilingSystem::s_instances[2];
+volatile unsigned ProfilingSystem::s_isProfilingEnabled[2];
 
-void ProfilingSystem::attachToThisThread() {
+static wsw::Mutex g_mutex;
+
+void ProfilingSystem::attachToThisThread( FrameGroup group ) {
+	assert( group == 0 || group == 1 );
+
 	if( tl_profilerThreadInstance ) {
 		wsw::failWithLogicError( "Already attached to this thread" );
 	}
+
 	auto *newInstance = new ProfilerThreadInstance;
-	wsw::link( newInstance, &s_instances );
+	do {
+		// Even if we split groups, we still have to guard the linked list by mutex
+		[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
+		wsw::link( newInstance, &s_instances[group] );
+	} while( false );
+
 	tl_profilerThreadInstance = newInstance;
 }
 
-void ProfilingSystem::detachFromThisThread() {
+void ProfilingSystem::detachFromThisThread( FrameGroup group ) {
+	assert( group == 0 || group == 1 );
+
 	if( auto *instance = tl_profilerThreadInstance ) {
-		wsw::unlink( instance, &s_instances );
+		do {
+			[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
+			wsw::unlink( instance, &s_instances[group] );
+		} while( false );
+
 		delete instance;
 		tl_profilerThreadInstance = nullptr;
 	}
 }
 
-void ProfilingSystem::beginFrame( const wsw::StringView &targetName ) {
+void ProfilingSystem::beginFrame( FrameGroup group, const wsw::StringView &targetName ) {
+	assert( group == 0 || group == 1 );
 	if( !targetName.empty() ) {
-		for( ProfilerThreadInstance *instance = s_instances; instance; instance = instance->next ) {
+		[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
+		for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
 			instance->m_targetName.assign( targetName );
 		}
-		s_isProfilingEnabled = true;
+		s_isProfilingEnabled[group] = true;
 	} else {
-		s_isProfilingEnabled = false;
+		s_isProfilingEnabled[group] = false;
 	}
 }
 
-void ProfilingSystem::endFrame() {
-	for( ProfilerThreadInstance *instance = s_instances; instance; instance = instance->next ) {
+void ProfilingSystem::endFrame( FrameGroup group ) {
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
+	for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
 		instance->resetFrameStats();
 	}
 }

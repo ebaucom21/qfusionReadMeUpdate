@@ -116,6 +116,7 @@ cvar_t *win_noalttab;
 cvar_t *win_nowinkeys;
 
 cvar_t *cl_multithreading;
+cvar_t *cl_profilingTarget;
 
 // Global variables used internally by this module
 viddef_t viddef;             // global video state; used by other modules
@@ -5088,6 +5089,8 @@ static void CL_InitLocal( void ) {
 
 	cl_checkForUpdate        = Cvar_Get( "cl_checkForUpdate", "1", CVAR_ARCHIVE );
 	cl_checkForUpdateTimeout = Cvar_Get( "cl_checkForUpdateTimeout", "3", CVAR_ARCHIVE );
+
+	cl_profilingTarget = Cvar_Get( "cl_profilingTarget", "", CVAR_CHEAT );
 
 	//
 	// userinfo

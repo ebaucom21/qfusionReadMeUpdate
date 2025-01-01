@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "compression.h"
 #include "cmdsystem.h"
 #include "pipeutils.h"
+#include "wswprofiler.h"
 #include "local.h"
 #include "textstreamwriterextras.h"
 #include "../server/server.h"
@@ -58,6 +59,9 @@ cvar_t *logconsole;
 cvar_t *logconsole_append;
 cvar_t *logconsole_flush;
 cvar_t *logconsole_timestamp;
+
+extern cvar_t *cl_profilingTarget;
+extern cvar_t *sv_profilingTarget;
 
 qmutex_t *com_print_mutex;
 
@@ -228,6 +232,8 @@ static void unregisterBuiltinServerCmdOnClientSide( const wsw::PodVector<char> &
 // TODO: !!!!! We should merge this thread with the sound background thread
 
 static void *SV_Thread( void * ) {
+	[[maybe_unused]] volatile wsw::ThreadProfilingAttachment profilingAttachment( wsw::ProfilingSystem::ServerGroup );
+
 	SV_GetCmdSystem()->markCurrentThreadForFurtherAccessChecks();
 
 	uint64_t oldtime = 0, newtime;
@@ -282,7 +288,9 @@ static void *SV_Thread( void * ) {
 			} else {
 				gameMsec = realMsec;
 			}
+			wsw::ProfilingSystem::beginFrame( wsw::ProfilingSystem::ServerGroup, wsw::StringView( sv_profilingTarget->string ) );
 			SV_Frame( realMsec, gameMsec );
+			wsw::ProfilingSystem::endFrame( wsw::ProfilingSystem::ServerGroup );
 		} else {
 			// TODO: It should've been a break @ label construct
 			break;
@@ -429,7 +437,10 @@ void Qcommon_Init( int argc, char **argv ) {
 #endif
 
 	SV_Init();
-#ifndef DEDICATED_ONLY
+#ifdef DEDICATED_ONLY
+	wsw::ProfilingSystem::attachToThisThread( wsw::ProfilingSystem::ServerGroup );
+#else
+	wsw::ProfilingSystem::attachToThisThread( wsw::ProfilingSystem::ClientGroup );
 	CL_Init();
 	SCR_EndLoadingPlaque();
 #endif
@@ -527,10 +538,14 @@ void Qcommon_Frame( unsigned realMsec, unsigned *gameMsec, float *extraTime ) {
 	rand();
 
 #ifdef DEDICATED_ONLY
+	wsw::ProfilingSystem::beginFrame( wsw::ProfilingSystem::ServerGroup, wsw::StringView( sv_profilingTarget->string ) );
 	SV_Frame( realMsec, *gameMsec );
+	wsw::ProfilingSystem::endFrame( wsw::ProfilingSystem::ServerGroup );
 #else
 	(void)QBufPipe_ReadCmds( g_clCmdPipe );
+	wsw::ProfilingSystem::beginFrame( wsw::ProfilingSystem::ClientGroup, wsw::StringView( cl_profilingTarget->string ) );
 	CL_Frame( realMsec, *gameMsec );
+	wsw::ProfilingSystem::endFrame( wsw::ProfilingSystem::ClientGroup );
 #endif
 }
 
@@ -569,6 +584,9 @@ void Qcommon_Shutdown( void ) {
 
 #ifdef DEDICATED_ONLY
 	SV_GetCmdSystem()->unregisterCommand( wsw::StringView( "quit" ) );
+	wsw::ProfilingSystem::detachFromThisThread( wsw::ProfilingSystem::ServerGroup );
+#else
+	wsw::ProfilingSystem::detachFromThisThread( wsw::ProfilingSystem::ClientGroup );
 #endif
 
 	Com_CloseConsoleLog( true, true );

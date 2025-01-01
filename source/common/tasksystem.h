@@ -22,11 +22,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define WSW_1592e913_d661_4bb3_bab4_1e7b665d1c0c_H
 
 #include "taskhandle.h"
+#include "wswprofiler.h"
 
 #include <cassert>
 #include <cstdlib>
 #include <limits>
 #include <span>
+#include <optional>
 #include <utility>
 
 class TaskSystem {
@@ -50,7 +52,11 @@ class TaskSystem {
 		bool succeeded { false };
 	};
 public:
-	struct CtorArgs { size_t numExtraThreads; };
+	struct CtorArgs {
+		std::optional<wsw::ProfilingSystem::FrameGroup> profilingGroup;
+		size_t numExtraThreads;
+	};
+
 	explicit TaskSystem( CtorArgs &&args );
 	~TaskSystem();
 	// Returns a total number of threads which may execute, including the main (std::this_thread) thread
@@ -265,7 +271,8 @@ private:
 	static void beginTapeModification( struct TaskSystemImpl * );
 	static void endTapeModification( struct TaskSystemImpl *, bool succeeded );
 
-	static void threadLoopFunc( struct TaskSystemImpl *impl, unsigned threadNumber );
+	static void threadLoopFunc( struct TaskSystemImpl *impl, unsigned threadNumber,
+								std::optional<wsw::ProfilingSystem::FrameGroup> profilingGroup );
 	[[nodiscard]]
 	static bool threadExecTasks( struct TaskSystemImpl *impl, unsigned threadNumber );
 

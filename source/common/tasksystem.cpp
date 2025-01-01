@@ -35,7 +35,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <barrier>
 
 struct TaskSystemImpl {
-	explicit TaskSystemImpl( unsigned numExtraThreads );
+	TaskSystemImpl( unsigned numExtraThreads, std::optional<wsw::ProfilingSystem::FrameGroup> profilingGroup );
 	~TaskSystemImpl();
 
 	// Share it here as the impl has an access to private types
@@ -126,13 +126,14 @@ struct TaskSystemImpl {
 	std::atomic<bool> awaitsCompletion { false };
 };
 
-TaskSystemImpl::TaskSystemImpl( unsigned numExtraThreads ) : barrier( numExtraThreads + 1 ) {
+TaskSystemImpl::TaskSystemImpl( unsigned numExtraThreads, std::optional<wsw::ProfilingSystem::FrameGroup> profilingGroup )
+	: barrier( numExtraThreads + 1 ) {
 	signalingFlags.resize( numExtraThreads );
 	completionStatuses.resize( numExtraThreads );
 
 	// Spawn threads once we're done with vars
 	for( unsigned threadNumber = 0; threadNumber < numExtraThreads; ++threadNumber ) {
-		threads.emplace_back( std::jthread( TaskSystem::threadLoopFunc, this, threadNumber ) );
+		threads.emplace_back( std::jthread( TaskSystem::threadLoopFunc, this, threadNumber, profilingGroup ) );
 	}
 }
 
@@ -142,7 +143,7 @@ TaskSystemImpl::~TaskSystemImpl() {
 }
 
 TaskSystem::TaskSystem( CtorArgs &&args ) {
-	m_impl = new TaskSystemImpl( args.numExtraThreads );
+	m_impl = new TaskSystemImpl( args.numExtraThreads, args.profilingGroup );
 }
 
 TaskSystem::~TaskSystem() {
@@ -635,8 +636,11 @@ bool TaskSystem::awaitCompletion( const ExecutionHandle &executionHandle ) {
 	return succeeded;
 }
 
-void TaskSystem::threadLoopFunc( TaskSystemImpl *__restrict impl, unsigned threadNumber ) {
-	[[maybe_unused]] volatile wsw::ThreadProfilingAttachment threadProfilingAttachment;
+void TaskSystem::threadLoopFunc( TaskSystemImpl *__restrict impl, unsigned threadNumber,
+								 std::optional<wsw::ProfilingSystem::FrameGroup> profilingGroup ) {
+	if( profilingGroup ) {
+		wsw::ProfilingSystem::attachToThisThread( *profilingGroup );
+	}
 
 	for(;; ) {
 		impl->signalingFlags[threadNumber].wait( false );
@@ -649,6 +653,10 @@ void TaskSystem::threadLoopFunc( TaskSystemImpl *__restrict impl, unsigned threa
 		const auto status = threadExecTasks( impl, threadNumber ) ? CompletionSuccess : CompletionFailure;
 		impl->completionStatuses[threadNumber].store( status, std::memory_order_seq_cst );
 		(void)impl->barrier.arrive( 1 );
+	}
+
+	if( profilingGroup ) {
+		wsw::ProfilingSystem::detachFromThisThread( *profilingGroup );
 	}
 }
 

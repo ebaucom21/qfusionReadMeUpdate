@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2024 Chasseur de bots
+Copyright (C) 2024-2025 Chasseur de bots
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -45,29 +45,34 @@ public:
 	friend class ProfilerScope;
 	friend class ThreadProfilingAttachment;
 
-	static void attachToThisThread();
-	static void detachFromThisThread();
+	enum FrameGroup { ClientGroup, ServerGroup };
 
-	static void beginFrame( const wsw::StringView &targetName );
-	static void endFrame();
+	static void attachToThisThread( FrameGroup group );
+	static void detachFromThisThread( FrameGroup group );
+
+	static void beginFrame( FrameGroup group, const wsw::StringView &targetName );
+	static void endFrame( FrameGroup group );
 private:
-	static class ProfilerThreadInstance *s_instances;
-	static volatile bool s_isProfilingEnabled;
+	// Per-group
+	static class ProfilerThreadInstance *s_instances[2];
+	static volatile unsigned s_isProfilingEnabled[2];
 };
 
 class ThreadProfilingAttachment {
 public:
-	ThreadProfilingAttachment() {
-		ProfilingSystem::attachToThisThread();
+	ThreadProfilingAttachment( ProfilingSystem::FrameGroup group ) : m_group( group ) {
+		ProfilingSystem::attachToThisThread( group );
 	}
 	~ThreadProfilingAttachment() {
-		ProfilingSystem::detachFromThisThread();
+		ProfilingSystem::detachFromThisThread( m_group );
 	}
 
 	ThreadProfilingAttachment( const ThreadProfilingAttachment & ) = delete;
 	auto operator=( const ThreadProfilingAttachment & ) -> ThreadProfilingAttachment & = delete;
 	ThreadProfilingAttachment( ThreadProfilingAttachment && ) = delete;
 	auto operator=( ThreadProfilingAttachment && ) -> ThreadProfilingAttachment & = delete;
+private:
+	const ProfilingSystem::FrameGroup m_group;
 };
 
 }
