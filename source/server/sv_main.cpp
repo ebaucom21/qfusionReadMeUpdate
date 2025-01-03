@@ -206,8 +206,6 @@ cvar_t *sv_http_upstream_ip;
 cvar_t *sv_http_upstream_realip_header;
 #endif
 
-cvar_t *sv_profilingTarget;
-
 static cvar_t *sv_showRcon;
 static cvar_t *sv_showChallenge;
 static cvar_t *sv_showInfoQueries;
@@ -1512,8 +1510,6 @@ void SV_Init() {
 	sv_infoservers =          Cvar_Get( "infoservers", DEFAULT_INFO_SERVERS_IPS, CVAR_LATCH );
 
 	sv_debug_serverCmd =        Cvar_Get( "sv_debug_serverCmd", "0", CVAR_ARCHIVE );
-
-	sv_profilingTarget = Cvar_Get( "sv_profilingTarget", "", 0 );
 
 	sv_MOTD = Cvar_Get( "sv_MOTD", "0", CVAR_ARCHIVE );
 	sv_MOTDFile = Cvar_Get( "sv_MOTDFile", "", CVAR_ARCHIVE );

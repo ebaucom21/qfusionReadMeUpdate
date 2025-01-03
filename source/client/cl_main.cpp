@@ -116,7 +116,6 @@ cvar_t *win_noalttab;
 cvar_t *win_nowinkeys;
 
 cvar_t *cl_multithreading;
-cvar_t *cl_profilingTarget;
 
 // Global variables used internally by this module
 viddef_t viddef;             // global video state; used by other modules
@@ -1377,7 +1376,7 @@ void SCR_UpdateScreen( void ) {
 
 	bool canRenderView = false;
 	bool canDrawConsole = false;
-	bool canDrawConsoleNotify = false;
+	bool canDrawDebug = false;
 
 	auto *const uiSystem = wsw::ui::UISystem::instance();
 
@@ -1397,7 +1396,7 @@ void SCR_UpdateScreen( void ) {
 		uiSystem->addToFrametimeTimeline( cls.realtime, cls.frametime );
 
 		canDrawConsole = true;
-		canDrawConsoleNotify = true;
+		canDrawDebug = true;
 	}
 
 	// Perform UI refresh (that may include binding UI GL context and unbinding it) first
@@ -1456,8 +1455,9 @@ void SCR_UpdateScreen( void ) {
 
 	uiSystem->drawCursorInMainContext();
 
-	if( canDrawConsoleNotify ) {
+	if( canDrawDebug ) {
 		Con_DrawNotify( viddef.width, viddef.height );
+		CL_ProfilerHud_Draw( viddef.width, viddef.height );
 	}
 
 	if( canDrawConsole ) {
@@ -5049,8 +5049,6 @@ static void CL_InitLocal( void ) {
 	cl_checkForUpdate        = Cvar_Get( "cl_checkForUpdate", "1", CVAR_ARCHIVE );
 	cl_checkForUpdateTimeout = Cvar_Get( "cl_checkForUpdateTimeout", "3", CVAR_ARCHIVE );
 
-	cl_profilingTarget = Cvar_Get( "cl_profilingTarget", "", CVAR_CHEAT );
-
 	//
 	// userinfo
 	//
@@ -5697,6 +5695,8 @@ void CL_Init( void ) {
 
 	Con_Init();
 
+	CL_ProfilerHud_Init();
+
 	CL_Sys_Init();
 
 	VID_Init();
@@ -5781,6 +5781,8 @@ void CL_Shutdown( void ) {
 		Steam_Shutdown();
 
 		CL_Sys_Shutdown();
+
+		CL_ProfilerHud_Shutdown();
 
 		Con_Shutdown();
 

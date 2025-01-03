@@ -60,9 +60,6 @@ cvar_t *logconsole_append;
 cvar_t *logconsole_flush;
 cvar_t *logconsole_timestamp;
 
-extern cvar_t *cl_profilingTarget;
-extern cvar_t *sv_profilingTarget;
-
 qmutex_t *com_print_mutex;
 
 int log_file = 0;
@@ -288,9 +285,9 @@ static void *SV_Thread( void * ) {
 			} else {
 				gameMsec = realMsec;
 			}
-			wsw::ProfilingSystem::beginFrame( wsw::ProfilingSystem::ServerGroup, wsw::StringView( sv_profilingTarget->string ) );
+			wsw::ProfilingSystem::beginFrame( wsw::ProfilingSystem::ServerGroup, CL_GetProfilerArgsSupplier() );
 			SV_Frame( realMsec, gameMsec );
-			wsw::ProfilingSystem::endFrame( wsw::ProfilingSystem::ServerGroup );
+			wsw::ProfilingSystem::endFrame( wsw::ProfilingSystem::ServerGroup, CL_GetProfilerResultSink() );
 		} else {
 			// TODO: It should've been a break @ label construct
 			break;
@@ -538,14 +535,12 @@ void Qcommon_Frame( unsigned realMsec, unsigned *gameMsec, float *extraTime ) {
 	rand();
 
 #ifdef DEDICATED_ONLY
-	wsw::ProfilingSystem::beginFrame( wsw::ProfilingSystem::ServerGroup, wsw::StringView( sv_profilingTarget->string ) );
 	SV_Frame( realMsec, *gameMsec );
-	wsw::ProfilingSystem::endFrame( wsw::ProfilingSystem::ServerGroup );
 #else
 	(void)QBufPipe_ReadCmds( g_clCmdPipe );
-	wsw::ProfilingSystem::beginFrame( wsw::ProfilingSystem::ClientGroup, wsw::StringView( cl_profilingTarget->string ) );
+	wsw::ProfilingSystem::beginFrame( wsw::ProfilingSystem::ClientGroup, CL_GetProfilerArgsSupplier() );
 	CL_Frame( realMsec, *gameMsec );
-	wsw::ProfilingSystem::endFrame( wsw::ProfilingSystem::ClientGroup );
+	wsw::ProfilingSystem::endFrame( wsw::ProfilingSystem::ClientGroup, CL_GetProfilerResultSink() );
 #endif
 }
 

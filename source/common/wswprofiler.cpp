@@ -44,12 +44,14 @@ public:
 	friend class ProfilerScope;
 	friend class ProfilingSystem;
 
+	explicit ProfilerThreadInstance( wsw::ProfilingSystem::FrameGroup group_ ) : group( group_ ) {}
+
 	ProfilerThreadInstance *prev { nullptr }, *next { nullptr };
 
 	void enterScope( ProfilerScope *scope, const wsw::HashedStringView &name );
 	void leaveScope( ProfilerScope *scope, const wsw::HashedStringView &name );
 
-	void resetFrameStats();
+	void dumpFrameStats( unsigned threadIndex, ProfilerResultSink *dataSink );
 
 	struct DescendantEntry {
 		uint64_t enterTimestamp { 0 };
@@ -61,6 +63,8 @@ public:
 	wsw::PodVector<char> m_targetName;
 
 	std::unordered_set<wsw::HashedStringView> m_frameRoots;
+
+	const wsw::ProfilingSystem::FrameGroup group;
 
 	uint64_t m_enterTimestamp { 0 };
 	uint64_t m_accumTime { 0 };
@@ -75,19 +79,17 @@ public:
 	std::unordered_map<wsw::HashedStringView, DescendantEntry> m_statsOfDescendantScopes;
 };
 
-void ProfilerThreadInstance::resetFrameStats() {
+void ProfilerThreadInstance::dumpFrameStats( unsigned threadIndex, ProfilerResultSink *dataSink ) {
 	if( m_discoverRootScopes ) {
 		assert( m_globalScopeDepth == 0 );
-		comNotice() << "Discovered profiling root scopes:";
 		for( const auto &name: m_frameRoots ) {
-			comNotice() << name;
+			dataSink->addDiscoveredRoot( threadIndex, name );
 		}
 	} else {
-		comNotice() << "(*)" << m_targetName << ": enter count" << m_enterCount << "accum time" << m_accumTime;
-		if( m_enterCount > 0 ) {
-			for( const auto &[k, v] : m_statsOfDescendantScopes ) {
-				comNotice() << " |-" << k << ": enter count" << v.enterCount << "accum time" << v.accumTime;
-			}
+		dataSink->addCallStats( threadIndex, { m_targetName.data(), m_targetName.size() },
+								{ .totalTime = m_accumTime, .enterCount = m_enterCount } );
+		for( const auto &[k, v] : m_statsOfDescendantScopes ) {
+			dataSink->addCallChildStats( threadIndex, k, { .totalTime = v.accumTime, .enterCount = v.enterCount } );
 		}
 	}
 
@@ -112,8 +114,12 @@ static thread_local ProfilerThreadInstance *tl_profilerThreadInstance;
 ProfilerScope::ProfilerScope( const wsw::HashedStringView &name ) : m_name( name ) {
 	// That's why these fields are of non-boolean type
 	if( ProfilingSystem::s_isProfilingEnabled[0] | ProfilingSystem::s_isProfilingEnabled[1] ) {
+		// We avoid touching thread-locals by checking the outer condition first
 		if( ProfilerThreadInstance *instance = tl_profilerThreadInstance ) {
-			instance->enterScope( this, name );
+			assert( instance->group == 0 || instance->group == 1 );
+			if( ProfilingSystem::s_isProfilingEnabled[instance->group] ) {
+				instance->enterScope( this, name );
+			}
 		}
 	}
 }
@@ -121,7 +127,10 @@ ProfilerScope::ProfilerScope( const wsw::HashedStringView &name ) : m_name( name
 ProfilerScope::~ProfilerScope() {
 	if( ProfilingSystem::s_isProfilingEnabled[0] | ProfilingSystem::s_isProfilingEnabled[1] ) {
 		if( ProfilerThreadInstance *instance = tl_profilerThreadInstance ) {
-			instance->leaveScope( this, m_name );
+			assert( instance->group == 0 || instance->group == 1 );
+			if( ProfilingSystem::s_isProfilingEnabled[instance->group] ) {
+				instance->leaveScope( this, m_name );
+			}
 		}
 	}
 }
@@ -138,7 +147,7 @@ void ProfilingSystem::attachToThisThread( FrameGroup group ) {
 		wsw::failWithLogicError( "Already attached to this thread" );
 	}
 
-	auto *newInstance = new ProfilerThreadInstance;
+	auto *newInstance = new ProfilerThreadInstance( group );
 	do {
 		// Even if we split groups, we still have to guard the linked list by mutex
 		[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
@@ -162,33 +171,57 @@ void ProfilingSystem::detachFromThisThread( FrameGroup group ) {
 	}
 }
 
-void ProfilingSystem::beginFrame( FrameGroup group, const FrameArgs &frameArgs ) {
+void ProfilingSystem::beginFrame( FrameGroup group, ProfilerArgsSupplier *argsSupplier ) {
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
+
 	assert( group == 0 || group == 1 );
-	s_isProfilingEnabled[group] = false;
-	if( const auto *targetName = std::get_if<wsw::StringView>( &frameArgs ) ) {
-		if( !targetName->empty() ) {
-			[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
+	// TODO: Use scope-guards
+	argsSupplier->beginSupplyingArgs();
+	try {
+		s_isProfilingEnabled[group] = false;
+		const ProfilerArgs &args = argsSupplier->getArgs( group );
+		if( const auto *targetName = std::get_if<wsw::StringView>( &args.args ) ) {
+			assert( !targetName->empty() );
 			for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
 				instance->m_targetName.assign( *targetName );
 			}
 			s_isProfilingEnabled[group] = true;
+		} else if( std::holds_alternative<ProfilerArgs::DiscoverRootScopes>( args.args ) ) {
+			for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
+				instance->m_discoverRootScopes = true;
+			}
+			s_isProfilingEnabled[group] = true;
 		}
-	} else if( std::holds_alternative<DiscoverRootScopes>( frameArgs ) ) {
-		[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
-		for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
-			instance->m_discoverRootScopes = true;
-		}
-		s_isProfilingEnabled[group] = true;
+	} catch( ... ) {
+		argsSupplier->endSupplyingArgs();
+		throw;
 	}
+	argsSupplier->endSupplyingArgs();
 }
 
-void ProfilingSystem::endFrame( FrameGroup group ) {
-	if( s_isProfilingEnabled[group] ) {
-		[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
-		for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
-			instance->resetFrameStats();
-		}
+void ProfilingSystem::endFrame( FrameGroup group, ProfilerResultSink *resultSink ) {
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
+
+	unsigned totalThreads = 0;
+	for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
+		totalThreads++;
 	}
+
+	resultSink->beginAcceptingResults( group, totalThreads );
+	try {
+		if( s_isProfilingEnabled[group] ) {
+			unsigned threadIndex = 0;
+			for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
+				instance->dumpFrameStats( threadIndex, resultSink );
+				threadIndex++;
+			}
+		}
+	} catch( ... ) {
+		resultSink->endAcceptingResults( group );
+		throw;
+	}
+
+	resultSink->endAcceptingResults( group );
 }
 
 [[nodiscard]]

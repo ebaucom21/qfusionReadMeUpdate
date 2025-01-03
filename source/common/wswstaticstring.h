@@ -394,7 +394,7 @@ public:
 	void resize( size_type newLength, char fillByChar ) {
 		assert( newLength <= capacity() );
 		if( newLength > m_len ) {
-			std::memset( m_data, fillByChar, newLength - m_len );
+			std::memset( m_data + m_len, fillByChar, newLength - m_len );
 			m_len = newLength;
 			m_data[m_len] = '\0';
 		} else if( newLength < m_len ) {

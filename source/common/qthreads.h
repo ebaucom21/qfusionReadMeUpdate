@@ -42,6 +42,7 @@ void QMutex_Lock( qmutex_t *mutex );
 void QMutex_Unlock( qmutex_t *mutex );
 
 class TaskSystem;
+class ProfilerHud;
 
 namespace wsw {
 
@@ -51,6 +52,7 @@ void failWithRuntimeError( const char * );
 class Mutex {
 	template <typename> friend class ScopedLock;
 	friend class ::TaskSystem;
+	friend class ::ProfilerHud;
 public:
 	Mutex( const Mutex & ) = delete;
 	auto operator=( const Mutex & ) -> Mutex & = delete;
