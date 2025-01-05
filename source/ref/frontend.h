@@ -572,8 +572,9 @@ private:
 
 	[[maybe_unused]]
 	auto addEntryToSortList( StateForCamera *stateForCamera, const entity_t *e, const mfog_t *fog,
-							  const shader_t *shader, float dist, unsigned order, const portalSurface_t *portalSurf,
-							  const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator = 0 ) -> void *;
+							 const shader_t *shader, float dist, unsigned order, const portalSurface_t *portalSurf,
+							 const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator = 0 )
+							 -> std::optional<unsigned>;
 
 	void prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamera, Scene *scene, portalSurface_t *portalSurface );
 

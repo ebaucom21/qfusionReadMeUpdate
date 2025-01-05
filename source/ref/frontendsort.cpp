@@ -393,9 +393,11 @@ void Frontend::addMergedBspSurfToSortList( StateForCamera *stateForCamera, const
 	const unsigned drawOrder = R_PackOpaqueOrder( fog, surfMaterial, mergedSurf->numLightmaps, false );
 
 	drawSurf->dlightBits = 0;
-	drawSurf->listSurf = addEntryToSortList( stateForCamera, entity, fog, surfMaterial, WORLDSURF_DIST,
-											 drawOrder, portalSurface, drawSurf, ST_BSP );
-	if( !drawSurf->listSurf ) {
+
+	const auto maybeIndexInSortList = addEntryToSortList( stateForCamera, entity, fog, surfMaterial, WORLDSURF_DIST,
+														  drawOrder, portalSurface, drawSurf, ST_BSP );
+	if( maybeIndexInSortList == std::nullopt ) [[unlikely]] {
+		drawSurf->mdSpan.numDraws = 0;
 		return;
 	}
 
@@ -449,7 +451,8 @@ void Frontend::addMergedBspSurfToSortList( StateForCamera *stateForCamera, const
 		if( resultDist == 0 ) {
 			resultDist = WORLDSURF_DIST;
 		}
-		sortedDrawSurf_t *const sds = (sortedDrawSurf_t *)drawSurf->listSurf;
+
+		sortedDrawSurf_t *const sds = stateForCamera->sortList->data() + *maybeIndexInSortList;
 		sds->distKey = R_PackDistKey( 0, surfMaterial, resultDist, order );
 	}
 }
@@ -655,7 +658,8 @@ void Frontend::addVisibleWorldSurfacesToSortList( StateForCamera *stateForCamera
 
 auto Frontend::addEntryToSortList( StateForCamera *stateForCamera, const entity_t *e, const mfog_t *fog,
 								   const shader_t *shader, float dist, unsigned order, const portalSurface_t *portalSurf,
-								   const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator ) -> void * {
+								   const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator )
+								   -> std::optional<unsigned> {
 	if( shader ) [[likely]] {
 		// TODO: This should be moved to an outer loop
 		if( !( stateForCamera->renderFlags & RF_SHADOWMAPVIEW ) || !Shader_ReadDepth( shader ) ) [[likely]] {
@@ -677,12 +681,12 @@ auto Frontend::addEntryToSortList( StateForCamera *stateForCamera, const entity_
 					.mergeabilitySeparator = mergeabilitySeparator
 				});
 
-				return std::addressof( stateForCamera->sortList->back() );
+				return (unsigned)stateForCamera->sortList->size();
 			}
 		}
 	}
 
-	return nullptr;
+	return std::nullopt;
 }
 
 void Frontend::processWorldPortalSurfaces( StateForCamera *stateForCamera, Scene *scene, bool isCameraAPortalCamera ) {

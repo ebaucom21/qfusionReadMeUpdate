@@ -120,11 +120,10 @@ struct MultiDrawElemSpan {
 struct portalSurface_s;
 
 typedef struct {
-	void *listSurf;                 // only valid if visFrame == rf.frameCount
 	MergedBspSurface *mergedBspSurf;
-	unsigned dlightBits;
-	MultiDrawElemSpan mdSpan;
 	portalSurface_s *portalSurface;
+	MultiDrawElemSpan mdSpan;
+	unsigned dlightBits;
 	float portalDistance;
 } drawSurfaceBSP_t;
 
