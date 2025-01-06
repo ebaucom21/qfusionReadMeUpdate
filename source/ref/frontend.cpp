@@ -312,8 +312,9 @@ auto Frontend::allocStateForCamera() -> StateForCamera * {
 	auto *stateForCamera = new( resultStorage->theStateStorage )StateForCamera;
 	resultStorage->isStateConstructed = true;
 
-	stateForCamera->sortList        = &resultStorage->meshSortList;
-	stateForCamera->drawActionsList = &resultStorage->drawActionsList;
+	stateForCamera->shaderParamsList = &resultStorage->shaderParamsList;
+	stateForCamera->sortList         = &resultStorage->meshSortList;
+	stateForCamera->drawActionsList  = &resultStorage->drawActionsList;
 
 	stateForCamera->preparePolysWorkload     = &resultStorage->preparePolysWorkloadBuffer;
 	stateForCamera->prepareCoronasWorkload   = &resultStorage->prepareCoronasWorkloadBuffer;

@@ -715,8 +715,9 @@ typedef struct mesh_s {
 } mesh_t;
 
 typedef struct {
+	uint64_t sortKey;
 	const void *drawSurf;
-	unsigned distKey, sortKey;
+	unsigned distKey;
 	unsigned surfType;
 	// Currently works just in addition to common mergeability checks.
 	unsigned mergeabilitySeparator;
@@ -810,7 +811,7 @@ void RB_DrawElements( const FrontendToBackendShared *fsh, const DrawCallData &dr
 void RB_FlushTextureCache( void );
 
 // shader
-void RB_BindShader( const entity_t *e, const struct shader_s *shader, const struct mfog_s *fog );
+void RB_BindShader( const entity_t *e, const ShaderParams *overrideParams, const shader_s *shader, const mfog_s *fog );
 void RB_SetLightstyle( const struct superLightStyle_s *lightStyle );
 void RB_SetDlightBits( unsigned int dlightBits );
 void RB_SetBonesData( int numBones, dualquat_t *dualQuats, int maxWeights );
@@ -1541,8 +1542,8 @@ void R_SubmitDynamicMeshToBackend( const FrontendToBackendShared *fsh, const ent
 void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const drawSurfaceBSP_t *drawSurf );
 void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const void * );
 
-void R_SubmitSpriteSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned meshOffset );
-void R_SubmitBatchedSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned vertElemSpanOffset );
+void R_SubmitSpriteSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const ShaderParams *overrideParams, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned meshOffset );
+void R_SubmitBatchedSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const ShaderParams *overrideParams, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned vertElemSpanOffset );
 
 //
 // r_poly.c
@@ -1710,18 +1711,44 @@ wsw_forceinline bool doOverlapTestFor14Dops( const float *mins1, const float *ma
 auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::span<const uint16_t> lightIndicesSpan,
 								 const float *mins, const float *maxs, uint16_t *affectingLightIndices ) -> unsigned;
 
-inline unsigned R_PackSortKey( unsigned shaderNum, int fogNum,
-							   int portalNum, unsigned entNum ) {
-	return ( shaderNum & 0x7FF ) << 21 | ( entNum & 0x7FF ) << 10 |
-		   ( ( ( portalNum + 1 ) & 0x1F ) << 5 ) | ( (unsigned)( fogNum + 1 ) & 0x1F );
+constexpr uint64_t kSortKeyFogOffset = 0;
+constexpr uint64_t kSortKeyFogLength = 5;
+
+constexpr uint64_t kSortKeyPortalOffset = kSortKeyFogOffset + kSortKeyFogLength;
+constexpr uint64_t kSortKeyPortalLength = 5;
+
+constexpr uint64_t kSortKeyParamsOffset = kSortKeyPortalOffset + kSortKeyPortalLength;
+constexpr uint64_t kSortKeyParamsLength = 15;
+
+constexpr uint64_t kSortKeyEntityOffset = kSortKeyParamsOffset + kSortKeyParamsLength;
+constexpr uint64_t kSortKeyEntityLength = 11;
+
+constexpr uint64_t kSortKeyShaderOffset = kSortKeyEntityOffset + kSortKeyEntityLength;
+constexpr uint64_t kSortKeyShaderLength = 11;
+
+inline uint64_t R_PackSortKey( unsigned shaderNum, int fogNum, int portalNum, unsigned entNum, int paramsNum ) {
+	assert( shaderNum < ( 1 << kSortKeyShaderLength ) );
+	assert( fogNum >= -1 && fogNum + 1 < (int)( 1 << kSortKeyFogOffset ) );
+	assert( portalNum >= -1 && portalNum + 1 < (int)( 1 << kSortKeyPortalOffset ) );
+	assert( entNum < ( 1 << kSortKeyEntityLength ) );
+	assert( paramsNum >= -1 && paramsNum + 1 < (int)( 1 << kSortKeyParamsOffset ) );
+
+	return ( ( (uint64_t)shaderNum ) << kSortKeyShaderOffset ) |
+		   ( ( (uint64_t)entNum ) << kSortKeyEntityOffset ) |
+		   ( ( (uint64_t)( paramsNum + 1 ) ) << kSortKeyParamsOffset ) |
+		   ( ( (uint64_t)( portalNum + 1 ) ) << kSortKeyPortalLength ) |
+		   ( ( (uint64_t)( fogNum + 1 ) ) << kSortKeyFogOffset );
 }
 
-inline void R_UnpackSortKey( unsigned sortKey, unsigned *shaderNum, int *fogNum,
-							 int *portalNum, unsigned *entNum ) {
-	*shaderNum = ( sortKey >> 21 ) & 0x7FF;
-	*entNum = ( sortKey >> 10 ) & 0x7FF;
-	*portalNum = (signed int)( ( sortKey >> 5 ) & 0x1F ) - 1;
-	*fogNum = (signed int)( sortKey & 0x1F ) - 1;
+inline void R_UnpackSortKey( uint64_t sortKey, unsigned *shaderNum, int *fogNum,
+							 int *portalNum, unsigned *entNum, int *paramsNum ) {
+
+
+	*shaderNum = ( sortKey >> kSortKeyShaderOffset ) & ( ( 1 << kSortKeyShaderLength ) - 1 );
+	*entNum    = ( sortKey >> kSortKeyEntityOffset ) & ( ( 1 << kSortKeyEntityLength ) - 1 );
+	*paramsNum = -1 + (int)( ( sortKey >> kSortKeyParamsOffset ) & ( ( 1 << kSortKeyParamsLength ) - 1 ) );
+	*portalNum = -1 + (int)( ( sortKey >> kSortKeyPortalOffset ) & ( ( 1 << kSortKeyPortalLength ) - 1 ) );
+	*fogNum    = -1 + (int)( ( sortKey >> kSortKeyFogOffset )    & ( ( 1 << kSortKeyFogLength ) - 1 ) );
 }
 
 #define rDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Renderer, wsw::MessageCategory::Debug ) ).getWriter()

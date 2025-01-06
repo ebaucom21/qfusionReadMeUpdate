@@ -674,9 +674,9 @@ auto Frontend::addEntryToSortList( StateForCamera *stateForCamera, const entity_
 				const int portalNum = portalSurf ? (int)( portalSurf - stateForCamera->portalSurfaces ) : -1;
 
 				stateForCamera->sortList->emplace_back( sortedDrawSurf_t {
+					.sortKey               = R_PackSortKey( shader->id, fogNum, portalNum, e->number, -1 ),
 					.drawSurf              = (drawSurfaceType_t *)drawSurf,
 					.distKey               = distKey,
-					.sortKey               = R_PackSortKey( shader->id, fogNum, portalNum, e->number ),
 					.surfType              = surfType,
 					.mergeabilitySeparator = mergeabilitySeparator
 				});

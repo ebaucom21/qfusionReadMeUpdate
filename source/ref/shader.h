@@ -308,5 +308,16 @@ unsigned    R_PackShaderOrder( const shader_t *shader );
 void        R_TouchShader( shader_t *s );
 
 
+// Currently just for overriding entity_t parameters, kept private for now.
+// entity_t must be eventually fully replaced by this data type.
+struct ShaderParams {
+	// Parameters of a material script
+	struct Material {
+		int64_t shaderTime { 0 };
+	};
+
+	// TODO: Add other components
+	Material *material { nullptr };
+};
 
 #endif // R_SHADER_H

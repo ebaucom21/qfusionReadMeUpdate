@@ -1780,7 +1780,7 @@ static void RB_UpdateVertexAttribs( void ) {
 /*
 * RB_BindShader
 */
-void RB_BindShader( const entity_t *e, const shader_t *shader, const mfog_t *fog ) {
+void RB_BindShader( const entity_t *e, const ShaderParams *overrideParams, const shader_t *shader, const mfog_t *fog ) {
 	rb.currentShader = shader;
 	rb.fog = fog;
 	rb.texFog = rb.colorFog = NULL;
@@ -1800,7 +1800,11 @@ void RB_BindShader( const entity_t *e, const shader_t *shader, const mfog_t *fog
 	rb.currentPortalSurface = NULL;
 
 	if( !e ) {
-		rb.currentShaderTime = rb.nullEnt.shaderTime * 0.001;
+		if( overrideParams && overrideParams->material ) {
+			rb.currentShaderTime = 1e-3 * (double)overrideParams->material->shaderTime;
+		} else {
+			rb.currentShaderTime = 1e-3 * (double)rb.nullEnt.shaderTime;
+		}
 		rb.alphaHack = false;
 		rb.greyscale = false;
 		rb.noDepthTest = false;
@@ -1809,10 +1813,16 @@ void RB_BindShader( const entity_t *e, const shader_t *shader, const mfog_t *fog
 	} else {
 		Vector4Copy( rb.currentEntity->shaderRGBA, rb.entityColor );
 		Vector4Copy( rb.currentEntity->outlineColor, rb.entityOutlineColor );
-		if( rb.currentEntity->shaderTime > rb.time ) {
+		int64_t givenShaderTime;
+		if( overrideParams && overrideParams->material ) {
+			givenShaderTime = overrideParams->material->shaderTime;
+		} else {
+			givenShaderTime = rb.currentEntity->shaderTime;
+		}
+		if( givenShaderTime > rb.time ) {
 			rb.currentShaderTime = 0;
 		} else {
-			rb.currentShaderTime = ( rb.time - rb.currentEntity->shaderTime ) * 0.001;
+			rb.currentShaderTime = 1e-3 * (double)( rb.time - givenShaderTime );
 		}
 		rb.alphaHack = e->renderfx & RF_ALPHAHACK ? true : false;
 		rb.hackedAlpha = e->shaderRGBA[3] / 255.0;

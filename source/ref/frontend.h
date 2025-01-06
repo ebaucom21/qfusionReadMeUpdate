@@ -193,6 +193,7 @@ private:
 
 		refdef_t refdef;
 
+		wsw::PodVector<ShaderParams> *shaderParamsList;
 		// TODO: We don't really need a growable vector, preallocate at it start
 		wsw::PodVector<sortedDrawSurf_t> *sortList;
 		// Same here, we can't use PodBufferHolder yet for wsw::Function<>
@@ -598,8 +599,8 @@ private:
 	void processSortList( StateForCamera *stateForCamera, Scene *scene );
 	void submitDrawActionsList( StateForCamera *stateForCamera, Scene *scene );
 
-	using SubmitBatchedSurfFn = void(*)( const FrontendToBackendShared *, const entity_t *, const shader_t *,
-		const mfog_t *, const portalSurface_t *, unsigned );
+	using SubmitBatchedSurfFn = void(*)( const FrontendToBackendShared *, const entity_t *, const ShaderParams *,
+		const shader_t *, const mfog_t *, const portalSurface_t *, unsigned );
 
 	[[nodiscard]]
 	auto registerBuildingBatchedSurf( StateForCamera *stateForCamera, Scene *scene, unsigned surfType, std::span<const sortedDrawSurf_t> batchSpan )
@@ -648,6 +649,7 @@ private:
 		alignas( alignof( StateForCamera ) ) uint8_t theStateStorage[sizeof( StateForCamera )];
 		bool isStateConstructed { false };
 
+		wsw::PodVector<ShaderParams> shaderParamsList;
 		wsw::PodVector<sortedDrawSurf_t> meshSortList;
 		wsw::PodVector<wsw::Function<void( FrontendToBackendShared * )>> drawActionsList;
 

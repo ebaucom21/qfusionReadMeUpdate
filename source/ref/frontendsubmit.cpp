@@ -174,10 +174,14 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 	}
 
 	const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {
-		// TODO: Avoid runtime composition of keys
-		const auto lhsKey = ( (uint64_t)lhs.distKey << 32 ) | (uint64_t)lhs.sortKey;
-		const auto rhsKey = ( (uint64_t)rhs.distKey << 32 ) | (uint64_t)rhs.sortKey;
-		return lhsKey < rhsKey;
+		// TODO: Use uint128_t
+		if( lhs.distKey < rhs.distKey ) {
+			return true;
+		}
+		if( lhs.distKey > rhs.distKey ) {
+			return false;
+		}
+		return lhs.sortKey < rhs.sortKey;
 	};
 
 	std::sort( stateForCamera->sortList->begin(), stateForCamera->sortList->end(), cmp );
@@ -201,12 +205,12 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 
 	const mfog_t *prevFog = nullptr;
 	const portalSurface_t *prevPortalSurface = nullptr;
+	const ShaderParams *prevOverrideParams = nullptr;
 
 	const size_t numDrawSurfs = sortList->size();
 	const sortedDrawSurf_t *const drawSurfs = sortList->data();
 	for( size_t i = 0; i < numDrawSurfs; i++ ) {
 		const sortedDrawSurf_t *sds = drawSurfs + i;
-		const unsigned sortKey      = sds->sortKey;
 		const unsigned surfType     = sds->surfType;
 
 		assert( surfType > ST_NONE && surfType < ST_MAX_TYPES );
@@ -214,15 +218,16 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 		const bool isDrawSurfBatched = ( r_drawSurfCb[surfType] == nullptr );
 
 		unsigned shaderNum, entNum;
-		int fogNum, portalNum;
+		int fogNum, portalNum, paramsNum;
 		// decode draw surface properties
-		R_UnpackSortKey( sortKey, &shaderNum, &fogNum, &portalNum, &entNum );
+		R_UnpackSortKey( sds->sortKey, &shaderNum, &fogNum, &portalNum, &entNum, &paramsNum );
 
-		const shader_t *shader    = materialCache->getMaterialById( shaderNum );
-		const entity_t *entity    = scene->m_entities[entNum];
-		const mfog_t *fog         = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
-		const auto *portalSurface = portalNum >= 0 ? stateForCamera->portalSurfaces + portalNum : nullptr;
-		const int entityFX        = entity->renderfx;
+		const shader_t *shader     = materialCache->getMaterialById( shaderNum );
+		const entity_t *entity     = scene->m_entities[entNum];
+		const mfog_t *fog          = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
+		const auto *portalSurface  = portalNum >= 0 ? stateForCamera->portalSurfaces + portalNum : nullptr;
+		const auto *overrideParams = paramsNum >= 0 ? stateForCamera->shaderParamsList->data() + paramsNum : nullptr;
+		const int entityFX         = entity->renderfx;
 
 		// TODO?
 		// const bool depthWrite     = shader->flags & SHADER_DEPTHWRITE ? true : false;
@@ -230,6 +235,11 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 		// see if we need to reset mesh properties in the backend
 
 		// TODO: Use a single 64-bit compound mergeability key
+
+		// CAUTION: Different shader override parameters do not lead to resetting batching automatically,
+		// as the batch processing code may access override parameters on its own
+		// and encode some parameters as vertex attributes.
+		// Mergeability separators must be set up correctly if resetting batches is really needed.
 
 		bool reset = false;
 		if( !prevIsDrawSurfBatched ) {
@@ -262,7 +272,7 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 
 				drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
 					RB_FlushDynamicMeshes();
-					submitFn( fsh, prevEntity, prevShader, prevFog, prevPortalSurface, offset );
+					submitFn( fsh, prevEntity, prevOverrideParams, prevShader, prevFog, prevPortalSurface, offset );
 					RB_FlushDynamicMeshes();
 				});
 			}
@@ -354,7 +364,7 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 				drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
 					assert( r_drawSurfCb[surfType] );
 
-					RB_BindShader( entity, shader, fog );
+					RB_BindShader( entity, overrideParams, shader, fog );
 					RB_SetPortalSurface( portalSurface );
 
 					r_drawSurfCb[surfType]( fsh, entity, shader, fog, portalSurface, sds->drawSurf );
@@ -374,6 +384,7 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 		prevEntityFX              = entityFX;
 		prevFog                   = fog;
 		prevPortalSurface         = portalSurface;
+		prevOverrideParams        = overrideParams;
 	}
 
 	if( batchSpanBegin ) {
@@ -387,7 +398,7 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 
 		drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
 			RB_FlushDynamicMeshes();
-			submitFn( fsh, prevEntity, prevShader, prevFog, prevPortalSurface, offset );
+			submitFn( fsh, prevEntity, prevOverrideParams, prevShader, prevFog, prevPortalSurface, offset );
 			RB_FlushDynamicMeshes();
 		});
 	}
