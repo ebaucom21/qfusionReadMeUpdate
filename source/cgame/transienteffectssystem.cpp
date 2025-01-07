@@ -1196,6 +1196,7 @@ void TransientEffectsSystem::submitPolyEffects( int64_t currTime, DrawSceneReque
 		const float lifetimeFrac = (float)lifetimeMillis * Q_Rcp( (float)effect->duration );
 
 		effect->poly.halfExtent = effect->scaleLifespan.getValueForLifetimeFrac( lifetimeFrac ) * effect->scaleMultiplier;
+		effect->poly.animFrac   = lifetimeFrac;
 
 		const float colorAlpha = effect->alphaLifespan.getValueForLifetimeFrac( lifetimeFrac );
 		// std::variant<> interface is awful

@@ -67,6 +67,8 @@ public:
 		{ "ShadeCubeMap"_asView, PassKey::ShadeCubeMap },
 		{ "ClampMap"_asView, PassKey::ClampMap },
 		{ "AnimClampMap"_asView, PassKey::AnimClampMap },
+		{ "TimelineMap"_asView, PassKey::TimelineMap },
+		{ "TimelineClampMap"_asView, PassKey::TimelineClampMap },
 		{ "Material"_asView, PassKey::Material },
 		{ "Distortion"_asView, PassKey::Distortion },
 		{ "CelShade"_asView, PassKey::CelShade },

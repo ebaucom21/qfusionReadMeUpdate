@@ -527,8 +527,24 @@ void RB_GetShaderpassColor( const shaderpass_t *pass, byte_vec4_t rgba_, float *
 * RB_ShaderpassTex
 */
 static inline Texture *RB_ShaderpassTex( const shaderpass_t *pass ) {
-	if( pass->anim_fps && pass->anim_numframes ) {
-		return pass->images[(int)( pass->anim_fps * rb.currentShaderTime ) % pass->anim_numframes];
+	if( pass->anim_numframes ) {
+		Texture *res;
+		if( pass->anim_fps > 0.0f ) {
+			res = pass->images[(int)( pass->anim_fps * rb.currentShaderTime ) % pass->anim_numframes];
+		} else {
+			assert( rb.currentShaderFrac >= 0.0f && rb.currentShaderFrac <= 1.0f );
+			assert( pass->timelineFracs[0] == 0.0f );
+			res = pass->images[0];
+			for( unsigned i = 1; i < pass->anim_numframes; ++i ) {
+				assert( pass->timelineFracs[i] >= 0.0f && pass->timelineFracs[i] < 1.0f );
+				if( pass->timelineFracs[i] < rb.currentShaderFrac ) {
+					res = pass->images[i];
+				} else {
+					break;
+				}
+			}
+		}
+		return res;
 	}
 
 	auto *const textureCache = TextureCache::instance();
@@ -1780,7 +1796,8 @@ static void RB_UpdateVertexAttribs( void ) {
 /*
 * RB_BindShader
 */
-void RB_BindShader( const entity_t *e, const ShaderParams *overrideParams, const shader_t *shader, const mfog_t *fog ) {
+void RB_BindShader( const entity_t *e, const ShaderParams *overrideParams, const ShaderParamsTable *paramsTable,
+					const shader_t *shader, const mfog_t *fog ) {
 	rb.currentShader = shader;
 	rb.fog = fog;
 	rb.texFog = rb.colorFog = NULL;
@@ -1800,10 +1817,12 @@ void RB_BindShader( const entity_t *e, const ShaderParams *overrideParams, const
 	rb.currentPortalSurface = NULL;
 
 	if( !e ) {
-		if( overrideParams && overrideParams->material ) {
-			rb.currentShaderTime = 1e-3 * (double)overrideParams->material->shaderTime;
+		if( const ShaderParams::Material *materialParams = ShaderParams::getMaterialParams( overrideParams, paramsTable ) ) {
+			rb.currentShaderTime = 1e-3 * (double)materialParams->shaderTime;
+			rb.currentShaderFrac = materialParams->shaderFrac;
 		} else {
 			rb.currentShaderTime = 1e-3 * (double)rb.nullEnt.shaderTime;
+			rb.currentShaderFrac = 0.0f;
 		}
 		rb.alphaHack = false;
 		rb.greyscale = false;
@@ -1814,10 +1833,12 @@ void RB_BindShader( const entity_t *e, const ShaderParams *overrideParams, const
 		Vector4Copy( rb.currentEntity->shaderRGBA, rb.entityColor );
 		Vector4Copy( rb.currentEntity->outlineColor, rb.entityOutlineColor );
 		int64_t givenShaderTime;
-		if( overrideParams && overrideParams->material ) {
-			givenShaderTime = overrideParams->material->shaderTime;
+		if( const ShaderParams::Material *materialParams = ShaderParams::getMaterialParams( overrideParams, paramsTable ) ) {
+			givenShaderTime      = materialParams->shaderTime;
+			rb.currentShaderFrac = materialParams->shaderFrac;
 		} else {
-			givenShaderTime = rb.currentEntity->shaderTime;
+			givenShaderTime      = rb.currentEntity->shaderTime;
+			rb.currentShaderFrac = 0.0f;
 		}
 		if( givenShaderTime > rb.time ) {
 			rb.currentShaderTime = 0;

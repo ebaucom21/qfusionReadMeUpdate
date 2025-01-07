@@ -62,7 +62,8 @@ enum {
 	SHADER_NODRAWFLAT               = 1 << 13,
 	SHADER_SOFT_PARTICLE            = 1 << 14,
 	SHADER_FORCE_OUTLINE_WORLD      = 1 << 15,
-	SHADER_STENCILTEST              = 1 << 16
+	SHADER_STENCILTEST              = 1 << 16,
+	SHADER_ANIM_FRAC                = 1 << 17,
 };
 
 // sorting
@@ -221,9 +222,11 @@ typedef struct shaderpass_s {
 
 	unsigned int program_type;
 
-	Texture             *images[MAX_SHADER_IMAGES]; // texture refs
+	Texture *images[MAX_SHADER_IMAGES];
+	float timelineFracs[MAX_SHADER_IMAGES];
 
-	float anim_fps;                                 // animation frames per sec
+	// If zero but anim frames are present, timeline-based anim should be used
+	float anim_fps;
 	unsigned int anim_numframes;
 
 	[[nodiscard]]
@@ -307,6 +310,7 @@ unsigned    R_PackShaderOrder( const shader_t *shader );
 
 void        R_TouchShader( shader_t *s );
 
+struct ShaderParamsTable;
 
 // Currently just for overriding entity_t parameters, kept private for now.
 // entity_t must be eventually fully replaced by this data type.
@@ -314,10 +318,25 @@ struct ShaderParams {
 	// Parameters of a material script
 	struct Material {
 		int64_t shaderTime { 0 };
+		float shaderFrac { 0.0f };
 	};
 
 	// TODO: Add other components
-	Material *material { nullptr };
+	int materialComponentIndex { -1 };
+
+	[[nodiscard]]
+	static auto getMaterialParams( const ShaderParams *params, const ShaderParamsTable *table ) -> const Material *;
 };
+
+struct ShaderParamsTable {
+	ShaderParams::Material *material { nullptr };
+};
+
+inline auto ShaderParams::getMaterialParams( const ShaderParams *params, const ShaderParamsTable *table ) -> const Material * {
+	if( params && params->materialComponentIndex >= 0 ) {
+		return &table->material[params->materialComponentIndex];
+	}
+	return nullptr;
+}
 
 #endif // R_SHADER_H

@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "frontend.h"
 #include "program.h"
 #include "materiallocal.h"
+#include "../common/smallassocarray.h"
 #include "../common/wswsortbyfield.h"
 
 static unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, int numLightmaps, bool dlight ) {
@@ -463,10 +464,25 @@ void Frontend::addParticlesToSortList( StateForCamera *stateForCamera, const ent
 	const float *const __restrict forwardAxis = stateForCamera->viewAxis;
 	const float *const __restrict viewOrigin  = stateForCamera->viewOrigin;
 
+	auto *const shaderParamsStorage   = stateForCamera->shaderParamsStorage;
+	auto *const materialParamsStorage = stateForCamera->materialParamsStorage;
+
 	unsigned numParticleDrawSurfaces = 0;
 	for( const unsigned aggregateIndex: aggregateIndices ) {
 		const Scene::ParticlesAggregate *const __restrict pa = particles + aggregateIndex;
-		const unsigned mergeabilityKey = aggregateIndex;
+
+		wsw::SmallAssocArray<unsigned, int, MAX_SHADER_IMAGES> overrideParamsIndicesForImageIndices;
+		const auto addOverrideParams = [&]( float frac ) -> int {
+			const int resultIndex = (int)shaderParamsStorage->size();
+			shaderParamsStorage->emplace_back( ShaderParams {
+				.materialComponentIndex = (int)materialParamsStorage->size(),
+			});
+			materialParamsStorage->emplace_back( ShaderParams::Material {
+				.shaderFrac = frac,
+			});
+			return resultIndex;
+		};
+
 		for( unsigned particleIndex = 0; particleIndex < pa->numParticles; ++particleIndex ) {
 			const Particle *__restrict particle = pa->particles + particleIndex;
 
@@ -481,11 +497,40 @@ void Frontend::addParticlesToSortList( StateForCamera *stateForCamera, const ent
 			drawSurf->aggregateIndex = aggregateIndex;
 			drawSurf->particleIndex  = particleIndex;
 
+			unsigned mergeabilityKey = aggregateIndex;
+			int overrideParamsIndex  = -1;
+
 			shader_s *material = pa->appearanceRules.materials[particle->instanceMaterialIndex];
+			if( material->flags & SHADER_ANIM_FRAC ) {
+				// Try binning by resuling image index in this case
+				// (particles with small difference in their fractions but with matching selected images
+				// can use any fraction as long as it yields the same image during shader parameter setup)
+				if( material->numpasses == 1 ) {
+					unsigned imageIndex = 0;
+					for( unsigned i = 1; i < material->passes[0].anim_numframes; ++i ) {
+						if( material->passes[0].timelineFracs[i] < particle->lifetimeFrac ) {
+							imageIndex = i;
+						} else {
+							break;
+						}
+					}
+					const auto it = overrideParamsIndicesForImageIndices.find( imageIndex );
+					if( it != overrideParamsIndicesForImageIndices.end() ) {
+						overrideParamsIndex = ( *it ).second;
+					} else {
+						overrideParamsIndex = addOverrideParams( particle->lifetimeFrac );
+						(void)overrideParamsIndicesForImageIndices.insert( imageIndex, overrideParamsIndex );
+					}
+				} else {
+					overrideParamsIndex = addOverrideParams( particle->lifetimeFrac );
+				}
+				static_assert( Scene::kMaxParticleAggregates <= ( 1 << 8 ) );
+				mergeabilityKey |= ( 1 + (unsigned)overrideParamsIndex ) << 8;
+			}
 
 			// TODO: Inline/add some kind of bulk insertion
 			addEntryToSortList( stateForCamera, particleEntity, fog, material, distanceLike, 0, nullptr, drawSurf,
-								ST_PARTICLE, mergeabilityKey );
+								ST_PARTICLE, mergeabilityKey, overrideParamsIndex );
 		}
 	}
 }
@@ -658,7 +703,8 @@ void Frontend::addVisibleWorldSurfacesToSortList( StateForCamera *stateForCamera
 
 auto Frontend::addEntryToSortList( StateForCamera *stateForCamera, const entity_t *e, const mfog_t *fog,
 								   const shader_t *shader, float dist, unsigned order, const portalSurface_t *portalSurf,
-								   const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator )
+								   const void *drawSurf, unsigned surfType,
+								   unsigned mergeabilitySeparator, int overrideParamsIndex )
 								   -> std::optional<unsigned> {
 	if( shader ) [[likely]] {
 		// TODO: This should be moved to an outer loop
@@ -674,7 +720,7 @@ auto Frontend::addEntryToSortList( StateForCamera *stateForCamera, const entity_
 				const int portalNum = portalSurf ? (int)( portalSurf - stateForCamera->portalSurfaces ) : -1;
 
 				stateForCamera->sortList->emplace_back( sortedDrawSurf_t {
-					.sortKey               = R_PackSortKey( shader->id, fogNum, portalNum, e->number, -1 ),
+					.sortKey               = R_PackSortKey( shader->id, fogNum, portalNum, e->number, overrideParamsIndex ),
 					.drawSurf              = (drawSurfaceType_t *)drawSurf,
 					.distKey               = distKey,
 					.surfType              = surfType,

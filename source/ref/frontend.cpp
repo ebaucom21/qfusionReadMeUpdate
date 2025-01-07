@@ -312,7 +312,11 @@ auto Frontend::allocStateForCamera() -> StateForCamera * {
 	auto *stateForCamera = new( resultStorage->theStateStorage )StateForCamera;
 	resultStorage->isStateConstructed = true;
 
-	stateForCamera->shaderParamsList = &resultStorage->shaderParamsList;
+	stateForCamera->shaderParamsStorage = &resultStorage->shaderParamsStorage;
+	stateForCamera->materialParamsStorage = &resultStorage->materialParamsStorage;
+	stateForCamera->shaderParamsStorage->clear();
+	stateForCamera->materialParamsStorage->clear();
+
 	stateForCamera->sortList         = &resultStorage->meshSortList;
 	stateForCamera->drawActionsList  = &resultStorage->drawActionsList;
 

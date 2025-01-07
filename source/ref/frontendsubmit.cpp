@@ -190,6 +190,11 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 	auto *const materialCache   = MaterialCache::instance();
 	auto *const drawActionsList = stateForCamera->drawActionsList;
 
+	// For capturing it in lambdas
+	ShaderParamsTable *const paramsTable = &stateForCamera->shaderParamsTable;
+	// Set final addresses once we're finished with possible relocations during the frame
+	paramsTable->material = stateForCamera->materialParamsStorage->data();
+
 	unsigned prevShaderNum                 = ~0;
 	unsigned prevEntNum                    = ~0;
 	int prevPortalNum                      = ~0;
@@ -221,12 +226,13 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 		int fogNum, portalNum, paramsNum;
 		// decode draw surface properties
 		R_UnpackSortKey( sds->sortKey, &shaderNum, &fogNum, &portalNum, &entNum, &paramsNum );
+		assert( paramsNum == -1 || ( paramsNum >= 0 && paramsNum < (int)stateForCamera->shaderParamsStorage->size() ) );
 
 		const shader_t *shader     = materialCache->getMaterialById( shaderNum );
 		const entity_t *entity     = scene->m_entities[entNum];
 		const mfog_t *fog          = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
 		const auto *portalSurface  = portalNum >= 0 ? stateForCamera->portalSurfaces + portalNum : nullptr;
-		const auto *overrideParams = paramsNum >= 0 ? stateForCamera->shaderParamsList->data() + paramsNum : nullptr;
+		const auto *overrideParams = paramsNum >= 0 ? stateForCamera->shaderParamsStorage->data() + paramsNum : nullptr;
 		const int entityFX         = entity->renderfx;
 
 		// TODO?
@@ -272,7 +278,7 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 
 				drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
 					RB_FlushDynamicMeshes();
-					submitFn( fsh, prevEntity, prevOverrideParams, prevShader, prevFog, prevPortalSurface, offset );
+					submitFn( fsh, prevEntity, prevOverrideParams, paramsTable, prevShader, prevFog, prevPortalSurface, offset );
 					RB_FlushDynamicMeshes();
 				});
 			}
@@ -364,7 +370,7 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 				drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
 					assert( r_drawSurfCb[surfType] );
 
-					RB_BindShader( entity, overrideParams, shader, fog );
+					RB_BindShader( entity, overrideParams, paramsTable, shader, fog );
 					RB_SetPortalSurface( portalSurface );
 
 					r_drawSurfCb[surfType]( fsh, entity, shader, fog, portalSurface, sds->drawSurf );
@@ -398,7 +404,7 @@ void Frontend::processSortList( StateForCamera *stateForCamera, Scene *scene ) {
 
 		drawActionsList->append( [=]( FrontendToBackendShared *fsh ) {
 			RB_FlushDynamicMeshes();
-			submitFn( fsh, prevEntity, prevOverrideParams, prevShader, prevFog, prevPortalSurface, offset );
+			submitFn( fsh, prevEntity, prevOverrideParams, paramsTable, prevShader, prevFog, prevPortalSurface, offset );
 			RB_FlushDynamicMeshes();
 		});
 	}

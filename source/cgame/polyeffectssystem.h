@@ -216,8 +216,9 @@ private:
 
 	struct TracerEffect {
 		TracerEffect *prev { nullptr }, *next { nullptr };
-		int64_t timeoutAt;
+		int64_t spawnTime;
 		int64_t selectedForSubmissionAt;
+		unsigned timeout;
 		unsigned povPlayerMask { ~0u };
 		std::optional<TracerParams::AlignForPovParams> alignForPovParams;
 		vec3_t from;

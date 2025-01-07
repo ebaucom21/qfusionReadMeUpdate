@@ -139,6 +139,7 @@ typedef struct r_backend_s {
 	// shader state
 	const shader_t *currentShader;
 	double currentShaderTime;
+	float currentShaderFrac;
 	int currentShaderState;
 	int shaderStateORmask, shaderStateANDmask;
 	bool dirtyUniformState;

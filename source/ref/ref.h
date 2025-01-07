@@ -496,6 +496,7 @@ struct QuadPoly {
 	struct shader_s *material;
 	float origin[3];
 	float halfExtent;
+	float animFrac;
 
 	AppearanceRules appearanceRules { ViewAlignedSpriteRules {} };
 };

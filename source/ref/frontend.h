@@ -193,7 +193,11 @@ private:
 
 		refdef_t refdef;
 
-		wsw::PodVector<ShaderParams> *shaderParamsList;
+		wsw::PodVector<ShaderParams> *shaderParamsStorage;
+		wsw::PodVector<ShaderParams::Material> *materialParamsStorage;
+
+		ShaderParamsTable shaderParamsTable;
+
 		// TODO: We don't really need a growable vector, preallocate at it start
 		wsw::PodVector<sortedDrawSurf_t> *sortList;
 		// Same here, we can't use PodBufferHolder yet for wsw::Function<>
@@ -574,7 +578,7 @@ private:
 	[[maybe_unused]]
 	auto addEntryToSortList( StateForCamera *stateForCamera, const entity_t *e, const mfog_t *fog,
 							 const shader_t *shader, float dist, unsigned order, const portalSurface_t *portalSurf,
-							 const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator = 0 )
+							 const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator = 0, int shaderParamsIndex = -1 )
 							 -> std::optional<unsigned>;
 
 	void prepareDrawingPortalSurface( StateForCamera *stateForPrimaryCamera, Scene *scene, portalSurface_t *portalSurface );
@@ -599,7 +603,8 @@ private:
 	void processSortList( StateForCamera *stateForCamera, Scene *scene );
 	void submitDrawActionsList( StateForCamera *stateForCamera, Scene *scene );
 
-	using SubmitBatchedSurfFn = void(*)( const FrontendToBackendShared *, const entity_t *, const ShaderParams *,
+	using SubmitBatchedSurfFn = void(*)( const FrontendToBackendShared *, const entity_t *,
+		const ShaderParams *, const ShaderParamsTable *,
 		const shader_t *, const mfog_t *, const portalSurface_t *, unsigned );
 
 	[[nodiscard]]
@@ -649,7 +654,9 @@ private:
 		alignas( alignof( StateForCamera ) ) uint8_t theStateStorage[sizeof( StateForCamera )];
 		bool isStateConstructed { false };
 
-		wsw::PodVector<ShaderParams> shaderParamsList;
+		wsw::PodVector<ShaderParams> shaderParamsStorage;
+		wsw::PodVector<ShaderParams::Material> materialParamsStorage;
+
 		wsw::PodVector<sortedDrawSurf_t> meshSortList;
 		wsw::PodVector<wsw::Function<void( FrontendToBackendShared * )>> drawActionsList;
 

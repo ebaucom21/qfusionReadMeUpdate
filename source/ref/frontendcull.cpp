@@ -115,10 +115,27 @@ void Frontend::collectVisiblePolys( StateForCamera *stateForCamera, Scene *scene
 	uint16_t tmpIndices[MAX_QUAD_POLYS];
 	const auto visibleIndices = cullQuadPolys( stateForCamera, quadPolys, scene->m_quadPolys.size(), frusta, tmpIndices, tmpModels );
 
+	auto *const shaderParamsStorage   = stateForCamera->shaderParamsStorage;
+	auto *const materialParamsStorage = stateForCamera->materialParamsStorage;
+
 	const auto *polyEntity = scene->m_polyent;
 	for( const unsigned index: visibleIndices ) {
 		QuadPoly *const p = quadPolys[index];
-		addEntryToSortList( stateForCamera, polyEntity, nullptr, p->material, 0, index, nullptr, quadPolys[index], ST_QUAD_POLY );
+		unsigned mergeabilitySeparator = 0;
+		int overrideParamsIndex        = -1;
+		assert( p->animFrac >= 0.0f && p->animFrac <= 1.0f );
+		if( p->material->flags & SHADER_ANIM_FRAC ) {
+			overrideParamsIndex = (int)shaderParamsStorage->size();
+			shaderParamsStorage->emplace_back( ShaderParams {
+				.materialComponentIndex = (int)materialParamsStorage->size(),
+			});
+			materialParamsStorage->emplace_back( ShaderParams::Material {
+				.shaderFrac = p->animFrac,
+			});
+			mergeabilitySeparator = 1 + (unsigned)overrideParamsIndex;
+		}
+		addEntryToSortList( stateForCamera, polyEntity, nullptr, p->material, 0, index, nullptr, quadPolys[index],
+							ST_QUAD_POLY, mergeabilitySeparator, overrideParamsIndex );
 	}
 }
 

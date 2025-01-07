@@ -712,7 +712,7 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 
 	vattribmask_t vattribs;
 	if( streamId == RB_VBO_NONE ) {
-		RB_BindShader( entity, nullptr, shader, fog );
+		RB_BindShader( entity, nullptr, nullptr, shader, fog );
 		vattribs = rb.currentVAttribs;
 		streamId = ( ( vattribs & ~COMPACT_STREAM_VATTRIBS ) ? RB_VBO_STREAM : RB_VBO_STREAM_COMPACT );
 	} else {
@@ -822,7 +822,7 @@ void RB_FlushDynamicMeshes() {
 	float offsetx = 0.0f, offsety = 0.0f;
 	for( int i = 0; i < numDraws; i++ ) {
 		rbDynamicDraw_t *draw = rb.dynamicDraws + i;
-		RB_BindShader( draw->entity, nullptr, draw->shader, draw->fog );
+		RB_BindShader( draw->entity, nullptr, nullptr, draw->shader, draw->fog );
 		RB_BindVBO( draw->streamId, draw->primitive );
 		RB_SetPortalSurface( draw->portalSurface );
 		RB_Scissor( draw->scissor[0], draw->scissor[1], draw->scissor[2], draw->scissor[3] );
@@ -1130,19 +1130,21 @@ void R_SubmitDynamicMeshToBackend( const FrontendToBackendShared *fsh, const ent
 }
 
 void R_SubmitBatchedSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e,
-									const ShaderParams *overrideParams, const shader_t *shader,
-									const mfog_t *fog, const portalSurface_t *portalSurface, unsigned vertElemSpanIndex ) {
+									const ShaderParams *overrideParams, const ShaderParamsTable *paramsTable,
+									const shader_t *shader, const mfog_t *fog,
+									const portalSurface_t *portalSurface, unsigned vertElemSpanIndex ) {
 	const VertElemSpan &vertElemSpan = fsh->batchedVertElemSpans[vertElemSpanIndex];
 	if( vertElemSpan.numVerts && vertElemSpan.numElems ) {
-		RB_BindShader( e, overrideParams, shader, fog );
+		RB_BindShader( e, overrideParams, paramsTable, shader, fog );
 		RB_BindVBO( RB_VBOIdForFrameUploads( UPLOAD_GROUP_BATCHED_MESH ), GL_TRIANGLES );
 		RB_DrawElements( fsh, vertElemSpan );
 	}
 }
 
 void R_SubmitSpriteSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e,
-								   const ShaderParams *, const shader_s *shader,
-								   const mfog_t *fog, const portalSurface_t *portalSurface, unsigned meshIndex ) {
+								   const ShaderParams *, const ShaderParamsTable *paramsTable,
+								   const shader_s *shader, const mfog_t *fog,
+								   const portalSurface_t *portalSurface, unsigned meshIndex ) {
 	auto *mesh = (mesh_t *)( (uint8_t *)fsh->preparedSpriteMeshes + meshIndex * fsh->preparedSpriteMeshStride );
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }

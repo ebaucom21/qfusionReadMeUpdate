@@ -311,6 +311,7 @@ auto PolyEffectsSystem::createStraightBeamEffect( shader_s *material, unsigned p
 		wsw::link( effect, &m_straightLaserBeamsHead );
 		effect->poly.material   = material;
 		effect->poly.halfExtent = 0.0f;
+		effect->poly.animFrac   = 0.0f;
 		effect->povPlayerMask   = povPlayerMask;
 		return effect;
 	}
@@ -472,7 +473,8 @@ auto PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to,
 	const float speed             = wsw::max( 3000.0f, totalDistance * Q_Rcp( tracerTimeSeconds ) );
 
 	auto *effect                 = new( mem )TracerEffect;
-	effect->timeoutAt            = m_lastTime + params.duration;
+	effect->spawnTime            = m_lastTime;
+	effect->timeout              = params.duration;
 	effect->povPlayerMask        = povPlayerMask;
 	effect->alignForPovParams    = params.alignForPovParams;
 	effect->speed                = speed;
@@ -1054,6 +1056,8 @@ void PolyEffectsSystem::simulateBeams( int64_t currTime, float ) {
 	for( TransientBeamEffect *beam = m_transientBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
 		if( beam->spawnTime + beam->timeout <= currTime ) [[unlikely]] {
 			destroyTransientBeamEffect( beam );
+		} else {
+			beam->poly.animFrac = (float)( currTime - beam->spawnTime ) * Q_Rcp( (float)beam->timeout );
 		}
 	}
 }
@@ -1116,7 +1120,7 @@ void PolyEffectsSystem::submitBeams( int64_t currTime, DrawSceneRequest *request
 
 void PolyEffectsSystem::simulateTracers( int64_t currTime, float timeDeltaSeconds ) {
 	for( TracerEffect *tracer = m_tracerEffectsHead, *next = nullptr; tracer; tracer = next ) { next = tracer->next;
-		if( tracer->timeoutAt <= currTime ) [[unlikely]] {
+		if( tracer->spawnTime + tracer->timeout <= currTime ) [[unlikely]] {
 			destroyTracerEffect( tracer );
 			continue;
 		}
@@ -1230,6 +1234,7 @@ void PolyEffectsSystem::simulateTracers( int64_t currTime, float timeDeltaSecond
 		assert( std::fabs( VectorLengthFast( rules->dir ) - 1.0f ) < 1e-3f );
 
 		tracer->selectedForSubmissionAt = currTime;
+		tracer->poly.animFrac           = (float)( currTime - tracer->spawnTime ) * Q_Rcp( (float)tracer->timeout );
 	}
 }
 

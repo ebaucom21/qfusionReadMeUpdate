@@ -811,7 +811,7 @@ void RB_DrawElements( const FrontendToBackendShared *fsh, const DrawCallData &dr
 void RB_FlushTextureCache( void );
 
 // shader
-void RB_BindShader( const entity_t *e, const ShaderParams *overrideParams, const shader_s *shader, const mfog_s *fog );
+void RB_BindShader( const entity_t *e, const ShaderParams *overrideParams, const ShaderParamsTable *paramsTable, const shader_s *shader, const mfog_s *fog );
 void RB_SetLightstyle( const struct superLightStyle_s *lightStyle );
 void RB_SetDlightBits( unsigned int dlightBits );
 void RB_SetBonesData( int numBones, dualquat_t *dualQuats, int maxWeights );
@@ -1542,8 +1542,8 @@ void R_SubmitDynamicMeshToBackend( const FrontendToBackendShared *fsh, const ent
 void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const drawSurfaceBSP_t *drawSurf );
 void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const void * );
 
-void R_SubmitSpriteSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const ShaderParams *overrideParams, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned meshOffset );
-void R_SubmitBatchedSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const ShaderParams *overrideParams, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned vertElemSpanOffset );
+void R_SubmitSpriteSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const ShaderParams *overrideParams, const ShaderParamsTable *paramsTable, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned meshOffset );
+void R_SubmitBatchedSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const ShaderParams *overrideParams, const ShaderParamsTable *paramsTable, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned vertElemSpanOffset );
 
 //
 // r_poly.c
