@@ -82,8 +82,12 @@ public:
 
 	void reset();
 
+	void setEnabled( bool enabled );
+
 	void listScopes();
 private:
+	void doReset();
+
 	wsw::Mutex m_mutex;
 
 	std::optional<wsw::ProfilingSystem::FrameGroup> m_activeResultGroup;
@@ -105,6 +109,7 @@ private:
 	};
 
 	GroupState m_groupStates[2];
+	bool m_isEnabled { false };
 };
 
 static SingletonHolder<ProfilerHud> g_profilerHudHolder;
@@ -147,6 +152,13 @@ void CL_ProfilerHud_Init() {
 	CL_Cmd_Register( "pf_reset"_asView, []( const CmdArgs &args ) {
 		g_profilerHudHolder.instance()->reset();
 	});
+	CL_Cmd_Register( "pf_enable"_asView, []( const CmdArgs &args ) {
+		if( std::optional<int64_t> value = wsw::toNum<int64_t>( args[1] ) ) {
+			g_profilerHudHolder.instance()->setEnabled( *value != 0 );
+		} else {
+			clNotice() << "Usage: pf_enable <1|0>";
+		}
+	});
 	g_profilerHudHolder.init();
 }
 
@@ -155,6 +167,7 @@ void CL_ProfilerHud_Shutdown() {
 	CL_Cmd_Unregister( "pf_select"_asView );
 	CL_Cmd_Unregister( "pf_listscopes"_asView );
 	CL_Cmd_Unregister( "pf_reset"_asView );
+	CL_Cmd_Unregister( "pf_enable"_asView );
 	g_profilerHudHolder.shutdown();
 }
 
@@ -170,22 +183,27 @@ wsw::ProfilerResultSink *CL_GetProfilerResultSink() {
 }
 
 auto ProfilerHud::getArgs( wsw::ProfilingSystem::FrameGroup group ) -> wsw::ProfilerArgs {
-	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 	assert( group == 0 || group == 1 );
-	const GroupState &groupState = m_groupStates[group];
-	switch( groupState.operationMode ) {
-		case GroupState::NoOp: {
-			return { std::monostate() };
-		};
-		case GroupState::ListRoots: {
-			return { wsw::ProfilerArgs::DiscoverRootScopes() };
-		};
-		case GroupState::ProfileCall: {
-			return { wsw::ProfilerArgs::ProfileCall { .scopeIndex = groupState.selectedScope.value() } };
-		};
-		default: {
-			wsw::failWithLogicError( "Unreachable" );
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
+
+	if( m_isEnabled ) {
+		const GroupState &groupState = m_groupStates[group];
+		switch( groupState.operationMode ) {
+			case GroupState::NoOp: {
+				return { std::monostate() };
+			};
+			case GroupState::ListRoots: {
+				return { wsw::ProfilerArgs::DiscoverRootScopes() };
+			};
+			case GroupState::ProfileCall: {
+				return { wsw::ProfilerArgs::ProfileCall { .scopeIndex = groupState.selectedScope.value() } };
+			};
+			default: {
+				wsw::failWithLogicError( "Unreachable" );
+			}
 		}
+	} else {
+		return { std::monostate() };
 	}
 }
 
@@ -225,11 +243,24 @@ bool ProfilerHud::select( wsw::ProfilingSystem::FrameGroup group, const wsw::Str
 void ProfilerHud::reset() {
 	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
+	doReset();
+}
+
+void ProfilerHud::doReset() {
 	for( GroupState &groupState: m_groupStates ) {
 		groupState.operationMode = GroupState::NoOp;
 		groupState.threadResults.clear();
 		groupState.discoveredRootScopes.clear();
 		groupState.selectedScope = std::nullopt;
+	}
+}
+
+void ProfilerHud::setEnabled( bool enabled ) {
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
+
+	if( m_isEnabled != enabled ) {
+		doReset();
+		m_isEnabled = enabled;
 	}
 }
 
@@ -244,6 +275,10 @@ void ProfilerHud::listScopes() {
 
 void ProfilerHud::drawSelf( unsigned width, unsigned ) {
 	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
+
+	if( !m_isEnabled ) {
+		return;
+	}
 
 	const int margin      = 8 * VID_GetPixelRatio();
 	const auto lineHeight = (int)SCR_FontHeight( cls.consoleFont );
