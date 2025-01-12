@@ -2108,7 +2108,7 @@ void Con_Init( void ) {
 	clNotice() << "Console initialized";
 
 	con_maxNotificationTime  = Cvar_Get( "con_maxNotificationTime", "3", CVAR_ARCHIVE );
-	con_maxNotificationLines = Cvar_Get( "con_maxNotificationLines", "4", CVAR_ARCHIVE );
+	con_maxNotificationLines = Cvar_Get( "con_maxNotificationLines", "0", CVAR_ARCHIVE );
 	con_chatmode             = Cvar_Get( "con_chatmode", "3", CVAR_ARCHIVE );
 
 	CL_Cmd_Register( "toggleconsole"_asView, Con_ToggleConsole_f );

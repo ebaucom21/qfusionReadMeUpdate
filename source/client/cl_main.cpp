@@ -1455,15 +1455,14 @@ void SCR_UpdateScreen( void ) {
 
 	uiSystem->drawCursorInMainContext();
 
-	if( canDrawDebug ) {
+	const bool shouldDrawConsole = canDrawConsole && scr_con_current > 0.0f;
+	if( canDrawDebug && !shouldDrawConsole ) {
 		Con_DrawNotify( viddef.width, viddef.height );
 		CL_ProfilerHud_Draw( viddef.width, viddef.height );
 	}
 
-	if( canDrawConsole ) {
-		if( scr_con_current > 0.0f ) {
-			Con_DrawConsole( viddef.width, viddef.height * scr_con_current );
-		}
+	if( shouldDrawConsole ) {
+		Con_DrawConsole( viddef.width, viddef.height * scr_con_current );
 	}
 
 	RF_EndFrame();
