@@ -281,7 +281,6 @@ typedef struct {
 
 	// these shaders have nothing to do with media
 	shader_t *whiteShader;
-	shader_t *consoleShader;
 
 	// system font
 	qfontface_t *consoleFont;
@@ -485,7 +484,8 @@ void SCR_ShutDownConsoleMedia( void );
 qfontface_t *SCR_RegisterFont( const char *family, int style, unsigned int size );
 size_t SCR_FontHeight( qfontface_t *font );
 size_t SCR_strWidth( const char *str, qfontface_t *font, size_t maxlen, int flags = 0 );
-int SCR_DrawString( int x, int y, int align, const char *str, qfontface_t *font, const vec4_t color, int flags = 0 );
+int SCR_DrawString( int x, int y, int align, const char *str, qfontface_t *font = nullptr, const float *color = colorWhite, int flags = 0 );
+int SCR_DrawString( int x, int y, int align, const wsw::StringView &str, qfontface_t *font = nullptr, const float *color = colorWhite, int flags = 0 );
 void SCR_DrawClampString( int x, int y, const char *str, int xmin, int ymin, int xmax, int ymax, qfontface_t *font, const vec4_t color, int flags = 0 );
 void SCR_DrawRawChar( int x, int y, wchar_t num, qfontface_t *font, const vec4_t color );
 void SCR_DrawFillRect( int x, int y, int w, int h, const vec4_t color );

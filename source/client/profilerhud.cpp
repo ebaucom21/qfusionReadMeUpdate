@@ -73,7 +73,7 @@ public:
 		results.childStats.append( { childScopeId, callStats } );
 	}
 
-	void drawSelf( unsigned width, unsigned height );
+	void drawSelf( unsigned screenWidth, unsigned screenHeight );
 
 	void listRoots( wsw::ProfilingSystem::FrameGroup group );
 
@@ -87,6 +87,15 @@ public:
 	void listScopes();
 private:
 	void doReset();
+
+	struct GroupState;
+
+	[[nodiscard]]
+	auto drawDiscoveredRoots( const GroupState &groupState, const wsw::StringView &title, int startX, int startY,
+							  int width, int margin, int lineHeight ) -> int;
+	[[nodiscard]]
+	auto drawProfilingStats( const GroupState &groupState, const wsw::StringView &title, int startX, int startY,
+							 int width, int margin, int lineHeight ) -> int;
 
 	wsw::Mutex m_mutex;
 
@@ -273,7 +282,112 @@ void ProfilerHud::listScopes() {
 	}
 }
 
-void ProfilerHud::drawSelf( unsigned width, unsigned ) {
+extern const vec4_t kConsoleBackgroundColor;
+
+template <typename S>
+static void drawSideAlignedPair( const S &left, const S &right, int startX, int startY,
+								 int width, int margin, int lineHeight, const float *color = colorWhite ) {
+	const int leftX      = startX + margin;
+	const int rightX     = startX + width - margin;
+	const int leftWidth  = SCR_DrawString( leftX, startY, ALIGN_LEFT_TOP, left, nullptr, color );
+	const int rightWidth = SCR_DrawString( rightX, startY, ALIGN_RIGHT_TOP, right, nullptr, color );
+	if( leftWidth + rightWidth + 2 * margin + 48 < width ) {
+		const int barX     = startX + leftWidth + 2 * margin;
+		const int barY     = startY + ( 7 * lineHeight ) / 8;
+		const int barWidth = (int)width - leftWidth - rightWidth - 4 * margin;
+		SCR_DrawFillRect( barX, barY, barWidth, 1, colorDkGrey );
+	}
+}
+
+static void drawHeader( const wsw::StringView &title, int startX, int startY, int width, int margin, int lineHeight ) {
+	const int textWidth = SCR_DrawString( startX + margin, startY, ALIGN_LEFT_TOP, title );
+	const int barX      = startX + textWidth + 2 * margin;
+	const int barY      = startY + ( 7 * lineHeight ) / 8;
+	const int barWidth  = (int)width  - textWidth - 3 * margin;
+	SCR_DrawFillRect( barX, barY, barWidth, 1, colorLtGrey );
+}
+
+auto ProfilerHud::drawDiscoveredRoots( const GroupState &groupState, const wsw::StringView &title,
+									   int startX, int startY, int width, int margin, int lineHeight ) -> int {
+	const std::span<const wsw::ProfilingSystem::RegisteredScope> &scopes = wsw::ProfilingSystem::getRegisteredScopes();
+
+	const int totalLines = 2 + (int)groupState.discoveredRootScopes.size();
+	SCR_DrawFillRect( startX, startY, (int)width, lineHeight * totalLines + 3 * margin, kConsoleBackgroundColor );
+
+	int y = startY;
+
+	drawHeader( title, startX, y, width, margin, lineHeight );
+	y += lineHeight + margin;
+
+	SCR_DrawString( startX + margin, y, ALIGN_LEFT_TOP, "Available profiling roots", nullptr, colorLtGrey );
+	y += lineHeight + margin;
+
+	for( const unsigned scopeId: groupState.discoveredRootScopes ) {
+		const wsw::StringView &fn = scopes[scopeId].readableFunction;
+		wsw::StaticString<16> idString;
+		idString << '#' << scopeId;
+		drawSideAlignedPair( fn, idString.asView(), startX, y, width, margin, lineHeight, colorMdGrey );
+		y += lineHeight;
+	}
+
+	return y - startY + margin;
+}
+
+auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::StringView &title,
+									  int startX, int startY, int width, int margin, int lineHeight ) -> int {
+	const std::span<const wsw::ProfilingSystem::RegisteredScope> &scopes = wsw::ProfilingSystem::getRegisteredScopes();
+
+	int totalLines = 2;
+	for( const ThreadProfilingResults &threadResults: groupState.threadResults ) {
+		totalLines += 1 + (int)threadResults.childStats.size();
+	}
+
+	SCR_DrawFillRect( startX, startY, (int)width, lineHeight * totalLines + 3 * margin, kConsoleBackgroundColor );
+
+	int y = startY;
+
+	drawHeader( title, startX, y, width, margin, lineHeight );
+	y += lineHeight + margin;
+
+	wsw::StaticString<64> commonHeader( "Profiling " );
+	constexpr unsigned maxNameLimit = 48;
+	commonHeader << scopes[groupState.selectedScope.value()].readableFunction.take( maxNameLimit );
+
+	SCR_DrawString( startX + margin, y, ALIGN_LEFT_TOP, commonHeader.asView(), nullptr, colorLtGrey );
+	y += lineHeight + margin;
+
+	unsigned threadIndex = 0;
+	for( const ThreadProfilingResults &threadResults: groupState.threadResults ) {
+		wsw::StaticString<64> threadHeader, threadStats;
+		(void)threadHeader.appendf( "Thread #%-2d", threadIndex );
+		(void)threadStats.appendf( "count=%-4d", threadResults.callStats.enterCount );
+		(void)threadStats.appendf( " us=%-5d", (unsigned)threadResults.callStats.totalTime );
+
+		drawSideAlignedPair( threadHeader.asView(), threadStats.asView(), startX, y, width, margin, lineHeight, colorLtGrey );
+		y += lineHeight;
+
+		unsigned realNameLimit = 0;
+		for( const auto &[scopeId, _] : threadResults.childStats ) {
+			realNameLimit = wsw::max<unsigned>( realNameLimit, scopes[scopeId].readableFunction.length() );
+		}
+		realNameLimit = wsw::min( realNameLimit, maxNameLimit );
+
+		threadIndex++;
+		for( const auto &[scopeId, callStats] : threadResults.childStats ) {
+			wsw::StaticString<64> childDesc, childStats;
+			childDesc << scopes[scopeId].readableFunction.take( realNameLimit );
+			(void)childStats.appendf( "count=%-4d", callStats.enterCount );
+			(void)childStats.appendf( " us=%-5d", (unsigned)callStats.totalTime );
+
+			drawSideAlignedPair( childDesc.asView(), childStats.asView(), startX, y, width, margin, lineHeight, colorMdGrey );
+			y += lineHeight;
+		}
+	}
+
+	return y - startY + margin;
+}
+
+void ProfilerHud::drawSelf( unsigned screenWidth, unsigned ) {
 	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
 	if( !m_isEnabled ) {
@@ -283,102 +397,38 @@ void ProfilerHud::drawSelf( unsigned width, unsigned ) {
 	const int margin      = 8 * VID_GetPixelRatio();
 	const auto lineHeight = (int)SCR_FontHeight( cls.consoleFont );
 
-	int x = (int)width - margin;
-	int y = margin;
+	const int paneX     = ( 2 * (int)screenWidth ) / 3;
+	const int paneWidth = (int)screenWidth - paneX - margin;
+	int y               = margin;
 
-	const auto drawTextLine = [&]( const char *text, const float *color ) {
-		SCR_DrawString( x, y, ALIGN_RIGHT_TOP, text, cls.consoleFont, color );
+	SCR_DrawFillRect( paneX, y, (int)paneWidth, 5 * lineHeight + 3 * margin, kConsoleBackgroundColor );
+	y += margin;
+
+	drawHeader( "H E L P"_asView, paneX, y, paneWidth, margin, lineHeight );
+	y += lineHeight + margin;
+
+	const std::pair<const char *, const char *> cmdDescs[] {
+		{ "pf_listscopes", "Print available profiling scopes to the console" },
+		{ "pf_listroots <cl|sv>", "Discover available call tree roots" },
+		{ "pf_select <cl|sv> #<id>", "Select a scope for detailed profiling" },
+		{ "pf_reset", "Reset everything to the idle state" },
+	};
+
+	for( const auto &[syntax, desc]: cmdDescs ) {
+		drawSideAlignedPair( syntax, desc, paneX, y, paneWidth, margin, lineHeight, colorMdGrey );
 		y += lineHeight;
-	};
-	const auto drawTextViewLine = [&]( const wsw::StringView &text, const float *color ) {
-		if( text.isZeroTerminated() ) {
-			drawTextLine( text.data(), color );
-		} else {
-			if( text.length() < 256 ) {
-				wsw::StaticString<256> s;
-				s << text;
-				drawTextLine( s.data(), color );
-			} else {
-				static wsw::PodVector<char> s;
-				s.clear();
-				s.append( text.data(), text.size() );
-				s.append( '\0' );
-				drawTextLine( s.data(), color );
-			}
-		}
-	};
+	}
+	y += margin;
 
-	// Draw help messages
-	if( m_groupStates[0].operationMode == GroupState::NoOp && m_groupStates[1].operationMode == GroupState::NoOp ) {
-		drawTextLine( "There are no active profiling operations", colorWhite );
-		drawTextLine( "Use these commands:", colorWhite );
-		drawTextLine( "pf_listroots <client|server>", colorWhite );
-		drawTextLine( "pf_select <client|server> <name>", colorWhite );
-		drawTextLine( "pf_reset", colorWhite );
-	} else {
-		const auto drawGroupHeader = [&]( size_t groupIndex ) {
-			drawTextLine( groupIndex > 0 ? "SERVER" : "CLIENT", colorWhite );
-		};
-		const std::span<const wsw::ProfilingSystem::RegisteredScope> &scopes = wsw::ProfilingSystem::getRegisteredScopes();
-		for( size_t groupIndex = 0; groupIndex < std::size( m_groupStates ); ++groupIndex ) {
-			const GroupState &groupState = m_groupStates[groupIndex];
-			switch( groupState.operationMode ) {
-				case GroupState::NoOp: {
-				} break;
-				case GroupState::ListRoots: {
-					drawGroupHeader( groupIndex );
-					if( !groupState.discoveredRootScopes.empty() ) {
-						drawTextLine( "Available profiling roots:", colorWhite );
-						for( const unsigned scopeId: groupState.discoveredRootScopes ) {
-							drawTextViewLine( scopes[scopeId].readableFunction, colorLtGrey );
-						}
-					} else {
-						drawTextLine( "Failed to discover profiling roots", colorRed );
-					}
-				} break;
-				case GroupState::ProfileCall: {
-					drawGroupHeader( groupIndex );
-					if( !groupState.threadResults.empty() ) {
-						wsw::StaticString<256> commonHeader( "Profiling " );
-						constexpr unsigned maxNameLimit = 48;
-						commonHeader << scopes[groupState.selectedScope.value()].readableFunction.take( maxNameLimit );
+	const wsw::StringView groupTitles[2] { "C L I E N T"_asView, "S E R V E R"_asView };
 
-						drawTextLine( commonHeader.data(), colorWhite );
-
-						unsigned threadIndex = 0;
-						for( const ThreadProfilingResults &threadResults: groupState.threadResults ) {
-							wsw::StaticString<256> threadHeader;
-							(void)threadHeader.appendf( "Thread #%-2d", threadIndex );
-							(void)threadHeader.appendf( " count=%-2d", threadResults.callStats.enterCount );
-							(void)threadHeader.appendf( " us=%-5d", (unsigned)threadResults.callStats.totalTime );
-							drawTextLine( threadHeader.data(), colorLtGrey );
-
-							unsigned realNameLimit = 0;
-							for( const auto &[scopeId, _] : threadResults.childStats ) {
-								realNameLimit = wsw::max<unsigned>( realNameLimit, scopes[scopeId].readableFunction.length() );
-							}
-							realNameLimit = wsw::min( realNameLimit, maxNameLimit );
-
-							threadIndex++;
-							for( const auto &[scopeId, callStats] : threadResults.childStats ) {
-								wsw::StaticString<256> childDesc;
-								childDesc << scopes[scopeId].readableFunction.take( realNameLimit );
-								childDesc.resize( realNameLimit, ' ' );
-								childDesc.append( " : "_asView );
-								(void)childDesc.appendf( "count=%-4d", callStats.enterCount );
-								(void)childDesc.appendf( " us=%-5d", (unsigned)callStats.totalTime );
-								drawTextLine( childDesc.data(), colorMdGrey );
-							}
-						}
-					} else {
-						// TODO: This is actually unreachable
-						drawTextLine( "Failed to get any profiling results", colorRed );
-					}
-				} break;
-				default: {
-					wsw::failWithLogicError( "Unreachable" );
-				}
-			}
+	for( size_t groupIndex = 0; groupIndex < std::size( m_groupStates ); ++groupIndex ) {
+		const GroupState &groupState = m_groupStates[groupIndex];
+		if( groupState.operationMode == GroupState::ListRoots ) {
+			y += drawDiscoveredRoots( groupState, groupTitles[groupIndex], paneX, y, paneWidth, margin, lineHeight );
+		} else if( groupState.operationMode == GroupState::ProfileCall ) {
+			y += drawProfilingStats( groupState, groupTitles[groupIndex], paneX, y, paneWidth, margin, lineHeight );
 		}
 	}
+
 }

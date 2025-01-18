@@ -664,6 +664,8 @@ void Con_DrawConsole( unsigned width, unsigned height ) {
 	}
 }
 
+extern const vec4_t kConsoleBackgroundColor { 0.10f, 0.05f, 0.17f, 0.7f };
+
 void Console::drawPane( unsigned width, unsigned height ) {
 	const int smallCharHeight = SCR_FontHeight( cls.consoleFont );
 	if( !smallCharHeight ) {
@@ -701,7 +703,7 @@ void Console::drawPane( unsigned width, unsigned height ) {
 	R_Set2DMode( true );
 
 	// draw the background
-	R_DrawStretchPic( 0, 0, width, height, 0, 0, 1, 1, colorWhite, cls.consoleShader );
+	R_DrawStretchPic( 0, 0, width, height, 0, 0, 1, 1, kConsoleBackgroundColor, cls.whiteShader );
 
 	const int bottomLineHeight = 2 * pixelRatio;
 	SCR_DrawFillRect( 0, height - bottomLineHeight, width, bottomLineHeight, colorOrange );

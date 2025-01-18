@@ -1273,7 +1273,7 @@ void SCR_DrawClampString( int x, int y, const char *str, int xmin, int ymin, int
 	FTLIB_DrawClampString( x, y, str, xmin, ymin, xmax, ymax, font, color, flags );
 }
 
-int SCR_DrawString( int x, int y, int align, const char *str, qfontface_t *font, const vec4_t color, int flags ) {
+int SCR_DrawString( int x, int y, int align, const char *str, qfontface_t *font, const float *color, int flags ) {
 	if( !str ) {
 		return 0;
 	}
@@ -1293,6 +1293,22 @@ int SCR_DrawString( int x, int y, int align, const char *str, qfontface_t *font,
 	FTLIB_DrawRawString( x, y, str, 0, &width, font, color, flags );
 
 	return width;
+}
+
+int SCR_DrawString( int x, int y, int align, const wsw::StringView &str, qfontface_t *font, const float *color, int flags ) {
+	if( str.isZeroTerminated() ) {
+		return SCR_DrawString( x, y, align, str.data(), font, color, flags );
+	}
+	if( str.length() < 256 ) {
+		wsw::StaticString<256> ztStr;
+		ztStr << str;
+		return SCR_DrawString( x, y, align, ztStr.data(), font, color, flags );
+	}
+	static wsw::PodVector<char> ztStr;
+	ztStr.clear();
+	ztStr.append( str );
+	ztStr.append( '\0' );
+	return SCR_DrawString( x, y, align, ztStr.data(), font, color, flags );
 }
 
 void SCR_DrawFillRect( int x, int y, int w, int h, const vec4_t color ) {
@@ -1358,7 +1374,6 @@ void SCR_EndLoadingPlaque( void ) {
 
 void SCR_RegisterConsoleMedia() {
 	cls.whiteShader = R_RegisterPic( "$whiteimage" );
-	cls.consoleShader = R_RegisterPic( "gfx/ui/console" );
 
 	SCR_InitFonts();
 }
