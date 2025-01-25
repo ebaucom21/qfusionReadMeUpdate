@@ -340,6 +340,9 @@ auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::S
 	int totalLines = 2;
 	for( const ThreadProfilingResults &threadResults: groupState.threadResults ) {
 		totalLines += 1 + (int)threadResults.childStats.size();
+		if( threadResults.callStats.enterCount > 0 ) {
+			totalLines++;
+		}
 	}
 
 	SCR_DrawFillRect( startX, startY, (int)width, lineHeight * totalLines + 3 * margin, kConsoleBackgroundColor );
@@ -372,7 +375,7 @@ auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::S
 		}
 		realNameLimit = wsw::min( realNameLimit, maxNameLimit );
 
-		threadIndex++;
+		auto remaining = (int64_t)threadResults.callStats.totalTime;
 		for( const auto &[scopeId, callStats] : threadResults.childStats ) {
 			wsw::StaticString<64> childDesc, childStats;
 			childDesc << scopes[scopeId].readableFunction.take( realNameLimit );
@@ -381,7 +384,19 @@ auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::S
 
 			drawSideAlignedPair( childDesc.asView(), childStats.asView(), startX, y, width, margin, lineHeight, colorMdGrey );
 			y += lineHeight;
+
+			remaining -= (int64_t)callStats.totalTime;
 		}
+
+		if( threadResults.callStats.enterCount > 0 ) {
+			wsw::StaticString<64> otherStats;
+			(void)otherStats.appendf( "us=%-5d", (unsigned)wsw::max<int64_t>( 0, remaining ) );
+
+			drawSideAlignedPair( "Other"_asView, otherStats.asView(), startX, y, width, margin, lineHeight, colorDkGrey );
+			y += lineHeight;
+		}
+
+		threadIndex++;
 	}
 
 	return y - startY + margin;
