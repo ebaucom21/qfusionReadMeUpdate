@@ -377,8 +377,11 @@ auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::S
 
 		auto remaining = (int64_t)threadResults.callStats.totalTime;
 		for( const auto &[scopeId, callStats] : threadResults.childStats ) {
-			wsw::StaticString<64> childDesc, childStats;
+			wsw::StaticString<maxNameLimit + 16> childDesc;
+			(void)childDesc.appendf( "#%d ", scopeId );
 			childDesc << scopes[scopeId].readableFunction.take( realNameLimit );
+
+			wsw::StaticString<64> childStats;
 			(void)childStats.appendf( "count=%-4d", callStats.enterCount );
 			(void)childStats.appendf( " us=%-5d", (unsigned)callStats.totalTime );
 
