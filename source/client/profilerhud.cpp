@@ -443,8 +443,20 @@ void ProfilerHud::drawSelf( unsigned screenWidth, unsigned ) {
 	const int paneWidth = (int)screenWidth - paneX - margin;
 	int y               = margin;
 
-	SCR_DrawFillRect( paneX, y, (int)paneWidth, 5 * lineHeight + 3 * margin, kConsoleBackgroundColor );
+	SCR_DrawFillRect( paneX, y, (int)paneWidth, 8 * lineHeight + 5 * margin, kConsoleBackgroundColor );
 	y += margin;
+
+	drawHeader( "S U M M A R Y"_asView, paneX, y, paneWidth, margin, lineHeight );
+	y += lineHeight + margin;
+
+	wsw::StaticString<16> frametime, realFrameTime;
+	frametime << cls.frametime;
+	realFrameTime << cls.realFrameTime;
+
+	drawSideAlignedPair( "cls.frametime"_asView, frametime.asView(), paneX, y, paneWidth, margin, lineHeight, colorMdGrey );
+	y += lineHeight;
+	drawSideAlignedPair( "cls.realFrameTime"_asView, realFrameTime.asView(), paneX, y, paneWidth, margin, lineHeight, colorMdGrey );
+	y += lineHeight + margin;
 
 	drawHeader( "H E L P"_asView, paneX, y, paneWidth, margin, lineHeight );
 	y += lineHeight + margin;
