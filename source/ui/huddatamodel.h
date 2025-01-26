@@ -524,11 +524,11 @@ public:
 	Q_INVOKABLE QByteArray getIndicatorStatusString( int stringNum ) const;
 
 	[[nodiscard]]
-	auto getFrametimeDataRow() const -> QVariant { return QVariant::fromValue( m_frametimeDataRow.curr ); }
+	auto getFrametimeDataRow() const -> QVariant { return QVariant::fromValue( m_frametimeDataRow.row ); }
 	[[nodiscard]]
-	auto getPingDataRow() const -> QVariant { return QVariant::fromValue( m_pingDataRow.curr ); }
+	auto getPingDataRow() const -> QVariant { return QVariant::fromValue( m_pingDataRow.row ); }
 	[[nodiscard]]
-	auto getPacketlossDataRow() const -> QVariant { return QVariant::fromValue( m_packetlossDataRow.curr ); }
+	auto getPacketlossDataRow() const -> QVariant { return QVariant::fromValue( m_packetlossDataRow.row ); }
 
 	Q_SLOT void onHudUpdated( const QByteArray &name, HudLayoutModel::Flavor flavor );
 
@@ -606,7 +606,8 @@ private:
 	struct TrackedPerfDataRow {
 		int64_t peakMinTimestamp { 0 }, peakMaxTimestamp { 0 };
 		qreal peakMin { 0.0 }, peakMax { 0.0 };
-		PerfDataRow prev, curr;
+		PerfDataRow row;
+		QVector<qreal> prevSamples;
 		TrackedPerfDataRow();
 		[[nodiscard]]
 		bool update( int64_t timestamp, float valueToAdd );

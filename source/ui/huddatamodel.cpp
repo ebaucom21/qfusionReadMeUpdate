@@ -918,38 +918,47 @@ void HudCommonDataModel::addStatusMessage( unsigned playerNum, const wsw::String
 }
 
 HudCommonDataModel::TrackedPerfDataRow::TrackedPerfDataRow() {
-	curr.m_samples.fill( 0.0, 16 );
-	prev = curr;
+	row.m_samples.fill( 0.0, 16 );
+	prevSamples.fill( 0.0, 16 );
 }
 
 bool HudCommonDataModel::TrackedPerfDataRow::update( int64_t timestamp, float valueToAdd ) {
-	curr.m_samples.removeLast();
-	curr.m_samples.prepend( (qreal)valueToAdd );
+	row.m_samples.removeLast();
+	row.m_samples.prepend( (qreal)valueToAdd );
 
-	bool doUpdate             = false;
-	const int64_t peakTimeout = 333;
-	const bool minTimedOut    = peakMinTimestamp + peakTimeout <= timestamp;
-	const bool maxTimedOut    = peakMaxTimestamp + peakTimeout <= timestamp;
+	constexpr int64_t peakTimeout = 333;
+
+	const bool minTimedOut = peakMinTimestamp + peakTimeout <= timestamp;
+	const bool maxTimedOut = peakMaxTimestamp + peakTimeout <= timestamp;
+
+	bool recalculate                = false;
+	bool hasFoundMismatchingSamples = false;
 	if( minTimedOut || maxTimedOut ) {
-		doUpdate = true;
+		recalculate = true;
 	} else if( peakMin > valueToAdd || peakMax < valueToAdd ) {
-		doUpdate = true;
-	} else if( curr.m_samples != prev.m_samples ) {
-		doUpdate = true;
+		recalculate = true;
+	} else if( row.m_samples != prevSamples ) {
+		hasFoundMismatchingSamples = true;
+		recalculate                = true;
 	}
 
-	if( doUpdate ) {
+	if( recalculate ) {
 		qreal average  = 0.0;
 		qreal minValue = std::numeric_limits<qreal>::max();
 		qreal maxValue = std::numeric_limits<qreal>::lowest();
-		for( const qreal value: curr.m_samples ) {
+		for( const qreal value: row.m_samples ) {
 			minValue = wsw::min( minValue, value );
 			maxValue = wsw::max( maxValue, value );
 			average += value;
 		}
-		curr.m_actualMax = maxValue;
-		curr.m_actualMin = minValue;
-		curr.m_average   = average / (qreal)curr.m_samples.size();
+
+		const auto oldActualMax        = row.m_actualMax, oldActualMin = row.m_actualMin;
+		const auto oldDisplayedPeakMax = row.m_displayedPeakMax, oldDisplayedPeakMin = row.m_displayedPeakMin;
+		const auto oldAverage          = row.m_average;
+
+		row.m_actualMax = maxValue;
+		row.m_actualMin = minValue;
+		row.m_average   = average / (qreal)row.m_samples.size();
 		if( minTimedOut || peakMin > minValue ) {
 			peakMin          = minValue;
 			peakMinTimestamp = timestamp;
@@ -958,10 +967,20 @@ bool HudCommonDataModel::TrackedPerfDataRow::update( int64_t timestamp, float va
 			peakMax          = maxValue;
 			peakMaxTimestamp = timestamp;
 		}
-		curr.m_displayedPeakMin = peakMin;
-		curr.m_displayedPeakMax = peakMax;
-		prev = curr;
-		return true;
+
+		row.m_displayedPeakMin = peakMin;
+		row.m_displayedPeakMax = peakMax;
+
+		// Check whether there are actual updates.
+		// Otherwise, peak timeouts lead to redundant Qml updates even if nothing actually changes.
+		if( row.m_actualMax != oldActualMax || row.m_actualMin != oldActualMin ||
+			hasFoundMismatchingSamples || oldAverage != row.m_average ||
+			oldDisplayedPeakMax != row.m_displayedPeakMax || oldDisplayedPeakMin != row.m_displayedPeakMin ) {
+			// Save samples
+			prevSamples.clear();
+			prevSamples.append( row.m_samples );
+			return true;
+		}
 	}
 
 	return false;
