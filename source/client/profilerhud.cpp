@@ -46,10 +46,10 @@ public:
 		assert( m_activeResultGroup == std::nullopt );
 		m_mutex.lock();
 		m_activeResultGroup = group;
-		m_groupStates[group].discoveredRootScopes.clear();
-		m_groupStates[group].threadResults.clear();
-		// TODO: Resize only if needed
-		m_groupStates[group].threadResults.resize( totalThreads );
+		m_groupStates[group].threadProfilingResults.clear();
+		m_groupStates[group].threadRootDiscoveryResults.clear();
+		m_groupStates[group].threadProfilingResults.resize( totalThreads );
+		m_groupStates[group].threadRootDiscoveryResults.resize( totalThreads );
 	}
 
 	void endAcceptingResults( wsw::ProfilingSystem::FrameGroup group ) override {
@@ -59,18 +59,19 @@ public:
 
 	void addDiscoveredRoot( unsigned threadIndex, unsigned scopeId ) override {
 		GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
-		groupState.discoveredRootScopes.append( scopeId );
+		ThreadRootDiscoveryResults &results = groupState.threadRootDiscoveryResults.at( threadIndex );
+		results.discoveredScopes.append( scopeId );
 	}
 
 	void addCallStats( unsigned threadIndex, unsigned callScopeId, const CallStats &callStats ) override {
 		GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
-		ThreadProfilingResults &results = groupState.threadResults.at( threadIndex );
+		ThreadProfilingResults &results = groupState.threadProfilingResults.at( threadIndex );
 		results.callStats = callStats;
 	}
 
 	void addCallChildStats( unsigned threadIndex, unsigned childScopeId, const CallStats &callStats ) override {
 		GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
-		ThreadProfilingResults &results = groupState.threadResults.at( threadIndex );
+		ThreadProfilingResults &results = groupState.threadProfilingResults.at( threadIndex );
 		results.childStats.append( { childScopeId, callStats } );
 	}
 
@@ -102,6 +103,10 @@ private:
 
 	std::optional<wsw::ProfilingSystem::FrameGroup> m_activeResultGroup;
 
+	struct ThreadRootDiscoveryResults {
+		wsw::PodVector<unsigned> discoveredScopes;
+	};
+
 	struct ThreadProfilingResults {
 		CallStats callStats;
 		wsw::PodVector<std::pair<unsigned, CallStats>> childStats;
@@ -110,12 +115,12 @@ private:
 	struct GroupState {
 		enum OperationMode { NoOp, ListRoots, ProfileCall };
 
-		wsw::PodVector<unsigned> discoveredRootScopes;
 		std::optional<unsigned> selectedScope;
 
 		OperationMode operationMode { NoOp };
 
-		std::vector<ThreadProfilingResults> threadResults;
+		std::vector<ThreadProfilingResults> threadProfilingResults;
+		std::vector<ThreadRootDiscoveryResults> threadRootDiscoveryResults;
 	};
 
 	GroupState m_groupStates[2];
@@ -261,8 +266,8 @@ void ProfilerHud::reset() {
 void ProfilerHud::doReset() {
 	for( GroupState &groupState: m_groupStates ) {
 		groupState.operationMode = GroupState::NoOp;
-		groupState.threadResults.clear();
-		groupState.discoveredRootScopes.clear();
+		groupState.threadProfilingResults.clear();
+		groupState.threadRootDiscoveryResults.clear();
 		groupState.selectedScope = std::nullopt;
 	}
 }
@@ -314,7 +319,11 @@ auto ProfilerHud::drawDiscoveredRoots( const GroupState &groupState, const wsw::
 									   int startX, int startY, int width, int margin, int lineHeight ) -> int {
 	const std::span<const wsw::ProfilingSystem::RegisteredScope> &scopes = wsw::ProfilingSystem::getRegisteredScopes();
 
-	const int totalLines = 2 + (int)groupState.discoveredRootScopes.size();
+	int totalLines = 2;
+	for( const ThreadRootDiscoveryResults &threadResults: groupState.threadRootDiscoveryResults ) {
+		totalLines += 1 + (int)threadResults.discoveredScopes.size();
+	}
+
 	SCR_DrawFillRect( startX, startY, (int)width, lineHeight * totalLines + 3 * margin, kConsoleBackgroundColor );
 
 	int y = startY;
@@ -325,12 +334,24 @@ auto ProfilerHud::drawDiscoveredRoots( const GroupState &groupState, const wsw::
 	SCR_DrawString( startX + margin, y, ALIGN_LEFT_TOP, "Available profiling roots", nullptr, colorLtGrey );
 	y += lineHeight + margin;
 
-	for( const unsigned scopeId: groupState.discoveredRootScopes ) {
-		const wsw::StringView &fn = scopes[scopeId].readableFunction;
-		wsw::StaticString<16> idString;
-		idString << '#' << scopeId;
-		drawSideAlignedPair( fn, idString.asView(), startX, y, width, margin, lineHeight, colorMdGrey );
+	unsigned threadIndex = 0;
+	for( const ThreadRootDiscoveryResults &threadResults: groupState.threadRootDiscoveryResults ) {
+		wsw::StaticString<64> threadHeader, threadStats;
+		(void)threadHeader.appendf( "Thread #%-2d", threadIndex );
+		(void)threadStats.appendf( "%d", (unsigned)threadResults.discoveredScopes.size() );
+
+		drawSideAlignedPair( threadHeader.asView(), threadStats.asView(), startX, y, width, margin, lineHeight, colorLtGrey );
 		y += lineHeight;
+
+		for( const unsigned scopeId: threadResults.discoveredScopes ) {
+			const wsw::StringView &fn = scopes[scopeId].readableFunction;
+			wsw::StaticString<16> idString;
+			idString << '#' << scopeId;
+			drawSideAlignedPair( fn, idString.asView(), startX, y, width, margin, lineHeight, colorMdGrey );
+			y += lineHeight;
+		}
+
+		threadIndex++;
 	}
 
 	return y - startY + margin;
@@ -341,7 +362,7 @@ auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::S
 	const std::span<const wsw::ProfilingSystem::RegisteredScope> &scopes = wsw::ProfilingSystem::getRegisteredScopes();
 
 	int totalLines = 2;
-	for( const ThreadProfilingResults &threadResults: groupState.threadResults ) {
+	for( const ThreadProfilingResults &threadResults: groupState.threadProfilingResults ) {
 		totalLines += 1 + (int)threadResults.childStats.size();
 		if( threadResults.callStats.enterCount > 0 ) {
 			totalLines++;
@@ -363,7 +384,7 @@ auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::S
 	y += lineHeight + margin;
 
 	unsigned threadIndex = 0;
-	for( const ThreadProfilingResults &threadResults: groupState.threadResults ) {
+	for( const ThreadProfilingResults &threadResults: groupState.threadProfilingResults ) {
 		wsw::StaticString<64> threadHeader, threadStats;
 		(void)threadHeader.appendf( "Thread #%-2d", threadIndex );
 		(void)threadStats.appendf( "count=%-4d", threadResults.callStats.enterCount );
