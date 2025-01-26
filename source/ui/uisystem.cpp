@@ -74,6 +74,9 @@ QVariant VID_GetMainContextHandle();
 bool GLimp_BeginUIRenderingHacks();
 bool GLimp_EndUIRenderingHacks();
 
+extern BoolConfigVar v_showFps;
+extern BoolConfigVar v_showNet;
+
 static FloatConfigVar v_mouseSensitivity { "ui_mouseSensitivity"_asView, {
 	.byDefault = 1.0f, .min = inclusive( 0.5f ), .max = inclusive( 5.0f ), .flags = CVAR_ARCHIVE, }
 };
@@ -2678,15 +2681,24 @@ void QtUISystem::addStatusMessage( unsigned playerNum, const wsw::StringView &me
 }
 
 void QtUISystem::addToFrametimeTimeline( int64_t timestamp, float frametime ) {
-	m_hudCommonDataModel.addToFrametimeTimeline( timestamp, frametime );
+	if( v_showFps.get() ) {
+		WSW_PROFILER_SCOPE();
+		m_hudCommonDataModel.addToFrametimeTimeline( timestamp, frametime );
+	}
 }
 
 void QtUISystem::addToPingTimeline( int64_t timestamp, float ping ) {
-	m_hudCommonDataModel.addToPingTimeline( timestamp, ping );
+	if( v_showNet.get() ) {
+		WSW_PROFILER_SCOPE();
+		m_hudCommonDataModel.addToPingTimeline( timestamp, ping );
+	}
 };
 
 void QtUISystem::addToPacketlossTimeline( int64_t timestamp, bool hadPacketloss ) {
-	m_hudCommonDataModel.addToPacketlossTimeline( timestamp, hadPacketloss );
+	if( v_showNet.get() ) {
+		WSW_PROFILER_SCOPE();
+		m_hudCommonDataModel.addToPacketlossTimeline( timestamp, hadPacketloss );
+	}
 }
 
 static const QString kConnectionFailedTitle( "Connection failed" );
