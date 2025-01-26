@@ -162,7 +162,7 @@ void CL_ProfilerHud_Init() {
 		if( std::optional<wsw::ProfilingSystem::FrameGroup> maybeGroup = parseProfilerGroup( args[1] ) ) {
 			g_profilerHudHolder.instance()->listRoots( *maybeGroup );
 		} else {
-			clNotice() << "Usage: pf_listroots <client|server>";
+			clNotice() << "Usage: pf_listroots <cl|sv>";
 		}
 	});
 	CL_Cmd_Register( "pf_select"_asView, []( const CmdArgs &args ) {
@@ -175,7 +175,7 @@ void CL_ProfilerHud_Init() {
 			}
 		}
 		if( !handled ) {
-			clNotice() << "Usage: pf_select <client|server> #<scope-number>";
+			clNotice() << "Usage: pf_select <cl|sv> <id>";
 		}
 	});
 	CL_Cmd_Register( "pf_listscopes"_asView, []( const CmdArgs &args ) {
@@ -258,11 +258,7 @@ void ProfilerHud::listRoots( wsw::ProfilingSystem::FrameGroup group ) {
 bool ProfilerHud::select( wsw::ProfilingSystem::FrameGroup group, const wsw::StringView &token ) {
 	assert( group == 0 || group == 1 );
 
-	if( !token.startsWith( '#' ) ) {
-		return false;
-	}
-
-	const std::optional<size_t> maybeNumber = wsw::toNum<size_t>( token.drop( 1 ) );
+	const std::optional<size_t> maybeNumber = wsw::toNum<size_t>( token );
 	if( !maybeNumber ) {
 		return false;
 	}
@@ -314,7 +310,15 @@ void ProfilerHud::listScopes() {
 	const std::span<const wsw::ProfilingSystem::RegisteredScope> scopes = wsw::ProfilingSystem::getRegisteredScopes();
 	for( size_t i = 0; i < scopes.size(); ++i ) {
 		const auto &scope = scopes[i];
-		clNotice() << '#' << i << scope.file << scope.readableFunction << scope.line;
+		wsw::StaticString<48> fileString;
+		wsw::StaticString<16> idString;
+		// TODO: Allow getting rid of string quotes in the output
+		idString << '@' << i;
+		idString.resize( 4, ' ' );
+		fileString << scope.file.take( fileString.capacity() - 8 );
+		fileString << ':' << scope.line;
+		fileString.resize( fileString.capacity(), '_' );
+		clNotice() << idString << fileString << scope.readableFunction;
 	}
 }
 
@@ -383,7 +387,7 @@ auto ProfilerHud::drawDiscoveredRoots( const GroupState &groupState, const wsw::
 		for( const unsigned scopeId: threadResults.discoveredScopes ) {
 			const wsw::StringView &fn = scopes[scopeId].readableFunction;
 			wsw::StaticString<16> idString;
-			idString << '#' << scopeId;
+			idString << '@' << scopeId;
 			drawSideAlignedPair( fn, idString.asView(), startX, y, width, margin, lineHeight, colorMdGrey );
 			y += lineHeight;
 		}
@@ -439,7 +443,7 @@ auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::S
 		auto remaining = (int64_t)threadResults.callStats.totalTime;
 		for( const auto &[scopeId, callStats] : threadResults.childStats ) {
 			wsw::StaticString<maxNameLimit + 16> childDesc;
-			(void)childDesc.appendf( "#%d ", scopeId );
+			(void)childDesc.appendf( "@%d ", scopeId );
 			childDesc << scopes[scopeId].readableFunction.take( realNameLimit );
 
 			wsw::StaticString<64> childStats;
@@ -501,7 +505,7 @@ void ProfilerHud::drawSelf( unsigned screenWidth, unsigned ) {
 	const std::pair<const char *, const char *> cmdDescs[] {
 		{ "pf_listscopes", "Print available profiling scopes to the console" },
 		{ "pf_listroots <cl|sv>", "Discover available call tree roots" },
-		{ "pf_select <cl|sv> #<id>", "Select a scope for detailed profiling" },
+		{ "pf_select <cl|sv> <id>", "Select a scope for detailed profiling" },
 		{ "pf_freeze", "Toggle the frozen state" },
 		{ "pf_reset", "Reset everything to the idle state" },
 	};
