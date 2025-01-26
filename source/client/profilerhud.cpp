@@ -45,34 +45,44 @@ public:
 	void beginAcceptingResults( wsw::ProfilingSystem::FrameGroup group, unsigned totalThreads ) override {
 		assert( m_activeResultGroup == std::nullopt );
 		m_mutex.lock();
-		m_activeResultGroup = group;
-		m_groupStates[group].threadProfilingResults.clear();
-		m_groupStates[group].threadRootDiscoveryResults.clear();
-		m_groupStates[group].threadProfilingResults.resize( totalThreads );
-		m_groupStates[group].threadRootDiscoveryResults.resize( totalThreads );
+		if( !m_isFrozen ) {
+			m_activeResultGroup = group;
+			m_groupStates[group].threadProfilingResults.clear();
+			m_groupStates[group].threadRootDiscoveryResults.clear();
+			m_groupStates[group].threadProfilingResults.resize( totalThreads );
+			m_groupStates[group].threadRootDiscoveryResults.resize( totalThreads );
+		}
 	}
 
 	void endAcceptingResults( wsw::ProfilingSystem::FrameGroup group ) override {
-		m_activeResultGroup = std::nullopt;
+		if( !m_isFrozen ) {
+			m_activeResultGroup = std::nullopt;
+		}
 		m_mutex.unlock();
 	}
 
 	void addDiscoveredRoot( unsigned threadIndex, unsigned scopeId ) override {
-		GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
-		ThreadRootDiscoveryResults &results = groupState.threadRootDiscoveryResults.at( threadIndex );
-		results.discoveredScopes.append( scopeId );
+		if( !m_isFrozen ) {
+			GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
+			auto &results          = groupState.threadRootDiscoveryResults.at( threadIndex );
+			results.discoveredScopes.append( scopeId );
+		}
 	}
 
 	void addCallStats( unsigned threadIndex, unsigned callScopeId, const CallStats &callStats ) override {
-		GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
-		ThreadProfilingResults &results = groupState.threadProfilingResults.at( threadIndex );
-		results.callStats = callStats;
+		if( !m_isFrozen ) {
+			GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
+			auto &results          = groupState.threadProfilingResults.at( threadIndex );
+			results.callStats      = callStats;
+		}
 	}
 
 	void addCallChildStats( unsigned threadIndex, unsigned childScopeId, const CallStats &callStats ) override {
-		GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
-		ThreadProfilingResults &results = groupState.threadProfilingResults.at( threadIndex );
-		results.childStats.append( { childScopeId, callStats } );
+		if( !m_isFrozen ) {
+			GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
+			auto &results          = groupState.threadProfilingResults.at( threadIndex );
+			results.childStats.append( { childScopeId, callStats } );
+		}
 	}
 
 	void drawSelf( unsigned screenWidth, unsigned screenHeight );
@@ -87,6 +97,8 @@ public:
 	void setEnabled( bool enabled );
 
 	void listScopes();
+
+	void toggleFrozenState();
 private:
 	void doReset();
 
@@ -124,7 +136,12 @@ private:
 	};
 
 	GroupState m_groupStates[2];
+
+	int m_frozenFrameTime { 0 };
+	int m_frozenRealFrameTime { 0 };
+
 	bool m_isEnabled { false };
+	bool m_isFrozen { false };
 };
 
 static SingletonHolder<ProfilerHud> g_profilerHudHolder;
@@ -174,6 +191,9 @@ void CL_ProfilerHud_Init() {
 			clNotice() << "Usage: pf_enable <1|0>";
 		}
 	});
+	CL_Cmd_Register( "pf_freeze"_asView, []( const CmdArgs &args ) {
+		g_profilerHudHolder.instance()->toggleFrozenState();
+	});
 	g_profilerHudHolder.init();
 }
 
@@ -183,6 +203,7 @@ void CL_ProfilerHud_Shutdown() {
 	CL_Cmd_Unregister( "pf_listscopes"_asView );
 	CL_Cmd_Unregister( "pf_reset"_asView );
 	CL_Cmd_Unregister( "pf_enable"_asView );
+	CL_Cmd_Unregister( "pf_freeze"_asView );
 	g_profilerHudHolder.shutdown();
 }
 
@@ -203,7 +224,7 @@ auto ProfilerHud::getArgs( wsw::ProfilingSystem::FrameGroup group ) -> wsw::Prof
 	assert( group == 0 || group == 1 );
 	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
-	if( m_isEnabled ) {
+	if( m_isEnabled && !m_isFrozen ) {
 		const GroupState &groupState = m_groupStates[group];
 		switch( groupState.operationMode ) {
 			case GroupState::NoOp: {
@@ -225,10 +246,13 @@ auto ProfilerHud::getArgs( wsw::ProfilingSystem::FrameGroup group ) -> wsw::Prof
 }
 
 void ProfilerHud::listRoots( wsw::ProfilingSystem::FrameGroup group ) {
+	assert( group == 0 || group == 1 );
+
 	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
-	assert( group == 0 || group == 1 );
 	m_groupStates[group].operationMode = GroupState::ListRoots;
+
+	m_isFrozen = false;
 }
 
 bool ProfilerHud::select( wsw::ProfilingSystem::FrameGroup group, const wsw::StringView &token ) {
@@ -254,6 +278,8 @@ bool ProfilerHud::select( wsw::ProfilingSystem::FrameGroup group, const wsw::Str
 	groupState.operationMode = GroupState::ProfileCall;
 	groupState.selectedScope = *maybeNumber;
 
+	m_isFrozen = false;
+
 	return true;
 }
 
@@ -270,6 +296,8 @@ void ProfilerHud::doReset() {
 		groupState.threadRootDiscoveryResults.clear();
 		groupState.selectedScope = std::nullopt;
 	}
+
+	m_isFrozen = false;
 }
 
 void ProfilerHud::setEnabled( bool enabled ) {
@@ -287,6 +315,15 @@ void ProfilerHud::listScopes() {
 	for( size_t i = 0; i < scopes.size(); ++i ) {
 		const auto &scope = scopes[i];
 		clNotice() << '#' << i << scope.file << scope.readableFunction << scope.line;
+	}
+}
+
+void ProfilerHud::toggleFrozenState() {
+	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
+	m_isFrozen = !m_isFrozen;
+	if( m_isFrozen ) {
+		m_frozenFrameTime     = cls.frametime;
+		m_frozenRealFrameTime = cls.realFrameTime;
 	}
 }
 
@@ -443,15 +480,15 @@ void ProfilerHud::drawSelf( unsigned screenWidth, unsigned ) {
 	const int paneWidth = (int)screenWidth - paneX - margin;
 	int y               = margin;
 
-	SCR_DrawFillRect( paneX, y, (int)paneWidth, 8 * lineHeight + 5 * margin, kConsoleBackgroundColor );
+	SCR_DrawFillRect( paneX, y, (int)paneWidth, 9 * lineHeight + 5 * margin, kConsoleBackgroundColor );
 	y += margin;
 
-	drawHeader( "S U M M A R Y"_asView, paneX, y, paneWidth, margin, lineHeight );
+	drawHeader( m_isFrozen ? "S U M M A R Y [*]"_asView : "S U M M A R Y"_asView, paneX, y, paneWidth, margin, lineHeight );
 	y += lineHeight + margin;
 
 	wsw::StaticString<16> frametime, realFrameTime;
-	frametime << cls.frametime;
-	realFrameTime << cls.realFrameTime;
+	frametime     << ( m_isFrozen ? m_frozenFrameTime : cls.frametime );
+	realFrameTime << ( m_isFrozen ? m_frozenRealFrameTime : cls.realFrameTime );
 
 	drawSideAlignedPair( "cls.frametime"_asView, frametime.asView(), paneX, y, paneWidth, margin, lineHeight, colorMdGrey );
 	y += lineHeight;
@@ -465,6 +502,7 @@ void ProfilerHud::drawSelf( unsigned screenWidth, unsigned ) {
 		{ "pf_listscopes", "Print available profiling scopes to the console" },
 		{ "pf_listroots <cl|sv>", "Discover available call tree roots" },
 		{ "pf_select <cl|sv> #<id>", "Select a scope for detailed profiling" },
+		{ "pf_freeze", "Toggle the frozen state" },
 		{ "pf_reset", "Reset everything to the idle state" },
 	};
 
@@ -474,7 +512,9 @@ void ProfilerHud::drawSelf( unsigned screenWidth, unsigned ) {
 	}
 	y += margin;
 
-	const wsw::StringView groupTitles[2] { "C L I E N T"_asView, "S E R V E R"_asView };
+	const wsw::StringView regularGroupTitles[2] { "C L I E N T"_asView, "S E R V E R"_asView };
+	const wsw::StringView frozenGroupTitles[2] { "C L I E N T [*]"_asView, "S E R V E R [*]"_asView };
+	const wsw::StringView *groupTitles = m_isFrozen ? frozenGroupTitles : regularGroupTitles;
 
 	for( size_t groupIndex = 0; groupIndex < std::size( m_groupStates ); ++groupIndex ) {
 		const GroupState &groupState = m_groupStates[groupIndex];
