@@ -932,14 +932,16 @@ bool HudCommonDataModel::TrackedPerfDataRow::update( int64_t timestamp, float va
 	const bool maxTimedOut = peakMaxTimestamp + peakTimeout <= timestamp;
 
 	bool recalculate                = false;
+	bool hasTestedSamplesMatch      = false;
 	bool hasFoundMismatchingSamples = false;
-	if( minTimedOut || maxTimedOut ) {
+	if( minTimedOut || maxTimedOut || peakMin > valueToAdd || peakMax < valueToAdd ) {
 		recalculate = true;
-	} else if( peakMin > valueToAdd || peakMax < valueToAdd ) {
-		recalculate = true;
-	} else if( row.m_samples != prevSamples ) {
-		hasFoundMismatchingSamples = true;
-		recalculate                = true;
+	} else {
+		hasTestedSamplesMatch = true;
+		if( row.m_samples != prevSamples ) {
+			hasFoundMismatchingSamples = true;
+			recalculate                = true;
+		}
 	}
 
 	if( recalculate ) {
@@ -973,9 +975,9 @@ bool HudCommonDataModel::TrackedPerfDataRow::update( int64_t timestamp, float va
 
 		// Check whether there are actual updates.
 		// Otherwise, peak timeouts lead to redundant Qml updates even if nothing actually changes.
-		if( row.m_actualMax != oldActualMax || row.m_actualMin != oldActualMin ||
-			hasFoundMismatchingSamples || oldAverage != row.m_average ||
-			oldDisplayedPeakMax != row.m_displayedPeakMax || oldDisplayedPeakMin != row.m_displayedPeakMin ) {
+		if( row.m_actualMax != oldActualMax || row.m_actualMin != oldActualMin || oldAverage != row.m_average ||
+			oldDisplayedPeakMax != row.m_displayedPeakMax || oldDisplayedPeakMin != row.m_displayedPeakMin ||
+			hasFoundMismatchingSamples || ( !hasTestedSamplesMatch && row.m_samples != prevSamples ) ) {
 			// Save samples
 			prevSamples.clear();
 			prevSamples.append( row.m_samples );
