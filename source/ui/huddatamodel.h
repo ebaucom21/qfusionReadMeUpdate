@@ -241,22 +241,41 @@ public:
 	bool operator!=( const ObjectiveIndicatorState &that ) const { return m_underlying != that.m_underlying; }
 };
 
-struct PerfDataRow {
-	Q_GADGET
+class PerfDataRowModel : public QObject {
+	Q_OBJECT
 public:
+	PerfDataRowModel();
+
+	Q_SIGNAL void displayedPeakMinChanged( qreal peakMin );
+	Q_PROPERTY( qreal displayedPeakMin MEMBER m_displayedPeakMin NOTIFY displayedPeakMinChanged );
+
+	Q_SIGNAL void displayedPeakMaxChanged( qreal peakMax );
+	Q_PROPERTY( qreal displayedPeakMax MEMBER m_displayedPeakMax NOTIFY displayedPeakMaxChanged );
+
+	Q_SIGNAL void averageChanged( qreal average );
+	Q_PROPERTY( qreal average MEMBER m_average NOTIFY averageChanged );
+
+	Q_SIGNAL void sampleDataChanged();
+
+	// All these properties are not notifiable and are expected to be read once
+	// in a sampleDataChanged() handler to avoid excessive individual updates.
 	Q_PROPERTY( qreal actualMin MEMBER m_actualMin );
 	Q_PROPERTY( qreal actualMax MEMBER m_actualMax );
-	Q_PROPERTY( qreal displayedPeakMin MEMBER m_displayedPeakMin );
-	Q_PROPERTY( qreal displayedPeakMax MEMBER m_displayedPeakMax );
-	Q_PROPERTY( qreal average MEMBER m_average );
-	Q_PROPERTY( QVector<qreal> samples MEMBER m_samples );
 
+	Q_INVOKABLE int getSampleCount() { return m_samples.size(); }
+	Q_INVOKABLE qreal sampleAt( int index ) { return m_samples[index]; }
+
+	void update( int64_t timestamp, float valueToAdd );
+private:
 	qreal m_actualMin { 0.0 };
 	qreal m_actualMax { 0.0 };
 	qreal m_displayedPeakMin { 0.0 };
 	qreal m_displayedPeakMax { 0.0 };
 	qreal m_average { 0.0 };
 	QVector<qreal> m_samples;
+
+	int64_t m_peakMinTimestamp { 0 }, m_peakMaxTimestamp { 0 };
+	QVector<qreal> m_prevSamples;
 };
 
 // Just an namespace for the enum
@@ -427,13 +446,6 @@ public:
 	Q_SIGNAL void indicator3StateChanged( const QVariant &indicator3State );
 	Q_PROPERTY( QVariant indicator3State READ getIndicator3State NOTIFY indicator3StateChanged );
 
-	Q_SIGNAL void frametimeDataRowChanged( const QVariant &frametimeDataRow );
-	Q_PROPERTY( QVariant frametimeDataRow READ getFrametimeDataRow NOTIFY frametimeDataRowChanged );
-	Q_SIGNAL void pingDataRowChanged( const QVariant &pingDataRow );
-	Q_PROPERTY( QVariant pingDataRow READ getPingDataRow NOTIFY pingDataRowChanged );
-	Q_SIGNAL void packetlossDataRowChanged( const QVariant &packetlossDataRow );
-	Q_PROPERTY( QVariant packetlossDataRow READ getPacketlossDataRow NOTIFY packetlossDataRowChanged );
-
 	Q_SIGNAL void hasTwoTeamsChanged( bool hasTwoTeams );
 	Q_PROPERTY( bool hasTwoTeams MEMBER m_hasTwoTeams NOTIFY hasTwoTeamsChanged );
 
@@ -524,11 +536,11 @@ public:
 	Q_INVOKABLE QByteArray getIndicatorStatusString( int stringNum ) const;
 
 	[[nodiscard]]
-	auto getFrametimeDataRow() const -> QVariant { return QVariant::fromValue( m_frametimeDataRow.row ); }
+	Q_INVOKABLE QObject *getFrametimeDataRowModel();
 	[[nodiscard]]
-	auto getPingDataRow() const -> QVariant { return QVariant::fromValue( m_pingDataRow.row ); }
+	Q_INVOKABLE QObject *getPingDataRowModel();
 	[[nodiscard]]
-	auto getPacketlossDataRow() const -> QVariant { return QVariant::fromValue( m_packetlossDataRow.row ); }
+	Q_INVOKABLE QObject *getPacketlossDataRowModel();
 
 	Q_SLOT void onHudUpdated( const QByteArray &name, HudLayoutModel::Flavor flavor );
 
@@ -602,20 +614,12 @@ private:
 
 	ObjectiveIndicatorState m_indicatorStates[3];
 
-	// Acutually, this is not only for tracking, but should help to reuse objects and reduce allocations
-	struct TrackedPerfDataRow {
-		int64_t peakMinTimestamp { 0 }, peakMaxTimestamp { 0 };
-		qreal peakMin { 0.0 }, peakMax { 0.0 };
-		PerfDataRow row;
-		QVector<qreal> prevSamples;
-		TrackedPerfDataRow();
-		[[nodiscard]]
-		bool update( int64_t timestamp, float valueToAdd );
-	};
-
-	TrackedPerfDataRow m_frametimeDataRow;
-	TrackedPerfDataRow m_pingDataRow;
-	TrackedPerfDataRow m_packetlossDataRow;
+	PerfDataRowModel m_frametimeDataRowModel;
+	PerfDataRowModel m_pingDataRowModel;
+	PerfDataRowModel m_packetlossDataRowModel;
+	bool m_hasSetFrametimeModelOwnership { false };
+	bool m_hasSetPingModelOwnership { false };
+	bool m_hasSetPacketlossModelOwnership { false };
 
 	int m_rawAlphaColor { 0 }, m_rawBetaColor { 0 };
 	QColor m_alphaColor { toQColor( m_rawAlphaColor ) };

@@ -744,6 +744,27 @@ auto HudCommonDataModel::getIndicatorStatusString( int stringNum ) const -> QByt
 	return QByteArray();
 }
 
+auto HudCommonDataModel::getFrametimeDataRowModel() -> QObject * {
+	if( !m_hasSetFrametimeModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_frametimeDataRowModel, QQmlEngine::CppOwnership );
+	}
+	return &m_frametimeDataRowModel;
+}
+
+auto HudCommonDataModel::getPingDataRowModel() -> QObject * {
+	if( !m_hasSetPingModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_pingDataRowModel, QQmlEngine::CppOwnership );
+	}
+	return &m_pingDataRowModel;
+}
+
+auto HudCommonDataModel::getPacketlossDataRowModel() -> QObject * {
+	if( !m_hasSetPacketlossModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_packetlossDataRowModel, QQmlEngine::CppOwnership );
+	}
+	return &m_packetlossDataRowModel;
+}
+
 // TODO: Don't even box, use QByteArray wrapping facilities?
 static const QByteArray kWarmup( "WARMUP" );
 static const QByteArray kCountdown( "COUNTDOWN" );
@@ -917,28 +938,28 @@ void HudCommonDataModel::addStatusMessage( unsigned playerNum, const wsw::String
 	}
 }
 
-HudCommonDataModel::TrackedPerfDataRow::TrackedPerfDataRow() {
-	row.m_samples.fill( 0.0, 16 );
-	prevSamples.fill( 0.0, 16 );
+PerfDataRowModel::PerfDataRowModel() {
+	m_samples.fill( 0.0, 12 );
+	m_prevSamples.fill( 0.0, 12 );
 }
 
-bool HudCommonDataModel::TrackedPerfDataRow::update( int64_t timestamp, float valueToAdd ) {
-	row.m_samples.removeLast();
-	row.m_samples.prepend( (qreal)valueToAdd );
+void PerfDataRowModel::update( int64_t timestamp, float valueToAdd ) {
+	m_samples.removeLast();
+	m_samples.prepend( (qreal)valueToAdd );
 
 	constexpr int64_t peakTimeout = 333;
 
-	const bool minTimedOut = peakMinTimestamp + peakTimeout <= timestamp;
-	const bool maxTimedOut = peakMaxTimestamp + peakTimeout <= timestamp;
+	const bool minTimedOut = m_peakMinTimestamp + peakTimeout <= timestamp;
+	const bool maxTimedOut = m_peakMaxTimestamp + peakTimeout <= timestamp;
 
 	bool recalculate                = false;
 	bool hasTestedSamplesMatch      = false;
 	bool hasFoundMismatchingSamples = false;
-	if( minTimedOut || maxTimedOut || peakMin > valueToAdd || peakMax < valueToAdd ) {
+	if( minTimedOut || maxTimedOut || m_displayedPeakMin > valueToAdd || m_displayedPeakMax < valueToAdd ) {
 		recalculate = true;
 	} else {
 		hasTestedSamplesMatch = true;
-		if( row.m_samples != prevSamples ) {
+		if( m_samples != m_prevSamples ) {
 			hasFoundMismatchingSamples = true;
 			recalculate                = true;
 		}
@@ -948,62 +969,61 @@ bool HudCommonDataModel::TrackedPerfDataRow::update( int64_t timestamp, float va
 		qreal average  = 0.0;
 		qreal minValue = std::numeric_limits<qreal>::max();
 		qreal maxValue = std::numeric_limits<qreal>::lowest();
-		for( const qreal value: row.m_samples ) {
+		for( const qreal value: m_samples ) {
 			minValue = wsw::min( minValue, value );
 			maxValue = wsw::max( maxValue, value );
 			average += value;
 		}
 
-		const auto oldActualMax        = row.m_actualMax, oldActualMin = row.m_actualMin;
-		const auto oldDisplayedPeakMax = row.m_displayedPeakMax, oldDisplayedPeakMin = row.m_displayedPeakMin;
-		const auto oldAverage          = row.m_average;
+		const auto oldActualMax        = m_actualMax, oldActualMin = m_actualMin;
+		const auto oldDisplayedPeakMax = m_displayedPeakMax, oldDisplayedPeakMin = m_displayedPeakMin;
+		const auto oldAverage          = m_average;
 
-		row.m_actualMax = maxValue;
-		row.m_actualMin = minValue;
-		row.m_average   = average / (qreal)row.m_samples.size();
-		if( minTimedOut || peakMin > minValue ) {
-			peakMin          = minValue;
-			peakMinTimestamp = timestamp;
-		}
-		if( maxTimedOut || peakMax < maxValue ) {
-			peakMax          = maxValue;
-			peakMaxTimestamp = timestamp;
+		m_actualMax = maxValue;
+		m_actualMin = minValue;
+
+		m_average = average / (qreal)m_samples.size();
+		if( m_average != oldAverage ) {
+			Q_EMIT averageChanged( m_average );
 		}
 
-		row.m_displayedPeakMin = peakMin;
-		row.m_displayedPeakMax = peakMax;
+		if( minTimedOut || m_displayedPeakMin > minValue ) {
+			m_displayedPeakMin = minValue;
+			m_peakMinTimestamp = timestamp;
+			if( m_displayedPeakMin != oldDisplayedPeakMin ) {
+				Q_EMIT displayedPeakMinChanged( m_displayedPeakMin );
+			}
+		}
+		if( maxTimedOut || m_displayedPeakMax < maxValue ) {
+			m_displayedPeakMax = maxValue;
+			m_peakMaxTimestamp = timestamp;
+			if( m_displayedPeakMax != oldDisplayedPeakMax ) {
+				Q_EMIT displayedPeakMaxChanged( m_displayedPeakMax );
+			}
+		}
 
 		// Check whether there are actual updates.
 		// Otherwise, peak timeouts lead to redundant Qml updates even if nothing actually changes.
-		if( row.m_actualMax != oldActualMax || row.m_actualMin != oldActualMin || oldAverage != row.m_average ||
-			oldDisplayedPeakMax != row.m_displayedPeakMax || oldDisplayedPeakMin != row.m_displayedPeakMin ||
-			hasFoundMismatchingSamples || ( !hasTestedSamplesMatch && row.m_samples != prevSamples ) ) {
+		if( m_actualMax != oldActualMax || m_actualMin != oldActualMin || hasFoundMismatchingSamples ||
+			( !hasTestedSamplesMatch && m_samples != m_prevSamples ) ) {
 			// Save samples
-			prevSamples.clear();
-			prevSamples.append( row.m_samples );
-			return true;
+			m_prevSamples.clear();
+			m_prevSamples.append( m_samples );
+			Q_EMIT sampleDataChanged();
 		}
 	}
-
-	return false;
 }
 
 void HudCommonDataModel::addToFrametimeTimeline( int64_t timestamp, float frametime ) {
-	if( m_frametimeDataRow.update( timestamp, frametime ) ) {
-		Q_EMIT frametimeDataRowChanged( getFrametimeDataRow() );
-	}
+	m_frametimeDataRowModel.update( timestamp, frametime );
 }
 
 void HudCommonDataModel::addToPingTimeline( int64_t timestamp, float ping ) {
-	if( m_pingDataRow.update( timestamp, ping ) ) {
-		Q_EMIT pingDataRowChanged( getPingDataRow() );
-	}
+	m_pingDataRowModel.update( timestamp, ping );
 }
 
 void HudCommonDataModel::addToPacketlossTimeline( int64_t timestamp, bool hadPacketloss ) {
-	if( m_packetlossDataRow.update( timestamp, hadPacketloss ? 1.0f : 0.0f ) ) {
-		Q_EMIT packetlossDataRowChanged( getPacketlossDataRow() );
-	}
+	m_packetlossDataRowModel.update( timestamp, hadPacketloss ? 1.0f : 0.0f );
 }
 
 // TODO: Should it be shared for regular/miniview models?

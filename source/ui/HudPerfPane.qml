@@ -42,12 +42,12 @@ Item {
             Layout.fillHeight: true
             title: "FPS"
             altTitle: "FRME<br>TIME"
-            primaryValueText: Math.round(1000 / Hud.commonDataModel.frametimeDataRow.average)
+            primaryValueText: Math.round(1000 / rowDataModel.average)
             fixedVisualMin: 0.0
             maxVisualFrac: showNet ? 0.9 : 1.0
             useFixedLevelIfSteady: true
             displayLowerBar: true
-            rowData: Hud.commonDataModel.frametimeDataRow
+            rowDataModel: Hud.commonDataModel.getFrametimeDataRowModel()
             strokeColor: Hud.ui.colorWithAlpha("white", 0.7)
             valueFormatter: v => '' + Math.round(v)
         }
@@ -56,18 +56,18 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             title: "PING"
-            primaryValueText: Math.round(Hud.commonDataModel.pingDataRow.average)
+            primaryValueText: Math.round(rowDataModel.average)
             fixedVisualMin: 0.0
             useFixedLevelIfSteady: true
             steadyVisualFrac: 0.75
-            rowData: Hud.commonDataModel.pingDataRow
+            rowDataModel: Hud.commonDataModel.getPingDataRowModel()
             strokeColor: Hud.ui.colorWithAlpha("white", 0.7)
             HudPerfRow {
                 anchors.fill: parent
                 fixedVisualMin: 0.0
                 fixedVisualMax: 1.0
                 altTitle: "<font color=\"red\">PCKT<br>LOSS</font>"
-                rowData: Hud.commonDataModel.packetlossDataRow
+                rowDataModel: Hud.commonDataModel.getPacketlossDataRowModel()
                 valueFormatter: v => ''
                 strokeColor: Hud.ui.colorWithAlpha("orangered", 0.7)
             }

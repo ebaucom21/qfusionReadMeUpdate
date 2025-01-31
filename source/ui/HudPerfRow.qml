@@ -12,7 +12,7 @@ Item {
     property alias primaryValueText: primaryValueLabel.text
     property alias strokeColor: path.strokeColor
 
-    property var rowData
+    property var rowDataModel
     property var fixedVisualMin: undefined
     property var fixedVisualMax: undefined
     property real minVisualFrac: 0.0
@@ -26,7 +26,11 @@ Item {
 
     property var valueFormatter: (v) => '' + v
 
-    onRowDataChanged: updateYValues()
+    Connections {
+        target: rowDataModel
+        onSampleDataChanged: updateYValues()
+    }
+
     onFixedVisualMinChanged: updateYValues()
     onFixedVisualMaxChanged: updateYValues()
     onUseFixedLevelIfSteadyChanged: updateYValues()
@@ -77,7 +81,7 @@ Item {
         anchors.right: altTitleLabel.left
         anchors.bottom: parent.verticalCenter
         horizontalAlignment: Qt.AlignHCenter
-        text: valueFormatter(rowData.displayedPeakMax)
+        text: valueFormatter(rowDataModel.displayedPeakMax)
         font.weight: Font.Bold
         font.family: Hud.ui.numbersFontFamily
         font.pointSize: 12
@@ -87,7 +91,7 @@ Item {
         anchors.right: altTitleLabel.left
         anchors.top: parent.verticalCenter
         horizontalAlignment: Qt.AlignHCenter
-        text: valueFormatter(rowData.displayedPeakMin)
+        text: valueFormatter(rowDataModel.displayedPeakMin)
         font.weight: Font.Bold
         font.family: Hud.ui.numbersFontFamily
         font.pointSize: 12
@@ -132,7 +136,6 @@ Item {
             // Unable to use PathPolyline in 2.12
             PathLine {} PathLine {} PathLine {} PathLine {}
             PathLine {} PathLine {} PathLine {} PathLine {}
-            PathLine {} PathLine {} PathLine {} PathLine {}
             PathLine {} PathLine {} PathLine {}
         }
         ShapePath {
@@ -158,45 +161,52 @@ Item {
     }
 
     function updateYValues() {
-        const count = rowData.samples.length
-        console.assert(count === path.pathElements.length + 1)
+        const count = rowDataModel.getSampleCount()
+        // TODO: Don't check in release builds
         console.assert(steadyVisualFrac >= 0.0 && steadyVisualFrac <= 1.0)
         console.assert(minVisualFrac >= 0.0 && minVisualFrac < 1.0)
         console.assert(maxVisualFrac > 0.0 && maxVisualFrac <= 1.0)
         console.assert(minVisualFrac < maxVisualFrac)
-        let minToUse = rowData.actualMin
+        let minToUse = rowDataModel.actualMin
         if (typeof(fixedVisualMin) !== "undefined") {
             minToUse = fixedVisualMin
         }
-        let maxToUse = rowData.actualMax
+        let maxToUse = rowDataModel.actualMax
         if (typeof(fixedVisualMax) !== "undefined") {
             maxToUse = fixedVisualMax
         }
-        if (minToUse !== maxToUse && !(useFixedLevelIfSteady && rowData.actualMin === rowData.actualMax)) {
+        // Save resolved aliases to members/fields for performance reasons
+        const _pathElements = path.pathElements
+        const _shapeHeight  = shape.height
+        const _model        = rowDataModel
+        console.assert(count === _pathElements.length + 1)
+        if (minToUse !== maxToUse && !(useFixedLevelIfSteady && _model.actualMin === _model.actualMax)) {
             console.assert(minToUse < maxToUse)
-            const rcpDelta = 1.0 / (maxToUse - minToUse)
-            let frac = (rowData.samples[0] - minToUse) * rcpDelta
+            const rcpDelta   = 1.0 / (maxToUse - minToUse)
+            const _minFrac   = minVisualFrac
+            const deltaFrac = maxVisualFrac - minVisualFrac
+            let frac = (_model.sampleAt(0) - minToUse) * rcpDelta
             // Clip it
             frac = Math.min(1.0, Math.max(0.0, frac))
             // Level it
-            frac = minVisualFrac + (maxVisualFrac - minVisualFrac) * frac
+            frac = _minFrac + deltaFrac * frac
             // Calc flipped Y
-            path.startY = shape.height * (1.0 - frac)
+            path.startY = _shapeHeight * (1.0 - frac)
             for (let i = 1; i < count; ++i) {
-                frac = (rowData.samples[i] - minToUse) * rcpDelta
+                frac = (_model.sampleAt(i) - minToUse) * rcpDelta
                 // Clip it
                 frac = Math.min(1.0, Math.max(0.0, frac))
                 // Level it
-                frac = minVisualFrac + (maxVisualFrac - minVisualFrac) * frac
+                frac = _minFrac + deltaFrac * frac
                 // Calc flipped Y
-                path.pathElements[i - 1].y = shape.height * (1.0 - frac)
+                _pathElements[i - 1].y = _shapeHeight * (1.0 - frac)
             }
             lowerBarPath.strokeColor = Hud.ui.colorWithAlpha(root.strokeColor, 0.2)
         } else {
-            const frac = 1.0 - steadyVisualFrac
-            path.startY = frac * shape.height
+            const resultY = (1.0 - steadyVisualFrac) * _shapeHeight
+            path.startY = resultY
             for (let i = 1; i < count; ++i) {
-                path.pathElements[i - 1].y = frac * shape.height
+                _pathElements[i - 1].y = resultY
             }
             lowerBarPath.strokeColor = "transparent"
         }
