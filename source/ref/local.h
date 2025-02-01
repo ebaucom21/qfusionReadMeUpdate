@@ -537,7 +537,10 @@ class TextureCache : TextureManagementShared {
 	};
 
 	wsw::StaticVector<PortalRenderTargetComponents, kMaxPortalRenderTargets> m_portalRenderTargets;
-	RenderTargetDepthBuffer *m_renderTargetDepthBuffer { nullptr };
+	RenderTargetDepthBuffer *m_portalRenderTargetDepthBuffer { nullptr };
+
+	wsw::StaticVector<RenderTargetComponents, 1> m_miniviewRenderTarget;
+	RenderTargetDepthBuffer *m_miniviewRenderTargetDepthBuffer { nullptr };
 
 	static constexpr unsigned kNumHashBins = 101;
 
@@ -560,6 +563,9 @@ class TextureCache : TextureManagementShared {
 								   int aniso, bool applyFilter, bool applyAniso );
 	[[nodiscard]]
 	auto wrapTextureHandle( GLuint externalTexNum, Texture *reuse ) -> Texture *;
+
+	[[nodiscard]]
+	auto createRenderTargetAndTexture( unsigned width, unsigned height ) -> std::optional<std::pair<RenderTarget *, RenderTargetTexture *>>;
 public:
 	TextureCache();
 	~TextureCache();
@@ -633,6 +639,9 @@ public:
 
 	[[nodiscard]]
 	auto getPortalRenderTarget( unsigned drawSceneFrameNum ) -> RenderTargetComponents *;
+
+	[[nodiscard]]
+	auto getMiniviewRenderTarget() -> RenderTargetComponents *;
 };
 
 class ImageBuffer {
