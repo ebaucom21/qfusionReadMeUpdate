@@ -1187,9 +1187,12 @@ static auto prepareViewRectsAndStateIndices( Rect *viewRects, unsigned *viewStat
 	return { actuallyUseTiledMode, numDisplayedViewStates };
 }
 
-static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool actuallyUseTiledMode,
-									 const Rect *viewRects, const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) {
+[[nodiscard]]
+static auto createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool actuallyUseTiledMode, const Rect *viewRects,
+									 const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) -> unsigned {
 	WSW_PROFILER_SCOPE();
+
+	unsigned useCachedViewsMask = 0;
 
 	const auto *const uiSystem = wsw::ui::UISystem::instance();
 
@@ -1292,6 +1295,9 @@ static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool 
 
 		if( viewNum > 0 && !actuallyUseTiledMode ) {
 			viewState->view.refdef.renderTarget = GetMiniviewRenderTarget();
+			if( (int)( ( viewNum - 1 ) % 4 ) != (int)( cg.frameCount % 4 ) ) {
+				useCachedViewsMask |= 1 << viewNum;
+			}
 		}
 
 		drawSceneRequests[viewNum] = CreateDrawSceneRequest( viewState->view.refdef );
@@ -1320,12 +1326,35 @@ static void createDrawSceneRequests( DrawSceneRequest **drawSceneRequests, bool 
 			}
 		}
 	}
+
+	return useCachedViewsMask;
 }
 
 [[nodiscard]]
-static auto coPrepareDrawSceneRequests( CoroTask::StartInfo si, DrawSceneRequest **drawSceneRequests,
+static auto coPrepareDrawSceneRequests( CoroTask::StartInfo si, DrawSceneRequest **drawSceneRequests, unsigned useCachedViewsMask,
 										const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) -> CoroTask {
-	const TaskHandle beginTask = BeginProcessingDrawSceneRequests( { drawSceneRequests, drawSceneRequests + numDisplayedViewStates } );
+	assert( numDisplayedViewStates < MAX_CLIENTS + 1 );
+
+	// Note: We process all draw scene requests as usual for correctness reasons,
+	// but exclude "cached view" requests from submission to the renderer.
+	// Further optimizations are possible, but this already is a huge win.
+
+	wsw::StaticVector<DrawSceneRequest *, MAX_CLIENTS + 1> tmpDrawSceneRequests;
+	std::span<DrawSceneRequest *> requestsToSubmit;
+
+	if( useCachedViewsMask ) {
+		// TODO: Add iterators for iterating over bits
+		for( unsigned i = 0; i < numDisplayedViewStates; ++i ) {
+			if( !( useCachedViewsMask & ( 1 << i ) ) ) {
+				tmpDrawSceneRequests.push_back( drawSceneRequests[i] );
+			}
+		}
+		requestsToSubmit = tmpDrawSceneRequests;
+	} else {
+		requestsToSubmit = { drawSceneRequests, drawSceneRequests + numDisplayedViewStates };
+	}
+
+	const TaskHandle beginTask = BeginProcessingDrawSceneRequests( requestsToSubmit );
 
 	for( unsigned viewNum = 0; viewNum < numDisplayedViewStates; ++viewNum ) {
 		ViewState *const viewState = cg.viewStates + viewStateIndices[viewNum];
@@ -1377,18 +1406,18 @@ static auto coPrepareDrawSceneRequests( CoroTask::StartInfo si, DrawSceneRequest
 	}
 
 	const std::span<const TaskHandle> endProcessingDependencies { &beginTask, 1 };
-	const std::span<DrawSceneRequest *> spanOfRequests { drawSceneRequests, numDisplayedViewStates };
-	co_await si.taskSystem->awaiterOf( EndProcessingDrawSceneRequests( spanOfRequests, endProcessingDependencies ) );
+	co_await si.taskSystem->awaiterOf( EndProcessingDrawSceneRequests( requestsToSubmit, endProcessingDependencies ) );
 }
 
-static void prepareDrawSceneRequests( DrawSceneRequest **drawSceneRequests, const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) {
+static void prepareDrawSceneRequests( DrawSceneRequest **drawSceneRequests, unsigned useCachedViewsMask,
+									  const unsigned *viewStateIndices, unsigned numDisplayedViewStates ) {
 	WSW_PROFILER_SCOPE();
 
 	TaskSystem *const taskSystem = BeginProcessingOfTasks();
 
 	(void)taskSystem->addCoro( [=]() {
 		CoroTask::StartInfo si { taskSystem, std::span<const TaskHandle> {}, CoroTask::OnlyMainThread };
-		return coPrepareDrawSceneRequests( si, drawSceneRequests, viewStateIndices, numDisplayedViewStates );
+		return coPrepareDrawSceneRequests( si, drawSceneRequests, useCachedViewsMask, viewStateIndices, numDisplayedViewStates );
 	});
 
 	EndProcessingOfTasks();
@@ -1554,9 +1583,10 @@ CGRenderViewResult CG_RenderView( int frameTime, int realFrameTime, int64_t real
 
 			BeginDrawingScenes();
 
-			createDrawSceneRequests( drawSceneRequests, actuallyUseTiledMode, viewRects, viewStateIndices, numDisplayedViewStates );
+			const unsigned useCachedViewsMask = createDrawSceneRequests( drawSceneRequests, actuallyUseTiledMode, viewRects,
+																		 viewStateIndices, numDisplayedViewStates );
 
-			prepareDrawSceneRequests( drawSceneRequests, viewStateIndices, numDisplayedViewStates );
+			prepareDrawSceneRequests( drawSceneRequests, useCachedViewsMask, viewStateIndices, numDisplayedViewStates );
 
 			commitDrawSceneRequests( drawSceneRequests, actuallyUseTiledMode, viewStateIndices, numDisplayedViewStates );
 
