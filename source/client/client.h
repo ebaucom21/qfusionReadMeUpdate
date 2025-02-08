@@ -492,6 +492,7 @@ void SCR_DrawFillRect( int x, int y, int w, int h, const vec4_t color );
 
 void CL_ProfilerHud_Init();
 void CL_ProfilerHud_Shutdown();
+void CL_ProfilerHud_Update( int gameMsec, int realMsec );
 void CL_ProfilerHud_Draw( unsigned width, unsigned height );
 
 namespace wsw {

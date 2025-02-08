@@ -264,12 +264,7 @@ void ProfilingSystem::beginFrame( FrameGroup group, ProfilerArgsSupplier *argsSu
 void ProfilingSystem::endFrame( FrameGroup group, ProfilerResultSink *resultSink ) {
 	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &g_mutex );
 
-	unsigned totalThreads = 0;
-	for( ProfilerThreadInstance *instance = s_instances[group]; instance; instance = instance->next ) {
-		totalThreads++;
-	}
-
-	resultSink->beginAcceptingResults( group, totalThreads );
+	resultSink->beginAcceptingResults( group );
 	try {
 		if( s_isProfilingEnabled[group] ) {
 			unsigned threadIndex = 0;

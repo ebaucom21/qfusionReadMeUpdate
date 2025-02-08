@@ -22,10 +22,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../common/cmdargs.h"
 #include "../common/profilerscope.h"
 #include "../common/singletonholder.h"
+#include "../common/wswalgorithm.h"
 #include "../common/wswtonum.h"
 
-#include <vector>
-#include <string>
+#include <unordered_map>
 
 using wsw::operator""_asView;
 
@@ -41,16 +41,13 @@ public:
 		m_mutex.unlock();
 	}
 
-	// TODO: Supply thread names?
-	void beginAcceptingResults( wsw::ProfilingSystem::FrameGroup group, unsigned totalThreads ) override {
+	void beginAcceptingResults( wsw::ProfilingSystem::FrameGroup group ) override {
 		assert( m_activeResultGroup == std::nullopt );
 		m_mutex.lock();
 		if( !m_isFrozen ) {
 			m_activeResultGroup = group;
-			m_groupStates[group].threadProfilingResults.clear();
-			m_groupStates[group].threadRootDiscoveryResults.clear();
-			m_groupStates[group].threadProfilingResults.resize( totalThreads );
-			m_groupStates[group].threadRootDiscoveryResults.resize( totalThreads );
+			m_groupStates[group].threadFrameProfilingResults.clear();
+			m_groupStates[group].threadFrameRootDiscoveryResults.clear();
 		}
 	}
 
@@ -61,36 +58,42 @@ public:
 		m_mutex.unlock();
 	}
 
-	void addDiscoveredRoot( unsigned threadIndex, unsigned scopeId ) override {
+	// Note: Currently we supply thread indices as ids (this is perfectly valid but could be surprising)
+	// TODO: Supply thread names?
+
+	void addDiscoveredRoot( uint64_t threadId, unsigned scopeId ) override {
 		if( !m_isFrozen ) {
 			GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
-			auto &results          = groupState.threadRootDiscoveryResults.at( threadIndex );
-			results.discoveredScopes.append( scopeId );
+			auto &results          = groupState.threadFrameRootDiscoveryResults[threadId];
+			results.discoveredScopes.push_back( scopeId );
 		}
 	}
 
-	void addCallStats( unsigned threadIndex, unsigned callScopeId, const CallStats &callStats ) override {
+	void addCallStats( uint64_t threadId, unsigned callScopeId, const CallStats &callStats ) override {
 		if( !m_isFrozen ) {
 			GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
-			auto &results          = groupState.threadProfilingResults.at( threadIndex );
+			auto &results          = groupState.threadFrameProfilingResults[threadId];
 			results.callStats      = callStats;
+			groupState.threadProfilingTimelines[threadId].add( callStats );
 		}
 	}
 
-	void addCallChildStats( unsigned threadIndex, unsigned childScopeId, const CallStats &callStats ) override {
+	void addCallChildStats( uint64_t threadId, unsigned childScopeId, const CallStats &callStats ) override {
 		if( !m_isFrozen ) {
 			GroupState &groupState = m_groupStates[m_activeResultGroup.value()];
-			auto &results          = groupState.threadProfilingResults.at( threadIndex );
+			auto &results          = groupState.threadFrameProfilingResults[threadId];
 			results.childStats.append( { childScopeId, callStats } );
 		}
 	}
+
+	void update( int gameMsec, int realMsec );
 
 	void drawSelf( unsigned screenWidth, unsigned screenHeight );
 
 	void listRoots( wsw::ProfilingSystem::FrameGroup group );
 
 	[[nodiscard]]
-	bool select( wsw::ProfilingSystem::FrameGroup group, const wsw::StringView &token );
+	bool startTracking( wsw::ProfilingSystem::FrameGroup group, const wsw::StringView &token );
 
 	void reset();
 
@@ -110,6 +113,55 @@ private:
 	[[nodiscard]]
 	auto drawProfilingStats( const GroupState &groupState, const wsw::StringView &title, int startX, int startY,
 							 int width, int margin, int lineHeight ) -> int;
+
+	class Timeline {
+	public:
+		static constexpr unsigned kNumSamples = 255;
+		static_assert( wsw::isPowerOf2( kNumSamples + 1 ) );
+	private:
+		CallStats m_values[kNumSamples + 1] {};
+		unsigned m_head { kNumSamples };
+		unsigned m_tail { 0 };
+	public:
+		Timeline() { clear(); }
+
+		void clear() {
+			wsw::fill( std::begin( m_values ), std::end( m_values ), CallStats {} );
+			m_tail = 0;
+			m_head = kNumSamples;
+		}
+
+		void add( const CallStats &callStats ) {
+			m_values[m_head] = callStats;
+			m_head           = ( m_head + 1 ) % ( kNumSamples + 1 );
+			m_tail           = ( m_tail + 1 ) % ( kNumSamples + 1 );
+		}
+
+		struct Iterator {
+			const Timeline *parent;
+			unsigned position;
+			[[nodiscard]]
+			bool operator!=( const Iterator &that ) const {
+				return position != that.position;
+			}
+			[[maybe_unused]]
+			auto operator++() -> Iterator & {
+				position = ( position + 1 ) % ( kNumSamples + 1 );
+				return *this;
+			}
+			[[nodiscard]]
+			auto operator*() const -> const CallStats & {
+				return parent->m_values[position];
+			}
+		};
+
+		[[nodiscard]]
+		auto begin() const -> Iterator { return { this, m_tail }; }
+		[[nodiscard]]
+		auto end() const -> Iterator { return { this, m_head }; }
+	};
+
+	static void drawTimeline( const Timeline &timeline, int startX, int startY, int width, int height, int margin );
 
 	wsw::Mutex m_mutex;
 
@@ -131,14 +183,29 @@ private:
 
 		OperationMode operationMode { NoOp };
 
-		std::vector<ThreadProfilingResults> threadProfilingResults;
-		std::vector<ThreadRootDiscoveryResults> threadRootDiscoveryResults;
+		std::unordered_map<uint64_t, ThreadProfilingResults> threadFrameProfilingResults;
+		std::unordered_map<uint64_t, ThreadRootDiscoveryResults> threadFrameRootDiscoveryResults;
+
+		std::unordered_map<uint64_t, Timeline> threadProfilingTimelines;
+
+		void clear() {
+			selectedScope = std::nullopt;
+			operationMode = NoOp;
+
+			threadFrameProfilingResults.clear();
+			threadFrameRootDiscoveryResults.clear();
+
+			threadProfilingTimelines.clear();
+		}
 	};
 
 	GroupState m_groupStates[2];
 
-	int m_frozenFrameTime { 0 };
-	int m_frozenRealFrameTime { 0 };
+	Timeline m_gameFrameTimeTimeline;
+	Timeline m_realFrameTimeTimeline;
+
+	int m_lastGameFrameTime { 0 };
+	int m_lastRealFrameTime { 0 };
 
 	bool m_isEnabled { false };
 	bool m_isFrozen { false };
@@ -165,17 +232,17 @@ void CL_ProfilerHud_Init() {
 			clNotice() << "Usage: pf_listroots <cl|sv>";
 		}
 	});
-	CL_Cmd_Register( "pf_select"_asView, []( const CmdArgs &args ) {
+	CL_Cmd_Register( "pf_track"_asView, []( const CmdArgs &args ) {
 		bool handled = false;
 		if( std::optional<wsw::ProfilingSystem::FrameGroup> maybeGroup = parseProfilerGroup( args[1] ) ) {
 			if( const wsw::StringView token = args[2]; !token.empty() ) {
-				if( g_profilerHudHolder.instance()->select( *maybeGroup, token ) ) {
+				if( g_profilerHudHolder.instance()->startTracking( *maybeGroup, token ) ) {
 					handled = true;
 				}
 			}
 		}
 		if( !handled ) {
-			clNotice() << "Usage: pf_select <cl|sv> <id>";
+			clNotice() << "Usage: pf_track <cl|sv> <id>";
 		}
 	});
 	CL_Cmd_Register( "pf_listscopes"_asView, []( const CmdArgs &args ) {
@@ -199,12 +266,16 @@ void CL_ProfilerHud_Init() {
 
 void CL_ProfilerHud_Shutdown() {
 	CL_Cmd_Unregister( "pf_listroots"_asView );
-	CL_Cmd_Unregister( "pf_select"_asView );
+	CL_Cmd_Unregister( "pf_track"_asView );
 	CL_Cmd_Unregister( "pf_listscopes"_asView );
 	CL_Cmd_Unregister( "pf_reset"_asView );
 	CL_Cmd_Unregister( "pf_enable"_asView );
 	CL_Cmd_Unregister( "pf_freeze"_asView );
 	g_profilerHudHolder.shutdown();
+}
+
+void CL_ProfilerHud_Update( int gameMsec, int realMsec ) {
+	g_profilerHudHolder.instance()->update( gameMsec, realMsec );
 }
 
 void CL_ProfilerHud_Draw( unsigned width, unsigned height ) {
@@ -250,12 +321,13 @@ void ProfilerHud::listRoots( wsw::ProfilingSystem::FrameGroup group ) {
 
 	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
+	m_groupStates[group].clear();
 	m_groupStates[group].operationMode = GroupState::ListRoots;
 
 	m_isFrozen = false;
 }
 
-bool ProfilerHud::select( wsw::ProfilingSystem::FrameGroup group, const wsw::StringView &token ) {
+bool ProfilerHud::startTracking( wsw::ProfilingSystem::FrameGroup group, const wsw::StringView &token ) {
 	assert( group == 0 || group == 1 );
 
 	const std::optional<size_t> maybeNumber = wsw::toNum<size_t>( token );
@@ -271,6 +343,8 @@ bool ProfilerHud::select( wsw::ProfilingSystem::FrameGroup group, const wsw::Str
 	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
 	GroupState &groupState = m_groupStates[group];
+	groupState.clear();
+
 	groupState.operationMode = GroupState::ProfileCall;
 	groupState.selectedScope = *maybeNumber;
 
@@ -287,11 +361,10 @@ void ProfilerHud::reset() {
 
 void ProfilerHud::doReset() {
 	for( GroupState &groupState: m_groupStates ) {
-		groupState.operationMode = GroupState::NoOp;
-		groupState.threadProfilingResults.clear();
-		groupState.threadRootDiscoveryResults.clear();
-		groupState.selectedScope = std::nullopt;
+		groupState.clear();
 	}
+
+	// Note: We don't care of always-displayed client properties
 
 	m_isFrozen = false;
 }
@@ -325,10 +398,6 @@ void ProfilerHud::listScopes() {
 void ProfilerHud::toggleFrozenState() {
 	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 	m_isFrozen = !m_isFrozen;
-	if( m_isFrozen ) {
-		m_frozenFrameTime     = cls.frametime;
-		m_frozenRealFrameTime = cls.realFrameTime;
-	}
 }
 
 extern const vec4_t kConsoleBackgroundColor;
@@ -361,7 +430,7 @@ auto ProfilerHud::drawDiscoveredRoots( const GroupState &groupState, const wsw::
 	const std::span<const wsw::ProfilingSystem::RegisteredScope> &scopes = wsw::ProfilingSystem::getRegisteredScopes();
 
 	int totalLines = 2;
-	for( const ThreadRootDiscoveryResults &threadResults: groupState.threadRootDiscoveryResults ) {
+	for( const auto &[_, threadResults]: groupState.threadFrameRootDiscoveryResults ) {
 		totalLines += 1 + (int)threadResults.discoveredScopes.size();
 	}
 
@@ -376,7 +445,7 @@ auto ProfilerHud::drawDiscoveredRoots( const GroupState &groupState, const wsw::
 	y += lineHeight + margin;
 
 	unsigned threadIndex = 0;
-	for( const ThreadRootDiscoveryResults &threadResults: groupState.threadRootDiscoveryResults ) {
+	for( const auto &[_, threadResults]: groupState.threadFrameRootDiscoveryResults ) {
 		wsw::StaticString<64> threadHeader, threadStats;
 		(void)threadHeader.appendf( "Thread #%-2d", threadIndex );
 		(void)threadStats.appendf( "%d", (unsigned)threadResults.discoveredScopes.size() );
@@ -398,19 +467,37 @@ auto ProfilerHud::drawDiscoveredRoots( const GroupState &groupState, const wsw::
 	return y - startY + margin;
 }
 
+static constexpr int kGraphHeight = 64;
+
 auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::StringView &title,
 									  int startX, int startY, int width, int margin, int lineHeight ) -> int {
 	const std::span<const wsw::ProfilingSystem::RegisteredScope> &scopes = wsw::ProfilingSystem::getRegisteredScopes();
 
-	int totalLines = 2;
-	for( const ThreadProfilingResults &threadResults: groupState.threadProfilingResults ) {
-		totalLines += 1 + (int)threadResults.childStats.size();
-		if( threadResults.callStats.enterCount > 0 ) {
-			totalLines++;
+	int totalLines           = 2;
+	int totalGraphs          = 0;
+	unsigned threadGraphMask = 0;
+	do {
+		unsigned threadIndex     = 0;
+		for( const auto &[threadId, threadResults]: groupState.threadFrameProfilingResults ) {
+			totalLines += 1 + (int)threadResults.childStats.size();
+			if( threadResults.callStats.enterCount > 0 ) {
+				totalLines++;
+			}
+			assert( groupState.threadProfilingTimelines.contains( threadId ) );
+			const Timeline &timeline = groupState.threadProfilingTimelines.find( threadId )->second;
+			for( const CallStats &callStats: timeline ) {
+				if( callStats.enterCount > 0 ) {
+					totalGraphs++;
+					threadGraphMask |= 1 << threadIndex;
+					break;
+				}
+			}
+			threadIndex++;
 		}
-	}
+	} while( false );
 
-	SCR_DrawFillRect( startX, startY, (int)width, lineHeight * totalLines + 3 * margin, kConsoleBackgroundColor );
+	const int totalHeight = lineHeight * totalLines + 3 * margin + ( 2 * margin + kGraphHeight ) * totalGraphs;
+	SCR_DrawFillRect( startX, startY, (int)width, totalHeight, kConsoleBackgroundColor );
 
 	int y = startY;
 
@@ -425,14 +512,23 @@ auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::S
 	y += lineHeight + margin;
 
 	unsigned threadIndex = 0;
-	for( const ThreadProfilingResults &threadResults: groupState.threadProfilingResults ) {
+	for( const auto &[threadId, threadResults]: groupState.threadFrameProfilingResults ) {
 		wsw::StaticString<64> threadHeader, threadStats;
 		(void)threadHeader.appendf( "Thread #%-2d", threadIndex );
+
 		(void)threadStats.appendf( "count=%-4d", threadResults.callStats.enterCount );
 		(void)threadStats.appendf( " us=%-5d", (unsigned)threadResults.callStats.totalTime );
 
 		drawSideAlignedPair( threadHeader.asView(), threadStats.asView(), startX, y, width, margin, lineHeight, colorLtGrey );
 		y += lineHeight;
+
+		if( threadGraphMask & ( 1 << threadIndex ) ) {
+			y += margin;
+			const auto it = groupState.threadProfilingTimelines.find( threadId );
+			assert( it != groupState.threadProfilingTimelines.end() );
+			drawTimeline( it->second, startX, y, width, kGraphHeight, margin );
+			y += kGraphHeight + margin;
+		}
 
 		unsigned realNameLimit = 0;
 		for( const auto &[scopeId, _] : threadResults.childStats ) {
@@ -470,6 +566,80 @@ auto ProfilerHud::drawProfilingStats( const GroupState &groupState, const wsw::S
 	return y - startY + margin;
 }
 
+void ProfilerHud::update( int gameMsec, int realMsec ) {
+	// This should be safe to call without locking
+
+	if( m_isEnabled && !m_isFrozen ) {
+		m_gameFrameTimeTimeline.add( CallStats { (uint64_t)gameMsec, 1 } );
+		m_lastGameFrameTime = gameMsec;
+		m_realFrameTimeTimeline.add( CallStats { (uint64_t)realMsec, 1 } );
+		m_lastRealFrameTime = realMsec;
+	}
+}
+
+void ProfilerHud::drawTimeline( const Timeline &timeline, int startX, int startY, int width, int height, int margin ) {
+	const float barColor[4] = { 1.0f, 1.0f, 1.0f, 0.1f };
+
+	int graphWidthStep = 1;
+	// TODO: The number 48 is arbitrary, measure the exact text width
+	while( 2 * margin + ( graphWidthStep + 1 ) * (int)Timeline::kNumSamples + 48 <= width ) {
+		graphWidthStep++;
+	}
+
+	const int graphWidth = graphWidthStep * (int)Timeline::kNumSamples;
+	const int bottomY    = startY + height;
+
+	int x = startX + margin;
+
+	// We apply side margins but use the full height to simplify layout calculations
+	SCR_DrawFillRect( x, startY, 1, height, barColor );
+	SCR_DrawFillRect( x + graphWidth, startY, 1, height, barColor );
+	SCR_DrawFillRect( x, startY, graphWidth, 1, barColor );
+	SCR_DrawFillRect( x, startY + height, graphWidth, 1, barColor );
+
+	wsw::StaticString<32> minText( "min="_asView ), maxText( "max="_asView ), avgText( "avg="_asView );
+
+	uint64_t minValue = std::numeric_limits<uint64_t>::max();
+	uint64_t maxValue = std::numeric_limits<uint64_t>::lowest();
+	uint64_t accum    = 0;
+	uint64_t total    = 0;
+	for( const CallStats &callStats: timeline ) {
+		if( callStats.enterCount > 0 ) {
+			minValue = wsw::min( callStats.totalTime, minValue );
+			maxValue = wsw::max( callStats.totalTime, maxValue );
+			accum += callStats.totalTime;
+			total++;
+		}
+	}
+	if( total > 0 ) {
+		const float rcpMaxValue = 1.0f / (float)maxValue;
+		for( const CallStats &callStats: timeline ) {
+			if( callStats.enterCount > 0 ) {
+				const float heightFrac = (float)callStats.totalTime * rcpMaxValue;
+				const int barHeight    = (int)( (float)height * heightFrac );
+				SCR_DrawFillRect( x, bottomY - barHeight, graphWidthStep, barHeight, barColor );
+			}
+			x += graphWidthStep;
+		}
+		(void)minText.appendf( "%-5d", (int)minValue );
+		(void)maxText.appendf( "%-5d", (int)maxValue );
+		(void)avgText.appendf( "%-5d", (int)( accum / total ) );
+	} else {
+		minText << "N/A  "_asView;
+		maxText << "N/A  "_asView;
+		avgText << "N/A  "_asView;
+	}
+
+	const int textX = startX + width - margin;
+	int textY       = startY;
+
+	SCR_DrawString( textX, textY, ALIGN_RIGHT_TOP, minText.asView(), nullptr, colorMdGrey );
+	textY += ( height ) / 3;
+	SCR_DrawString( textX, textY, ALIGN_RIGHT_TOP, avgText.asView(), nullptr, colorMdGrey );
+	textY += ( height ) / 3;
+	SCR_DrawString( textX, textY, ALIGN_RIGHT_TOP, maxText.asView(), nullptr, colorMdGrey );
+}
+
 void ProfilerHud::drawSelf( unsigned screenWidth, unsigned ) {
 	[[maybe_unused]] volatile wsw::ScopedLock<wsw::Mutex> lock( &m_mutex );
 
@@ -484,20 +654,26 @@ void ProfilerHud::drawSelf( unsigned screenWidth, unsigned ) {
 	const int paneWidth = (int)screenWidth - paneX - margin;
 	int y               = margin;
 
-	SCR_DrawFillRect( paneX, y, (int)paneWidth, 9 * lineHeight + 5 * margin, kConsoleBackgroundColor );
+	const int paneHeight = 9 * lineHeight + 5 * margin + 2 * kGraphHeight + 3 * margin;
+	SCR_DrawFillRect( paneX, y, paneWidth, paneHeight, kConsoleBackgroundColor );
 	y += margin;
 
 	drawHeader( m_isFrozen ? "S U M M A R Y [*]"_asView : "S U M M A R Y"_asView, paneX, y, paneWidth, margin, lineHeight );
 	y += lineHeight + margin;
 
-	wsw::StaticString<16> frametime, realFrameTime;
-	frametime     << ( m_isFrozen ? m_frozenFrameTime : cls.frametime );
-	realFrameTime << ( m_isFrozen ? m_frozenRealFrameTime : cls.realFrameTime );
-
-	drawSideAlignedPair( "cls.frametime"_asView, frametime.asView(), paneX, y, paneWidth, margin, lineHeight, colorMdGrey );
-	y += lineHeight;
-	drawSideAlignedPair( "cls.realFrameTime"_asView, realFrameTime.asView(), paneX, y, paneWidth, margin, lineHeight, colorMdGrey );
+	wsw::StaticString<16> realFrameTime( "%d", m_lastRealFrameTime );
+	drawSideAlignedPair( "Real frame time"_asView, realFrameTime.asView(), paneX, y, paneWidth, margin, lineHeight, colorMdGrey );
 	y += lineHeight + margin;
+
+	drawTimeline( m_realFrameTimeTimeline, paneX, y, paneWidth, kGraphHeight, margin );
+	y += kGraphHeight + margin;
+
+	wsw::StaticString<16> gameFrameTime( "%d", m_lastGameFrameTime );
+	drawSideAlignedPair( "Game frame time"_asView, gameFrameTime.asView(), paneX, y, paneWidth, margin, lineHeight, colorMdGrey );
+	y += lineHeight + margin;
+
+	drawTimeline( m_gameFrameTimeTimeline, paneX, y, paneWidth, kGraphHeight, margin );
+	y += kGraphHeight + margin;
 
 	drawHeader( "H E L P"_asView, paneX, y, paneWidth, margin, lineHeight );
 	y += lineHeight + margin;
@@ -505,7 +681,7 @@ void ProfilerHud::drawSelf( unsigned screenWidth, unsigned ) {
 	const std::pair<const char *, const char *> cmdDescs[] {
 		{ "pf_listscopes", "Print available profiling scopes to the console" },
 		{ "pf_listroots <cl|sv>", "Discover available call tree roots" },
-		{ "pf_select <cl|sv> <id>", "Select a scope for detailed profiling" },
+		{ "pf_track <cl|sv> <id>", "Start detailed profiling of a scope" },
 		{ "pf_freeze", "Toggle the frozen state" },
 		{ "pf_reset", "Reset everything to the idle state" },
 	};
@@ -528,5 +704,4 @@ void ProfilerHud::drawSelf( unsigned screenWidth, unsigned ) {
 			y += drawProfilingStats( groupState, groupTitles[groupIndex], paneX, y, paneWidth, margin, lineHeight );
 		}
 	}
-
 }

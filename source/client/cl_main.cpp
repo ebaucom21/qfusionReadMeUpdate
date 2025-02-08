@@ -5512,6 +5512,8 @@ void CL_Frame( int realMsec, int gameMsec ) {
 	} else {
 		cls.frametime = allGameMsec;
 		cls.realFrameTime = allRealMsec;
+		CL_ProfilerHud_Update( allGameMsec, allRealMsec );
+
 #if 1
 		if( allRealMsec < minMsec ) { // is compensating for a too slow frame
 			extraMsec -= ( minMsec - allRealMsec );

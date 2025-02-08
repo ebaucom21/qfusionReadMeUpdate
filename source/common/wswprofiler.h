@@ -81,18 +81,18 @@ class ProfilerResultSink {
 public:
 	virtual ~ProfilerResultSink() = default;
 
-	virtual void beginAcceptingResults( ProfilingSystem::FrameGroup group, unsigned totalThreads ) = 0;
+	virtual void beginAcceptingResults( ProfilingSystem::FrameGroup group ) = 0;
 	virtual void endAcceptingResults( ProfilingSystem::FrameGroup group ) = 0;
 
-	virtual void addDiscoveredRoot( unsigned threadIndex, unsigned scopeId ) = 0;
+	virtual void addDiscoveredRoot( uint64_t threadId, unsigned scopeId ) = 0;
 
 	struct CallStats {
 		uint64_t totalTime { 0 };
 		int enterCount { 0 };
 	};
 
-	virtual void addCallStats( unsigned threadIndex, unsigned callScopeId, const CallStats &callStats ) = 0;
-	virtual void addCallChildStats( unsigned threadIndex, unsigned childScopeId, const CallStats &callStats ) = 0;
+	virtual void addCallStats( uint64_t threadId, unsigned callScopeId, const CallStats &callStats ) = 0;
+	virtual void addCallChildStats( uint64_t threadId, unsigned childScopeId, const CallStats &callStats ) = 0;
 };
 
 class ThreadProfilingAttachment {
