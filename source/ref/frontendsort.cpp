@@ -724,9 +724,9 @@ auto Frontend::addEntryToSortList( StateForCamera *stateForCamera, const entity_
 			}
 
 			if( const unsigned distKey = R_PackDistKey( e->renderfx, shader, dist, order ) ) [[likely]] {
-
-				const int fogNum = fog ? (int)( fog - rsh.worldBrushModel->fogs ) : -1;
-				const int portalNum = portalSurf ? (int)( portalSurf - stateForCamera->portalSurfaces ) : -1;
+				const int fogNum       = fog ? (int)( fog - rsh.worldBrushModel->fogs ) : -1;
+				const int portalNum    = portalSurf ? (int)( portalSurf - stateForCamera->portalSurfaces ) : -1;
+				const auto oldListSize = stateForCamera->sortList->size();
 
 				stateForCamera->sortList->emplace_back( sortedDrawSurf_t {
 					.sortKey               = R_PackSortKey( shader->id, fogNum, portalNum, e->number, overrideParamsIndex ),
@@ -736,7 +736,7 @@ auto Frontend::addEntryToSortList( StateForCamera *stateForCamera, const entity_
 					.mergeabilitySeparator = mergeabilitySeparator
 				});
 
-				return (unsigned)stateForCamera->sortList->size();
+				return (unsigned)oldListSize;
 			}
 		}
 	}
