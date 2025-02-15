@@ -33,6 +33,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 bool g_isLockingOccluders = false;
 vec3_t g_lockedViewOrigin;
 vec3_t g_lockedViewAxis;
+int g_lockedOccluderNum;
 #endif
 
 void Frustum::setPlaneComponentsAtIndex( unsigned index, const float *n, float d ) {

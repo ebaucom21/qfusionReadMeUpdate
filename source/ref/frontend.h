@@ -45,6 +45,15 @@ struct alignas( 32 )Frustum {
 	void setupFor4Planes( const float *viewOrigin, const mat3_t viewAxis, float fovX, float fovY );
 };
 
+#define SHOW_OCCLUDED( stateForCamera, v1, v2, color ) do { /*addDebugLine( stateForCamera, v1, v2, color );*/ } while( 0 )
+//#define SHOW_OCCLUDERS
+//#define SHOW_OCCLUDERS_FRUSTA
+
+//#define DEBUG_OCCLUDERS
+#ifdef DEBUG_OCCLUDERS
+#define SHOW_OCCLUDERS_FRUSTA
+#endif
+
 namespace wsw::ref {
 
 class alignas( 32 ) Frontend {
@@ -532,6 +541,16 @@ private:
 	auto pruneAndSortOccludersByScores( StateForCamera *stateForCamera, std::span<const unsigned> visibleOccluders )
 		-> std::span<const SortedOccluder>;
 
+#if defined( IMPLEMENT_collectVisibleOccluders ) || defined( IMPLEMENT_buildFrustaOfOccluders )
+#if defined( SHOW_OCCLUDERS_FRUSTA ) || defined( DEBUG_OCCLUDERS )
+	// This subroutine does not have to be template but we keep it templated so the code is closer
+	// to the code which builds frusta, thus making things easier to follow
+	template <unsigned Arch>
+	void showOccluderFrustum( StateForCamera *stateForCamera, const float *viewOrigin,
+							  const float *viewAxis, const OccluderDataEntry *occluderData );
+#endif
+#endif
+
 	[[nodiscard]]
 	auto buildFrustaOfOccluders( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 		-> std::span<const Frustum>;
@@ -743,14 +762,5 @@ private:
 };
 
 }
-
-#define SHOW_OCCLUDED( stateForCamera, v1, v2, color ) do { /*addDebugLine( stateForCamera, v1, v2, color );*/ } while( 0 )
-//#define SHOW_OCCLUDERS
-//#define SHOW_OCCLUDERS_FRUSTA
-
-// Note: Locking occluders has very limited applicability
-// as we don't modify the sorting pass due to maintenance burden reasons,
-// therefore locked occluders are likely to be rejected by the sorting pass if the camera position changes.
-//#define DEBUG_OCCLUDERS
 
 #endif

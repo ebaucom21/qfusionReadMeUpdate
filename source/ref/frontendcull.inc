@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 extern bool g_isLockingOccluders;
 extern vec3_t g_lockedViewOrigin;
 extern vec3_t g_lockedViewAxis;
+extern int g_lockedOccluderNum;
 #endif
 
 namespace wsw::ref {
@@ -65,50 +66,43 @@ auto Frontend::collectVisibleWorldLeavesArch( StateForCamera *stateForCamera ) -
 
 template <unsigned Arch>
 auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> std::span<const unsigned> {
-#ifndef DEBUG_OCCLUDERS
 	const Frustum *__restrict frustum     = &stateForCamera->frustum;
-#endif
 	const unsigned numWorldModelOccluders = rsh.worldBrushModel->numOccluders;
 	unsigned *const visibleOccluders      = stateForCamera->visibleOccludersBuffer->get();
 	unsigned numVisibleOccluders          = 0;
 
+	const OccluderDataEntry *const occluderDataEntries     = rsh.worldBrushModel->occluderDataEntries;
+	const OccluderBoundsEntry *const occluderBoundsEntries = rsh.worldBrushModel->occluderBoundsEntries;
+
 #ifdef DEBUG_OCCLUDERS
-	if( Cvar_Integer( "lockOccluders" ) ) {
+	const int lockedOccluderNum = Cvar_Integer( "lockedOccluderNum" );
+	if( (unsigned)( lockedOccluderNum - 1 ) < numWorldModelOccluders ) {
 		if( !g_isLockingOccluders ) {
 			VectorCopy( stateForCamera->viewOrigin, g_lockedViewOrigin );
 			VectorCopy( stateForCamera->viewAxis, g_lockedViewAxis );
+			g_lockedOccluderNum = lockedOccluderNum;
 			g_isLockingOccluders = true;
 		}
 	} else {
 		g_isLockingOccluders = false;
 	}
-#endif
 
-#ifndef DEBUG_OCCLUDERS
-	const OccluderBoundsEntry *const occluderBoundsEntries = rsh.worldBrushModel->occluderBoundsEntries;
+	if( g_isLockingOccluders ) {
+		showOccluderFrustum<Arch>( stateForCamera, g_lockedViewOrigin, g_lockedViewAxis, occluderDataEntries + g_lockedOccluderNum - 1 );
+		return {};
+	}
 #endif
-	const OccluderDataEntry *const occluderDataEntries     = rsh.worldBrushModel->occluderDataEntries;
 
 	for( unsigned occluderNum = 0; occluderNum < numWorldModelOccluders; ++occluderNum ) {
 		visibleOccluders[numVisibleOccluders] = occluderNum;
-#ifdef DEBUG_OCCLUDERS
-		numVisibleOccluders++;
-#else
 		const OccluderBoundsEntry &__restrict occluderBounds = occluderBoundsEntries[occluderNum];
 		LOAD_BOX_COMPONENTS( occluderBounds.mins, occluderBounds.maxs );
 		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( frustum, const int nonZeroIfFullyOutside );
 		numVisibleOccluders += ( nonZeroIfFullyOutside == 0 );
-#endif
 	}
 
 	const float *__restrict viewOrigin = stateForCamera->viewOrigin;
 	const float *__restrict viewAxis   = stateForCamera->viewAxis;
-#ifdef DEBUG_OCCLUDERS
-	if( g_isLockingOccluders ) {
-		viewOrigin = g_lockedViewOrigin;
-		viewAxis   = g_lockedViewAxis;
-	}
-#endif
 
 	// Prune bogus occluders
 	unsigned numKeptOccluders = 0;
@@ -151,22 +145,16 @@ auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> 
 
 #ifdef IMPLEMENT_buildFrustaOfOccluders
 
+static constexpr float kSelfOcclusionBias = 4.0f;
+
 template <unsigned Arch>
 auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 	-> std::span<const Frustum> {
-	Frustum *const occluderFrusta     = stateForCamera->occluderFrusta;
-	const unsigned maxOccluders       = wsw::min<unsigned>( sortedOccluders.size(), std::size( stateForCamera->occluderFrusta ) );
-	constexpr float selfOcclusionBias = 4.0f;
+	Frustum *const occluderFrusta = stateForCamera->occluderFrusta;
+	const unsigned maxOccluders   = wsw::min<unsigned>( sortedOccluders.size(), std::size( stateForCamera->occluderFrusta ) );
 
 	const float *__restrict viewOrigin                = stateForCamera->viewOrigin;
 	[[maybe_unused]] const float *__restrict viewAxis = stateForCamera->viewAxis;
-
-#ifdef DEBUG_OCCLUDERS
-	if( g_isLockingOccluders ) {
-		viewOrigin = g_lockedViewOrigin;
-		viewAxis   = g_lockedViewAxis;
-	}
-#endif
 
 	bool hadCulledFrusta = false;
 	// Note: We don't process more occluders due to performance and not memory capacity reasons.
@@ -215,9 +203,9 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 		// Don't let the surface occlude itself
 		if( DotProduct( cappingPlane, viewOrigin ) - cappingPlane[3] > 0 ) {
 			Vector4Negate( cappingPlane, cappingPlane );
-			cappingPlane[3] += selfOcclusionBias;
+			cappingPlane[3] += kSelfOcclusionBias;
 		} else {
-			cappingPlane[3] -= selfOcclusionBias;
+			cappingPlane[3] -= kSelfOcclusionBias;
 		}
 
 		f->setPlaneComponentsAtIndex( occluder->numVertices, cappingPlane, cappingPlane[3] );
@@ -258,19 +246,17 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 	}
 
 #ifdef SHOW_OCCLUDERS_FRUSTA
-	vec3_t pointInFrontOfView;
-	VectorMA( viewOrigin, 8.0, &stateForCamera->viewAxis[0], pointInFrontOfView );
-
 	// Show preserved frusta
-	for( unsigned occluderNum = 0; occluderNum < maxOccluders; ++occluderNum ) {
-		if( isCulledByOtherTable[occluderNum] ) {
+	for( unsigned occluderIndex = 0; occluderIndex < maxOccluders; ++occluderIndex ) {
+		if( isCulledByOtherTable[occluderIndex] ) {
 			continue;
 		}
 
-		const OccluderDataEntry *const occluderData = occluderDataEntries + sortedOccluders[occluderNum].occluderNum;
+		const unsigned occluderNum = sortedOccluders[occluderIndex].occluderNum;
+		const OccluderDataEntry *const occluderData = occluderDataEntries + occluderNum;
 
 #ifdef DEBUG_OCCLUDERS
-		if( Cvar_Integer( "pinnedOccluderNum" ) != (int)( 1 + occluderNum ) ) {
+		if( Cvar_Integer( "testedOccluderIndex" ) != (int)( 1 + occluderIndex ) ) {
 			continue;
 		}
 
@@ -286,53 +272,66 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 		VectorNormalizeFast( toOccluderVec );
 		const float planeDotToOccluder = DotProduct( toOccluderVec, occluderData->plane );
 
-		Com_Printf( "Abs view dot=%f distanceToPlane=%f viewAxisDotToOccluder=%f planeDotToOccluder=%f\n",
-					absViewDot, distanceToPlane, viewAxisDotToOccluder, planeDotToOccluder );
+		Com_Printf( "Occluder num for locking=%d absViewDot=%f distanceToPlane=%f viewAxisDotToOccluder=%f planeDotToOccluder=%f\n",
+					occluderNum + 1, absViewDot, distanceToPlane, viewAxisDotToOccluder, planeDotToOccluder );
 #endif
 
 		//addDebugLine( stateForCamera, surface->occluderPolyMins, surface->occluderPolyMaxs, COLOR_RGB( 0, 128, 255 ) );
 
-		for( unsigned vertIndex = 0; vertIndex < occluderData->numVertices; ++vertIndex ) {
-			const float *const v1 = occluderData->data[vertIndex + 0];
-			const float *const v2 = occluderData->data[( vertIndex + 1 != occluderData->numVertices ) ? vertIndex + 1 : 0];
-
-			addDebugLine( stateForCamera, v1, pointInFrontOfView );
-			addDebugLine( stateForCamera, v1, v2, COLOR_RGB( 255, 0, 255 ) );
-
-			cplane_t plane;
-			// TODO: Inline?
-			PlaneFromPoints( v1, v2, viewOrigin, &plane );
-
-			// Make the normal point inside the frustum
-			if( DotProduct( plane.normal, occluderData->innerPolyPoint ) - plane.dist < 0 ) {
-				VectorNegate( plane.normal, plane.normal );
-				plane.dist = -plane.dist;
-			}
-
-			vec3_t midpointOfEdge, normalPoint;
-			VectorAvg( v1, v2, midpointOfEdge );
-			VectorMA( midpointOfEdge, 8.0f, plane.normal, normalPoint );
-			addDebugLine( stateForCamera, midpointOfEdge, normalPoint );
-		}
-
-		vec4_t cappingPlane;
-		Vector4Copy( occluderData->plane, cappingPlane );
-		// Don't let the surface occlude itself
-		if( DotProduct( cappingPlane, viewOrigin ) - cappingPlane[3] > 0 ) {
-			Vector4Negate( cappingPlane, cappingPlane );
-			cappingPlane[3] += selfOcclusionBias;
-		} else {
-			cappingPlane[3] -= selfOcclusionBias;
-		}
-
-		vec3_t cappingPlanePoint;
-		VectorMA( occluderData->innerPolyPoint, 32.0f, cappingPlane, cappingPlanePoint );
-		addDebugLine( stateForCamera, occluderData->innerPolyPoint, cappingPlanePoint );
+		showOccluderFrustum<Arch>( stateForCamera, viewOrigin, viewAxis, occluderData );
 	}
 #endif
 
 	return { occluderFrusta, occluderFrusta + numSelectedOccluders };
 }
+
+#if defined( IMPLEMENT_collectVisibleOccluders ) || defined( IMPLEMENT_buildFrustaOfOccluders )
+#if defined( SHOW_OCCLUDERS_FRUSTA ) || defined( DEBUG_OCCLUDERS )
+template <unsigned Arch>
+void Frontend::showOccluderFrustum( StateForCamera *stateForCamera, const float *viewOrigin,
+									const float *viewAxis, const OccluderDataEntry *occluderData ) {
+	vec3_t pointInFrontOfView;
+	VectorMA( viewOrigin, 8.0, viewAxis, pointInFrontOfView );
+
+	for( unsigned vertIndex = 0; vertIndex < occluderData->numVertices; ++vertIndex ) {
+		const float *const v1 = occluderData->data[vertIndex + 0];
+		const float *const v2 = occluderData->data[( vertIndex + 1 != occluderData->numVertices ) ? vertIndex + 1 : 0];
+
+		addDebugLine( stateForCamera, v1, pointInFrontOfView );
+		addDebugLine( stateForCamera, v1, v2, COLOR_RGB( 255, 0, 255 ) );
+
+		cplane_t plane;
+		// TODO: Inline?
+		PlaneFromPoints( v1, v2, viewOrigin, &plane );
+
+		// Make the normal point inside the frustum
+		if( DotProduct( plane.normal, occluderData->innerPolyPoint ) - plane.dist < 0 ) {
+			VectorNegate( plane.normal, plane.normal );
+			plane.dist = -plane.dist;
+		}
+
+		vec3_t midpointOfEdge, normalPoint;
+		VectorAvg( v1, v2, midpointOfEdge );
+		VectorMA( midpointOfEdge, 8.0f, plane.normal, normalPoint );
+		addDebugLine( stateForCamera, midpointOfEdge, normalPoint );
+	}
+
+	vec4_t cappingPlane;
+	Vector4Copy( occluderData->plane, cappingPlane );
+	// Don't let the surface occlude itself
+	if( DotProduct( cappingPlane, viewOrigin ) - cappingPlane[3] > 0 ) {
+		Vector4Negate( cappingPlane, cappingPlane );
+		cappingPlane[3] += kSelfOcclusionBias;
+	} else {
+		cappingPlane[3] -= kSelfOcclusionBias;
+	}
+
+	vec3_t cappingPlanePoint;
+	VectorMA( occluderData->innerPolyPoint, 32.0f, cappingPlane, cappingPlanePoint );
+	addDebugLine( stateForCamera, occluderData->innerPolyPoint, cappingPlanePoint );
+}
+#endif
+#endif
 
 #endif
 
@@ -346,7 +345,7 @@ void Frontend::cullSurfacesByOccludersArch( [[maybe_unused]] StateForCamera *sta
 	assert( !surfNums.empty() );
 
 #ifdef DEBUG_OCCLUDERS
-	const int pinnedOccluderNum = Cvar_Integer( "pinnedOccluderNum" );
+	const int testedOccluderIndex = Cvar_Integer( "testedOccluderIndex" );
 #endif
 
 	// TODO: Use library functions once they are available, use intrinsics on ARM64
@@ -381,13 +380,13 @@ void Frontend::cullSurfacesByOccludersArch( [[maybe_unused]] StateForCamera *sta
 
 		LOAD_BOX_COMPONENTS( surf->mins, surf->maxs );
 
-		bool surfVisible = true;
-		unsigned frustumNum = 0;
+		bool surfVisible      = true;
+		unsigned frustumIndex = 0;
 		do {
-			const Frustum *__restrict f = &occluderFrusta[frustumNum];
+			const Frustum *__restrict f = &occluderFrusta[frustumIndex];
 
 #ifdef DEBUG_OCCLUDERS
-			if( pinnedOccluderNum && pinnedOccluderNum != (int)( 1 + frustumNum ) ) {
+			if( testedOccluderIndex && testedOccluderIndex != (int)( 1 + frustumIndex ) ) {
 				continue;
 			}
 #endif
@@ -399,7 +398,7 @@ void Frontend::cullSurfacesByOccludersArch( [[maybe_unused]] StateForCamera *sta
 				SHOW_OCCLUDED( stateForCamera, surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
 				break;
 			}
-		} while( ++frustumNum != numOccluders );
+		} while( ++frustumIndex != numOccluders );
 
 		if( surfVisible ) {
 			surfVisTable[surfNum] = 1;
