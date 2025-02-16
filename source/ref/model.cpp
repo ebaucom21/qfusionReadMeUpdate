@@ -144,7 +144,8 @@ public:
 		// Prepare height field
 
 		constexpr float xzCellSize  = 8.0f;
-		constexpr float yCellSize   = 0.001f;
+		// Note: Droping it lower leads to production of bogus occluders
+		constexpr float yCellSize   = 0.1f;
 		constexpr float climbHeight = 0.0f;
 
 		int gridWidth = 0, gridHeight = 0;
@@ -198,12 +199,11 @@ public:
 			return nullptr;
 		}
 
-		/*
 		if( !rcErodeWalkableArea( &m_context, 1, *m_compactHeightfield ) ) {
 			return nullptr;
-		}*/
+		}
 
-		constexpr int borderSize      = 0;
+		constexpr int borderSize      = 3;
 		constexpr int minRegionArea   = 16 * 16;
 		constexpr int mergeRegionArea = 32 * 32;
 
