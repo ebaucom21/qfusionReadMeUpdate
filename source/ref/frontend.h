@@ -546,7 +546,7 @@ private:
 	// This subroutine does not have to be template but we keep it templated so the code is closer
 	// to the code which builds frusta, thus making things easier to follow
 	template <unsigned Arch>
-	void showOccluderFrustum( StateForCamera *stateForCamera, const float *viewOrigin,
+	void showOccluderFrustum( StateForCamera *stateForCamera, float offsetInFrontOfView, const float *viewOrigin,
 							  const float *viewAxis, const OccluderDataEntry *occluderData );
 #endif
 #endif

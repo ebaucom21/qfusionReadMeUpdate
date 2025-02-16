@@ -88,7 +88,8 @@ auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> 
 	}
 
 	if( g_isLockingOccluders ) {
-		showOccluderFrustum<Arch>( stateForCamera, g_lockedViewOrigin, g_lockedViewAxis, occluderDataEntries + g_lockedOccluderNum - 1 );
+		showOccluderFrustum<Arch>( stateForCamera, 0.0f, g_lockedViewOrigin, g_lockedViewAxis,
+								   occluderDataEntries + g_lockedOccluderNum - 1 );
 		return {};
 	}
 #endif
@@ -145,7 +146,7 @@ auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> 
 
 #ifdef IMPLEMENT_buildFrustaOfOccluders
 
-static constexpr float kSelfOcclusionBias = 4.0f;
+static constexpr float kSelfOcclusionBias = 0.1f;
 
 template <unsigned Arch>
 auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
@@ -200,13 +201,20 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 
 		vec4_t cappingPlane;
 		Vector4Copy( occluder->plane, cappingPlane );
-		// Don't let the surface occlude itself
+
+		// Orient the capping plane inside the frustum
 		if( DotProduct( cappingPlane, viewOrigin ) - cappingPlane[3] > 0 ) {
 			Vector4Negate( cappingPlane, cappingPlane );
+		}
+
+		// Don't let the surface occlude itself
+		if( DotProduct( cappingPlane, viewOrigin ) - ( cappingPlane[3] + kSelfOcclusionBias ) < 0 ) {
 			cappingPlane[3] += kSelfOcclusionBias;
 		} else {
 			cappingPlane[3] -= kSelfOcclusionBias;
 		}
+
+		assert( DotProduct( cappingPlane, viewOrigin ) - cappingPlane[3] < 0 );
 
 		f->setPlaneComponentsAtIndex( occluder->numVertices, cappingPlane, cappingPlane[3] );
 		f->fillComponentTails( occluder->numVertices );
@@ -278,7 +286,7 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 
 		//addDebugLine( stateForCamera, surface->occluderPolyMins, surface->occluderPolyMaxs, COLOR_RGB( 0, 128, 255 ) );
 
-		showOccluderFrustum<Arch>( stateForCamera, viewOrigin, viewAxis, occluderData );
+		showOccluderFrustum<Arch>( stateForCamera, 8.0f, viewOrigin, viewAxis, occluderData );
 	}
 #endif
 
@@ -288,14 +296,58 @@ auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::
 #if defined( IMPLEMENT_collectVisibleOccluders ) || defined( IMPLEMENT_buildFrustaOfOccluders )
 #if defined( SHOW_OCCLUDERS_FRUSTA ) || defined( DEBUG_OCCLUDERS )
 template <unsigned Arch>
-void Frontend::showOccluderFrustum( StateForCamera *stateForCamera, const float *viewOrigin,
-									const float *viewAxis, const OccluderDataEntry *occluderData ) {
+void Frontend::showOccluderFrustum( StateForCamera *stateForCamera, float offsetInFrontOfView,
+									const float *viewOrigin, const float *viewAxis,
+									const OccluderDataEntry *occluderData ) {
 	vec3_t pointInFrontOfView;
-	VectorMA( viewOrigin, 8.0, viewAxis, pointInFrontOfView );
+	VectorMA( viewOrigin, offsetInFrontOfView, viewAxis, pointInFrontOfView );
+
+	// We have to shift vertices as we apply kSelfOcclusionBias
+
+	vec3_t biasedVertices[7];
+	assert( occluderData->numVertices <= std::size( biasedVertices ) );
+	for( unsigned vertIndex = 0; vertIndex < occluderData->numVertices; ++vertIndex ) {
+		const float *originalVertex = occluderData->data[vertIndex];
+		if( const float squareDist = DistanceSquared( originalVertex, pointInFrontOfView ); squareDist > 1e-3f ) {
+			vec3_t dir;
+			VectorSubtract( originalVertex, pointInFrontOfView, dir );
+			const float rcpDist = Q_RSqrt( squareDist );
+			VectorScale( dir, rcpDist, dir );
+			if( const float absDot = std::fabs( DotProduct( dir, occluderData->plane ) ); absDot > 1e-3f ) {
+				const float biasAlongTheDir = kSelfOcclusionBias * Q_Rcp( absDot );
+				const float newDist         = squareDist * rcpDist + biasAlongTheDir;
+				VectorMA( pointInFrontOfView, newDist, dir, biasedVertices[vertIndex] );
+			} else {
+				VectorCopy( originalVertex, biasedVertices[vertIndex] );
+			}
+		} else {
+			VectorCopy( originalVertex, biasedVertices[vertIndex] );
+		}
+	}
+
+	vec4_t cappingPlane;
+	Vector4Copy( occluderData->plane, cappingPlane );
+
+	// Orient the capping plane inside the frustum
+	if( DotProduct( cappingPlane, viewOrigin ) - cappingPlane[3] > 0 ) {
+		Vector4Negate( cappingPlane, cappingPlane );
+	}
+
+	// Don't let the surface occlude itself
+	if( DotProduct( cappingPlane, viewOrigin ) - ( cappingPlane[3] + kSelfOcclusionBias ) < 0 ) {
+		cappingPlane[3] += kSelfOcclusionBias;
+	} else {
+		cappingPlane[3] -= kSelfOcclusionBias;
+	}
+
+	vec3_t cappingNormalPoint1, cappingNormalPoint2;
+	VectorMA( occluderData->innerPolyPoint, kSelfOcclusionBias, cappingPlane, cappingNormalPoint1 );
+	VectorMA( occluderData->innerPolyPoint, kSelfOcclusionBias + 32.0f, cappingPlane, cappingNormalPoint2 );
+	addDebugLine( stateForCamera, cappingNormalPoint1, cappingNormalPoint2 );
 
 	for( unsigned vertIndex = 0; vertIndex < occluderData->numVertices; ++vertIndex ) {
-		const float *const v1 = occluderData->data[vertIndex + 0];
-		const float *const v2 = occluderData->data[( vertIndex + 1 != occluderData->numVertices ) ? vertIndex + 1 : 0];
+		const float *const v1 = biasedVertices[vertIndex + 0];
+		const float *const v2 = biasedVertices[( vertIndex + 1 != occluderData->numVertices ) ? vertIndex + 1 : 0];
 
 		addDebugLine( stateForCamera, v1, pointInFrontOfView );
 		addDebugLine( stateForCamera, v1, v2, COLOR_RGB( 255, 0, 255 ) );
@@ -314,21 +366,9 @@ void Frontend::showOccluderFrustum( StateForCamera *stateForCamera, const float 
 		VectorAvg( v1, v2, midpointOfEdge );
 		VectorMA( midpointOfEdge, 8.0f, plane.normal, normalPoint );
 		addDebugLine( stateForCamera, midpointOfEdge, normalPoint );
-	}
 
-	vec4_t cappingPlane;
-	Vector4Copy( occluderData->plane, cappingPlane );
-	// Don't let the surface occlude itself
-	if( DotProduct( cappingPlane, viewOrigin ) - cappingPlane[3] > 0 ) {
-		Vector4Negate( cappingPlane, cappingPlane );
-		cappingPlane[3] += kSelfOcclusionBias;
-	} else {
-		cappingPlane[3] -= kSelfOcclusionBias;
+		addDebugLine( stateForCamera, midpointOfEdge, cappingNormalPoint1 );
 	}
-
-	vec3_t cappingPlanePoint;
-	VectorMA( occluderData->innerPolyPoint, 32.0f, cappingPlane, cappingPlanePoint );
-	addDebugLine( stateForCamera, occluderData->innerPolyPoint, cappingPlanePoint );
 }
 #endif
 #endif
